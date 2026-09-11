@@ -8,3 +8,7 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+
+# Expo
+.expo/
+mobile/dist/

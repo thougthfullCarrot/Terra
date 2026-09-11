@@ -9,6 +9,7 @@ market conditions.
 
 ```
 backend/            collector, match scoring, feed API   ← built
+mobile/             the five screens, React Native / Expo ← built
 client/
   data-source.js    production implementation of the UI's data contract
 docs/handoff/       the design handoff: prototype, contract, spec
@@ -23,12 +24,17 @@ schedule — with 102 tests that need neither network nor a database. See
 deliberately still open (Workday/iCIMS, the paid aggregator, quarterly market
 data).
 
-**Front end: not started.** The five screens live in
-`docs/handoff/Terra - Texas CRE Job Tracker.dc.html` as an interactive HTML
-prototype — a design reference, not code to port. React Native / Expo is the
-recommended target; a React web app also works. Design tokens, screen specs,
-and states are in [`docs/handoff/README.md`](docs/handoff/README.md), and they
-are final: colors, type, spacing, and copy should be matched exactly.
+**Front end: built, unverified.** All five screens plus the detail sheet and
+the loading and error states, in React Native / Expo — see
+[`mobile/README.md`](mobile/README.md). It typechecks and bundles, and runs
+against the prototype's seed data with no backend. It has not been run on a
+device or simulator, so the layout has not been checked against the prototype
+by eye.
+
+The HTML prototype it was built from is
+`docs/handoff/Terra - Texas CRE Job Tracker.dc.html` — a design reference, not
+code that was ported. Tokens, screen specs and states are in
+[`docs/handoff/README.md`](docs/handoff/README.md) and they are final.
 
 ## The seam between the two halves
 
