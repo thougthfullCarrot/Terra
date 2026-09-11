@@ -17,12 +17,16 @@ export interface FetchJsonOptions {
   signal?: AbortSignal;
   /** First retry delay; doubles per attempt. Lowered in tests. */
   baseDelayMs?: number;
+  /** Defaults to GET. Workday's career-site API is POST-only. */
+  method?: 'GET' | 'POST';
+  /** JSON request body; sets content-type and implies POST. */
+  body?: unknown;
 }
 
 const USER_AGENT = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
 
 /**
- * GET a JSON document with a timeout and bounded retries.
+ * Fetch a JSON document with a timeout and bounded retries.
  *
  * Retries cover timeouts, network errors, 429, and 5xx. A 404 is not retried:
  * on an ATS board that means a wrong slug, and hammering it will not fix the
@@ -31,19 +35,26 @@ const USER_AGENT = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/T
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
   const { timeoutMs = 15_000, retries = 2, fetchImpl = fetch, baseDelayMs = 1000 } = options;
 
+  const method = options.method ?? (options.body === undefined ? 'GET' : 'POST');
+  const headers: Record<string, string> = { accept: 'application/json', 'user-agent': USER_AGENT };
+  if (options.body !== undefined) headers['content-type'] = 'application/json';
+  const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetchImpl(url, {
-        headers: { accept: 'application/json', 'user-agent': USER_AGENT },
+        method,
+        headers,
+        body,
         signal: options.signal ?? controller.signal
       });
 
       if (!response.ok) {
         const error = new HttpError(
-          `GET ${url} returned ${response.status}`,
+          `${method} ${url} returned ${response.status}`,
           response.status,
           url
         );
@@ -63,7 +74,7 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
     await delay(backoffMs(attempt, baseDelayMs));
   }
 
-  throw lastError instanceof Error ? lastError : new Error(`GET ${url} failed`);
+  throw lastError instanceof Error ? lastError : new Error(`${method} ${url} failed`);
 }
 
 function retryable(status: number): boolean {

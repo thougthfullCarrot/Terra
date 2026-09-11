@@ -23,6 +23,7 @@ import { loadFirmSeed } from '../collector/firmSeed.js';
 import { SupabaseStore } from '../db/supabase.js';
 import { fetchGreenhouse } from '../collector/sources/greenhouse.js';
 import { fetchLever } from '../collector/sources/lever.js';
+import { fetchWorkday } from '../collector/sources/workday.js';
 import { normalize, type RejectReason } from '../collector/normalize.js';
 
 const SEED_PATH = resolve(
@@ -90,15 +91,12 @@ async function check(firm: FirmRow): Promise<Result> {
     'not-entry-level': 0
   };
 
-  if (firm.ats !== 'greenhouse' && firm.ats !== 'lever') {
-    return { firm, verdict: 'SKIP', raw: 0, kept: 0, rejected, error: `${firm.ats} not implemented` };
+  if (firm.ats === 'icims') {
+    return { firm, verdict: 'SKIP', raw: 0, kept: 0, rejected, error: 'icims not implemented' };
   }
 
   try {
-    const jobs =
-      firm.ats === 'greenhouse'
-        ? await fetchGreenhouse(firm.name, firm.atsSlug, { retries: 1 })
-        : await fetchLever(firm.name, firm.atsSlug, { retries: 1 });
+    const jobs = await fetchFor(firm);
 
     let kept = 0;
     for (const job of jobs) {
@@ -118,6 +116,20 @@ async function check(firm: FirmRow): Promise<Result> {
       rejected,
       error: error instanceof Error ? error.message : String(error)
     };
+  }
+}
+
+async function fetchFor(firm: FirmRow) {
+  switch (firm.ats) {
+    case 'greenhouse':
+      return fetchGreenhouse(firm.name, firm.atsSlug, { retries: 1 });
+    case 'lever':
+      return fetchLever(firm.name, firm.atsSlug, { retries: 1 });
+    case 'workday':
+      // Capped hard: verification only needs to know the tenant answers.
+      return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, { retries: 1, maxPages: 2 });
+    default:
+      throw new Error(`${firm.ats} not implemented`);
   }
 }
 

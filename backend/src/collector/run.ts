@@ -3,6 +3,7 @@ import type { FirmRow, Store } from '../db/store.js';
 import { normalize, type RejectReason } from './normalize.js';
 import { fetchGreenhouse } from './sources/greenhouse.js';
 import { fetchLever } from './sources/lever.js';
+import { fetchWorkday } from './sources/workday.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
 
@@ -187,9 +188,10 @@ async function defaultFetcher(firm: FirmRow): Promise<RawJob[]> {
       return fetchGreenhouse(firm.name, firm.atsSlug);
     case 'lever':
       return fetchLever(firm.name, firm.atsSlug);
-    // Workday and iCIMS need a per-tenant endpoint and an auth handshake;
-    // the spec puts them after the first two are carrying real coverage.
     case 'workday':
+      return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug);
+    // iCIMS needs a per-tenant endpoint and, on most tenants, an auth
+    // handshake; the spec puts it after the others are carrying real coverage.
     case 'icims':
       throw new Error(`${firm.ats} fetcher not implemented yet (firm: ${firm.name})`);
   }

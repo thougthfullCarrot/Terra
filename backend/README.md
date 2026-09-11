@@ -66,7 +66,7 @@ One pass, exactly the order in the spec:
 
 | Stage | Where | Notes |
 | --- | --- | --- |
-| fetch | `collector/sources/*` | Greenhouse and Lever. Timeouts, bounded retries; a 404 is not retried because a wrong slug will not fix itself. |
+| fetch | `collector/sources/*` | Greenhouse, Lever, Workday. Timeouts, bounded retries; a 404 is not retried because a wrong slug will not fix itself. |
 | Texas filter | `collector/texas.ts` | Six tracked cities plus suburb roll-up (Plano → Dallas, Arlington → Fort Worth). Rejects `Austin, MN`. |
 | seniority filter | `collector/seniority.ts` | Intern / entry titles; an explicit board level field overrides the title in both directions. `Analyst I` in, `Analyst II` out. |
 | sector | `collector/sector.ts` | Keyword scoring, title weighted 3×. Reports "no match" rather than guessing; the run counts how often that happens. |
@@ -130,11 +130,43 @@ select vault.create_secret('<COLLECTOR_SECRET>', 'collector_secret');
 
 Any other scheduler works too — `npm run collect` is a self-contained pass.
 
+## Workday
+
+Workday has no shared board host — every tenant serves its own — so a Workday
+firm row needs both columns:
+
+```sql
+insert into firms (name, ats, ats_host, ats_slug) values
+  ('CBRE', 'workday', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers');
+```
+
+`ats_host` is the tenant host (the `wd1` / `wd3` / `wd5` digit varies per
+tenant) and `ats_slug` is `<tenant>/<site>`. To find both for a firm: open its
+careers page with devtools on the network tab and look for the `/wday/cxs/`
+request. Its URL is `https://<ats_host>/wday/cxs/<tenant>/<site>/jobs`. A firm
+row missing `ats_host` throws by name rather than quietly collecting nothing.
+
+Two things differ from the other boards and are worth knowing before you touch
+`sources/workday.ts`:
+
+- **The list endpoint carries no description**, so classifying a posting needs
+  a second request for it. The fetcher applies the title and location filters
+  to the list payload first and only then spends detail requests — on a large
+  enterprise board that is ~15 requests instead of ~600. If you relax those
+  filters, you are buying hundreds of requests per firm per run.
+- **`postedOn` is prose** (`Posted 3 Days Ago`), parsed in `parsePostedOn`.
+  Unreadable values return undefined and the normalizer falls back to the run
+  time rather than inventing a date.
+
+The CXS endpoints are Workday's public career-site API, not a documented
+product surface, and they do change. The tests pin the shape against fixtures;
+if a tenant starts behaving oddly, check the live payload in devtools first.
+
 ## Not built yet
 
-- **Workday and iCIMS fetchers.** Both need per-tenant endpoints; `firms.ats_host`
-  is in the schema for them. `defaultFetcher` throws a named error for now, and
-  the run report records it per firm.
+- **The iCIMS fetcher.** Needs a per-tenant endpoint and, on most tenants, an
+  auth handshake. `defaultFetcher` throws a named error for now, and the run
+  report records it per firm.
 - **The aggregator source** (Adzuna or JSearch, ~$30/mo). `RawJob.ats` already
   has an `'aggregator'` case and the provenance copy for it.
 - **Market data.** `0003_markets_seed.sql` creates the rows with empty payloads.
