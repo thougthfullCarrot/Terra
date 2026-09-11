@@ -1,0 +1,57 @@
+# Checks every seeded ATS slug against the live board.
+#
+# This exists because the check needs open outbound network to
+# boards-api.greenhouse.io and api.lever.co, which a dev machine has but is not
+# worth requiring. Run it from the Actions tab: no local setup, no credentials.
+name: Verify firm slugs
+
+on:
+  workflow_dispatch:
+  # Slugs rot: firms change ATS, boards get renamed. Weekly is enough to catch
+  # it before the feed quietly empties out.
+  schedule:
+    - cron: '0 13 * * 1'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Check every board
+        id: verify
+        run: |
+          set +e
+          npm run --silent verify:firms -- --sql 2>&1 | tee /tmp/verify.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      # Written before the job can fail, so the table is readable on the run
+      # summary page without opening the log.
+      - name: Publish the results
+        if: always()
+        run: |
+          {
+            echo '## Firm slug verification'
+            echo
+            echo '```'
+            cat /tmp/verify.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if any slug is unreachable
+        if: steps.verify.outputs.exit_code != '0'
+        run: |
+          echo "Some slugs need fixing — see the summary above."
+          exit 1

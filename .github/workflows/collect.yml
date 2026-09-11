@@ -1,0 +1,66 @@
+# Runs a collector pass every 2 hours.
+#
+# This is the alternative to Vercel Cron, and the better one on a Hobby plan:
+# Vercel runs cron once a day there regardless of the expression, and caps a
+# function at 60s. A runner has neither limit, which matters once Workday
+# tenants are in the firm list.
+name: Collect postings
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */2 * * *'
+
+# A slow pass must never overlap the next one: two collectors writing the same
+# postings would race on first_seen.
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Run one pass
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EXPO_ACCESS_TOKEN: ${{ secrets.EXPO_ACCESS_TOKEN }}
+        run: |
+          set +e
+          npm run --silent collect 2>&1 | tee /tmp/collect.json
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        id: collect
+
+      - name: Publish the run report
+        if: always()
+        run: |
+          {
+            echo '## Collector run'
+            echo
+            echo '```json'
+            cat /tmp/collect.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # `npm run collect` exits non-zero when a pass keeps zero postings. That
+      # is the failure that matters here: the run "succeeded" and the feed is
+      # empty.
+      - name: Fail on an empty pass
+        if: steps.collect.outputs.exit_code != '0'
+        run: exit 1
