@@ -33,16 +33,32 @@ npx tsx src/bin/serve.ts      # the API on :8787
 ```
 
 **Before the first real run, verify the firm slugs.** `0002_seed_firms.sql`
-ships 30 firms with *guessed* ATS slugs. A wrong slug is a 404, which the
-collector records in `firms.last_error` while leaving `slug_verified` false.
-Check the list after one pass:
+ships 30 firms with *guessed* ATS slugs, and a clever collector pointed at 30
+wrong slugs produces an empty feed that looks like a clean run.
+
+```bash
+npm run verify:firms            # check the seed, no database or credentials needed
+npm run verify:firms -- --sql   # also print fix-up SQL for the misses
+npm run verify:firms -- --from-db
+```
+
+It reports three outcomes, because they need different fixes:
+
+| | meaning | what to do |
+| --- | --- | --- |
+| `OK` | board answered, has Texas entry-level roles | nothing |
+| `EMPTY` | board answered, nothing in the funnel today | nothing — the slug is right |
+| `FAIL` | board did not answer | fix the slug, or deactivate the firm |
+
+Needs outbound access to `boards-api.greenhouse.io` and `api.lever.co`. If
+every firm fails identically the script says so rather than blaming the slugs —
+that is an egress problem, not a firm list problem.
+
+After a real collector pass the same information is in the table:
 
 ```sql
 select name, ats, ats_slug, slug_verified, last_error from firms order by slug_verified, name;
 ```
-
-Coverage is the whole game here — a clever collector pointed at 30 wrong slugs
-produces an empty feed.
 
 ## The pipeline
 

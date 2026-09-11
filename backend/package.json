@@ -4,13 +4,16 @@
   "private": true,
   "description": "Collector, match scoring, and feed API for the Terra Texas CRE job tracker.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "collect": "tsx src/bin/collect.ts"
+    "collect": "tsx src/bin/collect.ts",
+    "verify:firms": "tsx src/bin/verify-firms.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
