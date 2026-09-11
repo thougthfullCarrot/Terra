@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E8E5DE;font-family:Archivo,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#2B4A8B}a:hover{color:#1f3766}
+*{box-sizing:border-box}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes sheetUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes shimmer{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:22px;padding:40px 20px 64px">
+
+  <div style="display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;max-width:520px">
+    <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:#8A867C">Interactive prototype · iPhone</div>
+    <div style="font:600 22px/1.2 Archivo,sans-serif;color:#17191A">Terra — Texas CRE job tracker</div>
+    <div style="font:400 13px/1.5 Archivo,sans-serif;color:#6B6B63">Internships and entry-level commercial real estate roles, Texas only. Tap cards, filters, and pipeline stages — it all works.</div>
+  </div>
+
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+
+    <div style="height:100%;display:flex;flex-direction:column;position:relative;overflow:hidden;background:#F4F2EE;font-family:Archivo,sans-serif">
+
+      <!-- ── LOADING ────────────────────────────── -->
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;height:100%;padding:60px 18px 0">
+        <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#8A867C">Texas · CRE</div>
+        <div style="font:700 28px/1.1 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:6px">Open roles</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:14px">
+          <div style="width:6px;height:6px;border-radius:3px;background:#2B4A8B;animation:pulse 1s ease-in-out infinite"></div>
+          <div style="font:400 11.5px/1.2 'JetBrains Mono',monospace;color:#6B6B63">Pulling Texas postings…</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:11px;margin-top:18px">
+          <sc-for list="{{ skeletons }}" as="k" hint-placeholder-count="4">
+            <div style="background:#fff;border:1px solid rgba(23,25,26,.08);border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:10px">
+              <div style="height:15px;width:62%;border-radius:5px;background:#ECEAE3;animation:shimmer 1.3s ease-in-out infinite"></div>
+              <div style="height:12px;width:44%;border-radius:5px;background:#F0EEE8;animation:shimmer 1.3s ease-in-out .15s infinite"></div>
+              <div style="display:flex;gap:6px">
+                <div style="height:22px;width:64px;border-radius:5px;background:#F0EEE8"></div>
+                <div style="height:22px;width:80px;border-radius:5px;background:#F0EEE8"></div>
+                <div style="height:22px;width:56px;border-radius:5px;background:#F0EEE8"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── ERROR ──────────────────────────────── -->
+      <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%;padding:60px 18px 0">
+        <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#8A867C">Texas · CRE</div>
+        <div style="font:700 28px/1.1 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:6px">Open roles</div>
+        <div style="margin-top:22px;border:1px solid rgba(184,68,46,.35);background:#FAEDE9;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px">
+          <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#B8442E">Feed unavailable</div>
+          <div style="font:400 13.5px/1.55 Archivo,sans-serif;color:#5A2F25">{{ errorMsg }}</div>
+          <div style="font:400 12.5px/1.5 Archivo,sans-serif;color:#8A6B62">Cached postings from your last sync are still in Saved and Pipeline.</div>
+          <button onClick="{{ retry }}" style="align-self:flex-start;margin-top:2px;border:none;background:#B8442E;color:#fff;border-radius:9px;padding:10px 15px;font:600 12px/1 Archivo,sans-serif;cursor:pointer">Try again</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── FEED ───────────────────────────────── -->
+      <sc-if value="{{ isFeed }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+        <div style="padding:60px 18px 12px;background:#F4F2EE;border-bottom:1px solid rgba(23,25,26,.09)">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#8A867C">Texas · CRE</div>
+              <div style="font:700 28px/1.1 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:6px">Open roles</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font:700 20px/1 'JetBrains Mono',monospace;color:#2B4A8B">{{ count }}</div>
+              <div style="font:500 9px/1.4 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8A867C">matches</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:6px;margin-top:16px;background:#E4E1D9;padding:3px;border-radius:9px">
+            <sc-for list="{{ types }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.pick }}" style="{{ t.style }}">{{ t.label }}</button>
+            </sc-for>
+          </div>
+
+          <div onWheel="{{ hScroll }}" style="display:flex;flex-wrap:nowrap;gap:7px;margin:11px -18px 0;padding:0 18px 4px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;scroll-snap-type:x proximity">
+            <sc-for list="{{ cities }}" as="c" hint-placeholder-count="5">
+              <button onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</button>
+            </sc-for>
+          </div>
+
+          <button onClick="{{ toggleMatchOnly }}" style="{{ matchBarStyle }}">
+            <div style="width:5px;height:5px;border-radius:3px;background:currentColor;flex:none"></div>
+            <div style="flex:1;text-align:left">{{ matchBarText }}</div>
+            <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase">{{ matchBarAction }}</div>
+          </button>
+        </div>
+
+        <div style="flex:1;overflow-y:auto;padding:14px 18px 108px;display:flex;flex-direction:column;gap:11px">
+          <sc-for list="{{ feed }}" as="j" hint-placeholder-count="4">
+            <div onClick="{{ j.open }}" style="{{ j.cardStyle }}">
+              <sc-if value="{{ j.strong }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:7px;margin:-2px 0 1px">
+                  <div style="width:5px;height:5px;border-radius:3px;background:#2B4A8B;flex:none"></div>
+                  <div style="font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#2B4A8B">Resume match {{ j.score }}%</div>
+                  <div style="flex:1"></div>
+                  <div style="font:400 10.5px/1.2 Archivo,sans-serif;color:#6B6B63">{{ j.matchNote }}</div>
+                </div>
+              </sc-if>
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                  <div style="font:600 16px/1.25 Archivo,sans-serif;color:#17191A;letter-spacing:-.01em">{{ j.role }}</div>
+                  <div style="font:400 13px/1.3 Archivo,sans-serif;color:#6B6B63">{{ j.firm }}</div>
+                </div>
+                <div style="{{ j.badgeStyle }}">{{ j.kindShort }}</div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#4A4A44;background:#F0EEE8;border-radius:5px;padding:5px 7px">{{ j.city }}</div>
+                <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#4A4A44;background:#F0EEE8;border-radius:5px;padding:5px 7px">{{ j.sector }}</div>
+                <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#4A4A44;background:#F0EEE8;border-radius:5px;padding:5px 7px">{{ j.pay }}</div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid rgba(23,25,26,.07);padding-top:10px">
+                <div style="font:400 11.5px/1.2 Archivo,sans-serif;color:#8A867C">{{ j.postedLabel }} · {{ j.deadlineLabel }}</div>
+                <button onClick="{{ j.toggleSave }}" style="{{ j.saveStyle }}">{{ j.saveLabel }}</button>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ feedEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px dashed rgba(23,25,26,.18);border-radius:14px;padding:34px 20px;text-align:center">
+              <div style="font:600 15px/1.3 Archivo,sans-serif;color:#17191A">No postings match</div>
+              <div style="font:400 12.5px/1.5 Archivo,sans-serif;color:#8A867C;margin-top:5px">Nothing in this city and role type right now. Clear a filter, or turn on alerts so new postings find you.</div>
+            </div>
+          </sc-if>
+          <button onClick="{{ refresh }}" style="margin-top:4px;border:1px solid rgba(23,25,26,.12);background:#fff;border-radius:10px;padding:11px 0;font:400 11.5px/1.2 'JetBrains Mono',monospace;color:#8A867C;cursor:pointer;width:100%">Synced {{ syncedAt }} · tap to refresh</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── PIPELINE ───────────────────────────── -->
+      <sc-if value="{{ isPipe }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+        <div style="padding:60px 18px 14px;border-bottom:1px solid rgba(23,25,26,.09)">
+          <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#8A867C">Applications</div>
+          <div style="font:700 28px/1.1 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:6px">Pipeline</div>
+          <div style="display:flex;gap:14px;margin-top:14px">
+            <sc-for list="{{ stageStats }}" as="s" hint-placeholder-count="4">
+              <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+                <div style="font:700 19px/1 'JetBrains Mono',monospace;color:#17191A">{{ s.n }}</div>
+                <div style="font:500 8.5px/1.3 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8A867C">{{ s.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 18px 108px;display:flex;flex-direction:column;gap:20px">
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <div style="{{ g.dotStyle }}"></div>
+                <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#4A4A44">{{ g.stage }}</div>
+                <div style="flex:1;height:1px;background:rgba(23,25,26,.10)"></div>
+                <div style="font:500 10px/1 'JetBrains Mono',monospace;color:#9A968C">{{ g.n }}</div>
+              </div>
+              <sc-for list="{{ g.items }}" as="a" hint-placeholder-count="2">
+                <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:13px;padding:13px 14px;display:flex;flex-direction:column;gap:9px">
+                  <div onClick="{{ a.open }}" style="cursor:pointer">
+                    <div style="font:600 15px/1.25 Archivo,sans-serif;color:#17191A">{{ a.role }}</div>
+                    <div style="font:400 12.5px/1.4 Archivo,sans-serif;color:#6B6B63;margin-top:2px">{{ a.firm }} · {{ a.city }}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                    <div style="font:400 11px/1.2 'JetBrains Mono',monospace;color:#9A968C">{{ a.note }}</div>
+                    <button onClick="{{ a.advance }}" style="{{ a.advanceStyle }}">{{ a.advanceLabel }}</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── SAVED ──────────────────────────────── -->
+      <sc-if value="{{ isSaved }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+        <div style="padding:60px 18px 14px;border-bottom:1px solid rgba(23,25,26,.09)">
+          <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#8A867C">Shortlist</div>
+          <div style="font:700 28px/1.1 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:6px">Saved &amp; deadlines</div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 18px 108px;display:flex;flex-direction:column;gap:11px">
+          <sc-if value="{{ savedEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px dashed rgba(23,25,26,.18);border-radius:14px;padding:34px 20px;text-align:center">
+              <div style="font:600 15px/1.3 Archivo,sans-serif;color:#17191A">Nothing saved yet</div>
+              <div style="font:400 12.5px/1.5 Archivo,sans-serif;color:#8A867C;margin-top:5px">Save a role from the feed and its deadline shows up here.</div>
+            </div>
+          </sc-if>
+          <sc-for list="{{ savedList }}" as="j" hint-placeholder-count="3">
+            <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-left:3px solid {{ j.urgColor }};border-radius:13px;padding:13px 14px;display:flex;flex-direction:column;gap:9px">
+              <div onClick="{{ j.open }}" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+                <div style="min-width:0">
+                  <div style="font:600 15px/1.25 Archivo,sans-serif;color:#17191A">{{ j.role }}</div>
+                  <div style="font:400 12.5px/1.4 Archivo,sans-serif;color:#6B6B63;margin-top:2px">{{ j.firm }} · {{ j.city }}</div>
+                </div>
+                <div style="{{ j.urgStyle }}">{{ j.urgLabel }}</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button onClick="{{ j.apply }}" style="flex:1;border:none;background:#2B4A8B;color:#fff;border-radius:9px;padding:9px 0;font:600 12px/1 Archivo,sans-serif;cursor:pointer">Mark applied</button>
+                <button onClick="{{ j.toggleSave }}" style="border:1px solid rgba(23,25,26,.16);background:#fff;color:#4A4A44;border-radius:9px;padding:9px 13px;font:500 12px/1 Archivo,sans-serif;cursor:pointer">Remove</button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── PROFILE ────────────────────────────── -->
+      <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+        <div style="padding:60px 18px 14px;border-bottom:1px solid rgba(23,25,26,.09)">
+          <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#8A867C">Candidate</div>
+          <div style="font:700 28px/1.1 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:6px">Your profile</div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 18px 108px;display:flex;flex-direction:column;gap:14px">
+          <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:14px;padding:16px;display:flex;gap:13px;align-items:center">
+            <div style="width:52px;height:52px;border-radius:26px;background:#2B4A8B;color:#fff;display:flex;align-items:center;justify-content:center;font:600 18px/1 Archivo,sans-serif">MR</div>
+            <div>
+              <div style="font:600 16px/1.2 Archivo,sans-serif;color:#17191A">Maya Reyes</div>
+              <div style="font:400 12.5px/1.4 Archivo,sans-serif;color:#6B6B63;margin-top:3px">UT Austin · Finance, May 2027</div>
+            </div>
+          </div>
+
+          <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A867C">Alert preferences</div>
+            <sc-for list="{{ prefs }}" as="p" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <div>
+                  <div style="font:500 14px/1.3 Archivo,sans-serif;color:#17191A">{{ p.label }}</div>
+                  <div style="font:400 11.5px/1.4 Archivo,sans-serif;color:#8A867C;margin-top:1px">{{ p.hint }}</div>
+                </div>
+                <button onClick="{{ p.toggle }}" style="{{ p.trackStyle }}"><div style="{{ p.knobStyle }}"></div></button>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:11px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A867C">Resume</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <div style="font:400 13.5px/1.4 Archivo,sans-serif;color:#17191A">Reyes_Maya_CRE_2026.pdf</div>
+              <div style="font:500 10px/1 'JetBrains Mono',monospace;color:#2B4A8B;background:#E3E8F3;border-radius:5px;padding:5px 7px">CURRENT</div>
+            </div>
+            <div style="height:1px;background:rgba(23,25,26,.08)"></div>
+            <div style="font:400 12.5px/1.55 Archivo,sans-serif;color:#6B6B63">Used for one-tap apply on 6 of 8 Texas postings. Two firms require their own portal.</div>
+          </div>
+
+          <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:11px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A867C">Data source</div>
+            <div style="display:flex;justify-content:space-between;gap:10px">
+              <div style="font:400 12.5px/1.4 Archivo,sans-serif;color:#6B6B63">Feed</div>
+              <div style="font:500 11.5px/1.4 'JetBrains Mono',monospace;color:#17191A;text-align:right">{{ srcName }}</div>
+            </div>
+            <div style="font:400 10.5px/1.5 'JetBrains Mono',monospace;color:#8A867C;word-break:break-all;background:#F4F2EE;border-radius:8px;padding:9px 10px">{{ srcEndpoint }}</div>
+            <div style="display:flex;justify-content:space-between;gap:10px">
+              <div style="font:400 12.5px/1.4 Archivo,sans-serif;color:#6B6B63">Polling</div>
+              <div style="font:500 11.5px/1.4 'JetBrains Mono',monospace;color:#17191A">{{ srcPoll }}</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:10px">
+              <div style="font:400 12.5px/1.4 Archivo,sans-serif;color:#6B6B63">Last sync</div>
+              <div style="font:500 11.5px/1.4 'JetBrains Mono',monospace;color:#17191A">{{ syncedAt }}</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:3px">
+              <button onClick="{{ refresh }}" style="flex:1;border:none;background:#2B4A8B;color:#fff;border-radius:9px;padding:10px 0;font:600 12px/1 Archivo,sans-serif;cursor:pointer">Sync now</button>
+              <button onClick="{{ breakSource }}" style="border:1px solid rgba(23,25,26,.16);background:#fff;color:#6B6B63;border-radius:9px;padding:10px 13px;font:500 12px/1 Archivo,sans-serif;cursor:pointer">Test failure</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── MARKET ─────────────────────────────── -->
+      <sc-if value="{{ isMarket }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+        <div style="padding:60px 18px 12px;border-bottom:1px solid rgba(23,25,26,.09)">
+          <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:#8A867C">Q3 2026 · Texas</div>
+          <div style="font:700 28px/1.1 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:6px">Market pulse</div>
+          <div onWheel="{{ hScroll }}" style="display:flex;flex-wrap:nowrap;gap:7px;margin:14px -18px 0;padding:0 18px 4px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;scroll-snap-type:x proximity">
+            <sc-for list="{{ marketCities }}" as="c" hint-placeholder-count="6">
+              <button onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 18px 108px;display:flex;flex-direction:column;gap:14px">
+
+          <div style="background:#17191A;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+              <div style="font:600 17px/1.2 Archivo,sans-serif;color:#fff">{{ mkt.name }}</div>
+              <div style="{{ mkt.trendStyle }}">{{ mkt.trend }}</div>
+            </div>
+            <div style="font:400 13px/1.55 Archivo,sans-serif;color:#B9B6AE">{{ mkt.summary }}</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <sc-for list="{{ mkt.stats }}" as="s" hint-placeholder-count="4">
+              <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:12px;padding:13px">
+                <div style="font:500 8.5px/1.3 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8A867C">{{ s.label }}</div>
+                <div style="font:700 19px/1.1 'JetBrains Mono',monospace;color:#17191A;margin-top:7px">{{ s.value }}</div>
+                <div style="{{ s.deltaStyle }}">{{ s.delta }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A867C">Sector activity</div>
+            <sc-for list="{{ mkt.sectors }}" as="s" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;justify-content:space-between;gap:10px">
+                  <div style="font:500 13.5px/1.2 Archivo,sans-serif;color:#17191A">{{ s.name }}</div>
+                  <div style="font:500 11.5px/1.2 'JetBrains Mono',monospace;color:#6B6B63">{{ s.note }}</div>
+                </div>
+                <div style="height:6px;border-radius:4px;background:#ECEAE3;overflow:hidden">
+                  <div style="{{ s.barStyle }}"></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:13px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A867C">What moved this week</div>
+            <sc-for list="{{ mkt.news }}" as="n" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:3px;border-top:1px solid rgba(23,25,26,.07);padding-top:11px">
+                <div style="font:500 9px/1 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#2B4A8B">{{ n.tag }}</div>
+                <div style="font:500 14px/1.4 Archivo,sans-serif;color:#17191A">{{ n.head }}</div>
+                <div style="font:400 12.5px/1.5 Archivo,sans-serif;color:#6B6B63">{{ n.body }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:#E3E8F3;border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:9px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#2B4A8B">Hiring read</div>
+            <div style="font:400 13.5px/1.55 Archivo,sans-serif;color:#26314A">{{ mkt.hiring }}</div>
+            <button onClick="{{ mkt.seeJobs }}" style="align-self:flex-start;border:none;background:#2B4A8B;color:#fff;border-radius:9px;padding:10px 14px;font:600 12px/1 Archivo,sans-serif;cursor:pointer">{{ mkt.jobsLabel }}</button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── DETAIL SHEET ───────────────────────── -->
+      <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;inset:0;z-index:5;background:#F4F2EE;display:flex;flex-direction:column;animation:sheetUp .22s ease-out">
+        <div style="padding:58px 18px 14px;border-bottom:1px solid rgba(23,25,26,.09);background:#fff">
+          <button onClick="{{ close }}" style="border:1px solid rgba(23,25,26,.14);background:#F4F2EE;border-radius:8px;padding:6px 10px;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#4A4A44;cursor:pointer">← BACK</button>
+          <div style="font:700 24px/1.18 Archivo,sans-serif;color:#17191A;letter-spacing:-.02em;margin-top:14px">{{ job.role }}</div>
+          <div style="font:400 14px/1.4 Archivo,sans-serif;color:#6B6B63;margin-top:4px">{{ job.firm }} · {{ job.city }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+            <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#2B4A8B;background:#E3E8F3;border-radius:5px;padding:6px 8px">{{ job.kind }}</div>
+            <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#4A4A44;background:#F0EEE8;border-radius:5px;padding:6px 8px">{{ job.sector }}</div>
+            <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#4A4A44;background:#F0EEE8;border-radius:5px;padding:6px 8px">{{ job.pay }}</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 18px 130px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;gap:10px">
+            <div style="flex:1;background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:12px;padding:12px">
+              <div style="font:500 8.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8A867C">Deadline</div>
+              <div style="font:600 14px/1.2 Archivo,sans-serif;color:#17191A;margin-top:6px">{{ job.deadline }}</div>
+            </div>
+            <div style="flex:1;background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:12px;padding:12px">
+              <div style="font:500 8.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8A867C">Posted</div>
+              <div style="font:600 14px/1.2 Archivo,sans-serif;color:#17191A;margin-top:6px">{{ job.postedLabel }}</div>
+            </div>
+          </div>
+          <sc-if value="{{ job.strong }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#2B4A8B;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                <div style="font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#fff">Resume match</div>
+                <div style="font:700 20px/1 'JetBrains Mono',monospace;color:#fff">{{ job.score }}%</div>
+              </div>
+              <sc-for list="{{ job.matchLines }}" as="m" hint-placeholder-count="3">
+                <div style="display:flex;gap:9px;align-items:flex-start">
+                  <div style="width:5px;height:5px;border-radius:3px;background:rgba(255,255,255,.75);margin-top:7px;flex:none"></div>
+                  <div style="font:400 13px/1.5 Archivo,sans-serif;color:#EDF0F7">{{ m }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="font:400 14px/1.6 Archivo,sans-serif;color:#3A3A35">{{ job.desc }}</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A867C">What they want</div>
+            <sc-for list="{{ job.reqs }}" as="r" hint-placeholder-count="4">
+              <div style="display:flex;gap:9px;align-items:flex-start">
+                <div style="width:5px;height:5px;border-radius:3px;background:#2B4A8B;margin-top:7px;flex:none"></div>
+                <div style="font:400 13.5px/1.5 Archivo,sans-serif;color:#3A3A35">{{ r }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#fff;border:1px solid rgba(23,25,26,.10);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
+            <div style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A867C">Source</div>
+            <div style="font:400 13px/1.5 Archivo,sans-serif;color:#3A3A35">{{ job.source }}</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 18px 30px;background:rgba(255,255,255,.94);border-top:1px solid rgba(23,25,26,.10);display:flex;gap:9px">
+          <button onClick="{{ toggleSaveDetail }}" style="{{ detailSaveStyle }}">{{ detailSaveLabel }}</button>
+          <button onClick="{{ applyDetail }}" style="{{ detailApplyStyle }}">{{ detailApplyLabel }}</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── TAB BAR ────────────────────────────── -->
+      <sc-if value="{{ tabsVisible }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;left:0;right:0;bottom:0;z-index:60;background:rgba(244,242,238,.96);border-top:1px solid rgba(23,25,26,.10);display:grid;grid-template-columns:repeat(5,1fr);padding:9px 6px 28px;backdrop-filter:blur(12px)">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+          <button onClick="{{ t.pick }}" style="{{ t.style }}">
+            <div style="{{ t.dotStyle }}"></div>
+            <div>{{ t.label }}</div>
+          </button>
+        </sc-for>
+      </div>
+      </sc-if>
+
+    </div>
+  </x-import>
+
+  <div style="max-width:402px;font:400 12px/1.6 Archivo,sans-serif;color:#7A766C;text-align:center">Firms and postings are placeholder data. Next: connect a live source (firm career pages, TREC/university boards), then add push alerts for new Texas postings.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:520,&quot;height&quot;:1080}}">
+const STRONG = 92;
+const MKT_CITIES = ['Austin','Dallas','Houston','San Antonio','Fort Worth','El Paso'];
+const DELTA_COLOR = {up:'#2B4A8B',down:'#B8442E',flat:'#8A867C'};
+
+const CITIES = ['All Texas','Dallas','Fort Worth','Houston','Austin','San Antonio'];
+const TYPES = ['All roles','Internship','Entry-level'];
+const STAGES = ['Applied','Interview','Offer'];
+const NEXT = {Applied:'Interview',Interview:'Offer',Offer:'Offer'};
+const DOT = {Applied:'#9A968C',Interview:'#B8722E',Offer:'#2B4A8B'};
+
+class Component extends DCLogic {
+  state = {
+    status:'loading', error:null, jobs:[], matchIndex:{}, markets:{}, lastSync:null, source:null,
+    tab:'feed', city:'All Texas', type:'All roles', detail:null,
+    matchOnly:false, mktCity:'Texas',
+    saved:{j1:true,j5:true,j3:true},
+    apps:{j2:{stage:'Interview',note:'2nd round · Sep 18'},j6:{stage:'Applied',note:'Applied Sep 4'},j8:{stage:'Applied',note:'Applied Sep 8'},j4:{stage:'Offer',note:'Verbal · decide by Sep 25'}},
+    prefs:{daily:true,deadline:true,intern:false,digest:true}
+  };
+
+  componentDidMount(){ this.load(); }
+  async api(){ return this._api || (this._api = await import('./data-source.js')); }
+  async load(){
+    this.setState({status:'loading',error:null});
+    try{
+      const api = await this.api();
+      const res = await api.fetchFeed({state:'TX'});
+      this.setState({status:'ready',jobs:res.jobs,matchIndex:res.match,markets:res.markets,lastSync:res.syncedAt,source:api.SOURCE});
+    }catch(e){ this.setState({status:'error',error:e.message}); }
+  }
+  async breakSource(){ const api = await this.api(); api.simulateFailure(); this.load(); }
+  clock(d){ return d ? d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})+' CT' : '—'; }
+
+  buildTabs(st){
+    return [['feed','Feed'],['market','Market'],['pipe','Pipeline'],['saved','Saved'],['profile','Profile']].map(([k,label])=>{
+      const on=st.tab===k;
+      return {label,pick:()=>this.setState({tab:k,detail:null}),
+        style:'border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font:'+(on?600:500)+' 10px/1 Archivo,sans-serif;color:'+(on?'#2B4A8B':'#8A867C'),
+        dotStyle:'width:6px;height:6px;border-radius:3px;background:'+(on?'#2B4A8B':'rgba(23,25,26,.18)')};
+    });
+  }
+  defaults(){
+    const noop=()=>{};
+    return {isFeed:false,isPipe:false,isSaved:false,isProfile:false,isMarket:false,isLoading:false,isError:false,
+      detailOpen:false,feedEmpty:false,savedEmpty:false,count:0,errorMsg:'',retry:noop,skeletons:[1,2,3,4],
+      job:{reqs:[],matchLines:[],strong:false},mkt:{stats:[],sectors:[],news:[],seeJobs:noop},
+      feed:[],savedList:[],groups:[],stageStats:[],prefs:[],cities:[],types:[],marketCities:[],tabs:[],tabsVisible:true,
+      syncedAt:'—',refreshing:false,refresh:noop,breakSource:noop,srcName:'',srcEndpoint:'',srcPoll:'',srcTransport:'',
+      matchBarText:'',matchBarAction:'',matchBarStyle:'display:none',toggleMatchOnly:noop,hScroll:noop,
+      close:noop,toggleSaveDetail:noop,applyDetail:noop,detailSaveLabel:'',detailSaveStyle:'',detailApplyLabel:'',detailApplyStyle:''};
+  }
+
+  chip(active){
+    return 'flex:none;border:1px solid '+(active?'#2B4A8B':'rgba(23,25,26,.14)')+';background:'+(active?'#2B4A8B':'#fff')+';color:'+(active?'#fff':'#4A4A44')+";border-radius:20px;padding:7px 12px;font:500 11.5px/1 Archivo,sans-serif;cursor:pointer;white-space:nowrap;scroll-snap-align:start";
+  }
+  seg(active){
+    return 'flex:1;border:none;border-radius:7px;background:'+(active?'#fff':'transparent')+';color:'+(active?'#17191A':'#77736A')+';padding:8px 0;font:'+(active?600:500)+" 12px/1 Archivo,sans-serif;cursor:pointer;box-shadow:"+(active?'0 1px 2px rgba(23,25,26,.10)':'none');
+  }
+  open(id){ this.setState({detail:id}); }
+  toggleSave(id){ this.setState(s=>{const n={...s.saved}; if(n[id]) delete n[id]; else n[id]=true; return {saved:n};}); }
+  apply(id){ this.setState(s=>{ if(s.apps[id]) return {}; const n={...s.apps}; n[id]={stage:'Applied',note:'Applied today'}; const sv={...s.saved}; delete sv[id]; return {apps:n,saved:sv}; }); }
+  advance(id){ this.setState(s=>{const a=s.apps[id]; if(!a) return {}; const n={...s.apps}; const st=NEXT[a.stage]; n[id]={stage:st,note:st==='Interview'?'Interview scheduled':'Offer received'}; return {apps:n};}); }
+
+  renderVals(){
+    const st=this.state;
+    const base=this.defaults();
+    const tabs=this.buildTabs(st);
+    if(st.status!=='ready'){
+      return {...base,tabs,isLoading:st.status==='loading',isError:st.status==='error',
+        errorMsg:st.error||'',retry:()=>this.load()};
+    }
+    const JOBS=st.jobs, MATCH=st.matchIndex, MARKETS=st.markets;
+    const strongOf=id=>MATCH[id].score>=STRONG;
+    const match=j=>(st.city==='All Texas'||j.city===st.city)&&(st.type==='All roles'||j.kind===st.type)&&(!st.matchOnly||strongOf(j.id));
+    const strongCount=JOBS.filter(j=>strongOf(j.id)).length;
+    const feed=JOBS.filter(match).sort((a,b)=>MATCH[b.id].score-MATCH[a.id].score).map(j=>({
+      ...j, kindShort:j.kind==='Internship'?'INTERN':'ENTRY',
+      strong:strongOf(j.id), score:MATCH[j.id].score, matchNote:MATCH[j.id].note,
+      cardStyle:'background:#fff;border:1px solid '+(strongOf(j.id)?'#2B4A8B':'rgba(23,25,26,.10)')+';border-radius:14px;padding:15px 15px 13px;cursor:pointer;display:flex;flex-direction:column;gap:10px;box-shadow:'+(strongOf(j.id)?'0 2px 0 #2B4A8B, 0 3px 10px rgba(43,74,139,.14)':'0 1px 2px rgba(23,25,26,.04)'),
+      postedLabel:j.posted===1?'Posted 1 day ago':'Posted '+j.posted+' days ago',
+      deadlineLabel:'closes in '+j.days+'d',
+      badgeStyle:'flex:none;font:500 9.5px/1 \'JetBrains Mono\',monospace;letter-spacing:.1em;padding:6px 8px;border-radius:6px;color:'+(j.kind==='Internship'?'#2B4A8B':'#17191A')+';background:'+(j.kind==='Internship'?'#E3E8F3':'#ECEAE3'),
+      saveLabel:st.saved[j.id]?'Saved':'Save',
+      saveStyle:'border:1px solid '+(st.saved[j.id]?'#2B4A8B':'rgba(23,25,26,.16)')+';background:'+(st.saved[j.id]?'#E3E8F3':'#fff')+';color:'+(st.saved[j.id]?'#2B4A8B':'#4A4A44')+";border-radius:8px;padding:7px 12px;font:500 11.5px/1 Archivo,sans-serif;cursor:pointer",
+      open:()=>this.open(j.id), toggleSave:(e)=>{e.stopPropagation();this.toggleSave(j.id);}
+    }));
+
+    const savedList=JOBS.filter(j=>st.saved[j.id]).map(j=>{
+      const urgent=j.days<=15, soon=j.days<=25;
+      return {...j, urgColor:urgent?'#B8442E':(soon?'#B8722E':'#2B4A8B'),
+        urgLabel:j.days+'d left',
+        urgStyle:'flex:none;font:500 9.5px/1 \'JetBrains Mono\',monospace;letter-spacing:.08em;padding:6px 8px;border-radius:6px;color:#fff;background:'+(urgent?'#B8442E':(soon?'#B8722E':'#2B4A8B')),
+        open:()=>this.open(j.id), toggleSave:()=>this.toggleSave(j.id), apply:()=>this.apply(j.id)};
+    });
+
+    const groups=STAGES.map(stage=>{
+      const items=JOBS.filter(j=>st.apps[j.id]&&st.apps[j.id].stage===stage).map(j=>({
+        id:j.id,role:j.role,firm:j.firm,city:j.city,note:st.apps[j.id].note,
+        open:()=>this.open(j.id), advance:()=>this.advance(j.id),
+        advanceLabel:stage==='Offer'?'Accept':'Move to '+NEXT[stage],
+        advanceStyle:'border:1px solid rgba(23,25,26,.16);background:#F4F2EE;color:#3A3A35;border-radius:8px;padding:7px 11px;font:500 11px/1 Archivo,sans-serif;cursor:pointer'
+      }));
+      return {stage,items,n:items.length,dotStyle:'width:7px;height:7px;border-radius:4px;flex:none;background:'+DOT[stage]};
+    }).filter(g=>g.n>0);
+
+    const appVals=Object.values(st.apps);
+    const stageStats=[{label:'Saved',n:Object.keys(st.saved).length}].concat(
+      STAGES.map(s=>({label:s,n:appVals.filter(a=>a.stage===s).length})));
+
+    const prefDefs=[['daily','Daily Texas digest','New CRE postings, 8am CT'],['deadline','Deadline reminders','3 days before each close'],['intern','Internships only','Hide entry-level full-time'],['digest','Weekly market note','DFW, Houston, Austin fundamentals']];
+    const prefs=prefDefs.map(([k,label,hint])=>{
+      const on=st.prefs[k];
+      return {label,hint,toggle:()=>this.setState(s=>({prefs:{...s.prefs,[k]:!s.prefs[k]}})),
+        trackStyle:'flex:none;width:48px;height:28px;border-radius:16px;border:none;padding:3px;cursor:pointer;display:flex;justify-content:'+(on?'flex-end':'flex-start')+';background:'+(on?'#2B4A8B':'#D9D6CE'),
+        knobStyle:'width:22px;height:22px;border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)'};
+    });
+
+    const dj=JOBS.find(j=>j.id===st.detail);
+    const applied=dj&&st.apps[dj.id];
+    const job=dj?{...dj,postedLabel:dj.posted===1?'1 day ago':dj.posted+' days ago',
+      strong:strongOf(dj.id),score:MATCH[dj.id].score,matchLines:MATCH[dj.id].lines}:{reqs:[],matchLines:[]};
+
+    const m=MARKETS[st.mktCity];
+    const mkt={ name:st.mktCity==='Texas'?'Texas · all markets':st.mktCity+' · '+(st.mktCity==='Dallas'?'DFW metroplex':'metro'), trend:m.trend, summary:m.summary, hiring:m.hiring,
+      trendStyle:'flex:none;font:700 9.5px/1 \'JetBrains Mono\',monospace;letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border-radius:6px;color:'+(m.dir==='down'?'#F0C3B8':'#CFDAF0')+';background:'+(m.dir==='down'?'rgba(184,68,46,.22)':'rgba(43,74,139,.35)'),
+      stats:m.stats.map(s=>({label:s[0],value:s[1],delta:s[2],deltaStyle:'font:500 10.5px/1.3 \'JetBrains Mono\',monospace;margin-top:5px;color:'+DELTA_COLOR[s[3]]})),
+      sectors:m.sectors.map(s=>({name:s[0],note:s[1],barStyle:'height:100%;border-radius:4px;background:#2B4A8B;width:'+s[2]+'%'})),
+      news:m.news.map(n=>({tag:n[0],head:n[1],body:n[2]})),
+      jobsLabel:st.mktCity==='Texas'?'See all Texas roles':'See '+st.mktCity+' roles',
+      seeJobs:()=>this.setState({tab:'feed',city:st.mktCity==='Texas'?'All Texas':st.mktCity,type:'All roles',matchOnly:false}) };
+
+    return {
+      ...base,
+      feedEmpty:feed.length===0,
+      refresh:()=>this.load(), breakSource:()=>this.breakSource(),
+      srcName:st.source?st.source.name:'', srcEndpoint:st.source?st.source.endpoint:'',
+      srcPoll:st.source?st.source.poll:'', srcTransport:st.source?st.source.transport:'',
+      isFeed:st.tab==='feed'&&!st.detail, isPipe:st.tab==='pipe'&&!st.detail,
+      isSaved:st.tab==='saved'&&!st.detail, isProfile:st.tab==='profile'&&!st.detail,
+      isMarket:st.tab==='market'&&!st.detail, mkt,
+      marketCities:MKT_CITIES.map(c=>({label:c,pick:()=>this.setState({mktCity:st.mktCity===c?'Texas':c}),style:this.chip(st.mktCity===c)})),
+      hScroll:(e)=>{ const el=e.currentTarget; if(el.scrollWidth<=el.clientWidth) return; const d=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY; el.scrollLeft+=d; e.preventDefault(); },
+      toggleMatchOnly:()=>this.setState(s=>({matchOnly:!s.matchOnly})),
+      matchBarText:strongCount+' roles match your resume almost exactly',
+      matchBarAction:st.matchOnly?'Show all':'Show only',
+      matchBarStyle:'margin-top:11px;width:100%;display:flex;align-items:center;gap:8px;cursor:pointer;border:1px solid '+(st.matchOnly?'#2B4A8B':'rgba(43,74,139,.28)')+';background:'+(st.matchOnly?'#2B4A8B':'#E3E8F3')+';color:'+(st.matchOnly?'#fff':'#26314A')+";border-radius:10px;padding:10px 12px;font:500 12px/1.2 Archivo,sans-serif",
+      detailOpen:!!dj, tabsVisible:!dj, job, count:feed.length, feed, savedList, savedEmpty:savedList.length===0,
+      groups, stageStats, tabs, prefs,
+      syncedAt:this.clock(st.lastSync),
+      cities:CITIES.map(c=>({label:c,pick:()=>this.setState({city:st.city===c?'All Texas':c}),style:this.chip(st.city===c)})),
+      types:TYPES.map(t=>({label:t,pick:()=>this.setState({type:st.type===t?'All roles':t}),style:this.seg(st.type===t)})),
+      close:()=>this.setState({detail:null}),
+      toggleSaveDetail:()=>dj&&this.toggleSave(dj.id),
+      detailSaveLabel:dj&&st.saved[dj.id]?'Saved':'Save',
+      detailSaveStyle:'flex:none;border:1px solid rgba(23,25,26,.18);background:#fff;color:#3A3A35;border-radius:11px;padding:14px 18px;font:500 13px/1 Archivo,sans-serif;cursor:pointer',
+      applyDetail:()=>dj&&this.apply(dj.id),
+      detailApplyLabel:applied?'In pipeline · '+st.apps[dj.id].stage:'Apply with saved resume',
+      detailApplyStyle:'flex:1;border:none;background:'+(applied?'#D9D6CE':'#2B4A8B')+';color:'+(applied?'#4A4A44':'#fff')+";border-radius:11px;padding:14px 0;font:600 13px/1 Archivo,sans-serif;cursor:"+(applied?'default':'pointer')
+    };
+  }
+}
+</script>
+</body>
+</html>
