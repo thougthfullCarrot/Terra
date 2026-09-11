@@ -134,7 +134,18 @@ and the handler routes internally.
    | `COLLECTOR_SECRET` | only if pg_cron will also call the endpoint |
    | `EXPO_ACCESS_TOKEN` | optional |
 
-3. **Deploy**, then check `https://<deployment>/health` returns `{"ok":true}`.
+3. **Deploy**, then check `https://<deployment>/health`.
+
+   Deploying before the Supabase project exists is fine and is the normal
+   order. Health answers either way, and says which state you are in:
+
+   ```jsonc
+   {"ok": true}                                   // configured and live
+   {"ok": true, "configured": false, "error": …}  // deployed, Supabase not set yet
+   ```
+
+   Every other route answers 503 until the variables are set, rather than
+   returning something misleading.
 4. Point the app at it: set `EXPO_PUBLIC_API_BASE` to the deployment URL, and
    update `SOURCE.endpoint` in `client/data-source.js`.
 
