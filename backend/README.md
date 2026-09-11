@@ -117,6 +117,42 @@ and none of them do timezone math. Same for provenance — `source` is stored as
 a stem and the ", verified 2 days ago" half is appended from `last_seen` at
 read time, because stored text would be wrong within a day.
 
+## Deploying to Vercel
+
+The API is one function: `vercel.json` rewrites every path to `api/index.ts`
+and the handler routes internally.
+
+1. **Import the repo** and set **Root Directory to `backend`** — the project is
+   a subdirectory, and Vercel defaults to the repo root.
+2. **Environment variables** (Project Settings → Environment Variables):
+
+   | | |
+   | --- | --- |
+   | `SUPABASE_URL` | your project URL |
+   | `SUPABASE_SERVICE_ROLE_KEY` | service role key — server only, never in the app |
+   | `CRON_SECRET` | any long random string; Vercel Cron sends it as a bearer token |
+   | `COLLECTOR_SECRET` | only if pg_cron will also call the endpoint |
+   | `EXPO_ACCESS_TOKEN` | optional |
+
+3. **Deploy**, then check `https://<deployment>/health` returns `{"ok":true}`.
+4. Point the app at it: set `EXPO_PUBLIC_API_BASE` to the deployment URL, and
+   update `SOURCE.endpoint` in `client/data-source.js`.
+
+The Node runtime is used deliberately rather than Edge: posting ids are hashed
+with `node:crypto`, which Edge does not provide.
+
+### Two limits worth knowing before you deploy
+
+- **Cron frequency is a plan limit.** `vercel.json` schedules `0 */2 * * *`, per
+  the spec. On the **Hobby plan Vercel runs cron jobs once a day** regardless of
+  the expression, so the two-hour cadence needs Pro — or use the pg_cron path
+  below instead, which has no such limit.
+- **`maxDuration` is 60s** in `vercel.json`. A pass over 30 Greenhouse and
+  Lever boards fits comfortably; a large Workday tenant may not, since it
+  fetches a detail document per surviving posting. If collects start timing
+  out, that is the cause — run the collector from a scheduler without a wall
+  clock (GitHub Actions, a small worker) rather than raising the limit.
+
 ## Scheduling
 
 `supabase/migrations/0004_cron.sql` schedules `0 */2 * * *` through pg_cron,

@@ -7,8 +7,13 @@ import { ExpoNotifier } from '../notify/expo.js';
 export interface HandlerConfig {
   supabaseUrl: string;
   serviceRoleKey: string;
-  /** Shared secret the scheduler sends to POST /v1/collect. */
+  /** Shared secret pg_cron sends as x-collector-secret on POST /v1/collect. */
   collectorSecret?: string;
+  /**
+   * Vercel Cron's secret. It fires a GET with `Authorization: Bearer <secret>`
+   * and no custom headers, so it cannot use collectorSecret's scheme.
+   */
+  cronSecret?: string;
   expoAccessToken?: string;
 }
 
@@ -22,6 +27,7 @@ export function configFromEnv(env: Record<string, string | undefined> = process.
     supabaseUrl,
     serviceRoleKey,
     collectorSecret: env.COLLECTOR_SECRET,
+    cronSecret: env.CRON_SECRET,
     expoAccessToken: env.EXPO_ACCESS_TOKEN
   };
 }
@@ -64,11 +70,11 @@ export function createHandler(config: HandlerConfig): (request: Request) => Prom
         return json(await reader.getMarkets());
       }
 
-      if (request.method === 'POST' && url.pathname === '/v1/collect') {
-        if (!config.collectorSecret) {
-          return json({ error: 'collector disabled: COLLECTOR_SECRET not set' }, 503);
+      if (url.pathname === '/v1/collect' && (request.method === 'POST' || request.method === 'GET')) {
+        if (!config.collectorSecret && !config.cronSecret) {
+          return json({ error: 'collector disabled: no COLLECTOR_SECRET or CRON_SECRET set' }, 503);
         }
-        if (request.headers.get('x-collector-secret') !== config.collectorSecret) {
+        if (!authorizedToCollect(request, config)) {
           return json({ error: 'forbidden' }, 403);
         }
         const report = await runCollector({
@@ -89,6 +95,23 @@ export function createHandler(config: HandlerConfig): (request: Request) => Prom
       return json({ error: message }, 500);
     }
   };
+}
+
+/**
+ * Two schedulers, two auth schemes. pg_cron POSTs with a custom header;
+ * Vercel Cron GETs with a bearer token and no way to add one. Either proves
+ * the caller is the scheduler.
+ */
+export function authorizedToCollect(request: Request, config: HandlerConfig): boolean {
+  if (
+    config.collectorSecret &&
+    request.headers.get('x-collector-secret') === config.collectorSecret
+  ) {
+    return true;
+  }
+
+  const bearer = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+  return Boolean(config.cronSecret && bearer === config.cronSecret);
 }
 
 /** 'intern,entry' -> undefined (both), 'intern' -> Internship, 'entry' -> Entry-level. */

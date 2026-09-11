@@ -13,14 +13,14 @@ const tenant = parseTenant('cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers');
 
 /** A fake tenant: one list page plus a detail document per posting. */
 function fakeWorkday(listings: unknown[], details: Record<string, unknown> = {}) {
-  const calls: { url: string; method: string; body: unknown }[] = [];
+  const calls: { url: string; method: string; body?: { offset?: number } }[] = [];
 
   const fetchImpl = vi.fn(async (url: string | URL, init?: RequestInit) => {
     const href = String(url);
     calls.push({
       url: href,
       method: init?.method ?? 'GET',
-      body: init?.body ? JSON.parse(String(init.body)) : undefined
+      body: init?.body ? (JSON.parse(String(init.body)) as { offset?: number }) : undefined
     });
 
     if (href.endsWith('/jobs')) {
