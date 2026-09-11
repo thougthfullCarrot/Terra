@@ -130,8 +130,8 @@ and the handler routes internally.
    | --- | --- |
    | `SUPABASE_URL` | your project URL |
    | `SUPABASE_SERVICE_ROLE_KEY` | service role key — server only, never in the app |
-   | `CRON_SECRET` | any long random string; Vercel Cron sends it as a bearer token |
-   | `COLLECTOR_SECRET` | only if pg_cron will also call the endpoint |
+   | `CRON_SECRET` | optional; only if something calls `/v1/collect` with a bearer token |
+   | `COLLECTOR_SECRET` | optional; only if pg_cron will call the endpoint |
    | `EXPO_ACCESS_TOKEN` | optional |
 
 3. **Deploy**, then check `https://<deployment>/health`.
@@ -152,17 +152,27 @@ and the handler routes internally.
 The Node runtime is used deliberately rather than Edge: posting ids are hashed
 with `node:crypto`, which Edge does not provide.
 
-### Two limits worth knowing before you deploy
+### Vercel serves the API, not the collector
 
-- **Cron frequency is a plan limit.** `vercel.json` schedules `0 */2 * * *`, per
-  the spec. On the **Hobby plan Vercel runs cron jobs once a day** regardless of
-  the expression, so the two-hour cadence needs Pro — or use the pg_cron path
-  below instead, which has no such limit.
-- **`maxDuration` is 60s** in `vercel.json`. A pass over 30 Greenhouse and
-  Lever boards fits comfortably; a large Workday tenant may not, since it
-  fetches a detail document per surviving posting. If collects start timing
-  out, that is the cause — run the collector from a scheduler without a wall
-  clock (GitHub Actions, a small worker) rather than raising the limit.
+`vercel.json` carries **no `crons` block**, on purpose. Vercel rejects a deploy
+outright on the Hobby plan if the schedule runs more than once a day, and the
+spec calls for every two hours — so a cron here is a deploy-time failure, not a
+degraded schedule.
+
+The collector runs on GitHub Actions instead (`.github/workflows/collect.yml`),
+which has no frequency limit and no wall clock. That is the better home for it
+regardless of plan: a function here is capped at 60s by `maxDuration`, which
+fits 30 Greenhouse and Lever boards comfortably but not a large Workday tenant,
+since that fetcher spends a request per surviving posting.
+
+To move it here anyway on a Pro plan, add:
+
+```json
+"crons": [{ "path": "/v1/collect", "schedule": "0 */2 * * *" }]
+```
+
+and set `CRON_SECRET` — Vercel Cron sends it as a bearer token. Disable the
+Actions workflow if you do, or two collectors will race on `first_seen`.
 
 ## Scheduling
 

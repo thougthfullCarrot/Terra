@@ -5,6 +5,5 @@
     "api/index.ts": {
       "maxDuration": 60
     }
-  },
-  "crons": [{ "path": "/v1/collect", "schedule": "0 */2 * * *" }]
+  }
 }

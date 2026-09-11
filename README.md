@@ -47,11 +47,13 @@ Nothing in this project needs to run on your computer. The split:
 | Firm slug checks | GitHub Actions (`verify-firms.yml`) | weekly, or the Actions tab |
 | Tests and typecheck | GitHub Actions (`ci.yml`) | every push and pull request |
 
-**The collector runs on Actions rather than Vercel Cron on purpose.** Vercel's
-Hobby plan runs cron once a day whatever the expression says, and caps a
-function at 60 seconds. A runner has neither limit. `vercel.json` still carries
-the two-hour schedule, so it works on Pro if you would rather keep it all in
-one place — but do not enable both, or two collectors will race.
+**The collector runs on Actions rather than Vercel Cron on purpose.** A Hobby
+plan *rejects the deploy* for any schedule more frequent than daily, and the
+spec calls for every two hours — so `vercel.json` carries no `crons` block at
+all. Vercel also caps a function at 60 seconds, which a large Workday tenant
+will outgrow. A runner has neither limit. To move the schedule to Vercel on a
+Pro plan, see [`backend/README.md`](backend/README.md#vercel-serves-the-api-not-the-collector)
+— and disable the workflow if you do, or two collectors will race.
 
 ### Connecting the repo to Vercel
 
