@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { loadFirmSeed } from '../collector/firmSeed.js';
 import { slugCandidates } from '../collector/slugCandidates.js';
+import { namesMatch } from '../collector/nameMatch.js';
 
 const SEED_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -42,6 +43,10 @@ interface Hit {
   /** Jobs on the board, or null when the count is not knowable (Workday). */
   jobs: number | null;
   host?: string;
+  /** The board's own company name, where the platform exposes one. */
+  owner: string | null;
+  /** True only when the board's company name matches the firm we wanted. */
+  confirmed: boolean;
 }
 
 interface Result {
@@ -90,10 +95,10 @@ async function probe(firm: string, limit: number): Promise<Result> {
 
   for (const slug of candidates) {
     tried++;
-    const greenhouse = await checkGreenhouse(slug);
+    const greenhouse = await checkGreenhouse(firm, slug);
     if (greenhouse) return { firm, hit: greenhouse, tried };
 
-    const lever = await checkLever(slug);
+    const lever = await checkLever(firm, slug);
     if (lever) return { firm, hit: lever, tried };
   }
 
@@ -107,34 +112,54 @@ async function probe(firm: string, limit: number): Promise<Result> {
   return { firm, hit: null, tried };
 }
 
-async function checkGreenhouse(slug: string): Promise<Hit | null> {
+async function checkGreenhouse(firm: string, slug: string): Promise<Hit | null> {
   const url = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs`;
   const body = await getJson<{ jobs?: unknown[] }>(url);
   if (!body) return null;
-  // A real board with nothing open still answers 200 — the slug is what is
-  // being established here, not whether they are hiring.
-  return { ats: 'greenhouse', slug, jobs: Array.isArray(body.jobs) ? body.jobs.length : 0 };
+
+  // A 200 proves a board exists at this slug, NOT that it belongs to this firm.
+  // Generic slugs like 'lincoln' or 'integra' are owned by whoever registered
+  // them first, so the board's own company name decides it.
+  const board = await getJson<{ name?: string }>(
+    `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}`
+  );
+  const owner = board?.name ?? null;
+
+  return {
+    ats: 'greenhouse',
+    slug,
+    // A real board with nothing open still answers 200 — the slug is what is
+    // being established here, not whether they are hiring.
+    jobs: Array.isArray(body.jobs) ? body.jobs.length : 0,
+    owner,
+    confirmed: owner ? namesMatch(firm, owner) : false
+  };
 }
 
-async function checkLever(slug: string): Promise<Hit | null> {
+async function checkLever(firm: string, slug: string): Promise<Hit | null> {
   const url = `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`;
-  const body = await getJson<unknown[]>(url);
+  const body = await getJson<{ categories?: { team?: string } }[]>(url);
   if (!Array.isArray(body)) return null;
-  return { ats: 'lever', slug, jobs: body.length };
+
+  // Lever exposes no company name, so ownership cannot be settled from the API.
+  // Reported as unconfirmed rather than guessed at.
+  return { ats: 'lever', slug, jobs: body.length, owner: null, confirmed: false };
 }
 
 /**
- * Workday tenants live at <tenant>.wd<n>.myworkdayjobs.com. The host either
- * resolves or it does not, which is enough to say the firm is on Workday; the
- * site path inside it still has to be read off their careers page.
+ * Workday tenants live at <tenant>.wd<n>.myworkdayjobs.com.
+ *
+ * The test is whether the hostname resolves at all, not what it answers. An
+ * earlier version used HEAD and required status < 400, which read a tenant
+ * replying 405 or redirecting as missing — and reported zero Workday tenants
+ * across thirty firms, which was the bug rather than the finding.
  */
 async function checkWorkday(slug: string): Promise<Hit | null> {
   for (const number of WORKDAY_HOSTS) {
     const host = `${slug}.wd${number}.myworkdayjobs.com`;
-    const status = await headStatus(`https://${host}/`);
-    // Workday answers a bare tenant root with a redirect or a page; a missing
-    // tenant fails to resolve at all.
-    if (status && status < 400) return { ats: 'workday', slug, jobs: null, host };
+    if (await resolves(`https://${host}/`)) {
+      return { ats: 'workday', slug, jobs: null, host, owner: null, confirmed: false };
+    }
   }
   return null;
 }
@@ -152,17 +177,21 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
-async function headStatus(url: string): Promise<number | null> {
+/**
+ * Whether a host answers at all. Any HTTP response — 200, 302, 405, even 500 —
+ * means the hostname exists; only a DNS or connection failure throws.
+ */
+async function resolves(url: string): Promise<boolean> {
   try {
-    const response = await fetch(url, {
-      method: 'HEAD',
+    await fetch(url, {
+      method: 'GET',
       redirect: 'manual',
       headers: { 'user-agent': USER_AGENT },
       signal: AbortSignal.timeout(12_000)
     });
-    return response.status;
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -173,21 +202,30 @@ function report(result: Result): void {
     return;
   }
 
-  const { ats, slug, jobs, host } = result.hit;
+  const { ats, slug, jobs, host, owner, confirmed } = result.hit;
   const detail =
     ats === 'workday'
       ? `tenant ${host} — site name still needed`
-      : `${jobs} jobs on the board`;
-  console.log(`HIT   ${name}  ${ats.padEnd(10)} ${slug.padEnd(24)} ${detail}`);
+      : `${jobs} jobs · board belongs to ${owner ?? 'an unnamed company'}`;
+
+  // CHECK means a board exists but is not provably this firm's. Treating those
+  // as findings is how a feed fills up with another industry's jobs.
+  const label = confirmed ? 'HIT  ' : 'CHECK';
+  console.log(`${label} ${name}  ${ats.padEnd(10)} ${slug.padEnd(24)} ${detail}`);
 }
 
 function summarize(results: Result[]): void {
   const count = (ats: Hit['ats']) => results.filter((r) => r.hit?.ats === ats).length;
   const misses = results.filter((r) => !r.hit).length;
+  const confirmed = results.filter((r) => r.hit?.confirmed).length;
+  const unconfirmed = results.filter((r) => r.hit && !r.hit.confirmed).length;
 
   console.log(
     `\n${count('greenhouse')} greenhouse · ${count('lever')} lever · ` +
       `${count('workday')} workday tenants · ${misses} not found`
+  );
+  console.log(
+    `${confirmed} confirmed as the right company · ${unconfirmed} need a human to confirm`
   );
 
   if (count('workday')) {
@@ -202,9 +240,20 @@ function printSql(results: Result[]): void {
   const hits = results.filter((result) => result.hit);
   if (!hits.length) return;
 
-  console.log('\n-- Verified boards:');
+  console.log('\n-- Boards confirmed to belong to the firm:');
   for (const { firm, hit } of hits) {
-    if (!hit) continue;
+    if (!hit || !hit.confirmed) continue;
+    const name = firm.replace(/'/g, "''");
+    console.log(
+      `update firms set ats = '${hit.ats}', ats_slug = '${hit.slug}', ats_host = null ` +
+        `where name = '${name}';`
+    );
+  }
+
+  console.log('\n-- Boards found but NOT confirmed as this firm. Open each one and');
+  console.log('-- check the company before enabling it:');
+  for (const { firm, hit } of hits) {
+    if (!hit || hit.confirmed) continue;
     const name = firm.replace(/'/g, "''");
     if (hit.ats === 'workday') {
       console.log(
@@ -213,8 +262,8 @@ function printSql(results: Result[]): void {
       );
     } else {
       console.log(
-        `update firms set ats = '${hit.ats}', ats_slug = '${hit.slug}', ats_host = null ` +
-          `where name = '${name}';`
+        `-- ${firm}: https://boards.greenhouse.io/${hit.slug} ` +
+          `(board says "${hit.owner ?? 'unnamed'}")`
       );
     }
   }
