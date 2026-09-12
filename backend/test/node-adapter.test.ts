@@ -36,7 +36,7 @@ describe('toNodeHandler', () => {
     const response = await fetch(`${base}/health`);
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('application/json');
-    await expect(response.json()).resolves.toEqual({ ok: true });
+    await expect(response.json()).resolves.toMatchObject({ ok: true });
   });
 
   it('passes the query string through', async () => {

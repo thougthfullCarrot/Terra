@@ -46,6 +46,7 @@ Nothing in this project needs to run on your computer. The split:
 | The collector | GitHub Actions (`collect.yml`) | every 2 hours, or the Actions tab |
 | Firm slug checks | GitHub Actions (`verify-firms.yml`) | weekly, or the Actions tab |
 | Tests and typecheck | GitHub Actions (`ci.yml`) | every push and pull request |
+| Deployment check | GitHub Actions (`check-deployment.yml`) | every push to the default branch, daily |
 
 **The collector runs on Actions rather than Vercel Cron on purpose.** A Hobby
 plan *rejects the deploy* for any schedule more frequent than daily, and the
@@ -75,6 +76,19 @@ Settings → Secrets and variables → Actions:
 | `SUPABASE_URL` | `collect.yml` |
 | `SUPABASE_SERVICE_ROLE_KEY` | `collect.yml` |
 | `EXPO_ACCESS_TOKEN` | `collect.yml`, optional |
+
+And one repository **variable** (same page, Variables tab — it is a public URL,
+not a secret):
+
+| Variable | Needed by |
+| --- | --- |
+| `DEPLOYMENT_URL` | `check-deployment.yml`, e.g. `https://terra-api.vercel.app` |
+
+`check-deployment.yml` waits until the deployment reports the commit being
+checked before going green. Vercel serves the previous deployment while a new
+one builds, so a plain health poll can pass against old code; the API reports
+its `VERCEL_GIT_COMMIT_SHA` at `/health` to make the difference visible. Without
+the variable set the workflow skips with a warning rather than failing.
 
 `verify-firms.yml` needs no secrets — it only reads public job boards, which is
 why it is the one to run first.

@@ -1,0 +1,120 @@
+# Verifies that a push actually reached production on Vercel.
+#
+# Vercel serves the PREVIOUS deployment while a new one builds, so polling
+# /health on its own can go green against old code. This waits until the
+# deployment reports the commit being checked, which is the only way to know
+# the push is live without a Vercel token.
+#
+# Needs one repository variable (Settings -> Secrets and variables -> Actions
+# -> Variables), not a secret — it is a public URL:
+#
+#   DEPLOYMENT_URL = https://your-project.vercel.app
+name: Check deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # A daily poke catches a deployment that fell over without a push.
+  schedule:
+    - cron: '30 13 * * *'
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Resolve the deployment URL
+        id: target
+        env:
+          DEPLOYMENT_URL: ${{ vars.DEPLOYMENT_URL }}
+        run: |
+          if [ -z "$DEPLOYMENT_URL" ]; then
+            echo "::warning::No DEPLOYMENT_URL repository variable set — skipping. \
+          Add it under Settings > Secrets and variables > Actions > Variables."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Trailing slashes would produce '//health'.
+          echo "url=${DEPLOYMENT_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for this commit to go live
+        if: steps.target.outputs.skip != 'true'
+        id: wait
+        env:
+          URL: ${{ steps.target.outputs.url }}
+          EXPECTED: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+
+          # Vercel builds this project in well under two minutes; ten is a
+          # generous ceiling that still fails rather than hanging.
+          for attempt in $(seq 1 40); do
+            body=$(curl -fsS --max-time 15 "$URL/health" 2>/dev/null || true)
+
+            if [ -n "$body" ]; then
+              deployed=$(jq -r '.commit // "unknown"' <<<"$body" 2>/dev/null || echo parse-error)
+              ok=$(jq -r '.ok // false' <<<"$body" 2>/dev/null || echo false)
+
+              if [ "$ok" = "true" ] && [ "$deployed" = "$EXPECTED" ]; then
+                echo "Live on $EXPECTED after $((attempt * 15))s."
+                echo "body=$body" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+
+              echo "attempt $attempt: ok=$ok commit=${deployed:0:12} want=${EXPECTED:0:12}"
+            else
+              echo "attempt $attempt: no response yet"
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::$URL never reported commit $EXPECTED. \
+          Either the build failed, or the deployment is not tracking this branch."
+          echo "last_body=${body:-<no response>}" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      # The static output directory is public by design; the source tree must
+      # not be in it. This pins the outputDirectory setting: pointing it at '.'
+      # would serve src/ at the deployment URL.
+      - name: Assert the source tree is not served statically
+        if: steps.target.outputs.skip != 'true'
+        env:
+          URL: ${{ steps.target.outputs.url }}
+        run: |
+          set -uo pipefail
+          leaked=0
+
+          for path in /src/api/handler.ts /package.json /tsconfig.json /vercel.json; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$URL$path" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "::error::$path is publicly readable at the deployment URL."
+              leaked=1
+            else
+              echo "ok: $path -> $code"
+            fi
+          done
+
+          exit "$leaked"
+
+      - name: Report
+        if: always() && steps.target.outputs.skip != 'true'
+        env:
+          URL: ${{ steps.target.outputs.url }}
+        run: |
+          {
+            echo "## Deployment check"
+            echo
+            echo "- URL: \`$URL\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Result: **${{ steps.wait.outcome == 'success' && 'live' || 'not live' }}**"
+            echo
+            echo '```json'
+            curl -fsS --max-time 15 "$URL/health" 2>/dev/null || echo '{"error":"no response"}'
+            echo
+            echo '```'
+            echo
+            echo "\`configured: false\` is expected until the Supabase variables are set."
+          } >> "$GITHUB_STEP_SUMMARY"

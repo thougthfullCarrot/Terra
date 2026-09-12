@@ -80,6 +80,13 @@ describe('an unconfigured deployment', () => {
     // Vercel's rewrite can append one; the path check must not be confused.
     expect((await fetch(`${base}/health?from=vercel`)).status).toBe(200);
   });
+
+  it('reports the build commit even while unconfigured', async () => {
+    // A deploy check has to identify which build answered before it can say
+    // whether the push it is verifying is actually live.
+    const body = (await (await fetch(`${base}/health`)).json()) as { commit: unknown };
+    expect('commit' in (body as object)).toBe(true);
+  });
 });
 
 describe('a configured deployment', () => {
@@ -95,6 +102,6 @@ describe('a configured deployment', () => {
 
     expect(response.status).toBe(200);
     // The real handler's health payload, not the unconfigured stand-in.
-    await expect(response.json()).resolves.toEqual({ ok: true });
+    await expect(response.json()).resolves.toMatchObject({ ok: true, configured: true });
   });
 });

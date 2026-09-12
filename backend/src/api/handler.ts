@@ -15,6 +15,13 @@ export interface HandlerConfig {
    */
   cronSecret?: string;
   expoAccessToken?: string;
+  /**
+   * The git commit this build came from, reported by `/health`. Vercel sets
+   * VERCEL_GIT_COMMIT_SHA automatically. Without it a health check cannot tell
+   * a new deployment from the previous one still being served while the new
+   * build runs.
+   */
+  commit?: string;
 }
 
 export function configFromEnv(env: Record<string, string | undefined> = process.env): HandlerConfig {
@@ -28,7 +35,8 @@ export function configFromEnv(env: Record<string, string | undefined> = process.
     serviceRoleKey,
     collectorSecret: env.COLLECTOR_SECRET,
     cronSecret: env.CRON_SECRET,
-    expoAccessToken: env.EXPO_ACCESS_TOKEN
+    expoAccessToken: env.EXPO_ACCESS_TOKEN,
+    commit: env.VERCEL_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA
   };
 }
 
@@ -85,7 +93,11 @@ export function createHandler(config: HandlerConfig): (request: Request) => Prom
       }
 
       if (request.method === 'GET' && url.pathname === '/health') {
-        return json({ ok: true });
+        return json({
+          ok: true,
+          configured: true,
+          commit: config.commit ?? null
+        });
       }
 
       return json({ error: 'not found' }, 404);

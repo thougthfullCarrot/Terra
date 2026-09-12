@@ -35,6 +35,9 @@ export default async function vercelHandler(
       ok: health ? true : undefined,
       deployed: true,
       configured: false,
+      // Reported even here: a health check needs to know which build answered,
+      // and an unconfigured deployment is still a deployment worth verifying.
+      commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
       error: message
     });
   }
