@@ -1,0 +1,66 @@
+# Finds each firm's real ATS board by asking the platforms directly.
+#
+# The seeded slugs scored 0 for 30 — a clean sweep, not near misses — which
+# says the firms were assigned the wrong ATS rather than a misspelled slug.
+# This tries every plausible slug on Greenhouse and Lever, then checks whether
+# a Workday tenant exists, and prints SQL for whatever it finds.
+#
+# Manual only. It makes a few hundred requests to third-party APIs, which is
+# fine occasionally and rude on a schedule.
+name: Probe ATS boards
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidates:
+        description: 'Slug candidates to try per firm'
+        required: false
+        default: '8'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Probe every firm
+        id: probe
+        env:
+          CANDIDATES: ${{ inputs.candidates || '8' }}
+        run: |
+          set +e
+          npm run --silent probe:slugs -- --sql --limit "$CANDIDATES" 2>&1 | tee /tmp/probe.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the findings
+        if: always()
+        run: |
+          {
+            echo '## ATS board probe'
+            echo
+            echo '```'
+            cat /tmp/probe.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Exit 1 means every firm missed on all three platforms. That is a real
+      # finding — the firm list needs replacing, not correcting — so it should
+      # be visible rather than a quiet green tick.
+      - name: Fail if nothing was found
+        if: steps.probe.outputs.exit_code != '0'
+        run: |
+          echo "No firm resolved to a readable board. The firm list needs rebuilding."
+          exit 1
