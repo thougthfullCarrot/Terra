@@ -1,0 +1,113 @@
+# Candidate firms for the ATS probe.
+#
+# THESE ARE UNVERIFIED GUESSES. Nothing here belongs in the database until the
+# probe confirms a board exists and that it belongs to this firm. That is the
+# whole point of the split: the first firm list went straight into a migration
+# and every one of its 30 slugs was wrong, two of them pointing at unrelated
+# companies including a veterinary hospital.
+#
+# So this file is cheap and disposable. Add names freely, delete what misses,
+# and let `npm run probe:slugs` decide. A name that is defunct, acquired, or
+# simply not on Greenhouse or Lever costs one HTTP request to rule out.
+#
+# Bias is deliberately toward small and mid-size Texas firms. The enterprise
+# names (CBRE, JLL, Cushman & Wakefield, Colliers, Newmark) all run Workday,
+# which cannot currently be read — see src/collector/sources/workday.ts. Firms
+# of 20-500 people are the ones that use Greenhouse and Lever, and they are
+# also where an intern actually gets hired.
+#
+# One firm per line. Blank lines and # comments are ignored.
+
+# --- Dallas / Fort Worth: brokerage and services ---
+Younger Partners
+Holt Lunsford Commercial
+Bradford Commercial Real Estate Services
+Cawley Partners
+Henry S. Miller Companies
+Edge Realty Partners
+Venture Commercial Real Estate
+The Retail Connection
+Shop Companies
+Structure Commercial
+Open Realty Advisors
+Dunhill Partners
+Vari
+
+# --- Dallas / Fort Worth: owners and developers ---
+Billingsley Company
+Provident Realty Advisors
+Woodbine Development Corporation
+Hall Group
+Trademark Property Company
+Champion Partners
+Jackson-Shaw
+KDC Real Estate Development
+Knightvest Residential
+Lantower Residential
+Highland Resources
+Urban Logistics Realty
+Alliance Industrial Company
+
+# --- Houston ---
+Boxer Property
+Griffin Partners
+Midway Companies
+Moody Rambin
+Braun Enterprises
+Radom Capital
+Triten Real Estate Partners
+Lovett Commercial
+Fidelis Realty Partners
+Read King
+Levcor
+Wile Interests
+Venterra Realty
+Sueba USA
+Hines
+Transwestern Development Company
+SVN J Beard Real Estate
+
+# --- Austin ---
+Stratus Properties
+Aquila Commercial
+Live Oak Gottesman
+Riverside Resources
+Cielo Property Group
+Capital Commercial Investments
+Rastegar Property Company
+Stonelake Capital Partners
+Endeavor Real Estate Group
+ECR Austin
+Nelsen Partners
+
+# --- San Antonio ---
+REOC San Antonio
+Endura Advisory Group
+Barshop and Oles
+Embrey Partners
+GrayStreet Partners
+Lynd Group
+Weston Urban
+Silver Ventures
+Titan Development
+
+# --- El Paso and border ---
+River Oaks Properties
+Hunt Companies
+
+# --- Investment, capital markets, and multifamily operators in Texas ---
+Ashcroft Capital
+Bell Partners
+Cortland
+Roberts Resorts
+Tricon Residential
+Presidium Group
+Leon Capital Group
+Pennybacker Capital
+Virtus Real Estate Capital
+Thackeray Partners
+Dalfen Industrial
+Sealy and Company
+Moody National
+Nitya Capital
+Camden Property Trust

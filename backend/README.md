@@ -32,6 +32,27 @@ npm run collect               # a real pass
 npx tsx src/bin/serve.ts      # the API on :8787
 ```
 
+### The firm list
+
+Two files, deliberately separate:
+
+| | |
+| --- | --- |
+| `data/firm-candidates.txt` | guesses. Cheap, disposable, edit freely. |
+| `supabase/migrations/0002_seed_firms.sql` | verified boards only. |
+
+A name reaches the migration only after `npm run probe:slugs` confirms both
+that a board exists and that the board's own company name matches the firm.
+The first version of this project skipped that step: 30 guessed slugs went
+straight into the migration, all 30 were wrong, and two of the four that
+answered belonged to unrelated companies — one of them a veterinary hospital.
+
+To add firms: put names in the candidate file, run the **Probe ATS boards**
+workflow, and paste the confirmed rows it prints into the migration.
+
+Bias the candidate list toward small and mid-size Texas firms. The enterprise
+names all run Workday, which cannot currently be read at all.
+
 **Before the first real run, verify the firm slugs.** `0002_seed_firms.sql`
 ships 30 firms with *guessed* ATS slugs, and a clever collector pointed at 30
 wrong slugs produces an empty feed that looks like a clean run.

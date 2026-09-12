@@ -32,13 +32,13 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { loadFirmSeed } from '../collector/firmSeed.js';
+import { loadFirmCandidates } from '../collector/firmCandidates.js';
 import { slugCandidates } from '../collector/slugCandidates.js';
 import { namesMatch } from '../collector/nameMatch.js';
 
-const SEED_PATH = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../supabase/migrations/0002_seed_firms.sql'
-);
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SEED_PATH = resolve(HERE, '../../supabase/migrations/0002_seed_firms.sql');
+const CANDIDATES_PATH = resolve(HERE, '../../data/firm-candidates.txt');
 
 /** Workday spreads tenants across numbered hosts; these cover almost all of them. */
 const WORKDAY_HOSTS = [1, 3, 5, 12, 101];
@@ -69,22 +69,30 @@ async function main(): Promise<void> {
   const limit = argValue('--limit', 8);
   const wantSql = process.argv.includes('--sql');
 
-  const firms = await loadFirmSeed(SEED_PATH);
+  // Candidates by default: the seed migration holds only verified firms, so
+  // re-probing it learns nothing. --from-seed re-checks the verified ones.
+  const fromSeed = process.argv.includes('--from-seed');
+  const source = fromSeed ? SEED_PATH : CANDIDATES_PATH;
+  const firms = fromSeed
+    ? (await loadFirmSeed(SEED_PATH)).map((firm) => firm.name)
+    : await loadFirmCandidates(CANDIDATES_PATH);
+
   if (!firms.length) {
-    console.error('No firms found in the seed migration.');
+    console.error(`No firms found in ${source}.`);
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Probing ${firms.length} firms, up to ${limit} slug candidates each.\n`);
+  console.log(
+    `Probing ${firms.length} firms from ${fromSeed ? 'the seed migration' : 'the candidate list'}, ` +
+      `up to ${limit} slug candidates each.\n`
+  );
 
   const results: Result[] = [];
   // Two firms at a time. These are public APIs answering for free; a burst of
   // 400 parallel requests is how you get rate limited and learn nothing.
   for (let i = 0; i < firms.length; i += 2) {
-    const batch = await Promise.all(
-      firms.slice(i, i + 2).map((firm) => probe(firm.name, limit))
-    );
+    const batch = await Promise.all(firms.slice(i, i + 2).map((firm) => probe(firm, limit)));
     for (const result of batch) {
       report(result);
       results.push(result);

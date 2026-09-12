@@ -12,8 +12,10 @@ export function parseFirmSeed(sql: string): FirmRow[] {
   const firms: FirmRow[] = [];
   let id = 0;
 
-  // Matches: ('CBRE', 'greenhouse', 'cbre'), with any whitespace between.
-  const row = /\(\s*'((?:[^']|'')*)'\s*,\s*'(greenhouse|lever|workday|icims)'\s*,\s*'((?:[^']|'')*)'\s*\)/g;
+  // Matches ('Firm', 'greenhouse', 'slug') and the same with trailing columns
+  // such as slug_verified or active, which rows carry once a firm is verified.
+  const row =
+    /\(\s*'((?:[^']|'')*)'\s*,\s*'(greenhouse|lever|workday|icims)'\s*,\s*'((?:[^']|'')*)'\s*(?:,[^)]*)?\)/g;
 
   for (const match of sql.matchAll(row)) {
     firms.push({
