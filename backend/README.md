@@ -14,7 +14,8 @@ src/
   notify/           Expo push
 supabase/
   migrations/       schema, firm seed, market seed, pg_cron schedule
-test/               102 tests, no network and no database required
+data/               candidate firms for the probe (unverified)
+test/               171 tests, no network and no database required
 ```
 
 ## Getting it running
@@ -53,9 +54,24 @@ workflow, and paste the confirmed rows it prints into the migration.
 Bias the candidate list toward small and mid-size Texas firms. The enterprise
 names all run Workday, which cannot currently be read at all.
 
-**Before the first real run, verify the firm slugs.** `0002_seed_firms.sql`
-ships 30 firms with *guessed* ATS slugs, and a clever collector pointed at 30
-wrong slugs produces an empty feed that looks like a clean run.
+### Finding boards: `probe:slugs`
+
+```bash
+npm run probe:slugs             # every name in data/firm-candidates.txt
+npm run probe:slugs -- --sql    # print SQL for what it finds
+npm run probe:slugs -- --from-seed   # re-check the firms already in the migration
+```
+
+For each candidate it tries every plausible slug on Greenhouse and Lever, and
+reports `HIT` only when the board's own company name matches. Anything else is
+`CHECK`, printed with the name the board actually gave, because a slug like
+`highland` or `integra` belongs to whoever registered it first.
+
+Workday is probed too but **does not work**: every tenant host answers 406 to a
+server client, identically for real and invented hostnames. See
+`src/collector/sources/workday.ts`.
+
+### Checking boards already in the migration: `verify:firms`
 
 ```bash
 npm run verify:firms            # check the seed, no database or credentials needed
