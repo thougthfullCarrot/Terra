@@ -1,0 +1,6 @@
+{
+  "service": "terra-api",
+  "description": "Texas CRE job tracker API. See /health for status.",
+  "routes": ["/health", "/v1/postings", "/v1/markets", "/v1/collect"],
+  "why_this_file_exists": "Vercel's outputDirectory points here so it does not expect a static site at the project root. Without a tracked file this directory would not survive a clone, and the build would fail with 'No Output Directory named public found'. Do not delete."
+}

@@ -152,6 +152,25 @@ and the handler routes internally.
 The Node runtime is used deliberately rather than Edge: posting ids are hashed
 with `node:crypto`, which Edge does not provide.
 
+### Why there is a `public/` directory
+
+`package.json` has a `build` script, so Vercel's "Other" preset runs it and
+then expects a static output directory to serve. This is an API with no front
+end, and the `tsc` build only emits to `dist/` for local type-checking — so
+without `outputDirectory` the deploy fails with *"No Output Directory named
+'public' found after the Build completed."*
+
+`outputDirectory` points at `public/` rather than `.` on purpose. Vercel checks
+the filesystem **before** applying rewrites, so whatever is in the output
+directory is publicly fetchable and the catch-all rewrite does not shadow it.
+Pointing it at `.` would publish `src/`, `package.json` and the rest of the
+source tree at the deployment URL. Pointing it at `public/` exposes only the
+one marker file there.
+
+`public/index.json` is tracked because git does not keep empty directories, and
+a missing `public/` brings the original build failure straight back. It is not
+cruft — do not delete it.
+
 ### Vercel serves the API, not the collector
 
 `vercel.json` carries **no `crons` block**, on purpose. Vercel rejects a deploy
