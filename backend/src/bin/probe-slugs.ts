@@ -214,7 +214,14 @@ async function statusOf(url: string): Promise<number | null> {
     const response = await fetch(url, {
       method: 'GET',
       redirect: 'follow',
-      headers: { 'user-agent': USER_AGENT },
+      headers: {
+        'user-agent': USER_AGENT,
+        // Without this every tenant answered 406 Not Acceptable — uniformly,
+        // for firms that have a Workday tenant and firms that do not. The
+        // request was simply malformed: asking for an HTML page while stating
+        // no acceptable type at all.
+        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
       signal: AbortSignal.timeout(12_000)
     });
     return response.status;
@@ -293,10 +300,11 @@ function printSql(results: Result[]): void {
           `ats_slug = '${hit.slug}/<site>' where name = '${name}';  -- site still needed`
       );
     } else {
-      console.log(
-        `-- ${firm}: https://boards.greenhouse.io/${hit.slug} ` +
-          `(board says "${hit.owner ?? 'unnamed'}")`
-      );
+      const board =
+        hit.ats === 'lever'
+          ? `https://jobs.lever.co/${hit.slug}`
+          : `https://boards.greenhouse.io/${hit.slug}`;
+      console.log(`-- ${firm}: ${board} (${hit.ats}, board says "${hit.owner ?? 'unnamed'}")`);
     }
   }
 
