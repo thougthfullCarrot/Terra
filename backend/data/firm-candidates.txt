@@ -16,6 +16,22 @@
 # of 20-500 people are the ones that use Greenhouse and Lever, and they are
 # also where an intern actually gets hired.
 #
+# RESULTS SO FAR: 110 names probed across two runs, 2 confirmed boards.
+# Lincoln Property Company (greenhouse/lincoln) and Cortland
+# (greenhouse/cortland). That is a hit rate near 1%, and biasing this list
+# toward smaller firms did not improve it — the second run of 80 small and
+# mid-size Texas firms produced exactly one.
+#
+# The conclusion is about the method, not the names: which firms use Greenhouse
+# or Lever is not publicly enumerable and not guessable, so generating
+# candidates and probing them does not scale to the 30 firms the collector
+# needs. Adding another hundred names here is unlikely to change that.
+#
+# Two approaches that do work are in backend/README.md under "Getting to a real
+# firm list": an aggregator API, which the original spec already called for, or
+# a person reading careers pages. Keep this file for the occasional firm you
+# already know about.
+#
 # One firm per line. Blank lines and # comments are ignored.
 
 # --- Dallas / Fort Worth: brokerage and services ---
@@ -98,7 +114,6 @@ Hunt Companies
 # --- Investment, capital markets, and multifamily operators in Texas ---
 Ashcroft Capital
 Bell Partners
-Cortland
 Roberts Resorts
 Tricon Residential
 Presidium Group

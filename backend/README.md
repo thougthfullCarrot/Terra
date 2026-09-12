@@ -54,6 +54,40 @@ workflow, and paste the confirmed rows it prints into the migration.
 Bias the candidate list toward small and mid-size Texas firms. The enterprise
 names all run Workday, which cannot currently be read at all.
 
+### Getting to a real firm list
+
+**The guess-and-probe approach has been tested and it does not scale.** 110
+firm names across two runs produced two confirmed boards — Lincoln Property
+Company and Cortland. Biasing the second run toward small and mid-size Texas
+firms, on the theory that they are likelier to use Greenhouse or Lever, changed
+nothing: 80 names, one hit.
+
+The reason is structural. Which ATS a company uses is not published anywhere
+and cannot be derived from its name, and neither Greenhouse nor Lever offers a
+way to search across boards. So the only thing a probe can do is confirm a
+guess, and the guesses are about 1% right. Reaching the 30 firms the spec calls
+for would take thousands of candidates.
+
+Two approaches do work:
+
+**An aggregator API.** The original spec already calls for this as source 2 —
+Adzuna or JSearch via RapidAPI, roughly $30/month, queried for Texas CRE
+keywords. It inverts the problem: instead of asking "does this firm have a
+board", it returns postings that already match, and the firm list falls out of
+the results. Given the hit rate above, this is the primary path rather than a
+later addition. `RawJob.ats` already has an `'aggregator'` case and the
+provenance string for it, so the normalizer, scorer and API need no changes.
+
+**A person with a browser.** Open a firm's careers page and the ATS is visible
+in the URL — `boards.greenhouse.io/x`, `jobs.lever.co/x`,
+`x.wd1.myworkdayjobs.com`. About a minute per firm, so an afternoon gets a real
+list of 30. Slower than the aggregator but free, and it is the only way to
+resolve Workday tenants at all.
+
+Candidate names still go in `data/firm-candidates.txt` and still get confirmed
+by the probe — that pipeline works fine. It just cannot be the source of
+coverage.
+
 ### Finding boards: `probe:slugs`
 
 ```bash

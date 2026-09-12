@@ -20,7 +20,10 @@
 insert into firms (name, ats, ats_slug, slug_verified) values
   -- Board name reads "Lincoln Property Company through LinkedIn"; 15 postings
   -- at the time of verification.
-  ('Lincoln Property Company', 'greenhouse', 'lincoln', true)
+  ('Lincoln Property Company', 'greenhouse', 'lincoln', true),
+  -- Multifamily owner-operator, Atlanta based with large Dallas, Houston and
+  -- Austin portfolios. Board name matched exactly.
+  ('Cortland', 'greenhouse', 'cortland', true)
 on conflict (name) do nothing;
 
 -- Boards that exist but could not be attributed from the API. Lever publishes
