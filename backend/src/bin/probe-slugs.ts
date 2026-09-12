@@ -47,6 +47,8 @@ interface Hit {
   owner: string | null;
   /** True only when the board's company name matches the firm we wanted. */
   confirmed: boolean;
+  /** What each probed host answered, kept so a null result can be judged. */
+  evidence?: string;
 }
 
 interface Result {
@@ -149,19 +151,44 @@ async function checkLever(firm: string, slug: string): Promise<Hit | null> {
 /**
  * Workday tenants live at <tenant>.wd<n>.myworkdayjobs.com.
  *
- * The test is whether the hostname resolves at all, not what it answers. An
- * earlier version used HEAD and required status < 400, which read a tenant
- * replying 405 or redirecting as missing — and reported zero Workday tenants
- * across thirty firms, which was the bug rather than the finding.
+ * Two earlier versions of this got it wrong in opposite directions, so it now
+ * reports what the host actually said instead of ruling on it:
+ *
+ *   v1 used HEAD and required status < 400 — a tenant answering 405 or
+ *      redirecting read as missing, and it found 0 tenants across 30 firms.
+ *   v2 asked only whether the hostname resolved — but *.wd1.myworkdayjobs.com
+ *      is a wildcard, so every firm "had" a tenant, including ones that plainly
+ *      do not.
+ *
+ * A wildcard DNS record answers for any name; the question is whether anything
+ * is actually served there. Only a 200 counts as a tenant, and the status of
+ * every attempt is kept so the next run can be judged on evidence rather than
+ * on another guess about what Workday does.
  */
 async function checkWorkday(slug: string): Promise<Hit | null> {
+  const seen: string[] = [];
+
   for (const number of WORKDAY_HOSTS) {
     const host = `${slug}.wd${number}.myworkdayjobs.com`;
-    if (await resolves(`https://${host}/`)) {
-      return { ats: 'workday', slug, jobs: null, host, owner: null, confirmed: false };
+    const status = await statusOf(`https://${host}/`);
+    seen.push(`wd${number}:${status ?? 'no-response'}`);
+
+    if (status === 200) {
+      return { ats: 'workday', slug, jobs: null, host, owner: null, confirmed: false, evidence: seen.join(' ') };
     }
   }
+
+  // Nothing served. The statuses are attached to the miss so a run that finds
+  // no Workday tenants can be told apart from a run whose probe is broken.
+  lastWorkdayEvidence.set(slug, seen.join(' '));
   return null;
+}
+
+/** Per-slug record of what each Workday host answered, for the miss report. */
+const lastWorkdayEvidence = new Map<string, string>();
+
+export function workdayEvidence(slug: string): string | undefined {
+  return lastWorkdayEvidence.get(slug);
 }
 
 async function getJson<T>(url: string): Promise<T | null> {
@@ -178,27 +205,32 @@ async function getJson<T>(url: string): Promise<T | null> {
 }
 
 /**
- * Whether a host answers at all. Any HTTP response — 200, 302, 405, even 500 —
- * means the hostname exists; only a DNS or connection failure throws.
+ * The status a host answers with after redirects, or null if it never answered.
+ * Redirects are followed because a live Workday tenant bounces to its careers
+ * site — the destination is the thing worth knowing, not the hop.
  */
-async function resolves(url: string): Promise<boolean> {
+async function statusOf(url: string): Promise<number | null> {
   try {
-    await fetch(url, {
+    const response = await fetch(url, {
       method: 'GET',
-      redirect: 'manual',
+      redirect: 'follow',
       headers: { 'user-agent': USER_AGENT },
       signal: AbortSignal.timeout(12_000)
     });
-    return true;
+    return response.status;
   } catch {
-    return false;
+    return null;
   }
 }
 
 function report(result: Result): void {
   const name = result.firm.padEnd(30);
   if (!result.hit) {
-    console.log(`MISS  ${name}  nothing on greenhouse, lever or workday (${result.tried} candidates)`);
+    const evidence = workdayEvidence(slugCandidates(result.firm, 1)[0] ?? '');
+    const workday = evidence ? ` · workday ${evidence}` : '';
+    console.log(
+      `MISS  ${name}  nothing on greenhouse, lever or workday (${result.tried} candidates)${workday}`
+    );
     return;
   }
 
