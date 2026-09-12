@@ -17,6 +17,18 @@ import { resolveCity } from '../texas.js';
  * documented product surface and do change; if a tenant starts returning
  * something unexpected, open its careers page with devtools on the network tab
  * and look for the /wday/cxs/ request — that is the contract this file follows.
+ *
+ * UNVERIFIED AGAINST A LIVE TENANT. Everything here is tested against fixtures
+ * only, and there is reason for caution: probing tenant roots from a server
+ * (see src/bin/probe-slugs.ts) returned 406 Not Acceptable uniformly — for
+ * hostnames that exist and hostnames invented on the spot, with and without a
+ * well-formed Accept header. That is an edge block on non-browser clients, not
+ * a missing tenant.
+ *
+ * Whether it also applies to the /wday/cxs/ JSON endpoints is unknown. Those
+ * are a different request shape — a POST with a JSON body and content type,
+ * which is what the career site's own page makes — so they may well be served.
+ * Establish that against one real tenant before building more on this file.
  */
 
 const PAGE_SIZE = 20;

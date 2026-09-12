@@ -9,6 +9,14 @@
  *   2. Lever, for every plausible slug
  *   3. Workday, for whether a tenant host exists at all
  *
+ * The Workday arm does not work and four attempts did not fix it. Every host
+ * answers 406 Not Acceptable — identically for real and invented hostnames,
+ * with HEAD and GET, with and without an Accept header. Workday blocks
+ * non-browser clients at the edge, so tenant existence cannot be established
+ * this way. Going further would mean impersonating a browser to defeat that
+ * block; the supported path is to read one tenant off a careers page by hand
+ * and see whether the JSON API answers a server at all.
+ *
  * Workday is only half-answerable this way: the tenant host is guessable, the
  * site name inside it is not. A hit therefore reports "this firm is on Workday,
  * tenant X" and leaves the site to be read off their careers page — which is
