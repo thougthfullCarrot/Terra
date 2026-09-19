@@ -32,6 +32,10 @@ jobs:
       # ignore a red X on this repo, and that is worse than no signal at all.
       - name: Check for credentials
         id: creds
+        # Runs before checkout, so it cannot use the job's default
+        # working-directory of `backend` — that path does not exist yet, and
+        # bash fails to start rather than running the check.
+        working-directory: ${{ github.workspace }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
