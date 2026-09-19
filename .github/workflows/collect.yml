@@ -26,17 +26,43 @@ jobs:
         working-directory: backend
 
     steps:
+      # A scheduled job that cannot possibly succeed must not report failure on
+      # every firing. Before this check the workflow failed 40 times in a week
+      # for want of credentials nobody had added yet — which teaches everyone to
+      # ignore a red X on this repo, and that is worse than no signal at all.
+      - name: Check for credentials
+        id: creds
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::No Supabase credentials — skipping. Add SUPABASE_URL and           SUPABASE_SERVICE_ROLE_KEY under Settings > Secrets and variables > Actions."
+            {
+              echo '## Collector skipped'
+              echo
+              echo 'There is nowhere to write postings yet: `SUPABASE_URL` and'
+              echo '`SUPABASE_SERVICE_ROLE_KEY` are not set as repository secrets.'
+              echo 'The collector will start running on its own once they are.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.creds.outputs.skip != 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.creds.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
       - run: npm ci
+        if: steps.creds.outputs.skip != 'true'
 
       - name: Run one pass
+        if: steps.creds.outputs.skip != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -48,7 +74,7 @@ jobs:
         id: collect
 
       - name: Publish the run report
-        if: always()
+        if: always() && steps.creds.outputs.skip != 'true'
         run: |
           {
             echo '## Collector run'
@@ -62,5 +88,5 @@ jobs:
       # is the failure that matters here: the run "succeeded" and the feed is
       # empty.
       - name: Fail on an empty pass
-        if: steps.collect.outputs.exit_code != '0'
+        if: steps.creds.outputs.skip != 'true' && steps.collect.outputs.exit_code != '0'
         run: exit 1
