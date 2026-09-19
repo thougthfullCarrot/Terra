@@ -2,14 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { color, radius, space, stageColor, type } from '../theme/tokens';
 import { STAGES, type App } from '../state';
 import { Button, Card, EmptyCard, Header } from '../components/primitives';
-import type { Stage } from '../data/types';
-
-/** Where a card's button sends it next. An Offer is the end of the line. */
-const NEXT: Record<Stage, Stage | null> = {
-  Applied: 'Interview',
-  Interview: 'Offer',
-  Offer: null
-};
+import { nextStage } from '../logic/feed';
 
 export function PipelineScreen(app: App) {
   const applications = Object.entries(app.apps);
@@ -56,7 +49,7 @@ export function PipelineScreen(app: App) {
                 </View>
 
                 {items.map((job) => {
-                  const next = NEXT[stage];
+                  const next = nextStage(stage);
                   return (
                     <Card key={job.id} style={styles.card}>
                       <Text style={styles.role}>{job.role}</Text>

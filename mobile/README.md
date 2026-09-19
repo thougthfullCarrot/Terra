@@ -18,6 +18,7 @@ src/
 npm install
 npm start            # then press i for a simulator, or scan with Expo Go
 npm run typecheck
+npm test             # the logic in src/logic, no renderer needed
 npm run bundle       # metro bundle; catches what typecheck cannot
 ```
 
@@ -55,11 +56,16 @@ The prototype is HTML and some things do not carry over one-to-one:
 - **No icon set.** Every tab mark is built from views, per the handoff's
   "all indicators are CSS shapes".
 
-## Not verified
+## What is and is not verified
 
-The app typechecks and bundles cleanly, which proves the module graph and the
-types. It has **not been run on a device or a simulator**, so layout, font
-rendering and the sheet animation are unconfirmed against the prototype. There
-are no tests here yet; `src/state.ts` is where they would earn their keep
-first — the feed filter, the re-tap-to-clear behaviour, and the apply/advance
-transitions are the logic worth pinning.
+`src/logic/feed.ts` holds the rules the screens run on — the feed filter and
+ordering, deadline sorting, re-tap-to-clear, the pipeline transitions, and
+deadline urgency — as plain functions with 20 tests. They live outside the
+state hook so they can be tested without a React renderer, and because they are
+the parts where a mistake is invisible: a wrong colour is obvious on a phone, a
+filter that silently drops a posting is not.
+
+Everything else is **still unverified**. The app typechecks and bundles, which
+proves the module graph and the types, but it has **never been run on a device
+or a simulator** — layout, font rendering and the sheet animation are
+unconfirmed against the prototype, and no test here touches a component.

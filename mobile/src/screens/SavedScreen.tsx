@@ -3,16 +3,15 @@ import { color, radius, shadow, space, type } from '../theme/tokens';
 import type { App } from '../state';
 import { Button, EmptyCard, Header } from '../components/primitives';
 
-/**
- * Urgency drives the left border and the badge: red at 15 days or fewer, amber
- * at 25 or fewer, navy beyond.
- */
-function urgency(days: number | null): string {
-  if (days === null) return color.accent;
-  if (days <= 15) return color.red;
-  if (days <= 25) return color.amber;
-  return color.accent;
-}
+import { urgencyOf, type Urgency } from '../logic/feed';
+
+/** Urgency drives the card's left border and its days-left badge. */
+const URGENCY_COLOR: Record<Urgency, string> = {
+  closing: color.red,
+  soon: color.amber,
+  later: color.accent,
+  open: color.accent
+};
 
 export function SavedScreen(app: App) {
   return (
@@ -28,7 +27,7 @@ export function SavedScreen(app: App) {
             />
           ) : (
             app.savedJobs.map((job) => {
-              const tint = urgency(job.days);
+              const tint = URGENCY_COLOR[urgencyOf(job.days)];
               return (
                 <View key={job.id} style={[styles.card, { borderLeftColor: tint }]}>
                   <View style={styles.head}>

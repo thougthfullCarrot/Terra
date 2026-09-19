@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchFeed, simulateFailure, SOURCE } from './data/source';
 import type { MatchIndex, Markets, Posting, Stage } from './data/types';
+import { filterFeed, nextStage, sortByDeadline, stageNote, toggleFilter } from './logic/feed';
 
 export type Status = 'loading' | 'ready' | 'error';
 export type Tab = 'feed' | 'market' | 'pipeline' | 'saved' | 'profile';
@@ -78,15 +79,7 @@ export function useApp() {
 
   /** Feed order and filters. Re-tapping an active chip clears it; see setters below. */
   const feed = useMemo(
-    () =>
-      jobs
-        .filter(
-          (job) =>
-            (city === 'All Texas' || job.city === city) &&
-            (type === 'All roles' || job.kind === type) &&
-            (!matchOnly || isStrong(job.id))
-        )
-        .sort((a, b) => scoreOf(b.id) - scoreOf(a.id)),
+    () => filterFeed(jobs, { city, type, matchOnly }, scoreOf, isStrong),
     [jobs, city, type, matchOnly, isStrong, scoreOf]
   );
 
@@ -96,11 +89,7 @@ export function useApp() {
   );
 
   const savedJobs = useMemo(
-    () =>
-      jobs
-        .filter((job) => saved[job.id])
-        // Soonest deadline first: this screen is about what is about to close.
-        .sort((a, b) => (a.days ?? Infinity) - (b.days ?? Infinity)),
+    () => sortByDeadline(jobs.filter((job) => saved[job.id])),
     [jobs, saved]
   );
 
@@ -116,7 +105,9 @@ export function useApp() {
   /** Applying moves a posting into the pipeline and clears it from Saved. */
   const apply = useCallback((id: string) => {
     setApps((current) =>
-      current[id] ? current : { ...current, [id]: { stage: 'Applied', note: 'Applied today' } }
+      current[id]
+        ? current
+        : { ...current, [id]: { stage: 'Applied', note: stageNote('Applied') } }
     );
     setSaved((current) => {
       const next = { ...current };
@@ -128,12 +119,10 @@ export function useApp() {
   const advance = useCallback((id: string) => {
     setApps((current) => {
       const app = current[id];
-      if (!app || app.stage === 'Offer') return current;
-      const next: Application =
-        app.stage === 'Applied'
-          ? { stage: 'Interview', note: 'Interview scheduled' }
-          : { stage: 'Offer', note: 'Offer received' };
-      return { ...current, [id]: next };
+      if (!app) return current;
+      const next = nextStage(app.stage);
+      if (!next) return current;
+      return { ...current, [id]: { stage: next, note: stageNote(next) } };
     });
   }, []);
 
@@ -151,13 +140,13 @@ export function useApp() {
 
   /** Re-tapping the active chip clears the filter, per the handoff. */
   const pickCity = useCallback((value: string) => {
-    setCity((current) => (current === value ? 'All Texas' : value));
+    setCity((current) => toggleFilter(current, value, 'All Texas'));
   }, []);
   const pickType = useCallback((value: string) => {
-    setType((current) => (current === value ? 'All roles' : value));
+    setType((current) => toggleFilter(current, value, 'All roles'));
   }, []);
   const pickMarketCity = useCallback((value: string) => {
-    setMktCity((current) => (current === value ? 'Texas' : value));
+    setMktCity((current) => toggleFilter(current, value, 'Texas'));
   }, []);
 
   /** The Market screen's "See all Texas roles" jumps to a pre-filtered feed. */

@@ -38,5 +38,6 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
       # Bundling catches what typecheck cannot: a bad import, a missing asset.
       - run: npm run bundle
