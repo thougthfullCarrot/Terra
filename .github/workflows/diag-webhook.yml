@@ -1,0 +1,28 @@
+name: Diagnose webhook (temporary)
+on:
+  push:
+    branches: [claude/diag-webhook]
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SRK: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SAT: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SK: ${{ secrets.STRIPE_SECRET_KEY }}
+    steps:
+      - name: Subscriptions table (ids masked)
+        run: |
+          curl -s "$SUPABASE_URL/rest/v1/subscriptions?select=status,current_period_end,updated_at,stripe_customer_id" -H "apikey: $SRK" -H "Authorization: Bearer $SRK" | jq -c '[.[] | .stripe_customer_id |= .[0:8]]'
+      - name: Recent function logs
+        run: |
+          ref=$(echo "$SUPABASE_URL" | sed -E 's#https://([a-z0-9]+)\..*#\1#')
+          sql='select timestamp, event_message from function_logs order by timestamp desc limit 30'
+          curl -s -G "https://api.supabase.com/v1/projects/$ref/analytics/endpoints/logs.all" -H "Authorization: Bearer $SAT" --data-urlencode "sql=$sql" | jq -c '.result[]? // .' | head -40
+          sql='select timestamp, event_message, response.status_code from function_edge_logs cross join unnest(metadata) as m cross join unnest(m.response) as response order by timestamp desc limit 20'
+          curl -s -G "https://api.supabase.com/v1/projects/$ref/analytics/endpoints/logs.all" -H "Authorization: Bearer $SAT" --data-urlencode "sql=$sql" | jq -c '.result[]? // .' | head -30
+      - name: Stripe key can read subscriptions?
+        run: |
+          curl -s "https://api.stripe.com/v1/subscriptions?limit=3&status=all" -u "$SK:" | jq -c '{error: .error.message, subs: [.data[]? | {status, has_client_ref: (.metadata|length)}]}'
+          curl -s "https://api.stripe.com/v1/webhook_endpoints" -u "$SK:" | jq -c '{error: .error.message, endpoints: [.data[]? | {url, status, enabled_events}]}'
+          curl -s "https://api.stripe.com/v1/events?limit=5" -u "$SK:" | jq -c '{error: .error.message, events: [.data[]? | {type, pending_webhooks}]}'
