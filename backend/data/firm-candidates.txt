@@ -11,8 +11,8 @@
 # simply not on Greenhouse or Lever costs one HTTP request to rule out.
 #
 # Bias is deliberately toward small and mid-size Texas firms. The enterprise
-# names (CBRE, JLL, Cushman & Wakefield, Colliers, Newmark) all run Workday,
-# which cannot currently be read — see src/collector/sources/workday.ts. Firms
+# names (JLL, Cushman & Wakefield, Colliers and peers) run Workday and are now
+# seeded directly from their board URLs in 0002_seed_firms.sql. Firms
 # of 20-500 people are the ones that use Greenhouse and Lever, and they are
 # also where an intern actually gets hired.
 #

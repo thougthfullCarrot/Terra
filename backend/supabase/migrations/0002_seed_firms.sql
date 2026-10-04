@@ -48,6 +48,36 @@ insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
    'tricon.wd3.myworkdayjobs.com', true, false)
 on conflict (name) do nothing;
 
+-- Enterprise CRE and Texas-heavy owners on Workday. Each tenant and site is
+-- read off a posting URL on the firm's own myworkdayjobs.com board, so the
+-- tenant belongs to the firm by construction. Seeded inactive until
+-- `npm run verify:firms` shows each one answering.
+--
+-- Not here, and why:
+--   CBRE      careers.cbre.com shows no Workday tenant; no board found
+--   Newmark   no public board URL found
+--   Camden    Oracle Recruiting Cloud, which has no fetcher
+insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
+  -- https://jll.wd1.myworkdayjobs.com/en-US/jllcareers
+  ('JLL', 'workday', 'jll/jllcareers', 'jll.wd1.myworkdayjobs.com', true, false),
+  -- https://cw.wd1.myworkdayjobs.com/en-US/External
+  ('Cushman & Wakefield', 'workday', 'cw/External', 'cw.wd1.myworkdayjobs.com', true, false),
+  -- https://colliers.wd3.myworkdayjobs.com/Colliers-External-Career-Site
+  ('Colliers', 'workday', 'colliers/Colliers-External-Career-Site',
+   'colliers.wd3.myworkdayjobs.com', true, false),
+  -- Houston based. https://transwestern.wd1.myworkdayjobs.com/TWCareers
+  ('Transwestern', 'workday', 'transwestern/TWCareers',
+   'transwestern.wd1.myworkdayjobs.com', true, false),
+  -- https://prologis.wd5.myworkdayjobs.com/en-US/Prologis_External_Careers
+  ('Prologis', 'workday', 'prologis/Prologis_External_Careers',
+   'prologis.wd5.myworkdayjobs.com', true, false),
+  -- Dallas HQ. https://invitationhomes.wd1.myworkdayjobs.com/INVH
+  ('Invitation Homes', 'workday', 'invitationhomes/INVH',
+   'invitationhomes.wd1.myworkdayjobs.com', true, false),
+  -- https://greystar.wd1.myworkdayjobs.com/External
+  ('Greystar', 'workday', 'greystar/External', 'greystar.wd1.myworkdayjobs.com', true, false)
+on conflict (name) do nothing;
+
 -- Boards that exist but could not be attributed from the API. Lever publishes
 -- no company name, so `marcusmillichap` cannot be proven to be Marcus &
 -- Millichap's without opening it. Left inactive so the collector ignores it

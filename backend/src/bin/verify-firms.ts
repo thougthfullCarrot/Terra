@@ -8,6 +8,7 @@
  *   npx tsx src/bin/verify-firms.ts            # check the seed migration
  *   npx tsx src/bin/verify-firms.ts --from-db  # check what is actually in `firms`
  *   npx tsx src/bin/verify-firms.ts --sql      # also print fix-up SQL
+ *   npx tsx src/bin/verify-firms.ts --pages 25 # read deeper into Workday boards
  *
  * Needs outbound access to boards-api.greenhouse.io and api.lever.co.
  *
@@ -32,6 +33,13 @@ const SEED_PATH = resolve(
 );
 
 type Verdict = 'OK' | 'EMPTY' | 'FAIL' | 'SKIP';
+
+/**
+ * Workday pages to read per tenant. Two is enough to prove a tenant answers;
+ * it is not enough to count an enterprise board, so `--pages` raises it when
+ * the Texas entry-level number is the point of the run.
+ */
+const WORKDAY_PAGES = pagesArg(process.argv) ?? 2;
 
 interface Result {
   firm: FirmRow;
@@ -142,7 +150,7 @@ async function fetchFor(firm: FirmRow, stats: WorkdayStats) {
       // Capped hard: verification only needs to know the tenant answers.
       return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, {
         retries: 1,
-        maxPages: 2,
+        maxPages: WORKDAY_PAGES,
         stats
       });
     default:
@@ -167,9 +175,10 @@ function report(results: Result[]): void {
     // Spelled out for Workday, because 0 returned has two very different
     // meanings and only one of them is a working fetcher.
     if (result.stats) {
-      const { listed, considered, fetched } = result.stats;
+      const { total, listed, considered, fetched } = result.stats;
+      const of = total !== undefined && total > listed ? ` of ${total}` : '';
       console.log(
-        `        board listed ${listed}, ${considered} looked entry-level in Texas, ` +
+        `        board listed ${listed}${of}, ${considered} looked entry-level in Texas, ` +
           `${fetched} detail documents parsed`
       );
       // Printed when nothing survived, so an over-aggressive filter is visible
@@ -203,6 +212,14 @@ function looksLikeNetworkBlock(results: Result[]): boolean {
 
   const statuses = new Set(checked.map((result) => result.error?.match(/returned (\d+)/)?.[1] ?? 'transport'));
   return statuses.size === 1 && !statuses.has('404');
+}
+
+function pagesArg(argv: string[]): number | undefined {
+  const index = argv.indexOf('--pages');
+  if (index === -1) return undefined;
+  const pages = Number(argv[index + 1]);
+  if (!Number.isInteger(pages) || pages < 1) throw new Error('--pages takes a positive integer');
+  return pages;
 }
 
 /** Fix-up SQL for the firms that did not answer, ready to paste and edit. */

@@ -291,4 +291,23 @@ describe('fetchWorkday', () => {
 
     expect(calls).toHaveLength(2);
   });
+
+  it('reports the board total alongside a capped listing', async () => {
+    // A capped run over a large board must not read as a count of the board.
+    const listings = Array.from({ length: 200 }, (_, i) => ({
+      title: 'Director',
+      externalPath: `/job/${i}`,
+      locationsText: 'Dallas, TX'
+    }));
+    const { fetchImpl } = fakeWorkday(listings);
+
+    const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
+    await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
+      fetchImpl,
+      maxPages: 2,
+      stats
+    });
+
+    expect(stats).toMatchObject({ total: 200, listed: 40 });
+  });
 });

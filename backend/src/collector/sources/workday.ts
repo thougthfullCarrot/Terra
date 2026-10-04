@@ -43,6 +43,12 @@ const MAX_PAGES = 25;
  * identical, and only the first means the fetcher is working.
  */
 export interface WorkdayStats {
+  /**
+   * What the board says it holds. On an enterprise tenant this is far more
+   * than a capped run lists, and a count over 40 of 3,000 postings is not a
+   * count of the board.
+   */
+  total?: number;
   listed: number;
   considered: number;
   fetched: number;
@@ -135,16 +141,20 @@ export async function fetchWorkday(
   const maxPages = options.maxPages ?? MAX_PAGES;
 
   const listings: WorkdayListing[] = [];
+  let total: number | undefined;
   for (let page = 0; page < maxPages; page++) {
     const batch = await fetchPage(tenant, page * PAGE_SIZE, options);
+    // Workday reports the total on the first page only; later pages carry 0.
+    if (page === 0) total = batch.total;
     listings.push(...batch.jobPostings);
     if (batch.jobPostings.length < PAGE_SIZE) break;
-    if (batch.total && listings.length >= batch.total) break;
+    if (total && listings.length >= total) break;
   }
 
   const candidates = listings.filter(worthFetching);
 
   if (options.stats) {
+    options.stats.total = total;
     options.stats.listed = listings.length;
     options.stats.considered = candidates.length;
     options.stats.sample = listings
