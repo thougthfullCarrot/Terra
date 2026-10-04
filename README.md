@@ -10,6 +10,7 @@ market conditions.
 ```
 backend/            collector, match scoring, feed API   ← built
 mobile/             the five screens, React Native / Expo ← built
+site/               the public website (static, GitHub Pages)
 client/
   data-source.js    production implementation of the UI's data contract
 docs/handoff/       the design handoff: prototype, contract, spec
@@ -45,6 +46,7 @@ Nothing in this project needs to run on your computer. The split:
 | The read API | Vercel, deployed from this repo | every push to the default branch |
 | The collector | GitHub Actions (`collect.yml`) | every 2 hours, or the Actions tab |
 | Firm slug checks | GitHub Actions (`verify-firms.yml`) | weekly, or the Actions tab |
+| The website | GitHub Pages, built by `site.yml` | every 2 hours, and every push to the default branch |
 | Tests and typecheck | GitHub Actions (`ci.yml`) | every push and pull request |
 | Deployment check | GitHub Actions (`check-deployment.yml`) | every push to the default branch, daily |
 
@@ -55,6 +57,27 @@ all. Vercel also caps a function at 60 seconds, which a large Workday tenant
 will outgrow. A runner has neither limit. To move the schedule to Vercel on a
 Pro plan, see [`backend/README.md`](backend/README.md#vercel-serves-the-api-not-the-collector)
 — and disable the workflow if you do, or two collectors will race.
+
+### The website
+
+`site/` is a static page that lists the current postings with search and
+filters for city, firm, role type and sector. Filtered views live in the URL,
+so a search can be sent as a link.
+
+It needs no database and no secrets. `site.yml` runs a collector pass against
+the live boards with the firm list from the seed migration
+(`npm run export:site` in `backend/`), writes `site/postings.json`, and
+publishes the folder to GitHub Pages. A run where no board answers fails
+instead of publishing, so an outage never replaces the live site with an empty
+one.
+
+**One-time setup:** Settings → Pages → Build and deployment → Source:
+**GitHub Actions**. Until then the workflow builds the site and skips the
+publish with a notice. The site is then at
+`https://thougthfullcarrot.github.io/Terra/`.
+
+To look at it locally: `cd backend && npm run export:site`, then serve `site/`
+with any static server (`npx serve site`).
 
 ### Connecting the repo to Vercel
 
