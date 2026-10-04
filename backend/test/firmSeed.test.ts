@@ -29,12 +29,71 @@ describe('the seed migration', () => {
     expect(firms.some((firm) => firm.name === 'Lincoln Property Company')).toBe(true);
   });
 
-  it('unescapes doubled quotes in firm names', () => {
-    const sql = "insert into firms values ('O''Connor & Associates', 'lever', 'oconnor');";
-    expect(parseFirmSeed(sql)[0]?.name).toBe("O'Connor & Associates");
+  it('keeps ats_host, which the Workday fetcher cannot run without', async () => {
+    // Dropping this column is not a cosmetic loss: parseTenant throws without
+    // it, so the fetcher never issues a request and the firm reports as
+    // unreachable when its board is fine.
+    const firms = parseFirmSeed(await readFile(seedPath, 'utf8'));
+    const workday = firms.filter((firm) => firm.ats === 'workday');
+
+    expect(workday.length).toBeGreaterThan(0);
+    for (const firm of workday) {
+      expect(firm.atsHost).toBeTruthy();
+      expect(firm.atsSlug).toContain('/');
+    }
   });
 
-  it('ignores the commented-out url examples above the insert', () => {
+  it('reads each column by name rather than by position', () => {
+    // The same three fields in a different order must parse identically.
+    const a = parseFirmSeed(
+      "insert into firms (name, ats, ats_slug) values ('A', 'lever', 'a');"
+    )[0];
+    const b = parseFirmSeed(
+      "insert into firms (ats_slug, name, ats) values ('a', 'A', 'lever');"
+    )[0];
+    expect({ ...a, id: 0 }).toEqual({ ...b, id: 0 });
+  });
+
+  it('defaults active to true and slug_verified to false when omitted', () => {
+    const firm = parseFirmSeed(
+      "insert into firms (name, ats, ats_slug) values ('A', 'lever', 'a');"
+    )[0];
+    expect(firm?.active).toBe(true);
+    expect(firm?.slugVerified).toBe(false);
+  });
+
+  it('reads boolean and null columns', () => {
+    const firm = parseFirmSeed(
+      "insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values " +
+        "('A', 'workday', 'a/b', 'a.wd1.myworkdayjobs.com', true, false);"
+    )[0];
+    expect(firm).toMatchObject({
+      atsHost: 'a.wd1.myworkdayjobs.com',
+      slugVerified: true,
+      active: false
+    });
+  });
+
+  it('handles a comma and an escaped quote inside a firm name', () => {
+    const firm = parseFirmSeed(
+      "insert into firms (name, ats, ats_slug) values ('O''Connor \u0026 Associates, Inc.', 'lever', 'oc');"
+    )[0];
+    expect(firm?.name).toBe("O'Connor & Associates, Inc.");
+    expect(firm?.atsSlug).toBe('oc');
+  });
+
+  it('ignores a trailing comment on a values row', () => {
+    const firms = parseFirmSeed(
+      [
+        'insert into firms (name, ats, ats_slug) values',
+        "  ('A', 'greenhouse', 'a'),  -- https://example.com/board",
+        "  ('B', 'lever', 'b');"
+      ].join('\n')
+    );
+    expect(firms.map((f) => f.name)).toEqual(['A', 'B']);
+  });
+
+  it('ignores commented-out url examples above the insert', () => {
     const sql = [
       '-- https://boards-api.greenhouse.io/v1/boards/<slug>/jobs',
       'insert into firms (name, ats, ats_slug) values',
