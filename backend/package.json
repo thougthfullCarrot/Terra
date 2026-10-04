@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "collect": "tsx src/bin/collect.ts",
     "verify:firms": "tsx src/bin/verify-firms.ts",
-    "probe:slugs": "tsx src/bin/probe-slugs.ts"
+    "probe:slugs": "tsx src/bin/probe-slugs.ts",
+    "discover:ats": "tsx src/bin/discover-ats.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"

@@ -1,0 +1,64 @@
+# Finds each firm's ATS by reading its own careers page.
+#
+# The slug probe guessed board identifiers and hit about 1%, because a slug is
+# not derivable from a firm name. This asks the firm instead: find its site,
+# follow the careers link, and read which ATS it points at. The answer is a URL
+# on the firm's own page rather than a guess that happened to return 200.
+#
+# Manual only. It fetches several pages per firm from other people's web
+# servers, which is fine occasionally and rude on a schedule.
+name: Discover ATS
+
+on:
+  workflow_dispatch:
+    inputs:
+      domains:
+        description: 'Domain guesses to try per firm'
+        required: false
+        default: '5'
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Read every firm's careers page
+        id: discover
+        env:
+          DOMAINS: ${{ inputs.domains || '5' }}
+        run: |
+          set +e
+          npm run --silent discover:ats -- --sql --limit "$DOMAINS" 2>&1 | tee /tmp/discover.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the findings
+        if: always()
+        run: |
+          {
+            echo '## ATS discovery'
+            echo
+            echo '```'
+            cat /tmp/discover.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if nothing was found
+        if: steps.discover.outputs.exit_code != '0'
+        run: |
+          echo "No firm resolved to an ATS. Either the domain guesses all missed,"
+          echo "or careers pages are rendering their board links with JavaScript."
+          exit 1
