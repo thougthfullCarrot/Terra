@@ -1,5 +1,6 @@
 import { CITIES, type City, type Kind, type Posting, type Sector } from '../types.js';
 import type { RunReport } from '../collector/run.js';
+import { matchInputs, type MatchInputs } from '../matching/score.js';
 
 /**
  * One posting as the public website renders it.
@@ -25,6 +26,12 @@ export interface SitePosting {
   desc: string;
   reqs: string[];
   applyUrl: string;
+  /**
+   * What the resume matcher reads from the posting's text, worked out here
+   * from the full description because `desc` is truncated. The site scores
+   * jobs in the browser (match.js) against the signed-in user's profile.
+   */
+  match: MatchInputs;
   /** The aggregator a posting came through, when it did not come from a firm board. */
   via: 'Adzuna' | null;
 }
@@ -70,6 +77,7 @@ export function toSitePosting(posting: Posting): SitePosting {
     desc: truncate(posting.description, DESC_LIMIT),
     reqs: posting.reqs,
     applyUrl: posting.applyUrl,
+    match: matchInputs(posting),
     via: viaAggregator(posting.applyUrl)
   };
 }

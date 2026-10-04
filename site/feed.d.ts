@@ -13,6 +13,8 @@ export interface Job {
   desc: string;
   reqs: string[];
   applyUrl: string;
+  /** Resume match score, 0-100, set by the page for a signed-in user with a resume. */
+  matchScore?: number;
   via?: 'Adzuna' | null;
 }
 
@@ -30,11 +32,11 @@ export interface QueryState {
   firm: string;
   kind: string;
   sector: string;
-  sort: 'newest' | 'deadline';
+  sort: 'newest' | 'deadline' | 'match';
 }
 
 export const FILTERS: readonly ['city', 'firm', 'kind', 'sector'];
-export const SORTS: readonly ['newest', 'deadline'];
+export const SORTS: readonly ['newest', 'deadline', 'match'];
 
 export function daysBetween(from: Date, to: Date): number;
 export function facet<T extends Job>(jobs: T[], field: keyof Job, always?: string[]): { value: string; count: number }[];

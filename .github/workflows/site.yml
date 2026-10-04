@@ -7,6 +7,12 @@
 # One-time setup: Settings > Pages > Build and deployment > Source:
 # "GitHub Actions". Until that is set the deploy step skips with a notice
 # rather than failing on every schedule.
+#
+# Accounts (docs/accounts-setup.md): once the repository has the variables
+# SUPABASE_URL and SUPABASE_ANON_KEY and the secret SUPABASE_SERVICE_ROLE_KEY,
+# the site asks visitors to sign in. The snapshot then goes to Supabase, where
+# only college emails and subscribers can read it, and postings.json is left
+# out of the published site. Without them the site stays open, as before.
 name: Website
 
 on:
@@ -48,6 +54,9 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
 
+      - name: Build the site's scripts
+        run: npm run build:site
+
       - name: Export postings from the live boards
         # Optional. With these set, Adzuna search results join the board
         # postings; without them the site is built from the boards alone.
@@ -74,6 +83,57 @@ jobs:
             tail -n 60 /tmp/export.log 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write account settings
+        id: accounts
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STRIPE_PAYMENT_LINK: ${{ vars.STRIPE_PAYMENT_LINK }}
+          STRIPE_BILLING_PORTAL_LINK: ${{ vars.STRIPE_BILLING_PORTAL_LINK }}
+          PRICE_LABEL: ${{ vars.PRICE_LABEL }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+            echo "Accounts not configured; publishing the open site."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # JSON.stringify quotes every value, so nothing in a variable can break out of the file.
+          node -e '
+            const config = {
+              supabaseUrl: process.env.SUPABASE_URL.replace(/\/+$/, ""),
+              supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+              paymentLink: process.env.STRIPE_PAYMENT_LINK || "",
+              billingPortalLink: process.env.STRIPE_BILLING_PORTAL_LINK || "",
+              priceLabel: process.env.PRICE_LABEL || ""
+            };
+            require("fs").writeFileSync("../site/config.js",
+              "// Written by site.yml from the repository variables.\nexport const CONFIG = " + JSON.stringify(config, null, 2) + ";\n");
+          '
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "- Accounts: on (sign-in required; subscriptions $([ -n "$STRIPE_PAYMENT_LINK" ] && echo on || echo off))" >> "$GITHUB_STEP_SUMMARY"
+
+      # Pull requests build with accounts on but never write the live feed.
+      - name: Send the snapshot to Supabase
+        if: steps.accounts.outputs.enabled == 'true' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          jq -c '{id: "current", data: ., updated_at: (now | todate)}' ../site/postings.json > /tmp/snapshot.json
+          curl -fsS -X POST "${SUPABASE_URL%/}/rest/v1/site_snapshots?on_conflict=id" \
+            -H "apikey: $SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates,return=minimal" \
+            --data-binary @/tmp/snapshot.json
+          echo "Snapshot stored in Supabase."
+
+      # With accounts on, the feed is members-only: it must not also sit at a public URL.
+      - name: Keep the feed out of the public site
+        if: steps.accounts.outputs.enabled == 'true'
+        run: rm -f ../site/postings.json
 
       - name: Package the site
         uses: actions/upload-pages-artifact@v3

@@ -1,4 +1,11 @@
 // app.js — loads the snapshot and draws the page. The rules live in feed.js.
+//
+// Two modes, picked by config.js. Open (no accounts configured): the feed is
+// read from postings.json, as it always was. Accounts: account.js signs the
+// visitor in and hands over the feed from Supabase, plus their profile, which
+// this file scores every job against to highlight the best matches.
+import { CONFIG } from './config.js';
+import { isConfigured } from './access.js';
 import {
   FILTERS,
   deadlineLabel,
@@ -17,23 +24,69 @@ const FILTER_LABELS = { city: 'All cities', firm: 'All firms', kind: 'All types'
 
 let snapshot = null;
 let state = readQuery(location.search);
+let bound = false;
+/** job id -> { score, note, lines, strong }, from the signed-in user's resume. */
+let scores = new Map();
+let profile = null;
+let matcher = null;
 
 async function load() {
   try {
     // no-cache: the file is replaced every two hours and must not be served stale.
     const response = await fetch('postings.json', { cache: 'no-cache' });
     if (!response.ok) throw new Error(`postings.json returned ${response.status}`);
-    snapshot = await response.json();
+    showFeed(await response.json());
   } catch (error) {
     $('meta').textContent = '';
     showState(`Couldn't load postings. ${error instanceof Error ? error.message : ''}`.trim(), true);
-    return;
   }
+}
 
+function showFeed(next) {
+  snapshot = next;
+  applyScores();
   fillFilters(snapshot.jobs);
   $('adzuna-credit').hidden = !snapshot.jobs.some((job) => job.via === 'Adzuna');
-  bind();
+  if (!bound) bind();
+  bound = true;
   render();
+}
+
+function hideFeed(message) {
+  snapshot = null;
+  $('meta').textContent = message ?? '';
+  $('list').replaceChildren();
+  $('count').textContent = '';
+}
+
+/** Called by account.js whenever the signed-in user's profile changes. */
+async function setProfile(next) {
+  profile = next;
+  if (profile?.resumeText && !matcher) {
+    try {
+      matcher = await import('./match.js');
+    } catch {
+      // match.js is build output; a local copy of the site without
+      // `npm run build:site` simply shows no match highlights.
+      matcher = null;
+    }
+  }
+  applyScores();
+  if (snapshot) render();
+}
+
+function applyScores() {
+  scores = profile && matcher && snapshot ? matcher.scoreJobs(profile, snapshot.jobs) : new Map();
+  for (const job of snapshot?.jobs ?? []) job.matchScore = scores.get(job.id)?.score;
+
+  // Safari ignores `hidden` on <option>, so the choice is added and removed instead.
+  const sort = $('sort');
+  const option = sort.querySelector('option[value="match"]');
+  if (scores.size && !option) sort.append(new Option('Best match', 'match'));
+  if (!scores.size && option) option.remove();
+  // A link or an earlier choice can ask for match order before there is a resume to sort by.
+  if (state.sort === 'match' && scores.size === 0 && snapshot) state.sort = 'newest';
+  $('sort').value = state.sort;
 }
 
 function fillFilters(jobs) {
@@ -82,8 +135,11 @@ function render() {
 
   const shown = sortJobs(filterJobs(jobs, state), state.sort);
   const filtered = Boolean(state.q || FILTERS.some((key) => state[key]));
+  const strong = shown.filter((job) => scores.get(job.id)?.strong).length;
 
-  $('count').textContent = `${shown.length} ${shown.length === 1 ? 'role' : 'roles'}${filtered ? ` of ${jobs.length}` : ''}`;
+  $('count').textContent = `${shown.length} ${shown.length === 1 ? 'role' : 'roles'}${filtered ? ` of ${jobs.length}` : ''}${
+    strong ? ` · ${strong} best ${strong === 1 ? 'match' : 'matches'} for you` : ''
+  }`;
   $('clear').hidden = !filtered;
 
   if (!jobs.length) {
@@ -132,9 +188,31 @@ function card(job, now) {
     deadlineNode.remove();
   }
 
+  const match = scores.get(job.id);
+  const scoreNode = node.querySelector('.score');
+  const why = node.querySelector('.why');
+  if (match) {
+    scoreNode.textContent = `${match.score}% match`;
+    if (match.strong) {
+      node.classList.add('best');
+      const badge = node.querySelector('.match-badge');
+      badge.textContent = `Best match · ${match.note}`;
+      badge.hidden = false;
+    }
+    for (const line of match.lines) {
+      const li = document.createElement('li');
+      li.textContent = line;
+      why.append(li);
+    }
+  } else {
+    scoreNode.remove();
+  }
+  if (!why.children.length) why.remove();
+
   const more = node.querySelector('.more');
-  if (job.desc || job.reqs?.length) {
+  if (job.desc || job.reqs?.length || match?.lines.length) {
     node.querySelector('.desc').textContent = job.desc;
+    if (!job.desc) node.querySelector('.desc').remove();
     const reqs = node.querySelector('.reqs');
     for (const req of job.reqs ?? []) {
       const li = document.createElement('li');
@@ -156,4 +234,12 @@ function showState(message, isError = false) {
   $('list').replaceChildren(box);
 }
 
-load();
+if (isConfigured(CONFIG)) {
+  $('meta').textContent = '';
+  $('feed').hidden = true;
+  import('./account.js')
+    .then(({ startAccounts }) => startAccounts({ showFeed, hideFeed, setProfile }))
+    .catch((error) => showState(`Couldn't start sign-in. ${error instanceof Error ? error.message : ''}`.trim(), true));
+} else {
+  load();
+}
