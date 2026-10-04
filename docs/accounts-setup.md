@@ -31,7 +31,7 @@ You need three accounts: Supabase (database, sign-in, file storage), Stripe
    - **Redirect URLs** > **Add URL**: `https://thougthfullcarrot.github.io/Terra/**`
    - Click **Save**.
 5. Left sidebar, **Project Settings** > **API** (or **Data API** / **API Keys**). Copy:
-   - **Project URL** (looks like `https://abcdefgh.supabase.co`)
+   - **Project URL** (looks like `https://<your-project-id>.supabase.co`)
    - the **anon / public** key
    - the **service_role** key (click **Reveal**). This one is secret; it only goes into GitHub secrets below.
 6. Go to <https://supabase.com/dashboard/account/tokens>, click **Generate new token**,
@@ -67,7 +67,8 @@ Nobody can be charged real money in test mode.
    **Create key** and copy it (starts with `rk_test_`).
 6. **Developers** > **Webhooks** > **Add endpoint**:
    - **Endpoint URL**: your Project URL from Supabase plus `/functions/v1/stripe-webhook`,
-     for example `https://abcdefgh.supabase.co/functions/v1/stripe-webhook`
+     for example `https://<your-project-id>.supabase.co/functions/v1/stripe-webhook`. Use your own
+     project ID; the Stripe webhook workflow prints the exact URL in its run summary
    - **Select events**: `checkout.session.completed`, `customer.subscription.created`,
      `customer.subscription.updated`, `customer.subscription.deleted`
    - Click **Add endpoint**, then **Reveal** the **Signing secret** and copy it (starts with `whsec_`).
