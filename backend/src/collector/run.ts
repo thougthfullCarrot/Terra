@@ -4,6 +4,7 @@ import { normalize, type RejectReason } from './normalize.js';
 import { fetchGreenhouse } from './sources/greenhouse.js';
 import { fetchLever } from './sources/lever.js';
 import { fetchWorkday } from './sources/workday.js';
+import { fetchIcims } from './sources/icims.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
 
@@ -190,10 +191,8 @@ async function defaultFetcher(firm: FirmRow): Promise<RawJob[]> {
       return fetchLever(firm.name, firm.atsSlug);
     case 'workday':
       return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug);
-    // iCIMS needs a per-tenant endpoint and, on most tenants, an auth
-    // handshake; the spec puts it after the others are carrying real coverage.
     case 'icims':
-      throw new Error(`${firm.ats} fetcher not implemented yet (firm: ${firm.name})`);
+      return fetchIcims(firm.name, firm.atsHost, firm.atsSlug);
   }
 }
 

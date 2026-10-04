@@ -17,12 +17,11 @@ docs/handoff/       the design handoff: prototype, contract, spec
 
 ## Status
 
-**Backend: built.** Schema, Greenhouse and Lever fetchers, the normalizer and
-its filters, match scoring, the collector pass, the feed API, and the pg_cron
-schedule — with 102 tests that need neither network nor a database. See
-[`backend/README.md`](backend/README.md) for how to run it and what is
-deliberately still open (Workday/iCIMS, the paid aggregator, quarterly market
-data).
+**Backend: built.** Schema, Greenhouse, Lever, Workday and iCIMS fetchers, the
+normalizer and its filters, match scoring, the collector pass, the feed API, and
+the pg_cron schedule — with 228 tests that need neither network nor a database.
+See [`backend/README.md`](backend/README.md) for how to run it and what is
+deliberately still open (the paid aggregator, quarterly market data).
 
 **Front end: built, unverified.** All five screens plus the detail sheet and
 the loading and error states, in React Native / Expo — see

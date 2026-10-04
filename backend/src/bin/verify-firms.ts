@@ -24,6 +24,7 @@ import { SupabaseStore } from '../db/supabase.js';
 import { fetchGreenhouse } from '../collector/sources/greenhouse.js';
 import { fetchLever } from '../collector/sources/lever.js';
 import { fetchWorkday, type WorkdayStats } from '../collector/sources/workday.js';
+import { fetchIcims } from '../collector/sources/icims.js';
 import { normalize, type RejectReason } from '../collector/normalize.js';
 
 const SEED_PATH = resolve(
@@ -40,7 +41,7 @@ interface Result {
   kept: number;
   rejected: Record<RejectReason, number>;
   error?: string;
-  /** Workday only: what the board listed before any filtering. */
+  /** Workday and iCIMS: what the board listed before any filtering. */
   stats?: WorkdayStats;
 }
 
@@ -93,12 +94,8 @@ async function check(firm: FirmRow): Promise<Result> {
     'not-entry-level': 0
   };
 
-  if (firm.ats === 'icims') {
-    return { firm, verdict: 'SKIP', raw: 0, kept: 0, rejected, error: 'icims not implemented' };
-  }
-
-  // Workday's fetcher filters before it fetches details, so its returned
-  // count cannot tell an empty board from a fully filtered one.
+  // Workday's and iCIMS's fetchers filter before they fetch details, so their
+  // returned count cannot tell an empty board from a fully filtered one.
   const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
 
   try {
@@ -118,7 +115,7 @@ async function check(firm: FirmRow): Promise<Result> {
       raw: jobs.length,
       kept,
       rejected,
-      ...(firm.ats === 'workday' ? { stats } : {})
+      ...(firm.ats === 'workday' || firm.ats === 'icims' ? { stats } : {})
     };
   } catch (error) {
     return {
@@ -145,8 +142,12 @@ async function fetchFor(firm: FirmRow, stats: WorkdayStats) {
         maxPages: 2,
         stats
       });
-    default:
-      throw new Error(`${firm.ats} not implemented`);
+    case 'icims':
+      return fetchIcims(firm.name, firm.atsHost, firm.atsSlug, {
+        retries: 1,
+        maxPages: 2,
+        stats
+      });
   }
 }
 
@@ -164,7 +165,7 @@ function report(results: Result[]): void {
     ].join('  ');
     console.log(result.error ? `${line}  — ${result.error}` : line);
 
-    // Spelled out for Workday, because 0 returned has two very different
+    // Spelled out for Workday and iCIMS, because 0 returned has two very different
     // meanings and only one of them is a working fetcher.
     if (result.stats) {
       const { listed, considered, fetched } = result.stats;
