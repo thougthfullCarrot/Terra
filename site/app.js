@@ -24,6 +24,11 @@ const FILTER_LABELS = { city: 'All cities', firm: 'All firms', kind: 'All types'
 
 let snapshot = null;
 let state = readQuery(location.search);
+// A sort named in the link wins; otherwise a signed-in user with a resume sees best matches first.
+let sortChosen = new URLSearchParams(location.search).has('sort');
+/** Match % at or above which a card is drawn heavier, below which lighter. Strong matches (STRONG_MATCH) get the full highlight. */
+const GOOD_MATCH = 75;
+const WEAK_MATCH = 50;
 let bound = false;
 /** job id -> { score, note, lines, strong }, from the signed-in user's resume. */
 let scores = new Map();
@@ -86,6 +91,7 @@ function applyScores() {
   if (!scores.size && option) option.remove();
   // A link or an earlier choice can ask for match order before there is a resume to sort by.
   if (state.sort === 'match' && scores.size === 0 && snapshot) state.sort = 'newest';
+  if (scores.size && !sortChosen && state.sort === 'newest') state.sort = 'match';
   $('sort').value = state.sort;
 }
 
@@ -113,6 +119,7 @@ function bind() {
   for (const key of [...FILTERS, 'sort']) {
     $(key).addEventListener('change', (event) => update({ [key]: event.target.value }));
   }
+  $('sort').addEventListener('change', () => (sortChosen = true));
   $('clear').addEventListener('click', () => {
     update({ q: '', city: '', firm: '', kind: '', sector: '' });
     $('q').value = '';
@@ -193,6 +200,7 @@ function card(job, now) {
   const why = node.querySelector('.why');
   if (match) {
     scoreNode.textContent = `${match.score}% match`;
+    if (!match.strong) node.classList.add(match.score >= GOOD_MATCH ? 'good' : match.score < WEAK_MATCH ? 'weak' : 'fair');
     if (match.strong) {
       node.classList.add('best');
       const badge = node.querySelector('.match-badge');

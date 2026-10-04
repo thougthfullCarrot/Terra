@@ -587,6 +587,32 @@ label.check {
   box-shadow: 0 0 0 1px var(--accent);
 }
 
+/* Emphasis scales with the resume match: best and good fits read heavier, weak fits lighter. */
+.card.best .role {
+  font-weight: 800;
+}
+
+.card.best .score {
+  font-weight: 700;
+}
+
+.card.good {
+  border-left: 4px solid var(--accent);
+}
+
+.card.good .role {
+  font-weight: 700;
+}
+
+.card.good .score {
+  font-weight: 700;
+}
+
+.card.weak .role {
+  font-weight: 500;
+  color: var(--secondary);
+}
+
 .match-badge {
   display: inline-block;
   margin: 0 0 10px;
