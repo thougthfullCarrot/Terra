@@ -38,9 +38,15 @@ You need three accounts: Supabase (database, sign-in, file storage), Stripe
    name it `terra-github`, copy it. GitHub uses it to deploy the payment webhook.
 
 Note on email: Supabase's built-in sender only sends a few sign-in emails per
-hour. That is fine for testing. Before sharing the site widely, add a free SMTP
-sender under **Authentication** > **Emails** > **SMTP Settings** (Resend's free
-plan works).
+hour, so other people quickly see "email rate limit exceeded". Use Gmail as the
+sender instead (free, about 500 emails a day):
+
+1. Turn on 2-Step Verification at <https://myaccount.google.com/security>.
+2. Open <https://myaccount.google.com/apppasswords>, name it `terra`, click **Create**,
+   and copy the 16-letter password.
+3. In GitHub secrets (section 3) add `SMTP_USER` (your Gmail address) and
+   `SMTP_PASSWORD` (that 16-letter password).
+4. **Actions** tab > **Email sender** > **Run workflow**.
 
 ## 2. Stripe (test mode)
 
