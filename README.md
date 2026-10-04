@@ -78,6 +78,17 @@ publish with a notice. The site is then at
 To look at it locally: `cd backend && npm run build:site && npm run export:site`,
 then serve `site/` with any static server (`npx serve site`).
 
+**Market data.** A second section, Market data, compares the six Texas
+markets (Dallas and Fort Worth as their own metro divisions) by property type:
+office, industrial and retail hiring, apartment vacancy and rents, population,
+income and unemployment, sortable by any figure or opened one city at a time.
+The figures come from the Bureau of Labor Statistics and the Census Bureau's
+American Community Survey, both public and keyless (`npm run export:market`
+writes `site/market.json`). `site.yml` asks them once a day and caches the
+file; a source that fails keeps its last figures. Optional free keys,
+`BLS_API_KEY` and `CENSUS_API_KEY` as Actions secrets, raise the APIs' daily
+limits. Brokerage vacancy and asking-rent figures are licensed and not shown.
+
 **Accounts (optional).** With Supabase and Stripe settings in the repository,
 the site requires sign-in: college (.edu) emails get it free, other emails
 subscribe through Stripe, and everyone gets a profile with a picture and resume

@@ -18,3 +18,6 @@ mobile/dist/
 site/postings.json
 site/match.js
 site/vendor/
+
+# Market data, written by `npm run export:market` in site.yml
+site/market.json

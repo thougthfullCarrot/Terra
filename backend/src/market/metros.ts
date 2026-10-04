@@ -1,0 +1,65 @@
+import type { City } from '../types.js';
+
+/**
+ * The metro area each Terra city's market data is read for.
+ *
+ * Dallas and Fort Worth share one metropolitan statistical area (19100), so
+ * each uses its own metropolitan division instead; BLS and the Census publish
+ * both divisions separately. The other cities are whole metro areas.
+ */
+export interface Metro {
+  city: City;
+  /** OMB's name for the area, shown under the city so a reader knows what is counted. */
+  name: string;
+  /** Five-digit CBSA or metropolitan division code, as BLS state and area employment uses it. */
+  area: string;
+  /** Census ACS geography: a division names its parent metro area too. */
+  census: { msa: string; division?: string };
+  /** BLS Local Area Unemployment Statistics area code (type prefix + state + area). */
+  laus: string;
+}
+
+export const METROS: Metro[] = [
+  {
+    city: 'Dallas',
+    name: 'Dallas-Plano-Irving metro division',
+    area: '19124',
+    census: { msa: '19100', division: '19124' },
+    laus: 'DV4819124000000'
+  },
+  {
+    city: 'Fort Worth',
+    name: 'Fort Worth-Arlington-Grapevine metro division',
+    area: '23104',
+    census: { msa: '19100', division: '23104' },
+    laus: 'DV4823104000000'
+  },
+  {
+    city: 'Houston',
+    name: 'Houston-Pasadena-The Woodlands metro',
+    area: '26420',
+    census: { msa: '26420' },
+    laus: 'MT4826420000000'
+  },
+  {
+    city: 'Austin',
+    name: 'Austin-Round Rock-San Marcos metro',
+    area: '12420',
+    census: { msa: '12420' },
+    laus: 'MT4812420000000'
+  },
+  {
+    city: 'San Antonio',
+    name: 'San Antonio-New Braunfels metro',
+    area: '41700',
+    census: { msa: '41700' },
+    laus: 'MT4841700000000'
+  },
+  {
+    city: 'El Paso',
+    name: 'El Paso metro',
+    area: '21340',
+    census: { msa: '21340' },
+    laus: 'MT4821340000000'
+  }
+];

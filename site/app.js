@@ -18,6 +18,7 @@ import {
   updatedLabel,
   writeQuery
 } from './feed.js';
+import { setMarketLoader, startMarkets } from './markets-view.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { city: 'All cities', firm: 'All firms', kind: 'All types', sector: 'All sectors' };
@@ -59,6 +60,7 @@ function showFeed(next) {
 
 function hideFeed(message) {
   snapshot = null;
+  setMarketLoader(null);
   $('meta').textContent = message ?? '';
   $('list').replaceChildren();
   $('count').textContent = '';
@@ -242,12 +244,23 @@ function showState(message, isError = false) {
   $('list').replaceChildren(box);
 }
 
+/** Market data is gated like the jobs: account.js hands over a loader once the visitor may read it. */
+async function loadMarketFile() {
+  const response = await fetch('market.json', { cache: 'no-cache' });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`market.json returned ${response.status}`);
+  return response.json();
+}
+
+startMarkets();
+
 if (isConfigured(CONFIG)) {
   $('meta').textContent = '';
   $('feed').hidden = true;
   import('./account.js')
-    .then(({ startAccounts }) => startAccounts({ showFeed, hideFeed, setProfile }))
+    .then(({ startAccounts }) => startAccounts({ showFeed, hideFeed, setProfile, setMarketLoader }))
     .catch((error) => showState(`Couldn't start sign-in. ${error instanceof Error ? error.message : ''}`.trim(), true));
 } else {
+  setMarketLoader(loadMarketFile);
   load();
 }

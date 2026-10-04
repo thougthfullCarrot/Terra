@@ -114,6 +114,12 @@ async function loadFeed() {
     return;
   }
   app.showFeed(data.data);
+  // Market data sits in the same members-only table, one row of its own.
+  app.setMarketLoader(async () => {
+    const market = await supabase.from('site_snapshots').select('data').eq('id', 'market').maybeSingle();
+    if (market.error) throw new Error(market.error.message);
+    return market.data?.data ?? null;
+  });
 }
 
 function showPaywall() {

@@ -17,6 +17,7 @@
     "probe:slugs": "tsx src/bin/probe-slugs.ts",
     "discover:ats": "tsx src/bin/discover-ats.ts",
     "export:site": "tsx src/bin/export-site.ts",
+    "export:market": "tsx src/bin/export-market.ts",
     "build:site": "tsx src/bin/build-site.ts"
   },
   "dependencies": {
