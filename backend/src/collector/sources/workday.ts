@@ -32,8 +32,13 @@ import { resolveCity } from '../texas.js';
  */
 
 const PAGE_SIZE = 20;
-/** Stop after this many pages per firm. 25 x 20 is far more than any CRE board carries. */
-const MAX_PAGES = 25;
+/**
+ * Stop after this many pages per firm. The largest boards seen (JLL, Cushman &
+ * Wakefield) both report exactly 2,000, which looks like Workday's ceiling, so
+ * 100 x 20 reads everything a board will give. Stopping at 500 found 5 of JLL's 16
+ * Texas entry-level roles; the list endpoint is cheap, the details are not.
+ */
+const MAX_PAGES = 100;
 
 /**
  * How many postings the board listed, and how many survived the cheap filters.
@@ -43,6 +48,12 @@ const MAX_PAGES = 25;
  * identical, and only the first means the fetcher is working.
  */
 export interface WorkdayStats {
+  /**
+   * What the board says it holds. On an enterprise tenant this is far more
+   * than a capped run lists, and a count over 40 of 3,000 postings is not a
+   * count of the board.
+   */
+  total?: number;
   listed: number;
   considered: number;
   fetched: number;
@@ -135,16 +146,20 @@ export async function fetchWorkday(
   const maxPages = options.maxPages ?? MAX_PAGES;
 
   const listings: WorkdayListing[] = [];
+  let total: number | undefined;
   for (let page = 0; page < maxPages; page++) {
     const batch = await fetchPage(tenant, page * PAGE_SIZE, options);
+    // Workday reports the total on the first page only; later pages carry 0.
+    if (page === 0) total = batch.total;
     listings.push(...batch.jobPostings);
     if (batch.jobPostings.length < PAGE_SIZE) break;
-    if (batch.total && listings.length >= batch.total) break;
+    if (total && listings.length >= total) break;
   }
 
   const candidates = listings.filter(worthFetching);
 
   if (options.stats) {
+    options.stats.total = total;
     options.stats.listed = listings.length;
     options.stats.considered = candidates.length;
     options.stats.sample = listings

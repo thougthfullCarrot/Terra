@@ -7,6 +7,11 @@ name: Verify firm slugs
 
 on:
   workflow_dispatch:
+    inputs:
+      workday_pages:
+        description: 'Workday pages (20 postings each) to read per tenant'
+        required: false
+        default: '2'
   # Slugs rot: firms change ATS, boards get renamed. Weekly is enough to catch
   # it before the feed quietly empties out.
   schedule:
@@ -32,9 +37,11 @@ jobs:
 
       - name: Check every board
         id: verify
+        env:
+          WORKDAY_PAGES: ${{ inputs.workday_pages || '2' }}
         run: |
           set +e
-          npm run --silent verify:firms -- --sql 2>&1 | tee /tmp/verify.txt
+          npm run --silent verify:firms -- --sql --pages "$WORKDAY_PAGES" 2>&1 | tee /tmp/verify.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       # Written before the job can fail, so the table is readable on the run
