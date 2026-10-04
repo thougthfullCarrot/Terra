@@ -46,6 +46,12 @@ export interface WorkdayStats {
   listed: number;
   considered: number;
   fetched: number;
+  /**
+   * A few titles the board listed, kept for diagnosis. 0 of 63 postings
+   * surviving the filters is either correct or a silently over-aggressive
+   * filter, and the titles are the only way to tell which.
+   */
+  sample?: string[];
 }
 
 export interface WorkdayTenant {
@@ -141,6 +147,9 @@ export async function fetchWorkday(
   if (options.stats) {
     options.stats.listed = listings.length;
     options.stats.considered = candidates.length;
+    options.stats.sample = listings
+      .slice(0, 6)
+      .map((listing) => `${listing.title ?? '?'} — ${listing.locationsText ?? '?'}`);
   }
 
   const jobs: RawJob[] = [];

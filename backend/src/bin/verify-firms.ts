@@ -172,6 +172,13 @@ function report(results: Result[]): void {
         `        board listed ${listed}, ${considered} looked entry-level in Texas, ` +
           `${fetched} detail documents parsed`
       );
+      // Printed when nothing survived, so an over-aggressive filter is visible
+      // rather than indistinguishable from a firm that posts no junior roles.
+      if (listed > 0 && considered === 0) {
+        for (const title of result.stats.sample ?? []) {
+          console.log(`          listed: ${title}`);
+        }
+      }
     }
   }
 
