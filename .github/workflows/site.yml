@@ -1,0 +1,109 @@
+# Builds the public website and publishes it on GitHub Pages.
+#
+# The site is static: this workflow runs a collector pass against the live
+# boards (no database, no secrets), writes site/postings.json, and deploys the
+# site/ folder. Refreshing it every two hours keeps it as current as the app.
+#
+# One-time setup: Settings > Pages > Build and deployment > Source:
+# "GitHub Actions". Until that is set the deploy step skips with a notice
+# rather than failing on every schedule.
+name: Website
+
+on:
+  push:
+    branches: [claude/new-session-6xvm0u]
+    paths: ['site/**', 'backend/**', '.github/workflows/site.yml']
+  # Pull requests build the site, so a broken export shows up before merge,
+  # but never deploy it.
+  pull_request:
+    paths: ['site/**', 'backend/**', '.github/workflows/site.yml']
+  workflow_dispatch:
+  schedule:
+    # Offset from collect.yml's top of the hour; scheduled runs only fire on
+    # the default branch.
+    - cron: '20 */2 * * *'
+
+# A new snapshot supersedes one still deploying.
+concurrency:
+  group: site-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Export postings from the live boards
+        run: |
+          set -o pipefail
+          npm run --silent export:site 2>&1 | tee /tmp/export.log
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo '## Website snapshot'
+            echo
+            if [ -f ../site/postings.json ]; then
+              echo "- Postings: $(jq '.jobs | length' ../site/postings.json)"
+              echo "- Boards: $(jq -c '.boards' ../site/postings.json)"
+              echo "- Firms: $(jq -r '[.jobs[].firm] | unique | join(", ")' ../site/postings.json)"
+            fi
+            echo
+            echo '```'
+            tail -n 60 /tmp/export.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Package the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check that Pages is turned on
+        id: pages
+        continue-on-error: true
+        uses: actions/configure-pages@v5
+
+      - name: Explain the skip
+        if: steps.pages.outcome != 'success'
+        run: |
+          echo "::notice::GitHub Pages is not enabled for this repository, so the site was built but not published. Turn it on under Settings > Pages > Source: GitHub Actions."
+          {
+            echo '## Website not published'
+            echo
+            echo 'GitHub Pages is off. Turn it on once under **Settings > Pages >'
+            echo 'Build and deployment > Source: GitHub Actions**; the next run publishes.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deploy
+        id: deployment
+        if: steps.pages.outcome == 'success'
+        uses: actions/deploy-pages@v4

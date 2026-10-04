@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terra · Texas CRE Jobs</title>
+    <meta
+      name="description"
+      content="Internships and entry-level commercial real estate jobs in Texas, collected from firm career boards every two hours."
+    />
+    <link rel="icon" href="favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
+        <h1>Terra</h1>
+        <p class="lede">
+          Internships and first jobs at Texas CRE firms, read straight from their career boards every two hours.
+        </p>
+        <p class="meta" id="meta" aria-live="polite">Loading postings…</p>
+      </header>
+
+      <form class="controls" id="controls" role="search" onsubmit="return false">
+        <label class="search">
+          <span class="visually-hidden">Search postings</span>
+          <input id="q" name="q" type="search" placeholder="Search role, firm, skill…" autocomplete="off" />
+        </label>
+        <div class="filters">
+          <label>
+            <span class="eyebrow">CITY</span>
+            <select id="city" name="city"><option value="">All cities</option></select>
+          </label>
+          <label>
+            <span class="eyebrow">FIRM</span>
+            <select id="firm" name="firm"><option value="">All firms</option></select>
+          </label>
+          <label>
+            <span class="eyebrow">ROLE TYPE</span>
+            <select id="kind" name="kind"><option value="">All types</option></select>
+          </label>
+          <label>
+            <span class="eyebrow">SECTOR</span>
+            <select id="sector" name="sector"><option value="">All sectors</option></select>
+          </label>
+          <label>
+            <span class="eyebrow">SORT</span>
+            <select id="sort" name="sort">
+              <option value="newest">Newest first</option>
+              <option value="deadline">Deadline</option>
+            </select>
+          </label>
+        </div>
+      </form>
+
+      <div class="summary">
+        <p id="count" aria-live="polite"></p>
+        <button type="button" id="clear" class="link" hidden>Clear filters</button>
+      </div>
+
+      <section id="list" class="list" aria-label="Job postings"></section>
+
+      <footer class="footer">
+        <p>
+          Postings come from each firm's own Greenhouse, Lever and Workday boards. Apply links go to the firm, not to
+          Terra.
+          <a href="https://github.com/thougthfullCarrot/Terra">Source on GitHub</a>
+        </p>
+      </footer>
+    </main>
+
+    <template id="card">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="role"></h2>
+            <p class="firm"></p>
+          </div>
+          <a class="apply" target="_blank" rel="noopener noreferrer">Apply</a>
+        </div>
+        <ul class="chips"></ul>
+        <p class="dates"><span class="posted"></span><span class="deadline"></span></p>
+        <details class="more">
+          <summary>Details</summary>
+          <p class="desc"></p>
+          <ul class="reqs"></ul>
+        </details>
+      </article>
+    </template>
+  </body>
+</html>
