@@ -13,6 +13,7 @@ export interface Job {
   desc: string;
   reqs: string[];
   applyUrl: string;
+  via?: 'Adzuna' | null;
 }
 
 export interface FilterState {

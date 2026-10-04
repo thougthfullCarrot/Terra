@@ -231,6 +231,10 @@ button.link {
   color: var(--faint);
 }
 
+.via {
+  color: var(--muted);
+}
+
 .deadline.urgent {
   color: var(--red);
 }
