@@ -15,6 +15,7 @@ export interface Job {
   applyUrl: string;
   /** Resume match score, 0-100, set by the page for a signed-in user with a resume. */
   matchScore?: number;
+  via?: 'Adzuna' | null;
 }
 
 export interface FilterState {

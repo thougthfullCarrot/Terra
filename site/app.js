@@ -46,6 +46,7 @@ function showFeed(next) {
   snapshot = next;
   applyScores();
   fillFilters(snapshot.jobs);
+  $('adzuna-credit').hidden = !snapshot.jobs.some((job) => job.via === 'Adzuna');
   if (!bound) bind();
   bound = true;
   render();
@@ -177,6 +178,7 @@ function card(job, now) {
   }
 
   node.querySelector('.posted').textContent = postedLabel(job.postedAt, now);
+  if (job.via !== 'Adzuna') node.querySelector('.via').remove();
   const deadline = deadlineLabel(job.deadline, now);
   const deadlineNode = node.querySelector('.deadline');
   if (deadline) {

@@ -32,6 +32,8 @@ export interface SitePosting {
    * jobs in the browser (match.js) against the signed-in user's profile.
    */
   match: MatchInputs;
+  /** The aggregator a posting came through, when it did not come from a firm board. */
+  via: 'Adzuna' | null;
 }
 
 export interface SiteSnapshot {
@@ -75,8 +77,22 @@ export function toSitePosting(posting: Posting): SitePosting {
     desc: truncate(posting.description, DESC_LIMIT),
     reqs: posting.reqs,
     applyUrl: posting.applyUrl,
-    match: matchInputs(posting)
+    match: matchInputs(posting),
+    via: viaAggregator(posting.applyUrl)
   };
+}
+
+/**
+ * Adzuna's terms require crediting it wherever its listings appear, and its
+ * apply links are its own redirects, so the link is what identifies them.
+ */
+export function viaAggregator(applyUrl: string): SitePosting['via'] {
+  try {
+    const host = new URL(applyUrl).hostname;
+    return host === 'adzuna.com' || host.endsWith('.adzuna.com') ? 'Adzuna' : null;
+  } catch {
+    return null;
+  }
 }
 
 function truncate(text: string, limit: number): string {
