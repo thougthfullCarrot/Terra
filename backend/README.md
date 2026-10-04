@@ -242,6 +242,16 @@ one marker file there.
 a missing `public/` brings the original build failure straight back. It is not
 cruft — do not delete it.
 
+### Pushes do not deploy
+
+`vercel.json` sets `git.deploymentEnabled` to `false`, so pushes and pull
+requests no longer start a Vercel build. The Hobby plan caps builds per day,
+and this repo pushes far more often than that. The public website is on GitHub
+Pages (`.github/workflows/site.yml`) and does not use Vercel at all.
+
+To ship the API, deploy by hand from `backend/` with `npx vercel --prod`, or
+remove the `git` block to turn automatic deploys back on.
+
 ### Vercel serves the API, not the collector
 
 `vercel.json` carries **no `crons` block**, on purpose. Vercel rejects a deploy

@@ -1,7 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  },
   "outputDirectory": "public",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
   "functions": {
     "api/index.ts": {
       "maxDuration": 60
