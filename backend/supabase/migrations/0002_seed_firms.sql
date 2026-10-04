@@ -49,11 +49,11 @@ insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
 on conflict (name) do nothing;
 
 -- iCIMS. Houston-based developer and manager; the portal's page titles read
--- 'Careers at Hines' and it listed ~200 postings, about 40 of them in Texas,
--- when the iCIMS fetcher was written. Read from outside a server, not yet by
--- the fetcher itself, so inactive until `npm run verify:firms` shows it answers.
+-- 'Careers at Hines'. Verified by `npm run verify:firms` on 2026-10-04: the
+-- portal listed 190 postings to the fetcher, 9 looked entry-level in Texas,
+-- all 9 job pages parsed, and 8 passed the normalizer.
 insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
-  ('Hines', 'icims', 'careers-hines', 'careers-hines.icims.com', true, false)
+  ('Hines', 'icims', 'careers-hines', 'careers-hines.icims.com', true, true)
 on conflict (name) do nothing;
 
 -- Boards that exist but could not be attributed from the API. Lever publishes
