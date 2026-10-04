@@ -7,7 +7,7 @@
 const DAY_MS = 86_400_000;
 
 export const FILTERS = ['city', 'firm', 'kind', 'sector'];
-export const SORTS = ['newest', 'deadline'];
+export const SORTS = ['newest', 'deadline', 'match'];
 
 /** Whole calendar days from `from` to `to`, in UTC. Matches the API's arithmetic. */
 export function daysBetween(from, to) {
@@ -58,6 +58,11 @@ export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sect
 export function sortJobs(jobs, sort = 'newest') {
   const newest = (a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id);
   const sorted = [...jobs];
+  if (sort === 'match') {
+    // matchScore is set by the page from the signed-in user's resume; jobs
+    // without one (no resume yet) fall back to newest.
+    return sorted.sort((a, b) => (b.matchScore ?? -1) - (a.matchScore ?? -1) || newest(a, b));
+  }
   if (sort === 'deadline') {
     return sorted.sort((a, b) => {
       if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline) || newest(a, b);

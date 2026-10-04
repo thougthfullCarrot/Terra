@@ -21,7 +21,13 @@
   <body>
     <main class="page">
       <header class="masthead">
-        <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
+        <div class="topbar">
+          <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
+          <button type="button" id="account-button" class="account-button" hidden>
+            <span class="avatar small" id="account-avatar" aria-hidden="true"></span>
+            <span>Profile</span>
+          </button>
+        </div>
         <h1>Terra</h1>
         <p class="lede">
           Internships and first jobs at Texas CRE firms, read straight from their career boards every two hours.
@@ -29,6 +35,108 @@
         <p class="meta" id="meta" aria-live="polite">Loading postings…</p>
       </header>
 
+      <!-- Shown when accounts are configured and nobody is signed in. -->
+      <section id="gate" class="panel" hidden aria-labelledby="gate-title">
+        <h2 id="gate-title">Sign in to see the jobs</h2>
+        <p class="panel-lede" id="gate-lede">Terra is free for students. Sign in with your college (.edu) email.</p>
+        <form id="signin" class="signin" novalidate>
+          <label>
+            <span class="eyebrow">EMAIL</span>
+            <input id="signin-email" type="email" autocomplete="email" placeholder="you@school.edu" required />
+          </label>
+          <button type="submit" class="primary" id="signin-submit">Email me a sign-in link</button>
+        </form>
+        <p class="notice" id="signin-status" aria-live="polite" hidden></p>
+      </section>
+
+      <!-- Signed in, but neither a college email nor a subscription. -->
+      <section id="paywall" class="panel" hidden aria-labelledby="paywall-title">
+        <h2 id="paywall-title">Subscribe to see the jobs</h2>
+        <p class="panel-lede" id="paywall-lede"></p>
+        <div class="actions">
+          <a class="primary" id="subscribe" hidden>Subscribe</a>
+          <button type="button" class="link" id="paywall-signout">Use a different email</button>
+        </div>
+        <p class="notice" id="paywall-status" aria-live="polite" hidden></p>
+      </section>
+
+      <!-- Profile: college, grad year, picture, resume. -->
+      <section id="profile" class="panel profile" hidden aria-labelledby="profile-title">
+        <div class="profile-head">
+          <div class="avatar large" id="profile-avatar" aria-hidden="true"></div>
+          <div class="profile-who">
+            <h2 id="profile-title">Your profile</h2>
+            <p class="muted" id="profile-email"></p>
+            <p class="badge" id="profile-access"></p>
+          </div>
+          <button type="button" class="link close" id="profile-close">Back to jobs</button>
+        </div>
+
+        <div class="uploads">
+          <div class="upload">
+            <span class="eyebrow">PROFILE PICTURE</span>
+            <label class="file-button">
+              <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp,image/gif" />
+              <span>Choose a picture</span>
+            </label>
+            <p class="hint">JPG, PNG, WebP or GIF, up to 2 MB.</p>
+          </div>
+          <div class="upload">
+            <span class="eyebrow">RESUME</span>
+            <label class="file-button">
+              <input
+                type="file"
+                id="resume-file"
+                accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+              />
+              <span id="resume-button-label">Upload resume</span>
+            </label>
+            <p class="hint" id="resume-state">PDF, Word or text, up to 5 MB. We use it to highlight your best matches.</p>
+            <ul class="chips" id="resume-skills"></ul>
+            <button type="button" class="link" id="resume-remove" hidden>Remove resume</button>
+          </div>
+        </div>
+        <p class="notice" id="upload-status" aria-live="polite" hidden></p>
+
+        <form id="profile-form" class="profile-form" novalidate>
+          <label>
+            <span class="eyebrow">NAME</span>
+            <input name="name" autocomplete="name" maxlength="120" />
+          </label>
+          <label>
+            <span class="eyebrow">COLLEGE</span>
+            <input name="school" autocomplete="organization" maxlength="120" placeholder="e.g. Texas A&amp;M University" />
+          </label>
+          <label>
+            <span class="eyebrow">GRAD YEAR</span>
+            <select name="gradYear"><option value="">Select</option></select>
+          </label>
+          <label>
+            <span class="eyebrow">MAJOR</span>
+            <input name="major" maxlength="120" placeholder="e.g. Finance" />
+          </label>
+          <label>
+            <span class="eyebrow">HOME CITY</span>
+            <select name="homeCity"><option value="">Select</option></select>
+          </label>
+          <label class="check">
+            <input type="checkbox" name="relocationOpen" />
+            <span>Open to relocating within Texas</span>
+          </label>
+          <fieldset class="sectors">
+            <legend class="eyebrow">SECTORS YOU'RE INTERESTED IN</legend>
+            <div id="sector-options"></div>
+          </fieldset>
+          <div class="actions">
+            <button type="submit" class="primary" id="profile-save">Save profile</button>
+            <a class="link" id="billing" target="_blank" rel="noopener noreferrer" hidden>Manage subscription</a>
+            <button type="button" class="link" id="signout">Sign out</button>
+          </div>
+          <p class="notice" id="profile-status" aria-live="polite" hidden></p>
+        </form>
+      </section>
+
+      <div id="feed">
       <form class="controls" id="controls" role="search" onsubmit="return false">
         <label class="search">
           <span class="visually-hidden">Search postings</span>
@@ -67,6 +175,7 @@
       </div>
 
       <section id="list" class="list" aria-label="Job postings"></section>
+      </div>
 
       <footer class="footer">
         <p>
@@ -79,6 +188,7 @@
 
     <template id="card">
       <article class="card">
+        <p class="match-badge" hidden></p>
         <div class="card-head">
           <div>
             <h2 class="role"></h2>
@@ -87,9 +197,10 @@
           <a class="apply" target="_blank" rel="noopener noreferrer">Apply</a>
         </div>
         <ul class="chips"></ul>
-        <p class="dates"><span class="posted"></span><span class="deadline"></span></p>
+        <p class="dates"><span class="posted"></span><span class="deadline"></span><span class="score"></span></p>
         <details class="more">
           <summary>Details</summary>
+          <ul class="why"></ul>
           <p class="desc"></p>
           <ul class="reqs"></ul>
         </details>

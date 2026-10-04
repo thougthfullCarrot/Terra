@@ -1,6 +1,11 @@
 import { CITIES, STRONG_MATCH, type Posting, type Profile } from '../types.js';
 import { detectSkills, normalizeProfileSkills, skillLabel } from './skills.js';
-import { matchesClass, parseClassRequirement, classStanding } from './classYear.js';
+import {
+  matchesClass,
+  parseClassRequirement,
+  classStanding,
+  type ClassRequirement
+} from './classYear.js';
 
 /** Component weights, per the spec. They sum to 1. */
 export const WEIGHTS = {
@@ -44,9 +49,35 @@ export interface ScoredMatch {
  * verbatim by the UI, which highlights anything at or above STRONG_MATCH.
  */
 export function scoreMatch(profile: Profile, posting: Posting, now = new Date()): ScoredMatch {
-  const postingText = [posting.role, posting.description, ...posting.reqs].join('\n');
+  return scoreWithInputs(profile, posting, matchInputs(posting), now);
+}
 
-  const required = detectSkills(postingText);
+/** What the scorer reads from a posting's text, worked out once per posting. */
+export interface MatchInputs {
+  /** Skill keys the posting mentions. */
+  required: string[];
+  requirement: ClassRequirement;
+}
+
+export function matchInputs(posting: Pick<Posting, 'role' | 'description' | 'reqs'>): MatchInputs {
+  const postingText = [posting.role, posting.description, ...posting.reqs].join('\n');
+  return { required: detectSkills(postingText), requirement: parseClassRequirement(postingText) };
+}
+
+/** The fields of a posting the score reads beyond its text. */
+export type ScoredPosting = Pick<Posting, 'city' | 'sector' | 'kind' | 'pay'>;
+
+/**
+ * scoreMatch with the text analysis already done. The website runs this in
+ * the browser against inputs the export computed from each posting's full
+ * description, which the site's snapshot truncates.
+ */
+export function scoreWithInputs(
+  profile: Profile,
+  posting: ScoredPosting,
+  { required, requirement }: MatchInputs,
+  now = new Date()
+): ScoredMatch {
   const resume = normalizeProfileSkills(profile.skills ?? []);
   const overlap = required.filter((key) => resume.includes(key));
 
@@ -56,7 +87,6 @@ export function scoreMatch(profile: Profile, posting: Posting, now = new Date())
     !!profile.homeCity && profile.homeCity.toLowerCase() === posting.city.toLowerCase();
   const location = homeMatches ? 1 : profile.relocationOpen ? 0.75 : 0.15;
 
-  const requirement = parseClassRequirement(postingText);
   const classVerdict = matchesClass(requirement, profile.gradYear, now);
   const classYear = classVerdict === null ? NEUTRAL.classYear : classVerdict ? 1 : 0;
 
@@ -100,7 +130,7 @@ export function scoreMatch(profile: Profile, posting: Posting, now = new Date())
  */
 function buildNote(
   profile: Profile,
-  posting: Posting,
+  posting: ScoredPosting,
   overlap: string[],
   classPhrase: string | null,
   now: Date
@@ -134,7 +164,7 @@ interface LineContext {
  * sheet's navy panel. Each one names the evidence it came from so the student
  * can tell whether the match is real.
  */
-function buildLines(profile: Profile, posting: Posting, ctx: LineContext): string[] {
+function buildLines(profile: Profile, posting: ScoredPosting, ctx: LineContext): string[] {
   const lines: string[] = [];
 
   if (ctx.overlap.length) {

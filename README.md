@@ -75,8 +75,14 @@ one.
 publish with a notice. The site is then at
 `https://thougthfullcarrot.github.io/Terra/`.
 
-To look at it locally: `cd backend && npm run export:site`, then serve `site/`
-with any static server (`npx serve site`).
+To look at it locally: `cd backend && npm run build:site && npm run export:site`,
+then serve `site/` with any static server (`npx serve site`).
+
+**Accounts (optional).** With Supabase and Stripe settings in the repository,
+the site requires sign-in: college (.edu) emails get it free, other emails
+subscribe through Stripe, and everyone gets a profile with a picture and resume
+that highlights their best-matching jobs. Without them it stays open. Setup,
+click by click: [docs/accounts-setup.md](docs/accounts-setup.md).
 
 ### Connecting the repo to Vercel
 

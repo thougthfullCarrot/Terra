@@ -13,5 +13,8 @@ coverage/
 .expo/
 mobile/dist/
 
-# Website snapshot, written by `npm run export:site` and published by site.yml
+# Website snapshot and matcher bundle, written by `npm run export:site` and
+# `npm run build:site`, published by site.yml
 site/postings.json
+site/match.js
+site/vendor/

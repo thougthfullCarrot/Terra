@@ -1,5 +1,6 @@
 import type { City, Kind, Posting, Sector } from '../types.js';
 import type { RunReport } from '../collector/run.js';
+import { matchInputs, type MatchInputs } from '../matching/score.js';
 
 /**
  * One posting as the public website renders it.
@@ -25,6 +26,12 @@ export interface SitePosting {
   desc: string;
   reqs: string[];
   applyUrl: string;
+  /**
+   * What the resume matcher reads from the posting's text, worked out here
+   * from the full description because `desc` is truncated. The site scores
+   * jobs in the browser (match.js) against the signed-in user's profile.
+   */
+  match: MatchInputs;
 }
 
 export interface SiteSnapshot {
@@ -64,7 +71,8 @@ export function toSitePosting(posting: Posting): SitePosting {
     deadline: posting.deadline,
     desc: truncate(posting.description, DESC_LIMIT),
     reqs: posting.reqs,
-    applyUrl: posting.applyUrl
+    applyUrl: posting.applyUrl,
+    match: matchInputs(posting)
   };
 }
 

@@ -16,13 +16,17 @@
     "verify:firms": "tsx src/bin/verify-firms.ts",
     "probe:slugs": "tsx src/bin/probe-slugs.ts",
     "discover:ats": "tsx src/bin/discover-ats.ts",
-    "export:site": "tsx src/bin/export-site.ts"
+    "export:site": "tsx src/bin/export-site.ts",
+    "build:site": "tsx src/bin/build-site.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
+    "esbuild": "^0.28.2",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^4.10.38",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

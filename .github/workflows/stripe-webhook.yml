@@ -1,0 +1,71 @@
+# Deploys the stripe-webhook Supabase Edge Function, which records website
+# subscriptions when Stripe reports a payment, renewal or cancellation.
+#
+# Needs (docs/accounts-setup.md): the repository variable SUPABASE_URL and the
+# secrets SUPABASE_ACCESS_TOKEN, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.
+# Until they are set every run skips with a notice.
+name: Stripe webhook
+
+on:
+  push:
+    branches: [claude/new-session-6xvm0u]
+    paths: ['backend/supabase/functions/**', '.github/workflows/stripe-webhook.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+
+    steps:
+      - name: Check settings
+        id: check
+        run: |
+          for name in SUPABASE_URL SUPABASE_ACCESS_TOKEN STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::notice::$name is not set, so the Stripe webhook was not deployed. See docs/accounts-setup.md."
+              echo "ready=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          # https://<ref>.supabase.co -> <ref>
+          ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
+          if [ "$ref" = "$SUPABASE_URL" ]; then
+            echo "::error::SUPABASE_URL should look like https://<project>.supabase.co"
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ready == 'true'
+
+      - uses: supabase/setup-cli@v1
+        if: steps.check.outputs.ready == 'true'
+        with:
+          version: latest
+
+      - name: Store the Stripe keys with the function
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          supabase secrets set --project-ref "${{ steps.check.outputs.ref }}" \
+            STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET"
+
+      # Stripe signs its requests instead of sending a Supabase token, so the
+      # function checks the Stripe signature itself and JWT checks are off.
+      - name: Deploy
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          supabase functions deploy stripe-webhook --project-ref "${{ steps.check.outputs.ref }}" --no-verify-jwt --use-api
+          echo "Webhook URL: ${SUPABASE_URL%/}/functions/v1/stripe-webhook" >> "$GITHUB_STEP_SUMMARY"
