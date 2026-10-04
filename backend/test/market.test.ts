@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { cesSeries, combine, fetchBls, parseBls, unemploymentSeries, yearOverYear, type Point } from '../src/market/bls.js';
-import { acsUrls, fetchAcs, parseAcs, rentalVacancy, renterShare } from '../src/market/census.js';
+import { acsUrls, fetchAcs, fetchAcsYear, parseAcs, rentalVacancy, renterShare } from '../src/market/census.js';
 import { METROS } from '../src/market/metros.js';
 import { blsSeriesFor, buildMarketSnapshot, fillFromPrevious, filledCount, GROUPS, METRICS } from '../src/market/snapshot.js';
 import {
@@ -128,6 +128,18 @@ describe('Census ACS', () => {
     expect(decodeURIComponent(urls[0]!)).toContain('for=metropolitan statistical area/micropolitan statistical area:26420,12420,41700,21340');
     expect(decodeURIComponent(urls[1]!)).toContain(
       'for=metropolitan division:19124,23104&in=metropolitan statistical area/micropolitan statistical area:19100'
+    );
+  });
+
+  it('leaves the geography clause unencoded but for spaces, which is all the API accepts', () => {
+    const [url] = acsUrls(2025, METROS);
+    expect(url).toContain('&for=metropolitan%20statistical%20area/micropolitan%20statistical%20area:26420,12420,41700,21340');
+  });
+
+  it('turns an error page into a readable failure', async () => {
+    const fetchImpl = vi.fn(async () => new Response('<html><body><p>error: unknown/unsupported geography hierarchy</p></body></html>'));
+    await expect(fetchAcsYear(2025, METROS, { fetchImpl: fetchImpl as unknown as typeof fetch })).rejects.toThrow(
+      'ACS 2025: error: unknown/unsupported geography hierarchy'
     );
   });
 

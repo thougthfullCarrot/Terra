@@ -24,6 +24,13 @@ export type AcsRow = Record<AcsField, number | null>;
 const MSA = 'metropolitan statistical area/micropolitan statistical area';
 const DIVISION = 'metropolitan division';
 
+/**
+ * The API wants its geography clauses nearly raw: an encoded "/", ":" or ","
+ * is not recognized and answers with an HTML error page, so only spaces are
+ * escaped.
+ */
+const geo = (text: string) => text.replace(/ /g, '%20');
+
 /** The request URLs for one survey year: one for whole metros, one per parent metro for divisions. */
 export function acsUrls(year: number, metros: Metro[], apiKey?: string): string[] {
   const get = `NAME,${Object.values(ACS_VARIABLES).join(',')}`;
@@ -32,13 +39,13 @@ export function acsUrls(year: number, metros: Metro[], apiKey?: string): string[
   const urls: string[] = [];
 
   const whole = metros.filter((m) => !m.census.division).map((m) => m.census.msa);
-  if (whole.length) urls.push(`${base}&for=${encodeURIComponent(`${MSA}:${whole.join(',')}`)}${key}`);
+  if (whole.length) urls.push(`${base}&for=${geo(`${MSA}:${whole.join(',')}`)}${key}`);
 
   const parents = [...new Set(metros.filter((m) => m.census.division).map((m) => m.census.msa))];
   for (const parent of parents) {
     const divisions = metros.filter((m) => m.census.division && m.census.msa === parent).map((m) => m.census.division);
     urls.push(
-      `${base}&for=${encodeURIComponent(`${DIVISION}:${divisions.join(',')}`)}&in=${encodeURIComponent(`${MSA}:${parent}`)}${key}`
+      `${base}&for=${geo(`${DIVISION}:${divisions.join(',')}`)}&in=${geo(`${MSA}:${parent}`)}${key}`
     );
   }
   return urls;
@@ -83,6 +90,11 @@ export async function fetchAcsYear(
     const text = await fetchText(url, { ...http, accept: 'application/json' });
     // A year that is not out yet answers 204 with no body, or 404.
     if (!text.trim()) throw new Error(`ACS ${year} returned no data`);
+    // Errors come back as a 200 with an HTML or plain-text explanation.
+    if (!text.trimStart().startsWith('[')) {
+      const reason = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+      throw new Error(`ACS ${year}: ${reason}`);
+    }
     for (const [geo, row] of parseAcs(JSON.parse(text) as string[][])) out.set(geo, row);
   }
   return out;

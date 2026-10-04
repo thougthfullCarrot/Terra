@@ -48,7 +48,10 @@ async function main(): Promise<void> {
       return null;
     }
   );
-  if (bls) console.log(`BLS: ${bls.size} of ${blsSeriesFor(METROS).length} series answered.`);
+  if (bls) {
+    const missing = blsSeriesFor(METROS).filter((id) => !bls.has(id));
+    console.log(`BLS: ${bls.size} of ${blsSeriesFor(METROS).length} series answered.${missing.length ? ` Not published: ${missing.join(', ')}` : ''}`);
+  }
 
   const acs = await fetchAcs(METROS, { apiKey: process.env.CENSUS_API_KEY || undefined, now, timeoutMs: 30_000 }).catch(
     (error: unknown) => {
