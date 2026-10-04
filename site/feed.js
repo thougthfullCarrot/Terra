@@ -18,9 +18,13 @@ function midnight(date) {
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
-/** Distinct values of one field with their counts, most common first, then A to Z. */
-export function facet(jobs, field) {
-  const counts = new Map();
+/**
+ * Distinct values of one field with their counts, most common first, then A to
+ * Z. Values in `always` are listed even at zero, so a covered city stays
+ * choosable on a day it has no postings.
+ */
+export function facet(jobs, field, always = []) {
+  const counts = new Map(always.map((value) => [value, 0]));
   for (const job of jobs) {
     const value = job[field];
     if (value) counts.set(value, (counts.get(value) ?? 0) + 1);

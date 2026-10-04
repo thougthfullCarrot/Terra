@@ -9,6 +9,7 @@
 import { SupabaseStore } from '../db/supabase.js';
 import { MemoryStore } from '../db/store.js';
 import { runCollector } from '../collector/run.js';
+import { adzunaAggregators } from '../collector/sources/adzuna.js';
 import { ExpoNotifier } from '../notify/expo.js';
 
 const dry = process.argv.includes('--dry');
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
 
   const report = await runCollector({
     store,
+    aggregators: adzunaAggregators(),
     notifier: dry ? undefined : new ExpoNotifier({ accessToken: process.env.EXPO_ACCESS_TOKEN })
   });
 

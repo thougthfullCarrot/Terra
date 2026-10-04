@@ -51,6 +51,7 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
     strongMatches: 0,
     notified: 0,
     errors: [],
+    aggregators: [],
     ranAt: now,
     ...overrides
   };
@@ -72,6 +73,7 @@ describe('buildSnapshot', () => {
 
     expect(snapshot.generatedAt).toBe('2026-10-04T15:00:00.000Z');
     expect(snapshot.boards).toEqual({ polled: 2, failed: 1 });
+    expect(snapshot.cities).toContain('San Antonio');
     expect(snapshot.jobs.map((j) => j.id)).toEqual(['new', 'old']);
     expect(snapshot.jobs[0]).toMatchObject({
       postedAt: '2026-10-03T00:00:00.000Z',
@@ -111,6 +113,15 @@ describe('site feed rules', () => {
     expect(facet(jobs, 'firm')).toEqual([
       { value: 'JLL', count: 2 },
       { value: 'Greystar', count: 1 }
+    ]);
+  });
+
+  it('lists every covered city, even at zero', () => {
+    const cities = facet(jobs, 'city', ['Dallas', 'Houston', 'San Antonio']);
+    expect(cities).toEqual([
+      { value: 'Houston', count: 2 },
+      { value: 'Dallas', count: 1 },
+      { value: 'San Antonio', count: 0 }
     ]);
   });
 

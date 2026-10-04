@@ -38,7 +38,7 @@ export const FILTERS: readonly ['city', 'firm', 'kind', 'sector'];
 export const SORTS: readonly ['newest', 'deadline', 'match'];
 
 export function daysBetween(from: Date, to: Date): number;
-export function facet<T extends Job>(jobs: T[], field: keyof Job): { value: string; count: number }[];
+export function facet<T extends Job>(jobs: T[], field: keyof Job, always?: string[]): { value: string; count: number }[];
 export function filterJobs<T extends Job>(jobs: T[], state?: FilterState): T[];
 export function sortJobs<T extends Job>(jobs: T[], sort?: string): T[];
 export function postedLabel(postedAt: string, now?: Date): string;

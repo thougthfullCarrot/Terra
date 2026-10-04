@@ -4,10 +4,14 @@
  *   npm run export:site                       # writes ../site/postings.json
  *   npm run export:site -- --out <path>
  *
- * Needs no database and no credentials: the firm list is read from the seed
- * migration, as verify-firms does, and the pass runs against an in-memory
- * store. What lands in the file is what the boards list right now, which is
- * exactly what a public job feed should show.
+ * Needs no database: the firm list is read from the seed migration, as
+ * verify-firms does, and the pass runs against an in-memory store. What lands
+ * in the file is what the boards list right now, which is exactly what a public
+ * job feed should show.
+ *
+ * With ADZUNA_APP_ID and ADZUNA_APP_KEY set, Adzuna search results are added
+ * too, minus any seat a firm board already listed. Without them it is boards
+ * only, as before.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -15,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { MemoryStore } from '../db/store.js';
 import { loadFirmSeed } from '../collector/firmSeed.js';
 import { runCollector } from '../collector/run.js';
+import { adzunaAggregators } from '../collector/sources/adzuna.js';
 import { buildSnapshot } from '../site/snapshot.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -26,7 +31,9 @@ async function main(): Promise<void> {
   const out = outFlag >= 0 && process.argv[outFlag + 1] ? resolve(process.argv[outFlag + 1]!) : DEFAULT_OUT;
 
   const store = new MemoryStore(await loadFirmSeed(SEED_PATH));
-  const report = await runCollector({ store });
+  const aggregators = adzunaAggregators();
+  if (!aggregators.length) console.warn('ADZUNA_APP_ID / ADZUNA_APP_KEY not set; boards only.');
+  const report = await runCollector({ store, aggregators });
   const snapshot = buildSnapshot([...store.postings.values()], report);
 
   await mkdir(dirname(out), { recursive: true });
