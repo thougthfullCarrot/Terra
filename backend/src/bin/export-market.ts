@@ -4,8 +4,9 @@
  *   npm run export:market                     # writes ../site/market.json
  *   npm run export:market -- --out <path> --previous <path>
  *
- * Needs no key. BLS_API_KEY and CENSUS_API_KEY (both free) raise the APIs'
- * daily limits if they are set. A source that fails leaves its figures from
+ * BLS needs no key; BLS_API_KEY (free) raises its daily limit. The Census API
+ * now refuses requests without CENSUS_API_KEY (free, instant at
+ * https://api.census.gov/data/key_signup.html). A source that fails leaves its figures from
  * --previous (default: the --out file, if one is there) in place, so one bad
  * day does not blank the page.
  *

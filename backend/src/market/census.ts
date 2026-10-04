@@ -4,8 +4,8 @@ import type { Metro } from './metros.js';
 /**
  * Census Bureau American Community Survey, 1-year estimates: population,
  * income, rent, home value and rental vacancy for each metro. Public data,
- * free to republish. Works without a key at Terra's volume; CENSUS_API_KEY
- * raises the daily limit if it is ever needed.
+ * free to republish. The API answers "Missing Key" without CENSUS_API_KEY,
+ * which is free and instant at https://api.census.gov/data/key_signup.html.
  */
 
 export const ACS_VARIABLES = {
