@@ -2,6 +2,7 @@ import type { Posting, RawJob, Sector } from '../types.js';
 import { postingId } from './id.js';
 import { resolveCity } from './texas.js';
 import { classifyKind } from './seniority.js';
+import { withinExperienceLimit } from './experience.js';
 import { classifySector } from './sector.js';
 import { extractPay } from './pay.js';
 import { extractReqs } from './reqs.js';
@@ -38,6 +39,8 @@ export function normalize(raw: RawJob, now = new Date()): NormalizeResult {
   if (!kind) return { ok: false, reason: 'not-entry-level' };
 
   const description = collapseBlank(raw.description ?? '');
+  // An 'Analyst' title can still ask for three years; the description says so.
+  if (!withinExperienceLimit(description)) return { ok: false, reason: 'not-entry-level' };
   const guess = classifySector(role, description);
 
   return {
