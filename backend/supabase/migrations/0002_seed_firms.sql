@@ -50,8 +50,13 @@ on conflict (name) do nothing;
 
 -- Enterprise CRE and Texas-heavy owners on Workday. Each tenant and site is
 -- read off a posting URL on the firm's own myworkdayjobs.com board, so the
--- tenant belongs to the firm by construction. Seeded inactive until
--- `npm run verify:firms` shows each one answering.
+-- tenant belongs to the firm by construction.
+--
+-- All seven verified live on 2026-10-04, reading each board in full. Texas
+-- entry-level postings at that time: Greystar 19, JLL 16, Cushman & Wakefield
+-- 15, Transwestern 8, Colliers 4, Invitation Homes 4, Prologis 2. JLL and C&W
+-- list 2,000, which is Workday's paging ceiling, so their real boards are
+-- larger and those counts are a floor.
 --
 -- Not here, and why:
 --   CBRE      careers.cbre.com shows no Workday tenant; no board found
@@ -59,24 +64,24 @@ on conflict (name) do nothing;
 --   Camden    Oracle Recruiting Cloud, which has no fetcher
 insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
   -- https://jll.wd1.myworkdayjobs.com/en-US/jllcareers
-  ('JLL', 'workday', 'jll/jllcareers', 'jll.wd1.myworkdayjobs.com', true, false),
+  ('JLL', 'workday', 'jll/jllcareers', 'jll.wd1.myworkdayjobs.com', true, true),
   -- https://cw.wd1.myworkdayjobs.com/en-US/External
-  ('Cushman & Wakefield', 'workday', 'cw/External', 'cw.wd1.myworkdayjobs.com', true, false),
+  ('Cushman & Wakefield', 'workday', 'cw/External', 'cw.wd1.myworkdayjobs.com', true, true),
   -- https://colliers.wd3.myworkdayjobs.com/Colliers-External-Career-Site
   ('Colliers', 'workday', 'colliers/Colliers-External-Career-Site',
-   'colliers.wd3.myworkdayjobs.com', true, false),
+   'colliers.wd3.myworkdayjobs.com', true, true),
   -- Houston based. https://transwestern.wd1.myworkdayjobs.com/TWCareers
   ('Transwestern', 'workday', 'transwestern/TWCareers',
-   'transwestern.wd1.myworkdayjobs.com', true, false),
+   'transwestern.wd1.myworkdayjobs.com', true, true),
   -- https://prologis.wd5.myworkdayjobs.com/en-US/Prologis_External_Careers
   ('Prologis', 'workday', 'prologis/Prologis_External_Careers',
-   'prologis.wd5.myworkdayjobs.com', true, false),
+   'prologis.wd5.myworkdayjobs.com', true, true),
   -- Dallas HQ. Moved from wd1 to wd503; the wd1 host answers 422.
   -- https://invitationhomes.wd503.myworkdayjobs.com/en-US/INVH
   ('Invitation Homes', 'workday', 'invitationhomes/INVH',
-   'invitationhomes.wd503.myworkdayjobs.com', true, false),
+   'invitationhomes.wd503.myworkdayjobs.com', true, true),
   -- https://greystar.wd1.myworkdayjobs.com/External
-  ('Greystar', 'workday', 'greystar/External', 'greystar.wd1.myworkdayjobs.com', true, false)
+  ('Greystar', 'workday', 'greystar/External', 'greystar.wd1.myworkdayjobs.com', true, true)
 on conflict (name) do nothing;
 
 -- Boards that exist but could not be attributed from the API. Lever publishes

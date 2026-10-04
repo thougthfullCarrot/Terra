@@ -32,8 +32,13 @@ import { resolveCity } from '../texas.js';
  */
 
 const PAGE_SIZE = 20;
-/** Stop after this many pages per firm. 25 x 20 is far more than any CRE board carries. */
-const MAX_PAGES = 25;
+/**
+ * Stop after this many pages per firm. The largest boards seen (JLL, Cushman &
+ * Wakefield) both report exactly 2,000, which looks like Workday's ceiling, so
+ * 100 x 20 reads everything a board will give. Stopping at 500 found 5 of JLL's 16
+ * Texas entry-level roles; the list endpoint is cheap, the details are not.
+ */
+const MAX_PAGES = 100;
 
 /**
  * How many postings the board listed, and how many survived the cheap filters.
