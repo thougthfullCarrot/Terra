@@ -1,4 +1,4 @@
-import type { City, Kind, Posting, Sector } from '../types.js';
+import { CITIES, type City, type Kind, type Posting, type Sector } from '../types.js';
 import type { RunReport } from '../collector/run.js';
 
 /**
@@ -32,6 +32,8 @@ export interface SiteSnapshot {
   generatedAt: string;
   /** Boards polled, and how many of them failed, so a thin feed can be told apart from a broken one. */
   boards: { polled: number; failed: number };
+  /** Every city Terra covers, so the filter offers one even on a day it has no postings. */
+  cities: City[];
   jobs: SitePosting[];
 }
 
@@ -47,6 +49,7 @@ export function buildSnapshot(postings: Posting[], report: RunReport): SiteSnaps
   return {
     generatedAt: report.ranAt.toISOString(),
     boards: { polled: report.firms, failed: report.firmsFailed },
+    cities: [...CITIES],
     jobs
   };
 }

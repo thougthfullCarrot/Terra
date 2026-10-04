@@ -39,11 +39,11 @@ function fillFilters(jobs) {
   for (const key of FILTERS) {
     const select = $(key);
     select.replaceChildren(new Option(FILTER_LABELS[key], ''));
-    for (const { value, count } of facet(jobs, key)) {
+    for (const { value, count } of facet(jobs, key, key === 'city' ? snapshot.cities ?? [] : [])) {
       select.append(new Option(`${value} (${count})`, value));
     }
     // A link can name a firm that has since left the feed; drop it rather than show nothing.
-    if (state[key] && !jobs.some((job) => job[key] === state[key])) state[key] = '';
+    if (state[key] && ![...select.options].some((option) => option.value === state[key])) state[key] = '';
     select.value = state[key];
   }
   $('q').value = state.q;

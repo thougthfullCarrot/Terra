@@ -21,6 +21,15 @@ describe('resolveCity', () => {
     expect(resolveCity('Southlake, TX')).toBe('Fort Worth');
   });
 
+  it('rolls San Antonio suburbs and military bases up to San Antonio', () => {
+    for (const place of ['Helotes, TX', 'Universal City, TX', 'Leon Valley, TX', 'Alamo Heights, TX',
+      'Cibolo, TX', 'Seguin, TX', 'Stone Oak', 'Joint Base San Antonio-Lackland', 'SATX']) {
+      expect(resolveCity(place), place).toBe('San Antonio');
+    }
+    // A same-named town elsewhere is still not Texas.
+    expect(resolveCity('Selma, AL')).toBeNull();
+  });
+
   it('handles metro aliases and abbreviations', () => {
     expect(resolveCity('DFW')).toBe('Dallas');
     expect(resolveCity('Dallas-Fort Worth, TX')).toBe('Dallas');
