@@ -81,6 +81,12 @@ describe('buildSnapshot', () => {
     });
   });
 
+  it('credits Adzuna on postings that came through it, and only those', () => {
+    expect(toSitePosting(posting({ applyUrl: 'https://www.adzuna.com/land/ad/123' })).via).toBe('Adzuna');
+    expect(toSitePosting(posting()).via).toBeNull();
+    expect(toSitePosting(posting({ applyUrl: 'https://notadzuna.com/x' })).via).toBeNull();
+  });
+
   it('shortens a long description on a word boundary', () => {
     const long = `${'word '.repeat(300)}end`;
     const { desc } = toSitePosting(posting({ description: long }));
