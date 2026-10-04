@@ -6,7 +6,8 @@ import {
   listUrl,
   parsePostedOn,
   parseTenant,
-  worthFetching
+  worthFetching,
+  type WorkdayStats
 } from '../src/collector/sources/workday.js';
 
 const tenant = parseTenant('cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers');
@@ -240,13 +241,15 @@ describe('fetchWorkday', () => {
       }
     });
 
-    const stats = { listed: 0, considered: 0, fetched: 0 };
+    const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
     await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
       fetchImpl,
       stats
     });
 
-    expect(stats).toEqual({ listed: 3, considered: 1, fetched: 1 });
+    expect(stats).toMatchObject({ listed: 3, considered: 1, fetched: 1 });
+    // The sample exists so a run of zero can be diagnosed from the titles.
+    expect(stats.sample?.[0]).toContain('Investment Analyst');
   });
 
   it('distinguishes an empty board from a fully filtered one', async () => {
@@ -254,21 +257,23 @@ describe('fetchWorkday', () => {
       { title: 'Chief Executive Officer', externalPath: '/job/ceo', locationsText: 'Dallas, TX' }
     ]);
 
-    const filtered = { listed: 0, considered: 0, fetched: 0 };
+    const filtered: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
     await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
       fetchImpl,
       stats: filtered
     });
     // Postings exist, none qualify: the fetcher is working.
-    expect(filtered).toEqual({ listed: 1, considered: 0, fetched: 0 });
+    expect(filtered).toMatchObject({ listed: 1, considered: 0, fetched: 0 });
+    expect(filtered.sample).toHaveLength(1);
 
     const { fetchImpl: emptyBoard } = fakeWorkday([]);
-    const empty = { listed: 0, considered: 0, fetched: 0 };
+    const empty: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
     await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
       fetchImpl: emptyBoard,
       stats: empty
     });
-    expect(empty).toEqual({ listed: 0, considered: 0, fetched: 0 });
+    expect(empty).toMatchObject({ listed: 0, considered: 0, fetched: 0 });
+    expect(empty.sample).toEqual([]);
   });
 
   it('respects the page cap', async () => {

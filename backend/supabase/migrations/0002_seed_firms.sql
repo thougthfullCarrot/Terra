@@ -34,13 +34,15 @@ on conflict (name) do nothing;
 -- tenant. These are therefore seeded inactive until `npm run verify:firms`
 -- confirms the CXS API answers a server client — see
 -- src/collector/sources/workday.ts for why that is in doubt.
+-- Jackson-Shaw was here and was wrong. The crawler accepted jackson.com as its
+-- domain on a single word match and reported Jackson National Life's Workday
+-- tenant as the Dallas developer's. The roles it listed — RIA Support
+-- Coordinator, Internal Wholesaler Trainee, Nashville and Lansing — are what
+-- exposed it. Domain confirmation now requires every distinctive word.
 insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
-  -- Dallas industrial and commercial developer.
-  -- https://jackson.wd1.myworkdayjobs.com/Jackson_Careers
-  ('Jackson-Shaw', 'workday', 'jackson/Jackson_Careers',
-   'jackson.wd1.myworkdayjobs.com', true, false),
-  -- Residential REIT with large Texas holdings; relevance is left to the
-  -- collector's Texas and entry-level filters rather than assumed here.
+  -- Residential REIT, Toronto based with Texas holdings. The tenant matches
+  -- the firm, and its board is property operations rather than CRE analyst
+  -- work, so relevance is left to the collector's filters rather than assumed.
   -- https://tricon.wd3.myworkdayjobs.com/tricon
   ('Tricon Residential', 'workday', 'tricon/tricon',
    'tricon.wd3.myworkdayjobs.com', true, false)

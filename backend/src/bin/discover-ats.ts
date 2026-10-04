@@ -106,9 +106,19 @@ async function discover(firm: string, limit: number): Promise<Finding> {
 }
 
 /**
- * The firm's own domain, confirmed by finding its distinctive words in the
- * page. Without that check a parked domain or an unrelated company would be
- * accepted and everything read off it would be wrong.
+ * The firm's own domain, confirmed by finding ALL of its distinctive words in
+ * the page.
+ *
+ * An earlier version accepted a single word, on the reasoning that a domain is
+ * the firm's own rather than a shared namespace. That was simply wrong — a
+ * domain belongs to whoever registered it. `domainCandidates('Jackson-Shaw')`
+ * offers `jackson.com`, that page contains "jackson", and the crawler went on
+ * to report Jackson National Life's Workday tenant as the Dallas developer
+ * Jackson-Shaw's. Wealth-management roles in Nashville and Lansing were what
+ * gave it away.
+ *
+ * So the bar is the same one board attribution uses: every distinctive word, or
+ * the single word when that is genuinely all the name has.
  */
 async function findSite(firm: string, limit: number): Promise<string | null> {
   const words = [...significant(firm)];
@@ -116,12 +126,10 @@ async function findSite(firm: string, limit: number): Promise<string | null> {
   for (const domain of domainCandidates(firm, limit)) {
     const response = await get(`https://${domain}`);
     if (!response) continue;
+    if (!words.length) continue;
 
     const text = response.body.toLowerCase();
-    const found = words.filter((word) => text.includes(word)).length;
-    // One distinctive word is enough here, unlike board attribution: this is
-    // the firm's own domain, not a shared namespace someone else registered.
-    if (!words.length || found >= 1) return domain;
+    if (words.every((word) => text.includes(word))) return domain;
   }
 
   return null;

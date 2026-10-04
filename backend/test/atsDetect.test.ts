@@ -149,3 +149,24 @@ describe('careersCandidates', () => {
     expect(careersCandidates(['https://example.com/properties'], origin)).toEqual([]);
   });
 });
+
+describe('domain confirmation', () => {
+  /**
+   * The rule a single-word match broke. `domainCandidates('Jackson-Shaw')`
+   * offers `jackson.com`, which belongs to Jackson National Life — and on a
+   * one-word match the crawler reported their Workday tenant as the Dallas
+   * developer Jackson-Shaw's. A domain is a shared namespace like any other.
+   */
+  it('offers a first-word domain that could belong to anyone', () => {
+    // The candidate itself is fine to try; what matters is that confirming it
+    // requires every distinctive word, which discover-ats now does.
+    expect(domainCandidates('Jackson-Shaw')).toContain('jackson.com');
+    expect(domainCandidates('Jackson-Shaw')).toContain('jacksonshaw.com');
+  });
+
+  it('keeps both words available to confirm against', () => {
+    // A page would have to contain 'jackson' AND 'shaw' to be accepted.
+    const words = domainCandidates('Jackson-Shaw');
+    expect(words[0]).toBe('jacksonshaw.com');
+  });
+});
