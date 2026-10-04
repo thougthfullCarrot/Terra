@@ -71,9 +71,10 @@ insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
   -- https://prologis.wd5.myworkdayjobs.com/en-US/Prologis_External_Careers
   ('Prologis', 'workday', 'prologis/Prologis_External_Careers',
    'prologis.wd5.myworkdayjobs.com', true, false),
-  -- Dallas HQ. https://invitationhomes.wd1.myworkdayjobs.com/INVH
+  -- Dallas HQ. Moved from wd1 to wd503; the wd1 host answers 422.
+  -- https://invitationhomes.wd503.myworkdayjobs.com/en-US/INVH
   ('Invitation Homes', 'workday', 'invitationhomes/INVH',
-   'invitationhomes.wd1.myworkdayjobs.com', true, false),
+   'invitationhomes.wd503.myworkdayjobs.com', true, false),
   -- https://greystar.wd1.myworkdayjobs.com/External
   ('Greystar', 'workday', 'greystar/External', 'greystar.wd1.myworkdayjobs.com', true, false)
 on conflict (name) do nothing;
