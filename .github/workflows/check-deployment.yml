@@ -12,8 +12,11 @@
 name: Check deployment
 
 on:
+  # Must name the branch Vercel deploys to production, which is this
+  # repository's default branch. Pointing it at a branch that is not deployed
+  # would check a deployment the push never produced.
   push:
-    branches: [main]
+    branches: [claude/new-session-6xvm0u]
   workflow_dispatch:
   # A daily poke catches a deployment that fell over without a push.
   schedule:

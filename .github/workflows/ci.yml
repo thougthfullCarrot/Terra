@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Every branch, deliberately. This repo's working branch has a generated
+  # name, and a hardcoded branch filter here fails silently — CI simply stops
+  # running and nothing says so.
   push:
-    branches: [main]
   pull_request:
 
 jobs:
