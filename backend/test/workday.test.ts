@@ -225,6 +225,52 @@ describe('fetchWorkday', () => {
     expect(jobs[0]?.title).toBe('Development Analyst');
   });
 
+  it('reports what the board listed, not just what survived', async () => {
+    // A returned count of zero is ambiguous: an empty board and a board whose
+    // every posting was filtered look the same. Only the first means the
+    // fetcher is broken, so the counts are kept apart.
+    const listings = [
+      { title: 'Investment Analyst', externalPath: '/job/keep', locationsText: 'Dallas, TX' },
+      { title: 'Senior Director', externalPath: '/job/senior', locationsText: 'Dallas, TX' },
+      { title: 'Analyst', externalPath: '/job/ny', locationsText: 'New York, NY' }
+    ];
+    const { fetchImpl } = fakeWorkday(listings, {
+      '/job/keep': {
+        jobPostingInfo: { title: 'Investment Analyst', jobDescription: '<p>x</p>', location: 'Dallas, TX' }
+      }
+    });
+
+    const stats = { listed: 0, considered: 0, fetched: 0 };
+    await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
+      fetchImpl,
+      stats
+    });
+
+    expect(stats).toEqual({ listed: 3, considered: 1, fetched: 1 });
+  });
+
+  it('distinguishes an empty board from a fully filtered one', async () => {
+    const { fetchImpl } = fakeWorkday([
+      { title: 'Chief Executive Officer', externalPath: '/job/ceo', locationsText: 'Dallas, TX' }
+    ]);
+
+    const filtered = { listed: 0, considered: 0, fetched: 0 };
+    await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
+      fetchImpl,
+      stats: filtered
+    });
+    // Postings exist, none qualify: the fetcher is working.
+    expect(filtered).toEqual({ listed: 1, considered: 0, fetched: 0 });
+
+    const { fetchImpl: emptyBoard } = fakeWorkday([]);
+    const empty = { listed: 0, considered: 0, fetched: 0 };
+    await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
+      fetchImpl: emptyBoard,
+      stats: empty
+    });
+    expect(empty).toEqual({ listed: 0, considered: 0, fetched: 0 });
+  });
+
   it('respects the page cap', async () => {
     const listings = Array.from({ length: 200 }, (_, i) => ({
       title: 'Director',

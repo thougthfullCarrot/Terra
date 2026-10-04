@@ -35,6 +35,19 @@ const PAGE_SIZE = 20;
 /** Stop after this many pages per firm. 25 x 20 is far more than any CRE board carries. */
 const MAX_PAGES = 25;
 
+/**
+ * How many postings the board listed, and how many survived the cheap filters.
+ *
+ * Without this a run of zero is ambiguous in a way that matters: a tenant with
+ * nothing posted and a tenant whose every posting was filtered out look
+ * identical, and only the first means the fetcher is working.
+ */
+export interface WorkdayStats {
+  listed: number;
+  considered: number;
+  fetched: number;
+}
+
 export interface WorkdayTenant {
   host: string;
   tenant: string;
@@ -110,7 +123,7 @@ export async function fetchWorkday(
   firm: string,
   host: string | null | undefined,
   slug: string,
-  options: FetchJsonOptions & { maxPages?: number } = {}
+  options: FetchJsonOptions & { maxPages?: number; stats?: WorkdayStats } = {}
 ): Promise<RawJob[]> {
   const tenant = parseTenant(host, slug);
   const maxPages = options.maxPages ?? MAX_PAGES;
@@ -125,6 +138,11 @@ export async function fetchWorkday(
 
   const candidates = listings.filter(worthFetching);
 
+  if (options.stats) {
+    options.stats.listed = listings.length;
+    options.stats.considered = candidates.length;
+  }
+
   const jobs: RawJob[] = [];
   // Three at a time: this is one tenant's server and we are a guest on it.
   for (let i = 0; i < candidates.length; i += 3) {
@@ -133,6 +151,8 @@ export async function fetchWorkday(
     );
     jobs.push(...details.filter((job): job is RawJob => job !== null));
   }
+
+  if (options.stats) options.stats.fetched = jobs.length;
 
   return jobs;
 }

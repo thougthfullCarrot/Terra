@@ -23,7 +23,7 @@ import { loadFirmSeed } from '../collector/firmSeed.js';
 import { SupabaseStore } from '../db/supabase.js';
 import { fetchGreenhouse } from '../collector/sources/greenhouse.js';
 import { fetchLever } from '../collector/sources/lever.js';
-import { fetchWorkday } from '../collector/sources/workday.js';
+import { fetchWorkday, type WorkdayStats } from '../collector/sources/workday.js';
 import { normalize, type RejectReason } from '../collector/normalize.js';
 
 const SEED_PATH = resolve(
@@ -40,6 +40,8 @@ interface Result {
   kept: number;
   rejected: Record<RejectReason, number>;
   error?: string;
+  /** Workday only: what the board listed before any filtering. */
+  stats?: WorkdayStats;
 }
 
 async function main(): Promise<void> {
@@ -95,8 +97,12 @@ async function check(firm: FirmRow): Promise<Result> {
     return { firm, verdict: 'SKIP', raw: 0, kept: 0, rejected, error: 'icims not implemented' };
   }
 
+  // Workday's fetcher filters before it fetches details, so its returned
+  // count cannot tell an empty board from a fully filtered one.
+  const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
+
   try {
-    const jobs = await fetchFor(firm);
+    const jobs = await fetchFor(firm, stats);
 
     let kept = 0;
     for (const job of jobs) {
@@ -106,7 +112,14 @@ async function check(firm: FirmRow): Promise<Result> {
     }
 
     // A board that answered is a board whose slug is right, even at zero hits.
-    return { firm, verdict: kept > 0 ? 'OK' : 'EMPTY', raw: jobs.length, kept, rejected };
+    return {
+      firm,
+      verdict: kept > 0 ? 'OK' : 'EMPTY',
+      raw: jobs.length,
+      kept,
+      rejected,
+      ...(firm.ats === 'workday' ? { stats } : {})
+    };
   } catch (error) {
     return {
       firm,
@@ -119,7 +132,7 @@ async function check(firm: FirmRow): Promise<Result> {
   }
 }
 
-async function fetchFor(firm: FirmRow) {
+async function fetchFor(firm: FirmRow, stats: WorkdayStats) {
   switch (firm.ats) {
     case 'greenhouse':
       return fetchGreenhouse(firm.name, firm.atsSlug, { retries: 1 });
@@ -127,7 +140,11 @@ async function fetchFor(firm: FirmRow) {
       return fetchLever(firm.name, firm.atsSlug, { retries: 1 });
     case 'workday':
       // Capped hard: verification only needs to know the tenant answers.
-      return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, { retries: 1, maxPages: 2 });
+      return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, {
+        retries: 1,
+        maxPages: 2,
+        stats
+      });
     default:
       throw new Error(`${firm.ats} not implemented`);
   }
@@ -146,6 +163,16 @@ function report(results: Result[]): void {
       `${String(result.kept).padStart(3)} TX entry-level`
     ].join('  ');
     console.log(result.error ? `${line}  — ${result.error}` : line);
+
+    // Spelled out for Workday, because 0 returned has two very different
+    // meanings and only one of them is a working fetcher.
+    if (result.stats) {
+      const { listed, considered, fetched } = result.stats;
+      console.log(
+        `        board listed ${listed}, ${considered} looked entry-level in Texas, ` +
+          `${fetched} detail documents parsed`
+      );
+    }
   }
 
   const total = (verdict: Verdict) => results.filter((r) => r.verdict === verdict).length;
