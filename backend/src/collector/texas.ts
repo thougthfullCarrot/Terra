@@ -68,6 +68,21 @@ const ALIASES: Record<string, City> = {
   schertz: 'San Antonio',
   'live oak': 'San Antonio',
   boerne: 'San Antonio',
+  satx: 'San Antonio',
+  'stone oak': 'San Antonio',
+  'alamo heights': 'San Antonio',
+  'leon valley': 'San Antonio',
+  'shavano park': 'San Antonio',
+  'castle hills': 'San Antonio',
+  windcrest: 'San Antonio',
+  'universal city': 'San Antonio',
+  converse: 'San Antonio',
+  selma: 'San Antonio',
+  cibolo: 'San Antonio',
+  helotes: 'San Antonio',
+  seguin: 'San Antonio',
+  'fort sam houston': 'San Antonio',
+  'joint base san antonio': 'San Antonio',
 
   // El Paso
   'el paso, tx': 'El Paso'

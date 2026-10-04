@@ -12,3 +12,6 @@ coverage/
 # Expo
 .expo/
 mobile/dist/
+
+# Website snapshot, written by `npm run export:site` and published by site.yml
+site/postings.json

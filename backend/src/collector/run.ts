@@ -4,6 +4,8 @@ import { normalize, type RejectReason } from './normalize.js';
 import { fetchGreenhouse } from './sources/greenhouse.js';
 import { fetchLever } from './sources/lever.js';
 import { fetchWorkday } from './sources/workday.js';
+import { fetchIcims } from './sources/icims.js';
+import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
 
@@ -11,6 +13,26 @@ import { STRONG_MATCH } from '../types.js';
 export const STALE_DAYS = 14;
 
 export type Fetcher = (firm: FirmRow) => Promise<RawJob[]>;
+
+/**
+ * A source that answers a search rather than one firm's board (Adzuna). Its
+ * postings fill gaps; a seat a firm board already listed is dropped in favour
+ * of the board's copy, which links straight to the firm.
+ */
+export interface Aggregator {
+  name: string;
+  fetch: () => Promise<RawJob[]>;
+}
+
+export interface AggregatorReport {
+  name: string;
+  fetched: number;
+  kept: number;
+  /** Already listed on a firm board this pass. */
+  duplicates: number;
+  rejected: number;
+  error?: string;
+}
 
 export interface Notifier {
   /** Called once per profile with the new postings worth waking them for. */
@@ -26,6 +48,8 @@ export interface RunOptions {
   staleDays?: number;
   /** Cap on concurrent board fetches. Boards are small; be a polite client. */
   concurrency?: number;
+  /** Search sources run after the boards, so board postings win on overlap. */
+  aggregators?: Aggregator[];
 }
 
 export interface RunReport {
@@ -42,6 +66,7 @@ export interface RunReport {
   strongMatches: number;
   notified: number;
   errors: { firm: string; message: string }[];
+  aggregators: AggregatorReport[];
   ranAt: Date;
 }
 
@@ -62,7 +87,8 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     notifier,
     now = new Date(),
     staleDays = STALE_DAYS,
-    concurrency = 4
+    concurrency = 4,
+    aggregators = []
   } = options;
 
   const report: RunReport = {
@@ -79,6 +105,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     strongMatches: 0,
     notified: 0,
     errors: [],
+    aggregators: [],
     ranAt: now
   };
 
@@ -114,6 +141,10 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
       if (!keep.has(result.posting.id)) keep.set(result.posting.id, result.posting);
     }
   });
+
+  for (const aggregator of aggregators) {
+    report.aggregators.push(await collectAggregator(aggregator, keep, now));
+  }
 
   const postings = [...keep.values()];
   report.kept = postings.length;
@@ -182,6 +213,68 @@ function filterForAlerts(profile: Profile, postings: Posting[]): Posting[] {
   return postings;
 }
 
+/**
+ * Pull one aggregator into `keep`. A failure is recorded and swallowed: the
+ * boards are the primary source, and an Adzuna outage must not blank the feed.
+ */
+async function collectAggregator(
+  aggregator: Aggregator,
+  keep: Map<string, Posting>,
+  now: Date
+): Promise<AggregatorReport> {
+  const result: AggregatorReport = { name: aggregator.name, fetched: 0, kept: 0, duplicates: 0, rejected: 0 };
+
+  let raw: RawJob[];
+  try {
+    raw = await aggregator.fetch();
+  } catch (error) {
+    result.error = error instanceof Error ? error.message : String(error);
+    return result;
+  }
+
+  result.fetched = raw.length;
+  const boardPostings = [...keep.values()];
+
+  for (const job of raw) {
+    const normalized = normalize(job, now);
+    // A search source has no firm list to vouch for it, so a posting with no
+    // sector keyword at all is more likely off-topic than unclassified.
+    if (!normalized.ok || normalized.sectorGuessed) {
+      result.rejected++;
+      continue;
+    }
+    const posting = normalized.posting;
+    if (keep.has(posting.id) || boardPostings.some((board) => sameSeat(board, posting))) {
+      result.duplicates++;
+      continue;
+    }
+    keep.set(posting.id, posting);
+    result.kept++;
+  }
+
+  return result;
+}
+
+/**
+ * Aggregators rename firms ('CBRE' vs 'CBRE Group, Inc.'), so the posting id,
+ * which hashes the firm name, misses them. Same city and same title, plus one
+ * firm name's distinctive words all appearing in the other's, is the same seat.
+ * That is looser than namesMatch() on purpose: the matching title and city
+ * already carry most of the evidence.
+ */
+function sameSeat(board: Posting, other: Posting): boolean {
+  if (board.city !== other.city) return false;
+  if (canonicalRole(board.role) !== canonicalRole(other.role)) return false;
+  const a = significant(board.firm);
+  const b = significant(other.firm);
+  if (!a.size || !b.size) return false;
+  return [...a].every((word) => b.has(word)) || [...b].every((word) => a.has(word));
+}
+
+function canonicalRole(role: string): string {
+  return role.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 async function defaultFetcher(firm: FirmRow): Promise<RawJob[]> {
   switch (firm.ats) {
     case 'greenhouse':
@@ -190,10 +283,8 @@ async function defaultFetcher(firm: FirmRow): Promise<RawJob[]> {
       return fetchLever(firm.name, firm.atsSlug);
     case 'workday':
       return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug);
-    // iCIMS needs a per-tenant endpoint and, on most tenants, an auth
-    // handshake; the spec puts it after the others are carrying real coverage.
     case 'icims':
-      throw new Error(`${firm.ats} fetcher not implemented yet (firm: ${firm.name})`);
+      return fetchIcims(firm.name, firm.atsHost, firm.atsSlug);
   }
 }
 

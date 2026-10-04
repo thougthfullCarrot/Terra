@@ -137,7 +137,7 @@ One pass, exactly the order in the spec:
 
 | Stage | Where | Notes |
 | --- | --- | --- |
-| fetch | `collector/sources/*` | Greenhouse, Lever, Workday. Timeouts, bounded retries; a 404 is not retried because a wrong slug will not fix itself. |
+| fetch | `collector/sources/*` | Greenhouse, Lever, Workday, iCIMS. Timeouts, bounded retries; a 404 is not retried because a wrong slug will not fix itself. |
 | Texas filter | `collector/texas.ts` | Six tracked cities plus suburb roll-up (Plano → Dallas, Arlington → Fort Worth). Rejects `Austin, MN`. |
 | seniority filter | `collector/seniority.ts` | Intern / entry titles; an explicit board level field overrides the title in both directions. `Analyst I` in, `Analyst II` out. |
 | sector | `collector/sector.ts` | Keyword scoring, title weighted 3×. Reports "no match" rather than guessing; the run counts how often that happens. |
@@ -309,13 +309,52 @@ The CXS endpoints are Workday's public career-site API, not a documented
 product surface, and they do change. The tests pin the shape against fixtures;
 if a tenant starts behaving oddly, check the live payload in devtools first.
 
+## iCIMS
+
+iCIMS's JSON API is issued per customer, with credentials only the firm holds,
+so the fetcher reads the public career portal instead — the same pages the
+firm's own site embeds:
+
+```sql
+insert into firms (name, ats, ats_host, ats_slug) values
+  ('Hines', 'icims', 'careers-hines.icims.com', 'careers-hines');
+```
+
+`ats_host` is the portal host; it can be left null when it is
+`<ats_slug>.icims.com`. `npm run discover:ats` fills both from a careers page.
+
+- **List pages are HTML**, 20 rows each at `/jobs/search?pr=<n>&in_iframe=1`.
+  Rows are read loosely: any `/jobs/<id>/<slug>/job` link is a job, its text is
+  the title, and the `US-TX-Houston` codes after it are its locations. The
+  portal's order is not stable between requests, so rows are de-duplicated by
+  id and the walk follows the portal's own page count.
+- **Job pages carry schema.org `JobPosting` JSON-LD**, which is preferred over
+  the markup for title, description, locations, date and employment type
+  (`INTERN` reaches the classifier as the level). Without it the fetcher falls
+  back to the portal's `iCIMS_InfoMsg_Job` sections.
+- **The same list-first filter as Workday**: only entry-level titles with a
+  Texas or unstated location cost a detail request. A filled job answers 410
+  between the two requests and is dropped, not counted as a firm failure.
+
+## Adzuna
+
+`src/collector/sources/adzuna.ts` searches Adzuna's US API for Texas commercial
+real estate terms on every pass, when `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` are
+set (repository secrets for the Actions; environment variables locally). It is
+off without them.
+
+- At most 6 API calls per pass (3 searches, 2 pages each), which keeps a pass
+  every two hours inside the free tier's limits.
+- Hits without a strong real estate signal, and residential sales or mortgage
+  roles, are dropped before the usual Texas and entry-level filters.
+- Aggregator postings run after the boards. A seat a firm board already listed
+  (same city and title, matching firm name) is dropped, so the board's direct
+  apply link wins.
+- An Adzuna failure is recorded under `aggregators` in the run report and never
+  fails the pass.
+
 ## Not built yet
 
-- **The iCIMS fetcher.** Needs a per-tenant endpoint and, on most tenants, an
-  auth handshake. `defaultFetcher` throws a named error for now, and the run
-  report records it per firm.
-- **The aggregator source** (Adzuna or JSearch, ~$30/mo). `RawJob.ats` already
-  has an `'aggregator'` case and the provenance copy for it.
 - **Market data.** `0003_markets_seed.sql` creates the rows with empty payloads.
   They are filled by hand each quarter from free brokerage research plus
   FRED/Census — no affordable API exists for an individual.
