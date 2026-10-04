@@ -336,10 +336,25 @@ insert into firms (name, ats, ats_host, ats_slug) values
   Texas or unstated location cost a detail request. A filled job answers 410
   between the two requests and is dropped, not counted as a firm failure.
 
+## Adzuna
+
+`src/collector/sources/adzuna.ts` searches Adzuna's US API for Texas commercial
+real estate terms on every pass, when `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` are
+set (repository secrets for the Actions; environment variables locally). It is
+off without them.
+
+- At most 6 API calls per pass (3 searches, 2 pages each), which keeps a pass
+  every two hours inside the free tier's limits.
+- Hits without a strong real estate signal, and residential sales or mortgage
+  roles, are dropped before the usual Texas and entry-level filters.
+- Aggregator postings run after the boards. A seat a firm board already listed
+  (same city and title, matching firm name) is dropped, so the board's direct
+  apply link wins.
+- An Adzuna failure is recorded under `aggregators` in the run report and never
+  fails the pass.
+
 ## Not built yet
 
-- **The aggregator source** (Adzuna or JSearch, ~$30/mo). `RawJob.ats` already
-  has an `'aggregator'` case and the provenance copy for it.
 - **Market data.** `0003_markets_seed.sql` creates the rows with empty payloads.
   They are filled by hand each quarter from free brokerage research plus
   FRED/Census — no affordable API exists for an individual.

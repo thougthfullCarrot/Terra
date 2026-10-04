@@ -49,6 +49,11 @@ jobs:
       - run: npm ci
 
       - name: Export postings from the live boards
+        # Optional. With these set, Adzuna search results join the board
+        # postings; without them the site is built from the boards alone.
+        env:
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
         run: |
           set -o pipefail
           npm run --silent export:site 2>&1 | tee /tmp/export.log

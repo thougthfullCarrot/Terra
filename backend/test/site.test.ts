@@ -51,6 +51,7 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
     strongMatches: 0,
     notified: 0,
     errors: [],
+    aggregators: [],
     ranAt: now,
     ...overrides
   };
