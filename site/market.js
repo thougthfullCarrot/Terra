@@ -129,3 +129,18 @@ export function writeMarketHash(state) {
   const text = params.toString();
   return `#markets${text ? `&${text}` : ''}`;
 }
+
+/**
+ * Drop metrics no market has a value for, and groups left empty, so a source
+ * that has not answered yet (say the Census, before its key is set) hides its
+ * columns instead of showing a row of dashes.
+ */
+export function pruneSnapshot(snapshot) {
+  const has = (key) => snapshot.markets.some((m) => m.values?.[key] != null);
+  const metrics = snapshot.metrics.filter((m) => has(m.key));
+  const keys = new Set(metrics.map((m) => m.key));
+  const groups = snapshot.groups
+    .map((g) => ({ ...g, metrics: g.metrics.filter((key) => keys.has(key)) }))
+    .filter((g) => g.metrics.length);
+  return { ...snapshot, metrics, groups };
+}

@@ -83,11 +83,14 @@ markets (Dallas and Fort Worth as their own metro divisions) by property type:
 office, industrial and retail hiring, apartment vacancy and rents, population,
 income and unemployment, sortable by any figure or opened one city at a time.
 The figures come from the Bureau of Labor Statistics and the Census Bureau's
-American Community Survey, both public and keyless (`npm run export:market`
-writes `site/market.json`). `site.yml` asks them once a day and caches the
-file; a source that fails keeps its last figures. Optional free keys,
-`BLS_API_KEY` and `CENSUS_API_KEY` as Actions secrets, raise the APIs' daily
-limits. Brokerage vacancy and asking-rent figures are licensed and not shown.
+American Community Survey, both public (`npm run export:market` writes
+`site/market.json`). `site.yml` asks them once a day and caches the file; a
+source that fails keeps its last figures, and figures no market has are hidden.
+BLS needs no key. The Census needs `CENSUS_API_KEY` as an Actions secret (free,
+instant: https://api.census.gov/data/key_signup.html); without it the
+population, income, rent and vacancy figures are left out. `BLS_API_KEY`
+(also free) is optional. Brokerage vacancy and asking-rent figures are licensed
+and not shown.
 
 **Accounts (optional).** With Supabase and Stripe settings in the repository,
 the site requires sign-in: college (.edu) emails get it free, other emails

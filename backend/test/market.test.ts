@@ -7,6 +7,7 @@ import {
   barPercent,
   formatValue,
   ordinal,
+  pruneSnapshot,
   ranks,
   readMarketHash,
   sortMarkets,
@@ -308,5 +309,21 @@ describe('market.js (site)', () => {
       order: 'desc'
     });
     expect(readMarketHash('', snapshot).open).toBe(false);
+  });
+
+  it('hides metrics nobody has and groups left empty', () => {
+    const pruned = pruneSnapshot({
+      metrics: [
+        { key: 'a', label: 'A', unit: 'count', better: 'high' },
+        { key: 'b', label: 'B', unit: 'count', better: 'high' }
+      ],
+      groups: [
+        { key: 'one', label: 'One', metrics: ['a', 'b'] },
+        { key: 'two', label: 'Two', metrics: ['b'] }
+      ],
+      markets: [{ city: 'Houston', values: { a: 1, b: null } }]
+    });
+    expect(pruned.metrics.map((m) => m.key)).toEqual(['a']);
+    expect(pruned.groups).toEqual([{ key: 'one', label: 'One', metrics: ['a'] }]);
   });
 });

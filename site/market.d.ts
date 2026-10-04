@@ -46,3 +46,4 @@ export function readMarketHash(
   snapshot: { groups: Group[]; metrics: Metric[]; markets: Market[] } | null | undefined
 ): MarketState;
 export function writeMarketHash(state: Partial<MarketState>): string;
+export function pruneSnapshot<T extends { groups: Group[]; metrics: Metric[]; markets: Market[] }>(snapshot: T): T;

@@ -9,6 +9,7 @@ import {
   defaultOrder,
   formatValue,
   ordinal,
+  pruneSnapshot,
   ranks,
   readMarketHash,
   sortMarkets,
@@ -79,12 +80,12 @@ async function show() {
     try {
       const data = await current;
       if (current !== loading) return; // the loader changed while this was in flight
-      if (!data?.markets?.length) {
+      if (!data?.markets?.length || !pruneSnapshot(data).groups.length) {
         loading = null;
         message('Market data is being built. Check back in a few minutes.');
         return;
       }
-      snapshot = data;
+      snapshot = pruneSnapshot(data);
     } catch (error) {
       loading = null;
       message(`Couldn't load market data. ${error instanceof Error ? error.message : ''}`.trim(), true);
