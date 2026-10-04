@@ -165,42 +165,69 @@ export function worthFetching(listing: IcimsListing): boolean {
 
 const JOB_LINK = /<a\b[^>]*\bhref\s*=\s*["']([^"']*\/jobs\/(\d+)\/([^/"'?#]+)\/job[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
-/** Pull every job row out of one search results page. */
+/**
+ * Pull every job row out of one search results page.
+ *
+ * Each row labels its location 'Job Locations'. On Hines' portal that label
+ * comes *before* the row's title link, so reading the codes after a link
+ * credits every job with the next row's location — which is exactly what the
+ * first live run did. So locations are tied to links through the labels, in
+ * whichever direction the page uses: if the first label precedes the first
+ * link, each label belongs to the link after it, otherwise to the link before.
+ * A page with no labels falls back to the codes after each link.
+ */
 export function parseSearchPage(html: string): IcimsListing[] {
   const links = [...html.matchAll(JOB_LINK)];
   const byId = new Map<string, IcimsListing>();
 
-  links.forEach((link, index) => {
+  for (const link of links) {
     const id = link[2] as string;
+    if (byId.has(id)) continue; // A title link and an 'Apply' button, say.
     const slug = link[3] as string;
+    byId.set(id, { id, slug, title: linkTitle(link[0], link[4] ?? '') || titleFromSlug(slug), location: '' });
+  }
 
-    // The row's location sits after its title link and before the next job's.
-    const nextJob = links.slice(index + 1).find((other) => other[2] !== id);
-    const rowEnd = nextJob?.index ?? html.length;
-    const row = html.slice((link.index ?? 0) + link[0].length, rowEnd);
+  const labels = [...html.matchAll(/Job\s+Locations?/gi)].map((label) => label.index ?? 0);
+  if (labels.length && links.length) {
+    const before = (labels[0] as number) < (links[0]?.index ?? 0);
 
-    const title = linkTitle(link[0], link[4] ?? '') || titleFromSlug(slug);
-    const existing = byId.get(id);
-    if (existing) {
-      // A row can link the same job twice (title and an 'Apply' button); keep
-      // the first title and any location the first link's row missed.
-      if (!existing.location) existing.location = locationCodes(row);
-      return;
+    for (const at of labels) {
+      const owner = before
+        ? links.find((link) => (link.index ?? 0) > at)
+        : links.filter((link) => (link.index ?? 0) < at).pop();
+      const listing = owner && byId.get(owner[2] as string);
+      if (!listing || listing.location) continue;
+
+      // The label's value runs to the next link or the next label.
+      const rest = html.slice(at + 'Job Locations'.length);
+      const stop = rest.search(/<a\b|Job\s+Locations?/i);
+      listing.location = locationCodes(rest.slice(0, stop < 0 ? 600 : stop));
     }
-
-    byId.set(id, { id, slug, title, location: locationCodes(row) });
-  });
+  } else {
+    links.forEach((link, index) => {
+      const listing = byId.get(link[2] as string);
+      if (!listing || listing.location) return;
+      const next = links.slice(index + 1).find((other) => other[2] !== link[2]);
+      listing.location = locationCodes(
+        html.slice((link.index ?? 0) + link[0].length, next?.index ?? html.length)
+      );
+    });
+  }
 
   return [...byId.values()];
 }
 
 function linkTitle(anchor: string, inner: string): string {
-  const text = stripHtml(inner).replace(/\s+/g, ' ').trim();
-  if (text && !/^(apply|view|details?|more)\b/i.test(text)) return text;
+  // iCIMS puts '<id> - <title>' in the anchor's title attribute, which is
+  // cleaner than the link text: that carries a screen-reader 'Title' label.
+  const attr = /\btitle\s*=\s*(["'])(.*?)\1/i.exec(anchor)?.[2];
+  const fromAttr = attr ? decodeEntities(attr).replace(/^\s*\d+\s*-\s*/, '').trim() : '';
+  if (fromAttr) return fromAttr;
 
-  // iCIMS also puts '<id> - <title>' in the anchor's title attribute.
-  const attr = /\btitle\s*=\s*["']([^"']+)["']/i.exec(anchor)?.[1];
-  return attr ? decodeEntities(attr).replace(/^\s*\d+\s*-\s*/, '').trim() : '';
+  const text = stripHtml(inner.replace(/<span[^>]*\bsr-only\b[^>]*>[\s\S]*?<\/span>/gi, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text && !/^(apply|view|details?|more)\b/i.test(text) ? text : '';
 }
 
 function titleFromSlug(slug: string): string {

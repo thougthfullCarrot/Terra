@@ -148,6 +148,38 @@ describe('parseSearchPage', () => {
   });
 });
 
+describe('parseSearchPage on the live Hines layout', () => {
+  /** Hines' real row order: location label first, then the title link, snippet, ID, category. */
+  function liveRow(id: number, slug: string, title: string, locations: string): string {
+    return `
+      <li class="iCIMS_JobCardItem">
+        <div class="col-xs-12 header left"><span class="sr-only field-label">Job Locations</span>
+          <span>${locations}</span></div>
+        <div class="col-xs-12 title">
+          <a href="https://${HOST}/jobs/${id}/${slug}/job?in_iframe=1" title="${id} - ${title.replace('&', '&amp;')}">
+            <span class="sr-only field-label">Title</span><h3>${title}</h3>
+          </a>
+        </div>
+        <div class="col-xs-12 description">Backed by Hines, a global real estate firm…</div>
+        <dl><dt>Job ID</dt><dd>2026-${id}</dd><dt>Category</dt><dd>Property Management</dd></dl>
+      </li>`;
+  }
+
+  it('credits each row with its own location, not the next row\'s', () => {
+    const html = `<div>Sort By... Job ID (Ascending) Title (Descending)</div><ul>${[
+      liveRow(14633, 'leasing-professional---talisman', 'Leasing Professional - Talisman', 'US-WA-Redmond'),
+      liveRow(14632, 'senior-director', 'Senior Director - Finance Strategy & Operations', 'US-TX-Houston | US-IL-Chicago'),
+      liveRow(14631, 'operations-engineer', 'Operations Engineer', 'US-OH-Columbus')
+    ].join('')}</ul>`;
+
+    expect(parseSearchPage(html).map((l) => [l.title, l.location])).toEqual([
+      ['Leasing Professional - Talisman', 'Redmond, WA'],
+      ['Senior Director - Finance Strategy & Operations', 'Houston, TX; Chicago, IL'],
+      ['Operations Engineer', 'Columbus, OH']
+    ]);
+  });
+});
+
 describe('pageCount', () => {
   it('reads "Page 1 of 10" through the spans around it', () => {
     expect(pageCount(searchPage([], 0, 10))).toBe(10);

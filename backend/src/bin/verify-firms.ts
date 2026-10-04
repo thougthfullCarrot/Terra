@@ -143,9 +143,12 @@ async function fetchFor(firm: FirmRow, stats: WorkdayStats) {
         stats
       });
     case 'icims':
+      // Ten pages, not two: a portal's order shifts between requests, so the
+      // first two pages are an arbitrary 40 rows and can easily hold no Texas
+      // entry-level role. Ten covers a board of Hines' size in ten requests.
       return fetchIcims(firm.name, firm.atsHost, firm.atsSlug, {
         retries: 1,
-        maxPages: 2,
+        maxPages: 10,
         stats
       });
   }
