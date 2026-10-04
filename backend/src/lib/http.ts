@@ -21,6 +21,8 @@ export interface FetchJsonOptions {
   method?: 'GET' | 'POST';
   /** JSON request body; sets content-type and implies POST. */
   body?: unknown;
+  /** Defaults to application/json. iCIMS career pages are HTML. */
+  accept?: string;
 }
 
 const USER_AGENT = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
@@ -33,10 +35,26 @@ const USER_AGENT = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/T
  * firm list.
  */
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
+  return request(url, options, (response) => response.json() as Promise<T>);
+}
+
+/** Same timeout and retry policy as fetchJson, for boards that serve HTML. */
+export async function fetchText(url: string, options: FetchJsonOptions = {}): Promise<string> {
+  return request(url, { accept: 'text/html', ...options }, (response) => response.text());
+}
+
+async function request<T>(
+  url: string,
+  options: FetchJsonOptions,
+  read: (response: Response) => Promise<T>
+): Promise<T> {
   const { timeoutMs = 15_000, retries = 2, fetchImpl = fetch, baseDelayMs = 1000 } = options;
 
   const method = options.method ?? (options.body === undefined ? 'GET' : 'POST');
-  const headers: Record<string, string> = { accept: 'application/json', 'user-agent': USER_AGENT };
+  const headers: Record<string, string> = {
+    accept: options.accept ?? 'application/json',
+    'user-agent': USER_AGENT
+  };
   if (options.body !== undefined) headers['content-type'] = 'application/json';
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
 
@@ -61,7 +79,7 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
         if (!retryable(response.status) || attempt === retries) throw error;
         lastError = error;
       } else {
-        return (await response.json()) as T;
+        return await read(response);
       }
     } catch (error) {
       if (error instanceof HttpError && !retryable(error.status)) throw error;
