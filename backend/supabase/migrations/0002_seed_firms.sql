@@ -26,6 +26,26 @@ insert into firms (name, ats, ats_slug, slug_verified) values
   ('Cortland', 'greenhouse', 'cortland', true)
 on conflict (name) do nothing;
 
+-- Read off each firm's own careers page by `npm run discover:ats`, which is a
+-- stronger basis than the slug probe: the board URL was a link on the firm's
+-- site rather than a guess that happened to answer.
+--
+-- Both are Workday, and the Workday fetcher has never been run against a live
+-- tenant. These are therefore seeded inactive until `npm run verify:firms`
+-- confirms the CXS API answers a server client — see
+-- src/collector/sources/workday.ts for why that is in doubt.
+insert into firms (name, ats, ats_slug, ats_host, slug_verified, active) values
+  -- Dallas industrial and commercial developer.
+  -- https://jackson.wd1.myworkdayjobs.com/Jackson_Careers
+  ('Jackson-Shaw', 'workday', 'jackson/Jackson_Careers',
+   'jackson.wd1.myworkdayjobs.com', true, false),
+  -- Residential REIT with large Texas holdings; relevance is left to the
+  -- collector's Texas and entry-level filters rather than assumed here.
+  -- https://tricon.wd3.myworkdayjobs.com/tricon
+  ('Tricon Residential', 'workday', 'tricon/tricon',
+   'tricon.wd3.myworkdayjobs.com', true, false)
+on conflict (name) do nothing;
+
 -- Boards that exist but could not be attributed from the API. Lever publishes
 -- no company name, so `marcusmillichap` cannot be proven to be Marcus &
 -- Millichap's without opening it. Left inactive so the collector ignores it

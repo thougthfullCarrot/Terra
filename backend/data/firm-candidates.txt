@@ -27,10 +27,15 @@
 # candidates and probing them does not scale to the 30 firms the collector
 # needs. Adding another hundred names here is unlikely to change that.
 #
-# Two approaches that do work are in backend/README.md under "Getting to a real
-# firm list": an aggregator API, which the original spec already called for, or
-# a person reading careers pages. Keep this file for the occasional firm you
-# already know about.
+# UPDATE: a person reading careers pages has now been automated. `npm run
+# discover:ats` finds a firm's own site, follows its careers link and reads
+# which ATS it points at — evidence rather than a guess. On this list it found
+# 2 supported boards (both Workday) plus 5 firms on platforms with no fetcher
+# yet, against the slug probe's 1 from the same names.
+#
+# Its 72 misses are mostly "careers page found, no ATS link", meaning the board
+# link is rendered by JavaScript and a plain fetch cannot see it. A headless
+# browser would recover a good share of those and is the obvious next step.
 #
 # One firm per line. Blank lines and # comments are ignored.
 
@@ -56,7 +61,6 @@ Woodbine Development Corporation
 Hall Group
 Trademark Property Company
 Champion Partners
-Jackson-Shaw
 KDC Real Estate Development
 Knightvest Residential
 Lantower Residential
@@ -115,7 +119,6 @@ Hunt Companies
 Ashcroft Capital
 Bell Partners
 Roberts Resorts
-Tricon Residential
 Presidium Group
 Leon Capital Group
 Pennybacker Capital
