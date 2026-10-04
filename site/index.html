@@ -137,6 +137,12 @@
       </section>
 
       <div id="feed">
+      <nav class="tabs" aria-label="Sections">
+        <a href="#" id="tab-jobs" class="tab" aria-current="page">Jobs</a>
+        <a href="#markets" id="tab-markets" class="tab">Market data</a>
+      </nav>
+
+      <div id="jobs-view">
       <form class="controls" id="controls" role="search" onsubmit="return false">
         <label class="search">
           <span class="visually-hidden">Search postings</span>
@@ -175,6 +181,38 @@
       </div>
 
       <section id="list" class="list" aria-label="Job postings"></section>
+      </div>
+
+      <!-- Market data by city: markets-view.js draws it from market.json or the members-only snapshot. -->
+      <section id="markets-view" hidden aria-labelledby="markets-title">
+        <h2 id="markets-title" class="visually-hidden">Market data</h2>
+        <form class="controls" id="market-controls" onsubmit="return false">
+          <div class="filters market-filters">
+            <label>
+              <span class="eyebrow">MARKET</span>
+              <select id="m-city"><option value="">All markets</option></select>
+            </label>
+            <label>
+              <span class="eyebrow">PROPERTY TYPE</span>
+              <select id="m-focus"></select>
+            </label>
+            <label id="m-sort-label">
+              <span class="eyebrow">SORT BY</span>
+              <select id="m-sort"></select>
+            </label>
+            <label id="m-order-label">
+              <span class="eyebrow">ORDER</span>
+              <select id="m-order">
+                <option value="desc">High to low</option>
+                <option value="asc">Low to high</option>
+              </select>
+            </label>
+          </div>
+        </form>
+        <div class="summary"><p id="m-blurb" class="market-blurb"></p></div>
+        <div id="m-body"></div>
+        <div id="m-sources" class="market-sources"></div>
+      </section>
       </div>
 
       <footer class="footer">

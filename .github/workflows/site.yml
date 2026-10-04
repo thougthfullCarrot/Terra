@@ -13,6 +13,10 @@
 # the site asks visitors to sign in. The snapshot then goes to Supabase, where
 # only college emails and subscribers can read it, and postings.json is left
 # out of the published site. Without them the site stays open, as before.
+#
+# Market data (site/market.json, from BLS and the Census, no key needed) is
+# built in the same job and gated the same way: with accounts on it goes to
+# Supabase as the 'market' row and is left out of the published site.
 name: Website
 
 on:
@@ -67,6 +71,41 @@ jobs:
           set -o pipefail
           npm run --silent export:site 2>&1 | tee /tmp/export.log
 
+      # Market data changes monthly (BLS) and yearly (Census), and keyless
+      # BLS allows 25 requests a day, so a good file is cached for the day and
+      # the APIs are asked once. A failed or partial pass keeps the last
+      # cached figures for whatever it could not read.
+      - name: Date for the market data cache
+        id: today
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore market data
+        id: market-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: site/market.json
+          key: market-${{ steps.today.outputs.date }}
+          restore-keys: market-
+
+      - name: Export market data from BLS and the Census
+        id: market
+        if: steps.market-cache.outputs.cache-hit != 'true'
+        # A market data outage must never hold back the job list.
+        continue-on-error: true
+        env:
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+        run: |
+          set -o pipefail
+          npm run --silent export:market 2>&1 | tee /tmp/market.log
+
+      - name: Cache market data for the day
+        if: steps.market.outputs.complete == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: site/market.json
+          key: market-${{ steps.today.outputs.date }}
+
       - name: Summarize
         if: always()
         run: |
@@ -81,6 +120,19 @@ jobs:
             echo
             echo '```'
             tail -n 60 /tmp/export.log 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## Market data'
+            echo
+            if [ -f ../site/market.json ]; then
+              echo "- Built: $(jq -r '.generatedAt' ../site/market.json)$([ '${{ steps.market-cache.outputs.cache-hit }}' = 'true' ] && echo ' (cached today)')"
+              echo "- Figures filled: $(jq '[.markets[].values[] | select(. != null)] | length' ../site/market.json) of $(jq '[.markets[].values[]] | length' ../site/market.json)"
+            else
+              echo "- No market data file."
+            fi
+            echo
+            echo '```'
+            cat /tmp/market.log 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -129,11 +181,21 @@ jobs:
             -H "Prefer: resolution=merge-duplicates,return=minimal" \
             --data-binary @/tmp/snapshot.json
           echo "Snapshot stored in Supabase."
+          if [ -f ../site/market.json ]; then
+            jq -c '{id: "market", data: ., updated_at: (now | todate)}' ../site/market.json > /tmp/market-row.json
+            curl -fsS -X POST "${SUPABASE_URL%/}/rest/v1/site_snapshots?on_conflict=id" \
+              -H "apikey: $SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: resolution=merge-duplicates,return=minimal" \
+              --data-binary @/tmp/market-row.json
+            echo "Market data stored in Supabase."
+          fi
 
       # With accounts on, the feed is members-only: it must not also sit at a public URL.
       - name: Keep the feed out of the public site
         if: steps.accounts.outputs.enabled == 'true'
-        run: rm -f ../site/postings.json
+        run: rm -f ../site/postings.json ../site/market.json
 
       - name: Package the site
         uses: actions/upload-pages-artifact@v3
