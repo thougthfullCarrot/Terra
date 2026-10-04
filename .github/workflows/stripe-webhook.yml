@@ -29,6 +29,9 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
 
     steps:
+      # First, so the backend working directory exists for every step.
+      - uses: actions/checkout@v4
+
       - name: Check settings
         id: check
         run: |
@@ -47,9 +50,6 @@ jobs:
           fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "ready=true" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@v4
-        if: steps.check.outputs.ready == 'true'
 
       - uses: supabase/setup-cli@v1
         if: steps.check.outputs.ready == 'true'
