@@ -16,7 +16,14 @@ export const ACS_VARIABLES = {
   occupied: 'B25003_001E',
   renterOccupied: 'B25003_003E',
   forRent: 'B25004_002E',
-  rentedNotOccupied: 'B25004_003E'
+  rentedNotOccupied: 'B25004_003E',
+  // Gross rent as a share of household income (renter households).
+  burdenTotal: 'B25070_001E',
+  burden30to35: 'B25070_007E',
+  burden35to40: 'B25070_008E',
+  burden40to50: 'B25070_009E',
+  burden50plus: 'B25070_010E',
+  burdenNotComputed: 'B25070_011E'
 } as const;
 export type AcsField = keyof typeof ACS_VARIABLES;
 export type AcsRow = Record<AcsField, number | null>;
@@ -146,6 +153,30 @@ export function rentalVacancy(row: AcsRow | undefined): number | null {
 export function renterShare(row: AcsRow | undefined): number | null {
   if (!row?.occupied || row.renterOccupied == null) return null;
   return (row.renterOccupied / row.occupied) * 100;
+}
+
+/** Renters whose income is known: B25070's total minus "not computed". */
+function burdenBase(row: AcsRow): number | null {
+  if (row.burdenTotal == null) return null;
+  const base = row.burdenTotal - (row.burdenNotComputed ?? 0);
+  return base > 0 ? base : null;
+}
+
+/** Percent of renters paying 30% or more of income on rent and utilities (HUD's "cost burdened"). */
+export function rentBurdened(row: AcsRow | undefined): number | null {
+  if (!row) return null;
+  const base = burdenBase(row);
+  const parts = [row.burden30to35, row.burden35to40, row.burden40to50, row.burden50plus];
+  if (base == null || parts.some((v) => v == null)) return null;
+  return (parts.reduce<number>((a, b) => a + (b ?? 0), 0) / base) * 100;
+}
+
+/** Percent of renters paying 50% or more ("severely cost burdened"). */
+export function rentSeverelyBurdened(row: AcsRow | undefined): number | null {
+  if (!row) return null;
+  const base = burdenBase(row);
+  if (base == null || row.burden50plus == null) return null;
+  return (row.burden50plus / base) * 100;
 }
 
 export function growth(now: number | null | undefined, before: number | null | undefined): number | null {

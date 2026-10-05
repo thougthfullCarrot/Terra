@@ -47,7 +47,8 @@ export const PROFILE_SECTORS = [
   'Asset Mgmt',
   'Appraisal',
   'Capital Markets',
-  'Homebuilder'
+  'Homebuilder',
+  'Affordable Housing'
 ];
 
 /** Graduation years offered on the form: last year through six years out. */

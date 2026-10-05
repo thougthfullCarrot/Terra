@@ -193,7 +193,13 @@ describe('buildMarketSnapshot', () => {
     occupied: 2_700_000,
     renterOccupied: 1_100_000,
     forRent: 90_000,
-    rentedNotOccupied: 10_000
+    rentedNotOccupied: 10_000,
+    burdenTotal: 1_000_000,
+    burden30to35: 100_000,
+    burden35to40: 80_000,
+    burden40to50: 90_000,
+    burden50plus: 230_000,
+    burdenNotComputed: 0
   };
   const acs = {
     year: 2025,

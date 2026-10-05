@@ -9,7 +9,7 @@ import {
   type Industry,
   type Point
 } from './bls.js';
-import { censusKey, growth, rentalVacancy, renterShare, type AcsResult } from './census.js';
+import { censusKey, growth, rentalVacancy, rentBurdened, renterShare, rentSeverelyBurdened, type AcsResult } from './census.js';
 import type { ApartmentListResult } from './apartmentList.js';
 import type { AppraisalFile, PropertyClass } from './appraisal.js';
 import type { MonthlyReading } from './csv.js';
@@ -203,6 +203,23 @@ export const METRICS: MarketMetric[] = [
     note: 'Homes for rent as a share of the rental stock. Lower means a tighter apartment market.'
   },
   { key: 'renterShare', label: 'Renter households', unit: 'rate', better: 'high', source: 'Census ACS', note: 'Share of occupied homes that are rented: the apartment demand pool.' },
+  {
+    key: 'rentBurdened',
+    label: 'Renters paying 30%+ of income',
+    unit: 'rate',
+    better: null,
+    source: 'Census ACS',
+    note: 'Share of renter households spending 30% or more of income on rent and utilities: HUD\'s "cost burdened" line, the need affordable housing serves.'
+  },
+  {
+    key: 'rentSeverelyBurdened',
+    label: 'Renters paying 50%+ of income',
+    unit: 'rate',
+    better: null,
+    source: 'Census ACS',
+    note: 'Share of renter households spending half or more of income on rent and utilities ("severely cost burdened").'
+  },
+  { key: 'renterHouseholds', label: 'Renter households (count)', unit: 'count', better: null, source: 'Census ACS', note: 'Occupied homes that are rented.' },
   { key: 'medianHomeValue', label: 'Median home value', unit: 'usd', better: null, source: 'Census ACS', note: 'Owner-estimated value of owner-occupied homes.' },
   { key: 'homeValueGrowth', label: 'Home value growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Median home value vs. the year before.' },
   {
@@ -412,6 +429,12 @@ export const GROUPS: MarketGroup[] = [
     ]
   },
   {
+    key: 'affordable',
+    label: 'Affordable housing',
+    blurb: 'How many renters are stretched by housing costs: the demand behind LIHTC, workforce and public housing.',
+    metrics: ['rentBurdened', 'rentSeverelyBurdened', 'medianRent', 'rentGrowth', 'medianIncome', 'renterHouseholds', 'renterShare', 'rentalVacancy']
+  },
+  {
     key: 'development',
     label: 'Development',
     blurb: 'Building activity, land and home values, and a map of the projects under way.',
@@ -602,6 +625,9 @@ export function buildMarketSnapshot(
     set('rentGrowth', growth(row?.medianRent, before?.medianRent), span);
     set('rentalVacancy', rentalVacancy(row), year);
     set('renterShare', renterShare(row), year);
+    set('renterHouseholds', row?.renterOccupied, year);
+    set('rentBurdened', rentBurdened(row), year);
+    set('rentSeverelyBurdened', rentSeverelyBurdened(row), year);
     set('medianHomeValue', row?.medianHomeValue, year);
     set('homeValueGrowth', growth(row?.medianHomeValue, before?.medianHomeValue), span);
 

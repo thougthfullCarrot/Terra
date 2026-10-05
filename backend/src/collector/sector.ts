@@ -117,8 +117,37 @@ const KEYWORDS: Record<Sector, string[]> = {
     'lot takedown',
     'homebuyer',
     'homebuyers'
+  ],
+  // Phrases specific to subsidized housing only; bare 'hud' or 'compliance'
+  // would pull in mortgage and corporate jobs. 'Compliance specialist' counts
+  // only alongside housing words (see HOUSING_CONTEXT below).
+  'Affordable Housing': [
+    'affordable housing',
+    'lihtc',
+    'low-income housing tax credit',
+    'low income housing tax credit',
+    'housing tax credit',
+    'tax credit compliance',
+    'tax credit property',
+    'tax credit properties',
+    'hud',
+    'section 8',
+    'section 42',
+    'housing choice voucher',
+    'public housing',
+    'housing authority',
+    'workforce housing',
+    'low-income housing',
+    'low income housing',
+    'community development corporation',
+    'community development financial',
+    'cdfi',
+    'tdhca'
   ]
 };
+
+/** Housing words that make a 'compliance specialist' an affordable-housing seat. */
+const HOUSING_CONTEXT = /\b(lihtc|tax credit|hud|section 8|affordable housing|housing authority|income certification)/;
 
 const TITLE_WEIGHT = 3;
 
@@ -144,7 +173,13 @@ export function classifySector(title: string, description = ''): SectorGuess {
       if (includesPhrase(t, word)) score += TITLE_WEIGHT;
       if (includesPhrase(d, word)) score += 1;
     }
-    if (score > best.score) best = { sector, score };
+    if (sector === 'Affordable Housing' && HOUSING_CONTEXT.test(`${t}\n${d}`)) {
+      if (includesPhrase(t, 'compliance specialist')) score += TITLE_WEIGHT;
+      if (includesPhrase(t, 'community development')) score += TITLE_WEIGHT;
+    }
+    // Ties go to Affordable Housing over Development/Property Mgmt: a LIHTC
+    // developer's role says both, and the affordable signal is the rarer one.
+    if (score > best.score || (score > 0 && score === best.score && sector === 'Affordable Housing')) best = { sector, score };
   }
 
   return best;

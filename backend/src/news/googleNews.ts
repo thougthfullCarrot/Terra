@@ -27,6 +27,14 @@ export function newsSearchUrl(city: City, days = 30): string {
   return `https://news.google.com/rss/search?${new URLSearchParams({ q, hl: 'en-US', gl: 'US', ceid: 'US:en' })}`;
 }
 
+/** The affordable-housing search: its own query so CRE headlines don't crowd it out. */
+const AFFORDABLE_TOPICS = '("affordable housing" OR LIHTC OR "housing tax credit" OR "workforce housing" OR "housing authority")';
+
+export function affordableSearchUrl(city: City, days = 30): string {
+  const q = `${SEARCH_NAME[city]} ${AFFORDABLE_TOPICS} when:${days}d`;
+  return `https://news.google.com/rss/search?${new URLSearchParams({ q, hl: 'en-US', gl: 'US', ceid: 'US:en' })}`;
+}
+
 export interface RssItem {
   title: string;
   link: string;
@@ -101,6 +109,11 @@ export const TOPIC_RULES: Array<{ topic: string; pattern: RegExp }> = [
   { topic: 'Retail', pattern: /\b(retail|shopping (center|centre)|mall|grocery|h-e-b|restaurant row|storefront)\b/i },
   { topic: 'Hotel', pattern: /\b(hotels?|hospitality|resort)\b/i },
   {
+    topic: 'Affordable housing',
+    pattern:
+      /\b(affordable (housing|homes|apartments|units)|LIHTC|housing tax credits?|low-income (housing|apartments|families|renters)|income-restricted|workforce housing|housing authority|public housing|section 8|HUD|housing vouchers?|attainable housing)\b/i
+  },
+  {
     topic: 'Deals',
     pattern:
       /\b(sells?|sold|sale|buys?|bought|acquir\w*|acquisition|purchase[sd]?|leases?|leased|signs? lease|financing|refinanc\w*|loan|investor|portfolio|REIT)\b/i
@@ -109,7 +122,7 @@ export const TOPIC_RULES: Array<{ topic: string; pattern: RegExp }> = [
 
 /** True when the headline is about commercial real estate at all, not just the city. */
 const CRE_HEADLINE =
-  /\b(real estate|commercial|develop\w*|construction|groundbreaking|ground|office|industrial|warehouse|logistics|data cent(er|re)|multifamily|multi-family|apartments?|mixed-use|retail|shopping|tower|hotel|square[- ]f(oo|ee)t|sq\.? ?ft|acres?|lease[sd]?|rezon\w*|zoning|property|properties|redevelop\w*|REIT|broker\w*|tenant|vacancy|units)\b/i;
+  /\b(real estate|commercial|develop\w*|construction|groundbreaking|ground|office|industrial|warehouse|logistics|data cent(er|re)|multifamily|multi-family|apartments?|mixed-use|retail|shopping|tower|hotel|square[- ]f(oo|ee)t|sq\.? ?ft|acres?|lease[sd]?|rezon\w*|zoning|property|properties|redevelop\w*|REIT|broker\w*|tenant|vacancy|units|affordable housing|housing|LIHTC|housing authority)\b/i;
 
 export function topicsFor(title: string): string[] {
   return TOPIC_RULES.filter((rule) => rule.pattern.test(title)).map((rule) => rule.topic);
@@ -200,7 +213,23 @@ export async function fetchCityNews(city: City, options: FetchJsonOptions = {}):
   return parseRss(xml);
 }
 
+export async function fetchCityAffordable(city: City, options: FetchJsonOptions = {}): Promise<RssItem[]> {
+  const xml = await fetchText(affordableSearchUrl(city), { timeoutMs: 30_000, ...options, accept: 'application/rss+xml, application/xml, text/xml' });
+  return parseRss(xml);
+}
+
+/** Affordable-housing headlines added to a city's list, up to `limit`, skipping stories already there. */
+export function mergeAffordable(headlines: Headline[], items: RssItem[], now: Date, limit = 10): Headline[] {
+  const extra = headlinesFrom(items, now, { limit: 50 })
+    .filter((h) => h.topics.includes('Affordable housing'))
+    .filter((h) => !headlines.some((kept) => kept.url === h.url || sameStory(kept.title, h.title)))
+    .slice(0, limit);
+  return [...headlines, ...extra].sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''));
+}
+
 export interface NewsSources {
+  /** One city's affordable-housing search; a failure only costs those stories. */
+  fetchAffordable?: (city: City) => Promise<RssItem[]>;
   /** One city's Google News search results. */
   fetchCity?: (city: City) => Promise<RssItem[]>;
   /** Stories not searched by city (Yahoo Finance); each goes to the cities it names. */
@@ -214,7 +243,7 @@ export interface NewsSources {
  * blank it. A shared source that fails only costs its own stories.
  */
 export async function buildNewsFile(now: Date, previous: NewsFile | null, sources: NewsSources = {}): Promise<NewsFile> {
-  const { fetchCity = (city) => fetchCityNews(city), fetchShared = () => fetchYahooFinance(), log = console.log } = sources;
+  const { fetchCity = (city) => fetchCityNews(city), fetchAffordable = sources.fetchCity ? async () => [] : (city) => fetchCityAffordable(city), fetchShared = () => fetchYahooFinance(), log = console.log } = sources;
   const shared = await fetchShared().catch((error: unknown) => {
     log(`Yahoo Finance: ${error instanceof Error ? error.message : String(error)}`);
     return [] as RssItem[];
@@ -231,7 +260,11 @@ export async function buildNewsFile(now: Date, previous: NewsFile | null, source
     } catch (error) {
       log(`${city}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    const headlines = headlinesFrom([...(searched ?? []), ...named], now);
+    const affordable = await fetchAffordable(city).catch((error: unknown) => {
+      log(`${city} affordable housing: ${error instanceof Error ? error.message : String(error)}`);
+      return [] as RssItem[];
+    });
+    const headlines = mergeAffordable(headlinesFrom([...(searched ?? []), ...named], now), affordable, now);
     if (searched === null || (headlines.length === 0 && before?.headlines.length)) {
       if (before) {
         log(`${city}: keeping ${before.headlines.length} headlines from ${before.fetchedAt}.`);

@@ -17,7 +17,8 @@ export const SECTORS = [
   'Asset Mgmt',
   'Appraisal',
   'Capital Markets',
-  'Homebuilder'
+  'Homebuilder',
+  'Affordable Housing'
 ] as const;
 export type Sector = (typeof SECTORS)[number];
 
