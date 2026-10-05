@@ -25,8 +25,9 @@
 # accounts on.
 #
 # Events (site/events.json): real estate networking events per city from
-# chapter calendars (CREDA Houston's events API, BOMA Dallas's GrowthZone
-# calendar). Public like the news, so it stays published with accounts on.
+# chapter and chamber calendars (src/events/events.ts EVENT_SOURCES), plus
+# rows typed into the sheet's Events tab and backend/data/events-manual.json.
+# Public like the news, so it stays published with accounts on.
 #
 # Google Sheets (docs/sheets-setup.md): with the secret
 # GOOGLE_SERVICE_ACCOUNT_JSON and the variable TERRA_SHEET_ID, the firm list
