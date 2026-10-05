@@ -1,0 +1,16 @@
+name: Probe events (temporary)
+on:
+  push:
+    branches: [claude/more-market-data-gnlj26]
+    paths: [.github/workflows/probe-events.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - run: npm ci
+      - run: npm run --silent export:events; head -c 3000 ../site/events.json
+      - run: for u in https://members.bomadallas.org/events/rss https://members.bomadallas.org/api/events https://members.bomadallas.org/events/ical; do echo "== $u"; curl -sL -m 20 -o /tmp/x -w '%{http_code} %{content_type}\n' "$u"; head -c 300 /tmp/x; echo; done
