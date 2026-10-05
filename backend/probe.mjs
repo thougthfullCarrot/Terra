@@ -1,74 +1,78 @@
-// Temporary: what broker research, zoning and parcel sources answer from a runner.
+// Temporary probe, round 2: parcel layer fields, broker report text, zoning layers.
+import { execSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
-async function get(url, opts = {}) {
+async function get(url) {
   try {
-    const r = await fetch(url, { headers: { 'user-agent': UA, accept: '*/*' }, redirect: 'follow', signal: AbortSignal.timeout(30000), ...opts });
-    const text = await r.text();
-    return { status: r.status, url: r.url, text };
-  } catch (e) {
-    return { status: 'ERR ' + e.message, url, text: '' };
+    const r = await fetch(url, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(45000) });
+    return { status: r.status, url: r.url, text: await r.text() };
+  } catch (e) { return { status: 'ERR ' + e.message, url, text: '' }; }
+}
+const json = async (url) => { const r = await get(url); try { return JSON.parse(r.text); } catch { return { _status: r.status, _text: r.text.slice(0, 300) }; } };
+const strip = (html) => html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+
+console.log('==== TxGIO Parcels folder');
+const base = 'https://feature.geographic.texas.gov/arcgis/rest/services';
+const folder = await json(`${base}/Parcels?f=json`);
+console.log(JSON.stringify(folder).slice(0, 1500));
+for (const s of folder.services ?? []) {
+  const svc = await json(`${base}/${s.name}/${s.type}?f=json`);
+  console.log(`\n# ${s.name} ${s.type}: layers ${JSON.stringify((svc.layers ?? []).map((l) => [l.id, l.name])).slice(0, 600)}`);
+  const layer = (svc.layers ?? [])[0];
+  if (!layer) continue;
+  const info = await json(`${base}/${s.name}/${s.type}/${layer.id}?f=json`);
+  console.log('fields: ' + (info.fields ?? []).map((f) => `${f.name}:${f.type.replace('esriFieldType', '')}`).join(', '));
+  console.log('maxRecordCount', info.maxRecordCount, 'caps', info.capabilities);
+  for (const where of ["COUNTY='Dallas' AND SITUS_CITY='DALLAS'", "SITUS_CITY='DALLAS'", "CNTY_NM='Dallas'"]) {
+    const q = await json(`${base}/${s.name}/${s.type}/${layer.id}/query?where=${encodeURIComponent(where)}&outFields=*&returnGeometry=false&resultRecordCount=3&f=json`);
+    console.log(`where ${where}: ${JSON.stringify(q).slice(0, 1800)}`);
+    if (q.features?.length) break;
   }
 }
-const CITY = /dallas|fort[- ]worth|dfw|houston|austin|san[- ]antonio|el[- ]paso|texas/i;
-async function page(url, extra = /marketbeat|report|research|\.pdf/i) {
+
+console.log('\n\n==== Zoning layers');
+const zoning = {
+  Dallas: 'https://services2.arcgis.com/rwnOSbfKSwyTBcwN/arcgis/rest/services/Dallas_Zoning/FeatureServer/0',
+  'Fort Worth': 'https://mapit.fortworthtexas.gov/ags/rest/services/CIVIC/OpenData_Boundaries/MapServer/54',
+  'El Paso': 'https://gis.elpasotexas.gov/dev/rest/services/Planning/Zoning/FeatureServer/0'
+};
+for (const q of ['owner:CoSAGIS_Opendata zoning', 'owner:CTM.Publisher zoning', 'austin zoning district', 'New Braunfels zoning districts']) {
+  const r = await json(`https://www.arcgis.com/sharing/rest/search?f=json&num=10&q=${encodeURIComponent(q)}`);
+  console.log(`\n# search ${q}`);
+  for (const i of r.results ?? []) console.log(`  ${i.title} | ${i.type} | ${i.owner} | ${i.url}`);
+}
+for (const [city, url] of Object.entries(zoning)) {
+  const info = await json(`${url}?f=json`);
+  console.log(`\n# ${city} ${info.name}: ${(info.fields ?? []).map((f) => f.name).join(', ')}`);
+  const q = await json(`${url}/query?where=1%3D1&outFields=*&returnGeometry=false&resultRecordCount=2&f=json`);
+  console.log(JSON.stringify(q.features ?? q).slice(0, 700));
+}
+
+console.log('\n\n==== Partners report pages');
+for (const url of ['https://partnersrealestate.com/research/dallas-office-q2-2026-quarterly-market-report/', 'https://partnersrealestate.com/research/houston-industrial-q2-2026-quarterly-market-report/', 'https://partnersrealestate.com/research/san-antonio-retail-q2-2026-quarterly-market-report/']) {
   const r = await get(url);
-  const title = /<title[^>]*>([^<]*)/i.exec(r.text)?.[1]?.trim();
-  console.log(`\n### ${url}\n-> ${r.status} ${r.url} len=${r.text.length} title=${title}`);
-  const hrefs = [...new Set([...r.text.matchAll(/href=["']([^"'#]+)["']/gi)].map((m) => m[1]))].filter((h) => CITY.test(h) && extra.test(h));
-  for (const h of hrefs.slice(0, 40)) console.log('  ' + h);
+  const text = strip(r.text);
+  const i = text.search(/vacancy|asking/i);
+  console.log(`\n# ${url} ${r.status}\n${text.slice(Math.max(0, i - 600), i + 2500)}`);
   const pdfs = [...new Set([...r.text.matchAll(/https?:[^"'\s<>]+\.pdf/gi)].map((m) => m[0]))];
-  for (const p of pdfs.slice(0, 15)) console.log('  PDF ' + p);
-  return r;
-}
-const pages = [
-  'https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats',
-  'https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/dallas-fort-worth-marketbeats',
-  'https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/houston-marketbeats',
-  'https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/austin-marketbeats',
-  'https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/san-antonio-marketbeats',
-  'https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/el-paso-marketbeats',
-  'https://www.cbre.com/insights/books/us-real-estate-market-outlook-2026',
-  'https://www.cbre.com/insights#market-reports',
-  'https://www.cbre.com/insights/figures',
-  'https://www.us.jll.com/en/trends-and-insights/research',
-  'https://www.jll.com/en-us/insights/market-dynamics',
-  'https://www.jll.com/en-us/insights/market-dynamics/dallas-fort-worth-office',
-  'https://www.colliers.com/en/research',
-  'https://www.colliers.com/en/united-states/research',
-  'https://www.marcusmillichap.com/research',
-  'https://www.marcusmillichap.com/research/market-reports',
-  'https://www.lee-associates.com/research/',
-  'https://www.lee-associates.com/market-reports/',
-  'https://www.avisonyoung.us/web/dallas/market-reports',
-  'https://www.nmrk.com/insights',
-  'https://www.nmrk.com/insights/market-report',
-  'https://transwestern.com/research',
-  'https://partnersrealestate.com/research/',
-  'https://www.naipartners.com/research/',
-  'https://www.weitzmangroup.com/research',
-  'https://www.stream.cre/research',
-  'https://www.mohrpartners.com/research'
-];
-for (const url of pages) await page(url);
-
-console.log('\n\n==== robots.txt');
-for (const host of ['www.cushmanwakefield.com', 'www.cbre.com', 'www.jll.com', 'www.colliers.com', 'www.marcusmillichap.com', 'www.lee-associates.com', 'www.nmrk.com', 'partnersrealestate.com', 'www.avisonyoung.us', 'transwestern.com']) {
-  const r = await get(`https://${host}/robots.txt`);
-  const lines = r.text.split('\n').filter((l) => /^(user-agent: \*|disallow|allow)/i.test(l.trim())).slice(0, 25);
-  console.log(`\n# ${host} ${r.status}\n` + lines.join('\n'));
+  console.log('PDFs: ' + pdfs.join(' '));
 }
 
-console.log('\n\n==== ArcGIS Online: zoning and parcel layers');
-for (const q of ['Dallas zoning', 'Dallas parcels', 'Houston parcels', 'HCAD parcels', 'Fort Worth zoning', 'Tarrant parcels', 'Austin zoning', 'Travis parcels TCAD', 'San Antonio zoning', 'Bexar parcels', 'El Paso zoning', 'El Paso parcels', 'Texas parcels StratMap', 'New Braunfels zoning']) {
-  const r = await get(`https://www.arcgis.com/sharing/rest/search?f=json&num=8&q=${encodeURIComponent(q + ' type:"Feature Service"')}`);
-  let items = [];
-  try { items = JSON.parse(r.text).results ?? []; } catch {}
-  console.log(`\n# ${q}`);
-  for (const i of items) console.log(`  ${i.title} | ${i.owner} | ${i.url} | views ${i.numViews} | mod ${new Date(i.modified).toISOString().slice(0, 10)}`);
-}
+console.log('\n\n==== Lee & Associates Texas');
+const lee = await get('https://www.lee-associates.com/research/');
+console.log([...new Set([...lee.text.matchAll(/https?:[^"'\s<>]+\.pdf/gi)].map((m) => m[0]))].filter((u) => /-TX-|texas/i.test(u)).join('\n'));
 
-console.log('\n\n==== TxGIO StratMap land parcels');
-for (const url of ['https://data.geographic.texas.gov/collection/?c=2679b514-bb7b-409f-97f3-ee3879f34448', 'https://feature.geographic.texas.gov/arcgis/rest/services?f=json', 'https://feature.tnris.org/arcgis/rest/services?f=json']) {
-  const r = await get(url);
-  console.log(`\n# ${url} -> ${r.status} len=${r.text.length}\n${r.text.slice(0, 1500)}`);
+console.log('\n\n==== Cushman PDFs as text');
+try { execSync('sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1'); } catch {}
+const dfw = await get('https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/dallas-ft-worth-marketbeats');
+const hou = await get('https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/houston-marketbeats');
+const pdfs = [...new Set([...(dfw.text + hou.text).matchAll(/https?:[^"'\s<>]+\.pdf/gi)].map((m) => m[0]))];
+console.log(pdfs.join('\n'));
+for (const pdf of pdfs.filter((p) => !/multifamily/i.test(p)).slice(0, 5)) {
+  const r = await fetch(pdf, { headers: { 'user-agent': UA } });
+  writeFileSync('/tmp/r.pdf', Buffer.from(await r.arrayBuffer()));
+  const text = execSync('pdftotext -layout /tmp/r.pdf - 2>&1 || true').toString();
+  console.log(`\n######## ${pdf} (${r.status})\n${text.split('\n').slice(0, 90).join('\n')}`);
+  const tail = text.split('\n').filter((l) => /TOTAL|Total|Overall|Class A|CBD|Asking/i.test(l)).slice(0, 40);
+  console.log('--- lines with totals:\n' + tail.join('\n'));
 }
