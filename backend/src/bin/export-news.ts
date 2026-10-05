@@ -28,6 +28,11 @@ async function main(): Promise<void> {
     .then((text) => JSON.parse(text) as NewsFile)
     .catch(() => null);
   const file = await buildNewsFile(new Date(), previous);
+  // Every headline in the log, so a run's summary shows what the filter kept.
+  for (const city of file.cities) {
+    console.log(`\n${city.city}:`);
+    for (const h of city.headlines) console.log(`  ${h.publishedAt?.slice(0, 10) ?? '----------'}  ${h.title} (${h.source})${h.topics.length ? ` [${h.topics.join(', ')}]` : ''}`);
+  }
   const total = file.cities.reduce((sum, c) => sum + c.headlines.length, 0);
   if (total === 0) {
     console.error('No headlines for any city and no earlier copy; not writing a blank news file.');
