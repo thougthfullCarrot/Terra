@@ -475,9 +475,6 @@ export const GROUPS: MarketGroup[] = [
       'fmr2',
       'fmr3',
       'fmr4',
-      'lihtcProjects',
-      'lihtcUnits',
-      'lihtcRecent',
       'medianRent',
       'rentGrowth',
       'medianIncome',
@@ -614,11 +611,6 @@ export const SOURCES: MarketSnapshot['sources'] = [
     name: 'HUD Fair Market Rents',
     url: 'https://www.huduser.gov/portal/datasets/fmr.html',
     detail: 'Fair Market Rents by bedroom count for each metro FMR area, from the HUD User API. Updated each fiscal year.'
-  },
-  {
-    name: 'HUD LIHTC database',
-    url: 'https://www.huduser.gov/portal/datasets/lihtc.html',
-    detail: 'Every Low-Income Housing Tax Credit property placed in service, with units and year. Updated yearly.'
   },
   {
     name: 'Federal Reserve Bank of Dallas, Texas Business Outlook Surveys (via FRED)',

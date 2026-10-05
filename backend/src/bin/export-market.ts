@@ -20,6 +20,7 @@
  * when every source answered, which is when site.yml caches the file for the
  * day.
  */
+import type { LihtcCount } from '../market/lihtc.js';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +41,6 @@ import { fetchRedfin } from '../market/redfin.js';
 import { fetchRealtor } from '../market/realtor.js';
 import { fetchFhfa } from '../market/fhfa.js';
 import { fetchHudFmr } from '../market/hudFmr.js';
-import { fetchLihtc } from '../market/lihtc.js';
 import { blsSeriesFor, buildMarketSnapshot, filledCount, fillFromPrevious, type MarketSnapshot } from '../market/snapshot.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -134,7 +134,9 @@ async function main(): Promise<void> {
     attempt('Realtor.com', () => fetchRealtor(METROS)),
     attempt('FHFA', () => fetchFhfa(METROS.map((m) => m.area))),
     hudToken ? attempt('HUD Fair Market Rents', () => fetchHudFmr(METROS, hudToken)) : Promise.resolve(null),
-    attempt('HUD LIHTC', () => fetchLihtc(METROS, { now }))
+    // HUD's LIHTC download sits behind a bot check (HTTP 202, empty body) for
+    // automated clients, so it stays off.
+    Promise.resolve(null as Map<string, LihtcCount> | null)
   ]);
   if (redfin) console.log(`Redfin: ${[...redfin].map(([city, r]) => `${city} ${r.period} $${r.medianSalePrice ?? '?'}`).join(', ') || 'no cities'}`);
   if (realtor) console.log(`Realtor.com: ${[...realtor].map(([cbsa, r]) => `${cbsa} ${r.period} $${r.medianListingPrice ?? '?'}`).join(', ') || 'no metros'}`);
@@ -143,7 +145,6 @@ async function main(): Promise<void> {
     console.log(`HUD Fair Market Rents: ${[...fmrResult.readings].map(([city, r]) => `${city} ${r.period} 2BR $${r.rents[2] ?? '?'}`).join(', ') || 'no areas'}`);
     if (fmrResult.failed.length) console.error(`HUD Fair Market Rents: not read: ${fmrResult.failed.join(', ')}`);
   }
-  if (lihtc) console.log(`HUD LIHTC: ${[...lihtc].map(([area, c]) => `${area} ${c.projects} properties, ${c.units} units`).join(', ') || 'no metros'}`);
 
   // Last so a slow TDLR day cannot hold up the other sources; projects read on
   // an earlier build keep their page and map point.

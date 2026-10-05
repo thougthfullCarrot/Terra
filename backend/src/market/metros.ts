@@ -44,7 +44,7 @@ export const METROS: Metro[] = [
     laus: 'DV4823104000000',
     counties: ['251', '367', '439', '497'],
     txdotDistrict: 'Fort Worth',
-    hudFmr: 'METRO23104M23104'
+    hudFmr: 'METRO19100MM2800'
   },
   {
     city: 'Houston',
