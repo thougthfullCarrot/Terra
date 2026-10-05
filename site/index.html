@@ -82,6 +82,124 @@
         <p class="notice" id="signin-status" aria-live="polite" hidden></p>
       </section>
 
+      <!-- Signed out: what Terra is, shown under the sign-in form. -->
+      <div id="welcome" class="welcome" hidden>
+        <section class="welcome-block" aria-labelledby="how-title">
+          <p class="eyebrow">HOW IT WORKS</p>
+          <h2 id="how-title">Three steps to your first CRE job</h2>
+          <ol class="steps">
+            <li>
+              <span class="step-num" aria-hidden="true">1</span>
+              <h3>Sign in with your email</h3>
+              <p>We email you a 6-digit code. No password to remember.</p>
+            </li>
+            <li>
+              <span class="step-num" aria-hidden="true">2</span>
+              <h3>Add your resume</h3>
+              <p>Upload it on your profile and Terra scores every job against your skills, city and class year.</p>
+            </li>
+            <li>
+              <span class="step-num" aria-hidden="true">3</span>
+              <h3>Apply at the firm</h3>
+              <p>Every apply button goes straight to the firm's own career page. Terra never stands in between.</p>
+            </li>
+          </ol>
+        </section>
+
+        <section class="welcome-block" aria-labelledby="why-title">
+          <p class="eyebrow">WHY TERRA</p>
+          <h2 id="why-title">Built for students breaking into Texas real estate</h2>
+          <div class="features">
+            <article class="feature">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+              <h3>Fresh every two hours</h3>
+              <p>Read straight from firm career boards like JLL, Hines, Transwestern and Lincoln, so you see roles the day they open.</p>
+            </article>
+            <article class="feature">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
+              <h3>Only 0-2 years</h3>
+              <p>Internships and entry-level roles only. Anything asking for more experience is filtered out.</p>
+            </article>
+            <article class="feature">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.6 5.5 6 .8-4.4 4.2 1 6L12 16.7 6.8 19.5l1-6L3.4 9.3l6-.8z" /></svg>
+              <h3>Your best matches first</h3>
+              <p>Jobs that fit your resume are marked <strong>Best match</strong> and sorted to the top.</p>
+            </article>
+            <article class="feature">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6" /></svg>
+              <h3>Market data by city</h3>
+              <p>Rents, vacancy, jobs and population for Dallas, Fort Worth, Houston, Austin, San Antonio and El Paso.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="welcome-block preview" aria-labelledby="preview-title">
+          <p class="eyebrow">WHAT YOU'LL SEE</p>
+          <h2 id="preview-title">A job list that knows your resume</h2>
+          <article class="card best preview-card" aria-label="Example job card">
+            <p class="match-badge">BEST MATCH · AUSTIN · ARGUS · SENIOR</p>
+            <div class="card-head">
+              <span class="monogram" aria-hidden="true">AF</span>
+              <div class="card-title">
+                <h3 class="role">Acquisitions Analyst Intern</h3>
+                <p class="firm">Example firm · Austin</p>
+              </div>
+            </div>
+            <ul class="chips">
+              <li class="kind">Internship</li>
+              <li>Investment</li>
+              <li class="pay">$25/hr</li>
+            </ul>
+            <div class="card-foot">
+              <p class="dates"><span class="posted">Posted today</span><span class="score">94% match</span></p>
+              <span class="apply">Apply</span>
+            </div>
+          </article>
+          <p class="hint">An example for illustration. Sign in to see the real jobs.</p>
+        </section>
+
+        <section class="welcome-block" aria-labelledby="price-title">
+          <p class="eyebrow">PRICING</p>
+          <h2 id="price-title">Free for students</h2>
+          <div class="plans">
+            <article class="plan featured">
+              <h3>Students</h3>
+              <p class="plan-price">Free</p>
+              <p>Sign in with any college email ending in .edu. Every job, market data and resume matching included.</p>
+            </article>
+            <article class="plan" id="plan-paid" hidden>
+              <h3>Everyone else</h3>
+              <p class="plan-price" id="plan-price">Monthly</p>
+              <p>Not in school? Subscribe with any email for the same access. Cancel anytime.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="welcome-block" aria-labelledby="faq-title">
+          <p class="eyebrow">QUESTIONS</p>
+          <h2 id="faq-title">Good to know</h2>
+          <div class="faq">
+            <details>
+              <summary>Where do the jobs come from?</summary>
+              <p>From each firm's own Greenhouse, Lever, Workday and iCIMS boards, plus a few listings from Adzuna. Terra checks them every two hours.</p>
+            </details>
+            <details>
+              <summary>Who sees my resume?</summary>
+              <p>Only you. It is stored privately, and matching runs in your browser. No AI service reads it.</p>
+            </details>
+            <details>
+              <summary>Which cities are covered?</summary>
+              <p>Dallas, Fort Worth, Houston, Austin, San Antonio and El Paso.</p>
+            </details>
+          </div>
+        </section>
+
+        <section class="welcome-cta">
+          <h2>Ready to find your first role?</h2>
+          <button type="button" class="primary" id="welcome-start">Get started</button>
+        </section>
+      </div>
+
       <!-- Signed in, but neither a college email nor a subscription. -->
       <section id="paywall" class="panel" hidden aria-labelledby="paywall-title">
         <h2 id="paywall-title">Subscribe to see the jobs</h2>
