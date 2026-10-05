@@ -1,0 +1,37 @@
+# Temporary: probes the TDLR TABS search form for county fields.
+name: Probe TABS
+on:
+  push:
+    branches: [claude/more-market-data-gnlj26]
+    paths: [.github/workflows/probe-tabs.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe
+        run: |
+          set -x
+          curl -sS -c jar -A 'Mozilla/5.0' https://www.tdlr.texas.gov/TABS/Search -o s.html
+          python3 - <<'PY'
+          import re
+          h=open('s.html',encoding='utf8',errors='replace').read()
+          for m in re.finditer(r'<select([^>]*)>(.*?)</select>',h,re.S):
+            opts=re.findall(r'<option[^>]*value="([^"]*)"[^>]*>([^<]*)',m.group(2))
+            print('SELECT',m.group(1).strip(),len(opts),opts[:5])
+            for v,t in opts:
+              if re.search(r'^(Harris|Galveston|Fort Bend|Montgomery|Brazoria|Chambers|Liberty|Waller|Austin|Dallas|Collin|Denton|Rockwall|Kaufman|Ellis|Tarrant|Parker|Johnson|Wise|Travis|Williamson|Hays|Bastrop|Caldwell|Bexar|Comal|Guadalupe|Medina|Kendall|Wilson|Atascosa|Bandera|El Paso)\b',t.strip(),re.I):
+                print('   ',v,t.strip())
+          for n in re.findall(r'name="([^"]+)"',h): print('NAME',n)
+          for s in re.findall(r'src="([^"]*bundles[^"]*)"',h): print('BUNDLE',s)
+          PY
+          for b in $(grep -o 'src="[^"]*bundles/projectSearch[^"]*"' s.html | sed 's/src="//;s/"$//'); do
+            curl -sS "https://www.tdlr.texas.gov$b" -o b.js; grep -o '[A-Za-z]*\(County\|City\|Location\)[A-Za-z]*' b.js | sort | uniq -c
+          done
+          T=$(date +%m/%d/%Y); F=$(date -d '-365 days' +%m/%d/%Y)
+          for f in "LocationCounty=101" "LocationCounty=Harris" "County=101" "ProjectCounty=101"; do
+            echo "== $f"
+            curl -sS -b jar -A 'Mozilla/5.0' -H 'x-requested-with: XMLHttpRequest' -H 'referer: https://www.tdlr.texas.gov/TABS/Search/' \
+              --data "draw=1&start=0&length=5&order[0][column]=9&order[0][dir]=desc&columns[9][data]=EstimatedCost&$f&RegistrationDateBegin=$F&RegistrationDateEnd=$T&DataVersionId=900001" \
+              https://www.tdlr.texas.gov/TABS/Search/SearchProjects | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("recordsTotal"),[(r.get("City"),r.get("County"),r.get("ProjectName")) for r in d.get("data",[])][:5]); print(list(d["data"][0].keys()) if d.get("data") else "")' || true
+          done
