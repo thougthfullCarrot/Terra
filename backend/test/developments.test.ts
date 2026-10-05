@@ -179,6 +179,13 @@ describe('fetchDevelopments', () => {
     }) as typeof fetch;
   }
 
+  it('skips a city with no TABS city id yet', async () => {
+    const calls: string[] = [];
+    const result = await fetchDevelopments(['New Braunfels'], { now: new Date('2026-10-05T00:00:00Z'), pauseMs: 0, fetchImpl: fakeFetch(calls) });
+    expect(result.projects).toHaveLength(0);
+    expect(calls).toHaveLength(0);
+  });
+
   it('reads new projects, reuses earlier ones, and places them on the map', async () => {
     const calls: string[] = [];
     const old = { id: 'OLD1', address: '1 Old St', owner: 'Hines', tenant: null, designFirm: null, scope: null, squareFeet: null, isPublic: false, lat: 29.7, lng: -95.4 } as Development;

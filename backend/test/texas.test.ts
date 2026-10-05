@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { resolveCity } from '../src/collector/texas.js';
 
 describe('resolveCity', () => {
-  it('resolves the six tracked cities', () => {
+  it('resolves the seven tracked cities', () => {
+    expect(resolveCity('New Braunfels, TX')).toBe('New Braunfels');
     expect(resolveCity('Dallas, TX')).toBe('Dallas');
     expect(resolveCity('Fort Worth, TX')).toBe('Fort Worth');
     expect(resolveCity('Houston, Texas')).toBe('Houston');

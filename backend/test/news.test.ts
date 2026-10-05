@@ -132,7 +132,7 @@ describe('Google News RSS', () => {
       fetchShared: async () => [],
       log: () => {}
     });
-    expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio']);
+    expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'New Braunfels']);
     expect(file.cities.find((c) => c.city === 'Austin')?.headlines[0]?.title).toBe('Old');
     expect(file.topics).toContain('Development');
   });

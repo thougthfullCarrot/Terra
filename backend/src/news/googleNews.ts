@@ -19,7 +19,8 @@ const SEARCH_NAME: Record<City, string> = {
   Houston: '"Houston"',
   Austin: '"Austin" Texas',
   'San Antonio': '"San Antonio"',
-  'El Paso': '"El Paso"'
+  'El Paso': '"El Paso"',
+  'New Braunfels': '"New Braunfels"'
 };
 
 export function newsSearchUrl(city: City, days = 30): string {
@@ -321,7 +322,8 @@ const CITY_NAMES: Array<{ city: City; pattern: RegExp }> = [
   { city: 'Houston', pattern: /\bHouston\b/ },
   { city: 'Austin', pattern: /\bAustin\b/ },
   { city: 'San Antonio', pattern: /\bSan Antonio\b/ },
-  { city: 'El Paso', pattern: /\bEl Paso\b/ }
+  { city: 'El Paso', pattern: /\bEl Paso\b/ },
+  { city: 'New Braunfels', pattern: /\bNew Braunfels\b/ }
 ];
 
 /** The Terra cities a story names. */

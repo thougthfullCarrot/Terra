@@ -77,6 +77,15 @@ export const CITY_UNITS: Record<City, Unit[]> = {
     { part: 'school', id: '071-902-02', label: 'El Paso ISD' },
     { part: 'other', id: '071-201-15', label: 'El Paso Community College' },
     { part: 'other', id: '071-202-11', label: 'University Medical Center' }
+  ],
+  // Comal County is Comptroller county 046. The city's and school district's
+  // unit ids were not at hand when the city was added, so those match by name.
+  // Most of the city is in New Braunfels ISD (Comal ISD covers the rest), and
+  // the part of the city in Guadalupe County is left out.
+  'New Braunfels': [
+    { part: 'city', name: /^(City of )?New Braunfels( City)?$/i, label: 'City of New Braunfels' },
+    { part: 'county', id: '046-000-00', label: 'Comal County' },
+    { part: 'school', name: /^New Braunfels ISD\b/i, label: 'New Braunfels ISD' }
   ]
 };
 

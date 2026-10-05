@@ -23,6 +23,11 @@ export interface Metro {
   txdotDistrict: string;
   /** HUD Fair Market Rent area id (the FMR API's entity id). */
   hudFmr: string;
+  /**
+   * Set for a city that is not its metro's namesake: metro-wide figures are
+   * the named metro's, and their period says so (e.g. "San Antonio metro").
+   */
+  sharedMetro?: string;
 }
 
 export const METROS: Metro[] = [
@@ -85,5 +90,19 @@ export const METROS: Metro[] = [
     counties: ['141', '229'],
     txdotDistrict: 'El Paso',
     hudFmr: 'METRO21340M21340'
+  },
+  {
+    // In the San Antonio metro: metro-level sources (BLS, ACS, population
+    // estimates, FHFA, Realtor.com, HUD FMR) repeat San Antonio's figures,
+    // labeled as such; city-level sources read New Braunfels's own rows.
+    city: 'New Braunfels',
+    name: 'San Antonio-New Braunfels metro',
+    area: '41700',
+    census: { msa: '41700' },
+    laus: 'MT4841700000000',
+    counties: ['013', '019', '029', '091', '187', '259', '325', '493'],
+    txdotDistrict: 'San Antonio',
+    hudFmr: 'METRO41700M41700',
+    sharedMetro: 'San Antonio metro'
   }
 ];

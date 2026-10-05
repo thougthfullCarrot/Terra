@@ -64,7 +64,6 @@ const ALIASES: Record<string, City> = {
 
   // San Antonio
   'san antonio, tx': 'San Antonio',
-  'new braunfels': 'San Antonio',
   schertz: 'San Antonio',
   'live oak': 'San Antonio',
   boerne: 'San Antonio',
@@ -85,7 +84,11 @@ const ALIASES: Record<string, City> = {
   'joint base san antonio': 'San Antonio',
 
   // El Paso
-  'el paso, tx': 'El Paso'
+  'el paso, tx': 'El Paso',
+
+  // New Braunfels (Comal County; its own market, inside the San Antonio metro)
+  'new braunfels': 'New Braunfels',
+  'gruene': 'New Braunfels'
 };
 
 /** US state markers other than Texas, used to reject out-of-state postings. */

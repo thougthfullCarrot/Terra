@@ -17,7 +17,8 @@ const CENTERS = {
   Houston: [29.7604, -95.3698],
   Austin: [30.2672, -97.7431],
   'San Antonio': [29.4241, -98.4936],
-  'El Paso': [31.7619, -106.485]
+  'El Paso': [31.7619, -106.485],
+  'New Braunfels': [29.703, -98.1245]
 };
 
 let leaflet = null;
