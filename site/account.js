@@ -25,6 +25,7 @@ import {
   resumeContentType,
   storagePath
 } from './access.js';
+import { schoolFor } from './school.js';
 
 const $ = (id) => document.getElementById(id);
 /** Resume text kept for matching. A long resume is a few thousand characters; this leaves room without storing a novel. */
@@ -319,6 +320,34 @@ function toMatchProfile(row) {
   };
 }
 
+const CAP_SVG =
+  '<svg class="school-icon" viewBox="0 0 24 24" width="20" height="20" role="img" aria-label="Graduation cap"><path fill="currentColor" d="M12 3 1 9l11 6 9-4.9V17h2V9L12 3zm-6.8 9.2V16c0 1.7 3 3 6.8 3s6.8-1.3 6.8-3v-3.8L12 16l-6.8-3.8z"/></svg>';
+
+/** The school icon and name for a .edu email; hidden for any other email. */
+function drawSchool(email) {
+  const line = $('profile-school');
+  const school = schoolFor(email);
+  line.replaceChildren();
+  line.hidden = !school;
+  if (!school) return;
+  const img = document.createElement('img');
+  img.className = 'school-icon';
+  img.width = 20;
+  img.height = 20;
+  img.alt = school.alt;
+  img.referrerPolicy = 'no-referrer';
+  img.addEventListener('error', () => {
+    const wrap = document.createElement('span');
+    wrap.innerHTML = CAP_SVG;
+    wrap.firstChild.setAttribute('aria-label', school.alt);
+    img.replaceWith(wrap.firstChild);
+  }, { once: true });
+  img.src = school.iconUrl;
+  const name = document.createElement('span');
+  name.textContent = school.name;
+  line.append(img, name);
+}
+
 function fillProfile() {
   const form = $('profile-form');
   form.elements.name.value = profile?.name ?? '';
@@ -335,6 +364,7 @@ function fillProfile() {
   form.goodMatchesOnly.checked = (profile?.alert_min_match ?? 0) >= ALERT_GOOD_MATCH;
 
   $('profile-email').textContent = user.email;
+  drawSchool(user.email);
   $('profile-access').textContent =
     access === 'college' ? 'Student · free access' : access === 'subscriber' ? 'Subscriber' : 'No access yet';
   const billing = $('billing');
