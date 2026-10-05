@@ -1,4 +1,5 @@
-# Points Supabase's sign-in emails at a real SMTP sender so they aren't capped
+# Sends sign-in emails as a typed code (no link, which school mail filters
+# flag as suspicious) and points them at a real SMTP sender so they aren't capped
 # at Supabase's built-in few-per-hour limit, and raises the hourly email limit.
 #
 # Needs the secrets SUPABASE_ACCESS_TOKEN, SMTP_USER (a Gmail address) and
@@ -35,8 +36,13 @@ jobs:
           ref=$(echo "$SUPABASE_URL" | sed -E 's#https://([^.]+)\..*#\1#')
           body=$(jq -n --arg host "$SMTP_HOST" --arg port "$SMTP_PORT" --arg user "$SMTP_USER" \
             --arg pass "$SMTP_PASSWORD" --arg name "$SMTP_SENDER_NAME" \
+            --arg tpl '<h2>Your Terra sign-in code</h2><p>Enter this code on the Terra sign-in page:</p><p style="font-size:28px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p><p>It expires in an hour. If you did not ask for it, you can ignore this email.</p>' \
             '{smtp_host:$host, smtp_port:$port, smtp_user:$user, smtp_pass:$pass,
-              smtp_admin_email:$user, smtp_sender_name:$name, rate_limit_email_sent:100}')
+              smtp_admin_email:$user, smtp_sender_name:$name, rate_limit_email_sent:100,
+              mailer_subjects_magic_link:"Your Terra sign-in code",
+              mailer_templates_magic_link_content:$tpl,
+              mailer_subjects_confirmation:"Your Terra sign-in code",
+              mailer_templates_confirmation_content:$tpl}')
           code=$(curl -sS -o resp.json -w '%{http_code}' -X PATCH \
             "https://api.supabase.com/v1/projects/$ref/config/auth" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' -d "$body")
