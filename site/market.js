@@ -113,7 +113,15 @@ export function barPercent(value, values, unit) {
   return Math.max(4, Math.round(((value - min) / (max - min)) * 100));
 }
 
-/** The view state lives in the URL hash (#markets&city=Houston&focus=office), leaving the query string to the job filters. */
+export const TOOLS = ['compare', 'calc'];
+
+/** The most cities the comparison puts side by side; fewer than two is filled up from the list. */
+export const MAX_COMPARE = 4;
+
+/**
+ * The view state lives in the URL hash (#markets&city=Houston&focus=office), leaving the query string to the job filters.
+ * tool=compare (with cities=Dallas,Houston) and tool=calc open the city comparison and the deal calculator.
+ */
 export function readMarketHash(hash, snapshot) {
   const params = new URLSearchParams(String(hash ?? '').replace(/^#/, ''));
   const groups = snapshot?.groups ?? [];
@@ -127,13 +135,17 @@ export function readMarketHash(hash, snapshot) {
   const metric = metrics.find((m) => m.key === sort);
   const order = ORDERS.includes(params.get('order')) ? params.get('order') : sort === 'city' ? 'asc' : defaultOrder(metric);
 
-  return {
-    open: params.has('markets'),
-    city: cities.includes(params.get('city')) ? params.get('city') : '',
-    focus,
-    sort,
-    order
-  };
+  const city = cities.includes(params.get('city')) ? params.get('city') : '';
+  const tool = TOOLS.includes(params.get('tool')) ? params.get('tool') : '';
+  let compare = [];
+  if (tool === 'compare') {
+    const picked = (params.get('cities') ?? '').split(',').filter((c) => cities.includes(c));
+    compare = [...new Set(picked)].slice(0, MAX_COMPARE);
+    // A comparison needs two: the open city first, then the list's order.
+    for (const c of [city, ...cities]) if (compare.length < 2 && c && !compare.includes(c)) compare.push(c);
+  }
+
+  return { open: params.has('markets'), city, focus, sort, order, tool, compare };
 }
 
 export function writeMarketHash(state) {
@@ -142,8 +154,44 @@ export function writeMarketHash(state) {
   if (state.focus) params.set('focus', state.focus);
   if (state.sort) params.set('sort', state.sort);
   if (state.order) params.set('order', state.order);
+  if (state.tool) params.set('tool', state.tool);
+  if (state.tool === 'compare' && state.compare?.length) params.set('cities', state.compare.join(','));
   const text = params.toString();
   return `#markets${text ? `&${text}` : ''}`;
+}
+
+/** The figures the comparison opens on: jobs, people, rents, building and taxes. */
+export const KEY_METRICS = [
+  'jobsGrowth',
+  'unemployment',
+  'populationGrowth',
+  'medianIncome',
+  'medianRent',
+  'rentGrowth',
+  'zoriGrowth',
+  'permitUnits',
+  'permitGrowth',
+  'taxRate',
+  'taxOnMillion'
+];
+
+/**
+ * One row per metric for the cities compared, in their order, with the city
+ * that comes out best. No best where the metric has no better end or fewer
+ * than two of the cities have a figure; ties name every city tied.
+ */
+export function compareRows(markets, metrics, cities) {
+  const picked = cities.map((city) => markets.find((m) => m.city === city)).filter(Boolean);
+  return metrics.map((metric) => {
+    const values = picked.map((m) => m.values?.[metric.key] ?? null);
+    const present = values.filter((v) => v != null && Number.isFinite(v));
+    let best = [];
+    if (metric.better && present.length >= 2) {
+      const top = metric.better === 'low' ? Math.min(...present) : Math.max(...present);
+      if (present.some((v) => v !== top)) best = picked.filter((_, i) => values[i] === top).map((m) => m.city);
+    }
+    return { metric, values, best };
+  });
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   writeMarketHash
 } from './market.js';
 import { developmentMap, disposeMap } from './devmap.js';
+import { calculatorView, compareView } from './market-tools.js';
 import { readNewsHash } from './news.js';
 import { readEventsHash } from './events.js';
 
@@ -140,12 +141,32 @@ function render() {
   $('m-order').value = state.order;
   $('m-city').value = state.city;
   $('m-focus').value = state.focus;
-  // Sorting means nothing with one market on screen.
-  $('m-sort-label').hidden = Boolean(state.city);
-  $('m-order-label').hidden = Boolean(state.city);
+  // Sorting means nothing with one market on screen, or with cities side by side.
+  $('m-sort-label').hidden = Boolean(state.city) || Boolean(state.tool);
+  $('m-order-label').hidden = Boolean(state.city) || Boolean(state.tool);
+  $('m-city-label').hidden = Boolean(state.tool);
+  // The calculator brings its own inputs.
+  $('m-filters').hidden = state.tool === 'calc';
+  for (const [id, tool] of [['m-tool-data', ''], ['m-tool-compare', 'compare'], ['m-tool-calc', 'calc']]) {
+    $(id).href = writeMarketHash({ ...state, tool, compare: tool === 'compare' ? state.compare : [] });
+    if (state.tool === tool) $(id).setAttribute('aria-current', 'page');
+    else $(id).removeAttribute('aria-current');
+  }
+
+  disposeMap();
+  if (state.tool) {
+    $('m-blurb').textContent =
+      state.tool === 'calc'
+        ? 'Run the numbers on a property with today\'s rates and a Texas city\'s property tax.'
+        : 'Rents, permits, job growth and taxes for the cities you pick, side by side.';
+    $('m-rates').replaceChildren();
+    $('m-chart').replaceChildren();
+    $('m-body').replaceChildren(state.tool === 'calc' ? calculatorView(snapshot) : compareView(snapshot, state, update));
+    $('m-sources').replaceChildren(sources());
+    return;
+  }
 
   $('m-blurb').textContent = group.blurb ?? '';
-  disposeMap();
   $('m-rates').replaceChildren(rates());
   $('m-chart').replaceChildren(...(state.city ? [] : group.key === 'development' ? [devMap(), chart(group)] : [chart(group)]));
   $('m-body').replaceChildren(state.city ? cityView(state.city, group) : table(group));

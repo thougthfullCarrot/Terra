@@ -398,8 +398,13 @@
       <section id="markets-view" hidden aria-labelledby="markets-title">
         <h2 id="markets-title" class="visually-hidden">Market data</h2>
         <form class="controls" id="market-controls" onsubmit="return false">
-          <div class="filters market-filters">
-            <label>
+          <nav class="market-tools" aria-label="Market data views">
+            <a href="#markets" id="m-tool-data" class="chip">City data</a>
+            <a href="#markets&amp;tool=compare" id="m-tool-compare" class="chip">Compare cities</a>
+            <a href="#markets&amp;tool=calc" id="m-tool-calc" class="chip">Deal calculator</a>
+          </nav>
+          <div class="filters market-filters" id="m-filters">
+            <label id="m-city-label">
               <span class="eyebrow">MARKET</span>
               <select id="m-city"><option value="">All markets</option></select>
             </label>
