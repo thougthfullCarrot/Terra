@@ -230,6 +230,8 @@ export function toSite(source: SiteSource, use: SiteUse, feature: { attributes: 
   const landSqft = source.area(a);
   const fields = source.read(a);
   if (!landSqft || !fields.id || isPublicOwner(fields.owner)) return null;
+  // A nominal value ($100 and the like) marks a common area or drainage tract, not a site.
+  if (fields.value != null && fields.value < 1000) return null;
   const point = center(feature.geometry);
   const landValue = positive(fields.landValue);
   return {
