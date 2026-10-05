@@ -89,15 +89,16 @@ jobs:
         id: today
         run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
+      # Keyed on the market code too, so a change to it rebuilds the file the same day.
       - name: Restore market data
         id: market-cache
         uses: actions/cache/restore@v4
         with:
           path: site/market.json
-          key: market-${{ steps.today.outputs.date }}
+          key: market-${{ hashFiles('backend/src/market/**') }}-${{ steps.today.outputs.date }}
           restore-keys: market-
 
-      - name: Export market data from BLS and the Census
+      - name: Export market data
         id: market
         if: steps.market-cache.outputs.cache-hit != 'true'
         # A market data outage must never hold back the job list.
@@ -114,7 +115,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: site/market.json
-          key: market-${{ steps.today.outputs.date }}
+          key: market-${{ hashFiles('backend/src/market/**') }}-${{ steps.today.outputs.date }}
 
       - name: Summarize
         if: always()
