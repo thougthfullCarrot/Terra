@@ -1,5 +1,5 @@
 /**
- * Create, check or remove the website's ten test accounts (src/testUsers/people.ts).
+ * Create, check or remove the website's fifty test accounts (src/testUsers/people.ts).
  *
  *   npm run test-users -- seed     # create or refresh them, then check
  *   npm run test-users -- check    # sign in as each and report what they see
@@ -14,6 +14,10 @@
  * Only accounts that are both in the list and flagged
  * app_metadata.terra_test_user are ever changed or removed.
  *
+ * With BROWSER=1 the check also opens the real website (site/, served
+ * locally against the same Supabase project) as each account in headless
+ * Chromium and clicks through it; see src/testUsers/browser.ts.
+ *
  * The check writes a Markdown report to REPORT_PATH (default stdout) and
  * exits non-zero if any check failed.
  */
@@ -22,13 +26,14 @@ import { deflateSync, crc32 } from 'node:zlib';
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { PEOPLE, TEST_FLAG, type TestPerson } from '../testUsers/people.js';
 import { scoreJobs, type SiteJob, type SiteMatch } from '../site/browserMatch.js';
+import { SiteTester, type BrowserResult } from '../testUsers/browser.js';
 
 // The site's own form and email rules. site/ has no package.json saying it is
 // an ES module, so tsx would load it as CommonJS; import its source instead.
 const siteAccess: typeof import('../../../site/access.js') = await import(
   `data:text/javascript,${encodeURIComponent(await readFile(new URL('../../../site/access.js', import.meta.url), 'utf8'))}`
 );
-const { isCollegeEmail, profileRow } = siteAccess;
+const { isCollegeEmail, profileRow, alertRow } = siteAccess;
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -222,12 +227,22 @@ interface PersonReport {
   top: { title: string; score: number; strong: boolean; note: string }[];
 }
 
-/** Sign in as a user the way the site's code form would, without sending the email. */
+/**
+ * Sign in as a user the way the site's code form would, without sending the
+ * email. Supabase limits token checks per IP (30 every 5 minutes on the free
+ * plan), so fifty accounts in a row wait out the limit rather than fail.
+ */
 async function signIn(env: Env, admin: SupabaseClient, email: string): Promise<SupabaseClient> {
-  const link = await must('generate sign-in token', admin.auth.admin.generateLink({ type: 'magiclink', email }));
-  const client = createClient(env.url, env.anonKey, noSession);
-  await must('verify sign-in token', client.auth.verifyOtp({ token_hash: link.properties!.hashed_token, type: 'magiclink' }));
-  return client;
+  for (let attempt = 0; ; attempt++) {
+    const link = await must('generate sign-in token', admin.auth.admin.generateLink({ type: 'magiclink', email }));
+    const client = createClient(env.url, env.anonKey, noSession);
+    const { error } = await client.auth.verifyOtp({ token_hash: link.properties!.hashed_token, type: 'magiclink' });
+    if (!error) return client;
+    const limited = error.status === 429 || /rate limit/i.test(error.message);
+    if (!limited || attempt >= 8) throw new Error(`verify sign-in token: ${error.message}`);
+    console.log(`sign-in rate limited for ${email}; waiting 40s`);
+    await new Promise((resolve) => setTimeout(resolve, 40_000));
+  }
 }
 
 type Snapshot = { jobs: (SiteJob & { role: string; firm: string; postedAt: string })[] };
@@ -238,7 +253,9 @@ async function checkPerson(
   person: TestPerson,
   user: User,
   other: User,
-  snapshot: Snapshot | null
+  snapshot: Snapshot | null,
+  site: SiteTester | null,
+  index: number
 ): Promise<PersonReport> {
   const results: Result[] = [];
   const check = (ok: boolean, label: string, detail?: string) => results.push({ ok, label, detail });
@@ -310,6 +327,64 @@ async function checkPerson(
   check(Boolean(intrude.error), "cannot upload into another user's folder");
   if (!intrude.error) await admin.storage.from('resumes').remove([`${other.id}/intruder.txt`]);
 
+  // Daily alerts (migration 0007): save the settings the way the form does, read them back, then turn them off again.
+  const alertChoice = alertRow({
+    emailAlerts: true,
+    alertCities: person.homeCity ? [person.homeCity] : [],
+    alertKinds: person.gradYear && person.gradYear > new Date().getUTCFullYear() ? ['Internship'] : ['Entry-level'],
+    goodMatchesOnly: Boolean(person.resume)
+  });
+  const { data: alertSaved, error: alertError } = await client.from('profiles').update(alertChoice).eq('id', user.id).select('*').single();
+  check(
+    !alertError &&
+      alertSaved?.email_alerts === true &&
+      [...(alertSaved?.alert_cities ?? [])].join() === alertChoice.alert_cities.join() &&
+      [...(alertSaved?.alert_kinds ?? [])].join() === alertChoice.alert_kinds.join() &&
+      alertSaved?.alert_min_match === alertChoice.alert_min_match,
+    'saves daily alert settings',
+    alertError?.message
+  );
+  await client.from('profiles').update({ email_alerts: false, alert_cities: [], alert_kinds: [], alert_min_match: 0 }).eq('id', user.id);
+  const recipients = await client.rpc('alert_recipients');
+  check(Boolean(recipients.error), "cannot list who gets alerts (other people's emails)");
+  const { data: sends } = await client.from('alert_sends').select('user_id').neq('user_id', user.id);
+  check((sends?.length ?? 0) === 0, "cannot read anyone else's alert history");
+
+  // Application tracker (migration 0008): members add, move and remove a job; others can't add.
+  const job = snapshot?.jobs[0];
+  const jobId = job?.id ?? 'terra-test-job';
+  const tracked = await client
+    .from('tracked_jobs')
+    .upsert({
+      user_id: user.id,
+      job_id: jobId,
+      stage: 'Saved',
+      job: { role: job?.role ?? 'Test role', firm: job?.firm ?? 'Test firm', city: job?.city ?? 'Dallas', kind: '', applyUrl: '', deadline: null }
+    })
+    .select('*');
+  if (member) {
+    check(!tracked.error && tracked.data?.length === 1, 'can save a job to the tracker', tracked.error?.message);
+    const moved = await client
+      .from('tracked_jobs')
+      .update({ stage: 'Applied', note: `Applied as ${person.name}`, follow_up: '2026-12-01' })
+      .eq('user_id', user.id)
+      .eq('job_id', jobId)
+      .select('*')
+      .single();
+    check(
+      !moved.error && moved.data?.stage === 'Applied' && moved.data?.note === `Applied as ${person.name}` && moved.data?.follow_up === '2026-12-01',
+      'can move a tracked job to Applied with a note and follow-up',
+      moved.error?.message
+    );
+    const theirTracked = await client.from('tracked_jobs').select('user_id').neq('user_id', user.id);
+    check((theirTracked.data?.length ?? 0) === 0, "cannot read anyone else's tracker");
+    const removed = await client.from('tracked_jobs').delete().eq('user_id', user.id).eq('job_id', jobId).select('job_id');
+    check(!removed.error && removed.data?.length === 1, 'can remove a tracked job', removed.error?.message);
+  } else {
+    check(Boolean(tracked.error) || (tracked.data?.length ?? 0) === 0, 'cannot add to the tracker without access');
+    if (!tracked.error) await admin.from('tracked_jobs').delete().eq('user_id', user.id).eq('job_id', jobId);
+  }
+
   // Best match, scored exactly as the site does in the browser.
   if (member && snapshot && own) {
     const scores = scoreJobs(
@@ -337,6 +412,18 @@ async function checkPerson(
     else check(scores.size === 0, 'no match scores without a resume');
   }
 
+  // The real page, as this account. Before signing out below, which ends every session the account has.
+  if (site) {
+    const { data } = await client.auth.getSession();
+    const expect = { strong: report.strong, scored: report.scored > 0, jobs: member ? snapshot?.jobs.length ?? 0 : 0 };
+    const pages: BrowserResult[] = data.session
+      ? await site.checkPerson(person, user.id, data.session, expect)
+      : [{ ok: false, label: 'browser: no session to open the site with' }];
+    // Every fifth account also goes through on a phone-sized screen.
+    if (data.session && index % 5 === 0) pages.push(...(await site.checkPerson(person, user.id, data.session, expect, { mobile: true })));
+    for (const result of pages) check(result.ok, `site: ${result.label}`, result.detail);
+  }
+
   await client.auth.signOut();
   return report;
 }
@@ -362,6 +449,23 @@ async function check(env: Env, admin: SupabaseClient): Promise<boolean> {
     ''
   );
 
+  let site: SiteTester | null = null;
+  if (process.env.BROWSER === '1') {
+    site = await SiteTester.start({
+      supabaseUrl: env.url,
+      supabaseAnonKey: env.anonKey,
+      paymentLink: process.env.STRIPE_PAYMENT_LINK ?? '',
+      billingPortalLink: process.env.STRIPE_BILLING_PORTAL_LINK ?? '',
+      priceLabel: process.env.PRICE_LABEL ?? ''
+    });
+    const signedOut = await site.checkSignedOut();
+    for (const result of signedOut) {
+      allOk &&= result.ok;
+      lines.push(`${result.ok ? '✅' : '❌'} Site, ${result.label}${!result.ok && result.detail ? ` (${result.detail})` : ''}`);
+    }
+    lines.push('');
+  }
+
   const reports: PersonReport[] = [];
   for (const [index, person] of PEOPLE.entries()) {
     const user = accounts.get(person.email.toLowerCase());
@@ -372,8 +476,10 @@ async function check(env: Env, admin: SupabaseClient): Promise<boolean> {
     }
     const otherPerson = PEOPLE[(index + 1) % PEOPLE.length]!;
     const other = accounts.get(otherPerson.email.toLowerCase()) ?? user;
-    reports.push(await checkPerson(env, admin, person, user, other, snapshot));
+    console.log(`checking ${index + 1}/${PEOPLE.length} ${person.email}`);
+    reports.push(await checkPerson(env, admin, person, user, other, snapshot, site, index));
   }
+  await site?.stop();
 
   lines.push('| # | Name | Email | Expected | Got | Checks | Scored | Best matches | Top match |', '|---|---|---|---|---|---|---|---|---|');
   for (const [i, r] of reports.entries()) {

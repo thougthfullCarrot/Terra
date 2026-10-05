@@ -1,7 +1,9 @@
-# Creates, checks or removes the website's ten test accounts
+# Creates, checks or removes the website's fifty test accounts
 # (backend/src/testUsers/people.ts) and reports what each one can see: access,
-# profile, files, and best-match ordering. No email is sent and Stripe is
-# never called; see backend/src/bin/test-users.ts.
+# profile, files, alerts, tracker and best-match ordering. The check also opens
+# the real website as each account in headless Chromium and clicks through it
+# (backend/src/testUsers/browser.ts). No email is sent and Stripe is never
+# called; see backend/src/bin/test-users.ts.
 #
 # Actions tab > Test accounts > Run workflow, then pick seed, check or remove.
 # The report is in the run summary.
@@ -17,8 +19,8 @@ on:
         default: check
   # The branch that introduced the accounts seeds them when the script changes.
   push:
-    branches: [claude/project-thread-sq7qyk]
-    paths: ['backend/src/bin/test-users.ts', 'backend/src/testUsers/**', 'backend/src/site/browserMatch.ts', '.github/workflows/test-users.yml']
+    branches: [claude/project-thread-sq7qyk, claude/project-thread-n8y2vh]
+    paths: ['backend/src/bin/test-users.ts', 'backend/src/testUsers/**', 'backend/src/site/browserMatch.ts', 'site/**', '.github/workflows/test-users.yml']
 
 concurrency:
   group: test-users
@@ -30,7 +32,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: backend
@@ -38,6 +40,11 @@ jobs:
       SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
       SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRIPE_PAYMENT_LINK: ${{ vars.STRIPE_PAYMENT_LINK }}
+      STRIPE_BILLING_PORTAL_LINK: ${{ vars.STRIPE_BILLING_PORTAL_LINK }}
+      PRICE_LABEL: ${{ vars.PRICE_LABEL }}
+      BROWSER: '1'
+      REPORT_PATH: ${{ github.workspace }}/test-users-report.md
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,6 +53,17 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      - name: Build the site's scripts
+        run: npm run build:site
+      - name: Install Chromium
+        run: npx playwright-core install --with-deps chromium
+      # News and events are public files the live site publishes; the local copy has none.
+      - name: Fetch the published news and events
+        continue-on-error: true
+        run: |
+          for file in news.json events.json; do
+            curl -fsS "https://thougthfullcarrot.github.io/Terra/$file" -o "../site/$file" || true
+          done
       - name: Run
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
@@ -53,3 +71,9 @@ jobs:
             exit 0
           fi
           npm run --silent test-users -- "${{ inputs.command || 'seed' }}"
+      - name: Keep the report
+        if: always() && hashFiles('test-users-report.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-users-report
+          path: test-users-report.md
