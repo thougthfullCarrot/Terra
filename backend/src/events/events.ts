@@ -72,6 +72,11 @@ export function centralIso(local: string): string | null {
 
 // ---- The Events Calendar (WordPress) ----
 
+/** The Events Calendar's iCal exports, tried when the REST API is disabled. */
+export function tribeIcalFeeds(base: string): string[] {
+  return [`${base}/events/?ical=1`, `${base}/events/list/?ical=1`, `${base}/?post_type=tribe_events&ical=1`];
+}
+
 export function tribeUrl(base: string, now: Date): string {
   return `${base}/wp-json/tribe/events/v1/events?${new URLSearchParams({ per_page: '50', start_date: now.toISOString().slice(0, 10) })}`;
 }
@@ -203,11 +208,45 @@ export function parseGrowthZoneDetail(html: string): { title?: string; start: st
 }
 
 function normalizeDate(value: string): string | null {
-  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) {
+  // Keep an explicit offset as written so the local (Central) calendar date survives; converting to UTC
+  // shifts evening events to the next day.
+  const off = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?([+-]\d{2}):?(\d{2})$/.exec(value.trim());
+  if (off) return `${off[1]!.length === 16 ? `${off[1]}:00` : off[1]}${off[2]}:${off[3]}`;
+  if (/^\d{4}-\d{2}-\d{2}T00:00(?::00)?(?:\.0+)?Z$/i.test(value.trim())) return centralIso(value.slice(0, 10)); // date-only serialized as UTC midnight
+  if (/[zZ]$/.test(value)) {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   }
   return centralIso(value);
+}
+
+/** Housekeeping entries ("BOMA CLOSED - Labor Day", office-closure holidays), not real events. */
+export function isClosure(title: string): boolean {
+  return /^\s*(?:[\w&.' ]+\s+)?closed(?:\s*[\u2013\u2014:]|\s*-(?!\w))/i.test(title) || /\boffices?\s+(?:will\s+be\s+)?closed\b/i.test(title);
+}
+
+/** "10.24.26 Foundation Gala" → { date: '2026-10-24', title: 'Foundation Gala' }. */
+export function datePrefix(title: string): { date: string | null; title: string } {
+  const m = /^\s*(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})\s*[-\u2013:|]?\s*(.*)$/.exec(title);
+  if (!m) return { date: null, title };
+  const mo = Number(m[1]), d = Number(m[2]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return { date: null, title };
+  const y = m[3]!.length === 2 ? `20${m[3]}` : m[3]!;
+  return { date: `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`, title: m[4]!.trim() || title };
+}
+
+/** Apply a title's MM.DD.YY prefix: it wins over a scraped start on a different date. */
+export function applyDatePrefix(e: TerraEvent): TerraEvent {
+  const p = datePrefix(e.title);
+  if (!p.date) return e;
+  if (e.start.slice(0, 10) === p.date) return { ...e, title: p.title };
+  const start = centralIso(p.date)!;
+  const end = e.end && e.end.slice(0, 10) >= p.date ? e.end : null;
+  return { ...e, title: p.title, start, end };
+}
+
+function tidy(events: TerraEvent[]): TerraEvent[] {
+  return events.filter((e) => !isClosure(e.title)).map(applyDatePrefix);
 }
 
 export type Fetcher = { json: (url: string) => Promise<unknown>; text: (url: string) => Promise<string> };
@@ -218,7 +257,31 @@ const defaultFetcher: Fetcher = {
 };
 
 export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
-  if (source.kind === 'tribe') return parseTribe((await fetcher.json(tribeUrl(source.base, now))) as { events?: TribeEvent[] }, source);
+  return tidy(await fetchRaw(source, now, fetcher, log));
+}
+
+async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (m: string) => void): Promise<TerraEvent[]> {
+  if (source.kind === 'tribe') {
+    let restError: unknown = null;
+    try {
+      return parseTribe((await fetcher.json(tribeUrl(source.base, now))) as { events?: TribeEvent[] }, source);
+    } catch (error) {
+      restError = error;
+      log(`${source.organizer}: REST API failed (${error instanceof Error ? error.message : String(error)}); trying iCal export.`);
+    }
+    for (const feed of tribeIcalFeeds(source.base)) {
+      try {
+        const text = await fetcher.text(feed);
+        if (!/BEGIN:VCALENDAR/.test(text)) continue;
+        const events = parseIcs(text, source);
+        log(`${source.organizer}: ${events.length} events from ${feed}`);
+        return events;
+      } catch (error) {
+        log(`${source.organizer}: ${feed}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    throw restError instanceof Error ? restError : new Error('no event feed reachable');
+  }
 
   for (const feed of growthZoneFeeds(source.base)) {
     try {

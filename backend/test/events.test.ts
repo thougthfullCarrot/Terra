@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyDatePrefix,
   buildEventsFile,
+  datePrefix,
+  isClosure,
   centralIso,
   EVENT_SOURCES,
   fetchSource,
@@ -134,7 +137,7 @@ describe('GrowthZone (BOMA Dallas)', () => {
   });
 
   it('reads dates from JSON-LD or microdata', () => {
-    expect(parseGrowthZoneDetail(DETAIL_LD)).toEqual({ title: 'Fall Trade Show & Expo', start: '2026-10-28T13:00:00.000Z', end: '2026-10-28T19:00:00.000Z', venue: 'Fair Park' });
+    expect(parseGrowthZoneDetail(DETAIL_LD)).toEqual({ title: 'Fall Trade Show & Expo', start: '2026-10-28T08:00:00-05:00', end: '2026-10-28T14:00:00-05:00', venue: 'Fair Park' });
     expect(parseGrowthZoneDetail(DETAIL_MICRO)).toMatchObject({ start: '2026-11-06T17:30:00-06:00', venue: 'The Rustic' });
     expect(parseGrowthZoneDetail('<p>nothing</p>').start).toBeNull();
   });
@@ -232,5 +235,82 @@ describe('site events.js', () => {
     expect(eventDate('2026-10-14T12:30:00Z')).toBe('Wed, Oct 14 · 7:30 AM');
     expect(eventDate('2026-10-14T00:00:00-05:00')).toBe('Wed, Oct 14');
     expect(eventDate('bad')).toBe('');
+  });
+});
+
+describe('event fixes', () => {
+  it('falls back to the tribe iCal export when REST 404s', async () => {
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'UID:10012-1760000000-1760003600@credahouston.org',
+      'DTSTART;TZID=America/Chicago:20261014T073000',
+      'DTEND;TZID=America/Chicago:20261014T093000',
+      'SUMMARY:Developers\\, Lenders &',
+      '  Brokers Breakfast',
+      'URL:https://credahouston.org/event/breakfast/',
+      'LOCATION:Houstonian Hotel\\, 111 N Post Oak Ln\\, Houston',
+      'END:VEVENT',
+      'BEGIN:VEVENT',
+      'UID:10013',
+      'DTSTART;VALUE=DATE:20261120',
+      'DTEND;VALUE=DATE:20261121',
+      'SUMMARY:Golf Tournament',
+      'URL:https://credahouston.org/event/golf/',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+    const tried: string[] = [];
+    const fetcher: Fetcher = {
+      json: async () => { throw new Error('HTTP 404'); },
+      text: async (url) => { tried.push(url); if (url.includes('/events/?ical=1')) throw new Error('HTTP 404'); return ics; }
+    };
+    const events = await fetchSource(creda, now, fetcher, () => {});
+    expect(tried[0]).toBe('https://credahouston.org/events/?ical=1');
+    expect(tried[1]).toBe('https://credahouston.org/events/list/?ical=1');
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ title: 'Developers, Lenders & Brokers Breakfast', start: '2026-10-14T07:30:00-05:00', venue: 'Houstonian Hotel, 111 N Post Oak Ln, Houston' });
+    expect(events[1]!.start).toBe('2026-11-20T00:00:00-06:00');
+  });
+
+  it('throws when neither REST nor iCal works', async () => {
+    const fetcher: Fetcher = { json: async () => { throw new Error('HTTP 404'); }, text: async () => '<html></html>' };
+    await expect(fetchSource(creda, now, fetcher, () => {})).rejects.toThrow('HTTP 404');
+  });
+
+  it('flags closures', () => {
+    expect(isClosure('BOMA CLOSED - Thanksgiving')).toBe(true);
+    expect(isClosure('Closed - Labor Day')).toBe(true);
+    expect(isClosure('BOMA Offices Closed for Christmas')).toBe(true);
+    expect(isClosure('Foundation Gala')).toBe(false);
+    expect(isClosure('Closed-Door Leasing Roundtable')).toBe(false);
+  });
+
+  it('reads MM.DD.YY title prefixes', () => {
+    expect(datePrefix('10.24.26 Foundation Gala')).toEqual({ date: '2026-10-24', title: 'Foundation Gala' });
+    expect(datePrefix('Gala 2026')).toEqual({ date: null, title: 'Gala 2026' });
+    const base: TerraEvent = { id: 'x', title: '12.09.26 Annual Leadership Orientation', url: 'https://a/b', start: '2026-10-22T08:00:00-05:00', end: '2026-10-22T10:00:00-05:00', city: 'Dallas', organizer: 'BOMA Dallas', venue: null, cost: null };
+    expect(applyDatePrefix(base)).toMatchObject({ title: 'Annual Leadership Orientation', start: '2026-12-09T00:00:00-06:00', end: null });
+    const same = { ...base, title: '10.22.26 Lunch' };
+    expect(applyDatePrefix(same)).toMatchObject({ title: 'Lunch', start: '2026-10-22T08:00:00-05:00' });
+  });
+
+  it('keeps Central dates from GrowthZone detail pages', () => {
+    const ld = (start: string) => `<script type="application/ld+json">${JSON.stringify({ '@type': 'Event', name: 'Gala', startDate: start })}</script>`;
+    expect(parseGrowthZoneDetail(ld('2026-10-24T19:00:00-05:00')).start).toBe('2026-10-24T19:00:00-05:00');
+    expect(parseGrowthZoneDetail(ld('2026-10-24T00:00:00Z')).start).toBe('2026-10-24T00:00:00-05:00');
+    expect(parseGrowthZoneDetail(ld('2026-10-24')).start).toBe('2026-10-24T00:00:00-05:00');
+  });
+
+  it('drops closures and fixes prefixed BOMA events end to end', async () => {
+    const list = '<a href="/events/Details/boma-closed-thanksgiving-111">BOMA CLOSED - Thanksgiving</a><a href="/events/Details/foundation-gala-222">10.24.26 Foundation Gala</a>';
+    const pages: Record<string, string> = {
+      'https://members.bomadallas.org/events/Details/boma-closed-thanksgiving-111': '<span itemprop="startDate" content="2026-11-26"></span>',
+      'https://members.bomadallas.org/events/Details/foundation-gala-222': `<script type="application/ld+json">${JSON.stringify({ '@type': 'Event', name: '10.24.26 Foundation Gala', startDate: '2026-10-24T18:00:00-05:00' })}</script>`
+    };
+    const fetcher: Fetcher = { json: async () => ({}), text: async (url) => { if (url.endsWith('/events')) return list; if (pages[url]) return pages[url]!; throw new Error('404'); } };
+    const events = await fetchSource(boma, now, fetcher, () => {});
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ title: 'Foundation Gala', start: '2026-10-24T18:00:00-05:00' });
   });
 });
