@@ -7,23 +7,18 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - name: Probe round 2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Export events (live run 1)
         run: |
-          UA="Mozilla/5.0 (compatible; TerraEventsBot/1.0; +https://github.com/thougthfullCarrot/Terra)"
-          g() { curl -sSL -A "$UA" -m 20 "$1"; }
-          echo "=== houstonboma robots"; g https://www.houstonboma.org/robots.txt
-          echo "=== houstonboma events links"; g https://www.houstonboma.org/events | grep -oiE 'href="[^"]*event[^"]*"[^>]*>[^<]{0,80}' | sort -u | head -15
-          g https://www.houstonboma.org/events | grep -oiE 'application/ld\+json|"@type":"Event"|ical|\.ics' | sort | uniq -c
-          echo "=== bomafortworth gz"; g https://www.bomafortworth.org/events/ | grep -oiE 'https?://[a-z0-9.-]*(growthzone|chambermaster)[a-z0-9./-]*|href="[^"]*/events/details/[^"]*"' | sort | uniq -c | sort -rn | head -10
-          echo "=== ycran"; g https://www.ycran.org/events | grep -oiE 'https://www\.ycran\.org/(event-details|events?)/[a-z0-9-]+' | sort -u | head -20
-          E=$(g https://www.ycran.org/events | grep -oiE 'https://www\.ycran\.org/event-details/[a-z0-9-]+' | head -1); echo "detail $E"; [ -n "$E" ] && g "$E" | grep -oiE '<script type="application/ld\+json">.{0,700}' | head -3
-          g https://www.ycran.org/events | grep -oiE '"title":"[^"]{0,80}","[^}]{0,300}' | head -10
-          echo "=== nawic"; g https://www.nawicsatx.org/events | grep -oiE 'https://www\.nawicsatx\.org/(event-details|events-1)/[a-z0-9-]+' | sort -u | head -10
-          E=$(g https://www.nawicsatx.org/events | grep -oiE 'https://www\.nawicsatx\.org/(event-details|events-1)/[a-z0-9-]+' | head -1); [ -n "$E" ] && g "$E" | grep -oiE '<script type="application/ld\+json">.{0,500}' | head -2
-          echo "=== recouncil"; g https://recouncil.com/calendar/ | grep -oiE '<script type="application/ld\+json">.{0,1500}' | head -2
-          echo "=== acg"; g https://www.acg.org/robots.txt | head -30; g https://www.acg.org/asa/events/acg-asa-october-27th-lunch-sa | grep -oiE '<script type="application/ld\+json">.{0,600}|itemprop="startDate"[^>]*|class="[^"]*date[^"]*"[^>]*>[^<]{0,60}' | head -5
-          echo "=== fwi"; g https://www.fwitexas.org/robots.txt; g https://www.fwitexas.org/events | grep -oiE 'href="[^"]*event-[0-9]+[^"]*"[^>]*>[^<]{0,60}' | head; g "https://www.fwitexas.org/event-6833214" | grep -oiE 'ical[^"]{0,80}|application/ld\+json.{0,300}' | head -3
-          echo "=== elpaso"; g https://members.elpaso.org/events | grep -oiE 'href="[^"]*events/details/[^"]*"[^>]*>[^<]{0,70}' | sort -u | head -12
-          echo "=== nb"; g https://newbraunfelschamber.growthzoneapp.com/events | grep -oiE 'href="[^"]*events/details/[^"]*"[^>]*>[^<]{0,70}' | sort -u | head -12
-          echo "=== nb detail"; g "https://newbraunfelschamber.growthzoneapp.com/events/Details/gnbedf-luncheon-q4-2026-state-of-the-city-1652649" | grep -oiE 'application/ld\+json.{0,400}|itemprop="startDate"[^>]*' | head -3
+          npm run --silent export:events -- --out /tmp/events.json --previous /nonexistent 2>&1 | grep -vE '^  20'
+          jq -c '[.cities[] | {(.city): (.events | length)}] | add' /tmp/events.json
+          jq -c '.sources' /tmp/events.json
+          jq -r '.cities[].events[] | "\(.city) | \(.start[0:16]) | \(.organizer) | \(.title)"' /tmp/events.json

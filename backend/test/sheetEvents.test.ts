@@ -88,3 +88,44 @@ describe('committed hand list', () => {
     expect(mergeManual(listed, [], prev)).toHaveLength(24);
   });
 });
+
+describe('new event sources', async () => {
+  const ev = await import('../src/events/events.js');
+  const src = { key: 'x', organizer: 'X', city: 'San Antonio' as const, kind: 'pages' as const, base: 'https://x.org' };
+
+  it('reads schema.org events from JSON-LD, including @graph', () => {
+    const html = `<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite"},{"@type":"Event","name":"Market &amp; Mixer","url":"/events/mixer","startDate":"2026-10-07T17:30:00-05:00","location":{"name":"Alamo Caf\\u00e9"}}]}</script>
+      <script type="application/ld+json">[{"@type":"BusinessEvent","name":"No url","startDate":"2026-11-01"}]</script><script type="application/ld+json">{bad</script>`;
+    const out = ev.parseJsonLdEvents(html, src, 'https://x.org/calendar/');
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ title: 'Market & Mixer', url: 'https://x.org/events/mixer', start: '2026-10-07T17:30:00-05:00', venue: 'Alamo Café' });
+    expect(out[1]!.url).toBe('https://x.org/calendar/');
+  });
+
+  it('finds detail links one level under the prefix', () => {
+    const html = '<a href="/events/">all</a><a href="/events/gala-2026">g</a><a href="/events/gala-2026">g</a><a href="/events/?PastEvents=1">p</a><a href="https://other.org/events/x">o</a><a href="/events/a/b">d</a>';
+    expect(ev.detailLinks(html, 'https://x.org/events/', '/events/')).toEqual(['https://x.org/events/gala-2026']);
+  });
+
+  it('fetches a pages source and keeps only relevant chamber events', async () => {
+    const pages = { ...src };
+    const fetcher = {
+      json: async () => ({}),
+      text: async (url: string) =>
+        url.endsWith('/events')
+          ? '<a href="/events/one">1</a>'
+          : '<script type="application/ld+json">{"@type":"Event","name":"Fall Mixer","startDate":"2026-10-20T17:00:00-05:00"}</script>'
+    };
+    const got = await ev.fetchSource(pages, now, fetcher, () => {});
+    expect(got).toMatchObject([{ title: 'Fall Mixer', url: 'https://x.org/events/one' }]);
+    expect(ev.RELEVANT.test('Ribbon Cutting: Pest Control')).toBe(false);
+    expect(ev.RELEVANT.test('Membership Mixer')).toBe(true);
+    expect(ev.RELEVANT.test('State of the City Luncheon')).toBe(true);
+  });
+
+  it('merges hand rows with the same event from a feed', () => {
+    const a = { id: 'a', title: 'A', url: 'https://members.metrosa.com/events/details/x-1?calendarMonth=2026-10-01', start: '2026-10-22T11:00:00-05:00', end: null, city: 'San Antonio' as const, organizer: 'M', venue: null, cost: null };
+    const b = { ...a, id: 'b', url: 'https://members.metrosa.com/events/Details/x-1?sourceTypeId=Hub', source: MANUAL_SOURCE };
+    expect(ev.upcoming([a, b], now)).toHaveLength(1);
+  });
+});
