@@ -163,7 +163,8 @@ function render() {
     $('m-rates').replaceChildren();
     $('m-chart').replaceChildren();
     $('m-body').replaceChildren(toolView(tool));
-    $('m-sources').replaceChildren(sources());
+    // The broker and parcel tools carry their own source notes.
+    $('m-sources').replaceChildren(...(['leases', 'reports', 'sites'].includes(tool) ? [] : [sources()]));
     return;
   }
 
@@ -572,7 +573,7 @@ function sources() {
     el(
       'p',
       '',
-      'Office, industrial and retail vacancy and asking rents come from brokerage research that is licensed, so Terra shows the public figures that drive them instead: who is hiring in each property type, and how tight the rental market is. Tax rates are for a typical property inside each city; a parcel in another school district or a utility district pays a different total.'
+      'Office, industrial and retail vacancy and asking rents are under Lease rates, read from the free quarterly reports brokerages publish. Tax rates are for a typical property inside each city; a parcel in another school district or a utility district pays a different total.'
     )
   );
   return box;

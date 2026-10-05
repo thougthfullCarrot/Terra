@@ -192,6 +192,30 @@ jobs:
           path: site/events.json
           key: events-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Parcel values change once a year, so the site finder's list is rebuilt
+      # once a week; in between, the cached file is published as is.
+      - name: Restore the site finder list
+        uses: actions/cache/restore@v4
+        with:
+          path: site/sites.json
+          key: sites-none
+          restore-keys: sites-
+
+      - name: Export the site finder list
+        id: sites
+        # A parcel map outage must never hold back the job list.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run --silent export:sites -- --max-age-days 7 2>&1 | tee /tmp/sites.log
+
+      - name: Cache the site finder list
+        if: steps.sites.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: site/sites.json
+          key: sites-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Summarize
         if: always()
         run: |

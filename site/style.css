@@ -2903,3 +2903,39 @@ th[aria-sort] .sort-button {
   gap: 4px 12px;
   font-size: 13.5px;
 }
+
+.sites-filters {
+  margin-bottom: 12px;
+  padding: 18px;
+}
+
+.sites-filters .metric-pills {
+  margin-bottom: 4px;
+}
+
+.sites-table .city-col {
+  min-width: 220px;
+}
+
+.site-address {
+  display: block;
+  font-weight: 500;
+}
+
+.sites-table .metro {
+  margin-left: 0;
+}
+
+.site-zoning {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.sites-table td .metric-meta {
+  display: block;
+}
+
+.sites-more {
+  margin-top: 12px;
+}

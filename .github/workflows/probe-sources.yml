@@ -14,5 +14,7 @@ jobs:
           node-version: 22
       - run: npm ci --silent
         working-directory: backend
+      - run: npm run --silent export:sites -- --out /tmp/sites.json
+        working-directory: backend
       - run: npx tsx probe.mjs
         working-directory: backend

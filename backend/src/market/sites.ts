@@ -54,6 +54,8 @@ export interface SiteSource {
   /** SQL for "inside this city"; null when the layer is already one city. */
   inCity: string | null;
   code: string;
+  /** State codes per use where this district differs from USE_CODES. */
+  codes?: Partial<Record<SiteUse, string[]>>;
   areaField: string;
   /** Land area in square feet from a record (some layers give acres). */
   area: (a: Attributes) => number | null;
@@ -90,7 +92,8 @@ export const SITE_SOURCES: SiteSource[] = [
       built: positive(num(a.YR_IMPR)),
       buildingSqft: positive(num(a.TOTAL_BUILDING_AREA)),
       flood: str(a.FLOOD_ZONE) || null,
-      url: a.TAX_ID ? `https://hcad.org/property-search/property-details?acct=${encodeURIComponent(str(a.TAX_ID))}` : null,
+      // HCAD's record pages sit behind a bot check, so there is no deep link; the account number is shown instead.
+      url: null,
       owner: str(a.OWNER_LIST)
     }),
     zoning: null,
@@ -125,6 +128,8 @@ export const SITE_SOURCES: SiteSource[] = [
     page: 'https://www.bcad.org/',
     inCity: "Situs_Zip LIKE '782%'",
     code: 'State_cd',
+    // Bexar files all vacant platted land as C1, not C2/C3.
+    codes: { land: ['C1'] },
     areaField: 'Land_acres',
     area: (a) => {
       const acres = positive(num(a.Land_acres));
@@ -150,6 +155,8 @@ export const SITE_SOURCES: SiteSource[] = [
     page: 'https://traviscad.org/',
     inCity: "situs_city='AUSTIN'",
     code: 'land_state_cd',
+    // Travis files vacant land as C1 too.
+    codes: { land: ['C1'] },
     areaField: 'GIS_acres',
     area: (a) => {
       const acres = positive(num(a.GIS_acres)) ?? positive(num(a.tcad_acres));
@@ -180,7 +187,7 @@ export const MAX_SQFT = 100 * SQFT_PER_ACRE;
 
 /** The query for one use: in the city, the use's codes, a buildable size, biggest first. */
 export function siteQuery(source: SiteSource, use: SiteUse, count: number): URLSearchParams {
-  const codes = USE_CODES[use].map((c) => `${source.code} LIKE '${c}%'`).join(' OR ');
+  const codes = (source.codes?.[use] ?? USE_CODES[use]).map((c) => `${source.code} LIKE '${c}%'`).join(' OR ');
   const area =
     source.areaField === 'Land_acres' || source.areaField === 'GIS_acres'
       ? `${source.areaField} >= ${MIN_SQFT / SQFT_PER_ACRE} AND ${source.areaField} <= ${MAX_SQFT / SQFT_PER_ACRE}`
