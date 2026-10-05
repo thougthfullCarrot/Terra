@@ -2,8 +2,8 @@
  * Build the website's market data file from BLS, the Census, Zillow Research,
  * Apartment List, the Census Building Permits Survey, FRED interest rates,
  * Census population estimates, Texas Comptroller tax rates, HUD Opportunity
- * Zones and TxDOT highway projects. All free; only the Census API needs a
- * (free) key.
+ * Zones, TxDOT highway projects and TDLR's register of current development
+ * projects. All free; only the Census API needs a (free) key.
  *
  *   npm run export:market                     # writes ../site/market.json
  *   npm run export:market -- --out <path> --previous <path> --appraisal <path>
@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchApartmentList } from '../market/apartmentList.js';
 import type { AppraisalFile } from '../market/appraisal.js';
 import { fetchBls } from '../market/bls.js';
+import { fetchDevelopments } from '../market/developments.js';
 import { fetchRates } from '../market/fred.js';
 import { fetchOpportunityZones } from '../market/opportunityZones.js';
 import { fetchPep } from '../market/pep.js';
@@ -119,6 +120,12 @@ async function main(): Promise<void> {
     }
   }
 
+  // Last so a slow TDLR day cannot hold up the other sources; projects read on
+  // an earlier build keep their page and map point.
+  const developments = await attempt('TDLR TABS', () =>
+    fetchDevelopments(cities, { now, previous: previous?.developments?.projects, log: (line) => console.log(`TDLR TABS: ${line}`) })
+  );
+
   const appraisal = await readFile(resolve(flag('--appraisal') ?? DEFAULT_APPRAISAL), 'utf8')
     .then((text) => JSON.parse(text) as AppraisalFile)
     .catch(() => null);
@@ -142,6 +149,7 @@ async function main(): Promise<void> {
     }),
     previous
   );
+  if (developments?.projects.length) snapshot.developments = developments;
 
   for (const market of snapshot.markets) {
     const missing = Object.entries(market.values)

@@ -48,3 +48,20 @@ export function readMarketHash(
 ): MarketState;
 export function writeMarketHash(state: Partial<MarketState>): string;
 export function pruneSnapshot<T extends { groups: Group[]; metrics: Metric[]; markets: Market[] }>(snapshot: T): T;
+
+export interface Development {
+  id: string;
+  city: string;
+  name: string;
+  cost: number;
+  isPublic: boolean;
+  lat: number | null;
+  lng: number | null;
+}
+export function cityProjects<T extends Pick<Development, 'city' | 'cost' | 'isPublic'>>(
+  projects: T[] | null | undefined,
+  city: string,
+  options?: { privateOnly?: boolean }
+): T[];
+export function markerRadius(cost: number, maxCost: number): number;
+export function projectDates(start: string | null | undefined, end: string | null | undefined): string;

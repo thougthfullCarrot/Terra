@@ -16,6 +16,7 @@ import {
   sortMarkets,
   writeMarketHash
 } from './market.js';
+import { developmentMap, disposeMap } from './devmap.js';
 import { readNewsHash } from './news.js';
 
 const $ = (id) => document.getElementById(id);
@@ -26,12 +27,15 @@ let snapshot = null;
 let loading = null;
 let state = null;
 let bound = false;
+/** The city the all-markets development map shows. */
+let mapCity = null;
 
 /** Set where the data comes from. null (signed out) hides any data already drawn. */
 export function setMarketLoader(next) {
   loader = next;
   snapshot = null;
   loading = null;
+  disposeMap();
   $('m-body').replaceChildren();
   $('m-chart').replaceChildren();
   $('m-rates').replaceChildren();
@@ -139,8 +143,9 @@ function render() {
   $('m-order-label').hidden = Boolean(state.city);
 
   $('m-blurb').textContent = group.blurb ?? '';
+  disposeMap();
   $('m-rates').replaceChildren(rates());
-  $('m-chart').replaceChildren(state.city ? '' : chart(group));
+  $('m-chart').replaceChildren(...(state.city ? [] : group.key === 'development' ? [devMap(), chart(group)] : [chart(group)]));
   $('m-body').replaceChildren(state.city ? cityView(state.city, group) : table(group));
   if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
@@ -332,7 +337,7 @@ function cityView(city, focus) {
   const back = el('a', 'link', '← All markets');
   back.href = writeMarketHash({ ...state, city: '' });
   head.append(back, el('h2', 'role', market.city), el('p', 'firm', market.metro ?? ''));
-  frag.append(head);
+  frag.append(head, devMap(city));
 
   // The chosen property type first, then the rest.
   const groups = [focus, ...snapshot.groups.filter((g) => g.key !== focus.key)];
@@ -422,6 +427,28 @@ function rates() {
   }
   box.append(head, grid);
   return box;
+}
+
+/**
+ * The development map: one city's on its own page, or any city's with a
+ * switcher on the all-markets development view. Nothing until a build has
+ * read the state's project register.
+ */
+function devMap(city) {
+  const data = snapshot.developments;
+  if (!data?.projects?.length) return '';
+  const cities = snapshot.markets.map((m) => m.city).filter((c) => data.projects.some((p) => p.city === c));
+  if (city) return cities.includes(city) ? developmentMap({ data, cities: [city], city }) : '';
+  if (!cities.includes(mapCity)) mapCity = cities[0];
+  return developmentMap({
+    data,
+    cities,
+    city: mapCity,
+    onCity: (next) => {
+      mapCity = next;
+      render();
+    }
+  });
 }
 
 /** The Texas counties that added the most people, on the migration view. */
