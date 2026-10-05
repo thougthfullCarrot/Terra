@@ -1,0 +1,51 @@
+# Temporary: runs the market export once against the live sources and prints
+# which ones returned data. Remove after checking the new sources.
+name: Probe market sources
+
+on:
+  push:
+    branches: [claude/more-market-data-gnlj26]
+    paths: [.github/workflows/probe-sources.yml]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Export market data
+        continue-on-error: true
+        env:
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+          HUD_API_TOKEN: ${{ secrets.HUD_API_TOKEN }}
+        run: |
+          set -o pipefail
+          npm run --silent export:market -- --out /tmp/market.json 2>&1 | tee /tmp/market.log
+
+      - name: Summary of sources
+        if: always()
+        run: |
+          echo "## Source log lines" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -E '^(BLS|Census|Zillow|Apartment List|FRED|Tax rates|Opportunity|TxDOT [A-Z]|Redfin|Realtor|FHFA|HUD|TDLR TABS: (found|read)|Appraisal)' /tmp/market.log | tee -a "$GITHUB_STEP_SUMMARY" || true
+          echo "## Filled figures per new metric" | tee -a "$GITHUB_STEP_SUMMARY"
+          node -e '
+            const s = require("/tmp/market.json");
+            const keys = ["redfinPrice","redfinDom","rdcListPrice","rdcPriceReduced","hpi","hpiGrowth5y","fmr0","fmr2","fmr4","lihtcProjects","lihtcUnits"];
+            for (const k of keys) console.log(k + ": " + s.markets.map((m) => m.city + "=" + (m.values[k] ?? "-")).join(", "));
+            console.log("Dallas Fed: " + JSON.stringify((s.rates || []).find((r) => r.key === "BACTSAMFRBDAL") || null));
+          ' 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true

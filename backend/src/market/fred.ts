@@ -15,7 +15,9 @@ export interface RateSeries {
   /** One line on what the rate is and why a CRE reader watches it. */
   note: string;
   /** How often FRED publishes it, for the period label. */
-  frequency: 'daily' | 'weekly' | 'quarterly';
+  frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  /** 'index' for a survey diffusion index rather than a percent. */
+  format?: 'index';
 }
 
 export const RATE_SERIES: RateSeries[] = [
@@ -68,6 +70,14 @@ export const RATE_SERIES: RateSeries[] = [
     note:
       'Net share of banks tightening standards on loans for existing office, retail, industrial and other non-residential property. Above zero means tighter.',
     frequency: 'quarterly'
+  },
+  {
+    id: 'BACTSAMFRBDAL',
+    label: 'Texas manufacturing activity',
+    note:
+      'Dallas Fed Texas Manufacturing Outlook Survey: general business activity index (share of Texas manufacturers reporting better minus worse). Above zero means expanding.',
+    frequency: 'monthly',
+    format: 'index'
   }
 ];
 
@@ -98,6 +108,8 @@ export interface RateReading {
   value: number;
   /** Change from a year earlier, in percentage points; null without a year of history. */
   change: number | null;
+  /** 'index' for a diffusion index (shown without a percent sign). */
+  format?: 'index';
   /** e.g. "Oct 2, 2026", "Q3 2026". */
   period: string;
   url: string;
@@ -108,6 +120,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export function periodLabel(date: string, frequency: RateSeries['frequency']): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   if (frequency === 'quarterly') return `Q${Math.floor((month - 1) / 3) + 1} ${year}`;
+  if (frequency === 'monthly') return `${MONTHS[month - 1]} ${year}`;
   if (frequency === 'weekly') return `week of ${MONTHS[month - 1]} ${day}, ${year}`;
   return `${MONTHS[month - 1]} ${day}, ${year}`;
 }
@@ -128,7 +141,8 @@ export function readRate(series: RateSeries, observations: Observation[]): RateR
     value: last.value,
     change: usable ? Math.round((last.value - before.value) * 100) / 100 : null,
     period: periodLabel(last.date, series.frequency),
-    url: fredPageUrl(series.id)
+    url: fredPageUrl(series.id),
+    ...(series.format ? { format: series.format } : {})
   };
 }
 

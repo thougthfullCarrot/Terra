@@ -22,6 +22,11 @@ import type { PermitResult } from './permits.js';
 import type { TaxRateResult } from './taxRates.js';
 import type { DistrictProjects } from './txdot.js';
 import type { ZillowResult } from './zillow.js';
+import type { RedfinReading } from './redfin.js';
+import type { RealtorReading } from './realtor.js';
+import type { HpiReading } from './fhfa.js';
+import type { FmrReading } from './hudFmr.js';
+import type { LihtcCount } from './lihtc.js';
 
 /**
  * The market data page's file: one row per Terra city, a value per metric.
@@ -52,7 +57,10 @@ export interface MarketMetric {
     | 'Appraisal districts'
     | 'Texas Comptroller'
     | 'HUD'
-    | 'TxDOT';
+    | 'TxDOT'
+    | 'Redfin'
+    | 'Realtor.com'
+    | 'FHFA';
   /** One line on what the figure is, shown on hover and in the method notes. */
   note: string;
 }
@@ -362,6 +370,31 @@ export const METRICS: MarketMetric[] = [
     note: "Estimated construction cost of state highway projects in the area's TxDOT district that are under construction or about to start."
   },
   ...appraisalMetrics(),
+  { key: 'redfinPrice', label: 'Median sale price (Redfin)', unit: 'usd', better: null, source: 'Redfin', note: 'Median price of homes sold in the city (all residential), latest rolling three months.' },
+  { key: 'redfinPriceGrowth', label: 'Sale price growth (Redfin)', unit: 'change', better: 'high', source: 'Redfin', note: 'Median sale price vs. a year earlier.' },
+  { key: 'redfinInventory', label: 'Homes for sale (Redfin)', unit: 'count', better: null, source: 'Redfin', note: 'Active listings in the city at the end of the period.' },
+  { key: 'redfinDom', label: 'Days on market (Redfin)', unit: 'count', better: 'low', source: 'Redfin', note: 'Median days from listing to contract for homes sold.' },
+  { key: 'redfinSaleToList', label: 'Sale-to-list price (Redfin)', unit: 'rate', better: 'high', source: 'Redfin', note: 'Average sale price as a share of the last list price. Over 100% means bidding above asking.' },
+  { key: 'rdcListPrice', label: 'Median listing price (Realtor.com)', unit: 'usd', better: null, source: 'Realtor.com', note: 'Median asking price of homes listed in the metro, latest month. Dallas and Fort Worth share the Dallas-Fort Worth metro figure.' },
+  { key: 'rdcListings', label: 'Active listings (Realtor.com)', unit: 'count', better: null, source: 'Realtor.com', note: 'Homes listed for sale in the metro, latest month.' },
+  { key: 'rdcDom', label: 'Days on market (Realtor.com)', unit: 'count', better: 'low', source: 'Realtor.com', note: 'Median days listings in the metro have been on the market.' },
+  { key: 'rdcPriceReduced', label: 'Listings with a price cut (Realtor.com)', unit: 'rate', better: 'low', source: 'Realtor.com', note: 'Share of metro listings that cut their asking price. Higher means a softer market.' },
+  { key: 'hpi', label: 'House price index (FHFA)', unit: 'count', better: null, source: 'FHFA', note: 'FHFA all-transactions house price index for the metro or metro division (1995 Q1 = 100), from repeat sales and refinance appraisals.' },
+  { key: 'hpiGrowth', label: 'House prices, 1-year change (FHFA)', unit: 'change', better: 'high', source: 'FHFA', note: 'FHFA index vs. the same quarter a year earlier.' },
+  { key: 'hpiGrowth5y', label: 'House prices, 5-year change (FHFA)', unit: 'change', better: 'high', source: 'FHFA', note: 'FHFA index vs. the same quarter five years earlier.' },
+  ...['Efficiency', 'One-bedroom', 'Two-bedroom', 'Three-bedroom', 'Four-bedroom'].map(
+    (label, beds): MarketMetric => ({
+      key: `fmr${beds}`,
+      label: `Fair Market Rent, ${label.toLowerCase()}`,
+      unit: 'usd',
+      better: null,
+      source: 'HUD',
+      note: `HUD Fair Market Rent for a ${label.toLowerCase()} unit in the metro FMR area: the rent ceiling Housing Choice Vouchers are set from (rent plus utilities, 40th percentile).`
+    })
+  ),
+  { key: 'lihtcProjects', label: 'LIHTC properties', unit: 'count', better: null, source: 'HUD', note: 'Low-Income Housing Tax Credit properties placed in service in the metro (HUD LIHTC database).' },
+  { key: 'lihtcUnits', label: 'LIHTC low-income units', unit: 'count', better: null, source: 'HUD', note: 'Low-income units in those LIHTC properties.' },
+  { key: 'lihtcRecent', label: 'LIHTC properties, last 5 years', unit: 'count', better: null, source: 'HUD', note: 'LIHTC properties in the metro placed in service in the last five years.' },
   {
     key: 'cadNewConstruction',
     label: 'New construction added to the roll',
@@ -422,6 +455,8 @@ export const GROUPS: MarketGroup[] = [
       'zoriGrowth',
       'multifamilyPermitUnits',
       ...cad('Apartment', 'Growth', 'Value', 'LandPsf', 'LandPsfMedian', 'Total'),
+      'fmr1',
+      'fmr2',
       'rentalVacancy',
       'medianRent',
       'rentGrowth',
@@ -432,7 +467,45 @@ export const GROUPS: MarketGroup[] = [
     key: 'affordable',
     label: 'Affordable housing',
     blurb: 'How many renters are stretched by housing costs: the demand behind LIHTC, workforce and public housing.',
-    metrics: ['rentBurdened', 'rentSeverelyBurdened', 'medianRent', 'rentGrowth', 'medianIncome', 'renterHouseholds', 'renterShare', 'rentalVacancy']
+    metrics: [
+      'rentBurdened',
+      'rentSeverelyBurdened',
+      'fmr0',
+      'fmr1',
+      'fmr2',
+      'fmr3',
+      'fmr4',
+      'lihtcProjects',
+      'lihtcUnits',
+      'lihtcRecent',
+      'medianRent',
+      'rentGrowth',
+      'medianIncome',
+      'renterHouseholds',
+      'renterShare',
+      'rentalVacancy'
+    ]
+  },
+  {
+    key: 'housing',
+    label: 'For-sale housing',
+    blurb: 'Home prices, listings and how fast homes sell: the pulse of homebuilding, land and build-to-rent.',
+    metrics: [
+      'redfinPrice',
+      'redfinPriceGrowth',
+      'redfinSaleToList',
+      'redfinDom',
+      'redfinInventory',
+      'rdcListPrice',
+      'rdcListings',
+      'rdcDom',
+      'rdcPriceReduced',
+      'hpiGrowth',
+      'hpiGrowth5y',
+      'hpi',
+      'zhvi',
+      'zhviGrowth'
+    ]
   },
   {
     key: 'development',
@@ -523,6 +596,36 @@ export const SOURCES: MarketSnapshot['sources'] = [
       'Every commercial and public building project in Texas over $50,000 registers here before construction, with its address, owner and cost. The map shows each city\'s biggest new buildings and additions registered in the last year, placed with the free Census geocoder.'
   },
   {
+    name: 'Redfin Data Center',
+    url: 'https://www.redfin.com/news/data-center/',
+    detail: 'City market tracker: median sale price, homes for sale, days on market and sale-to-list ratio, rolling three months. Updated monthly.'
+  },
+  {
+    name: 'Realtor.com Economic Research',
+    url: 'https://www.realtor.com/research/data/',
+    detail: 'Monthly inventory core metrics by metro: median listing price, active listings, days on market and price cuts.'
+  },
+  {
+    name: 'FHFA House Price Index',
+    url: 'https://www.fhfa.gov/data/hpi',
+    detail: 'All-transactions house price index by metro and metropolitan division. Updated quarterly.'
+  },
+  {
+    name: 'HUD Fair Market Rents',
+    url: 'https://www.huduser.gov/portal/datasets/fmr.html',
+    detail: 'Fair Market Rents by bedroom count for each metro FMR area, from the HUD User API. Updated each fiscal year.'
+  },
+  {
+    name: 'HUD LIHTC database',
+    url: 'https://www.huduser.gov/portal/datasets/lihtc.html',
+    detail: 'Every Low-Income Housing Tax Credit property placed in service, with units and year. Updated yearly.'
+  },
+  {
+    name: 'Federal Reserve Bank of Dallas, Texas Business Outlook Surveys (via FRED)',
+    url: 'https://www.dallasfed.org/research/surveys/tmos',
+    detail: 'Texas Manufacturing Outlook Survey general business activity index. Updated monthly.'
+  },
+  {
     name: 'County appraisal districts (Harris, Dallas, Tarrant, Travis)',
     url: 'https://comptroller.texas.gov/taxes/property-tax/county-directory/',
     detail:
@@ -543,6 +646,14 @@ export interface PropertyData {
   zones?: Map<string, number> | null;
   /** TxDOT projects per district name. */
   txdot?: Map<string, DistrictProjects> | null;
+  redfin?: Map<City, RedfinReading> | null;
+  /** Realtor.com readings per CBSA code. */
+  realtor?: Map<string, RealtorReading> | null;
+  /** FHFA index per metro or division code. */
+  fhfa?: Map<string, HpiReading> | null;
+  fmr?: Map<City, FmrReading> | null;
+  /** LIHTC counts per metro area code. */
+  lihtc?: Map<string, LihtcCount> | null;
 }
 
 /** Every BLS series the snapshot reads, for one request batch. */
@@ -694,6 +805,35 @@ export function buildMarketSnapshot(
     const asOfToday = `${metro.txdotDistrict} district, ${now.toISOString().slice(0, 10)}`;
     set('txdotPlanned', roads ? roads.planned : null, roads ? asOfToday : null);
     set('txdotUnderway', roads ? roads.underway : null, roads ? asOfToday : null);
+
+    const sale = property.redfin?.get(metro.city);
+    const salePeriod = sale?.period ?? null;
+    set('redfinPrice', sale?.medianSalePrice, salePeriod);
+    set('redfinPriceGrowth', sale?.medianSalePriceYoy, salePeriod);
+    set('redfinInventory', sale?.inventory, salePeriod);
+    set('redfinDom', sale?.medianDom, salePeriod);
+    set('redfinSaleToList', sale?.saleToList, salePeriod);
+
+    const listing = property.realtor?.get(metro.census.msa);
+    const listPeriod = listing ? (metro.census.division ? `${listing.period}, DFW metro` : listing.period) : null;
+    set('rdcListPrice', listing?.medianListingPrice, listPeriod);
+    set('rdcListings', listing?.activeListings, listPeriod);
+    set('rdcDom', listing?.medianDom, listPeriod);
+    set('rdcPriceReduced', listing?.priceReducedShare, listPeriod);
+
+    const hpi = property.fhfa?.get(metro.area);
+    set('hpi', hpi?.index, hpi?.period ?? null);
+    set('hpiGrowth', hpi?.change1y, hpi?.period ?? null);
+    set('hpiGrowth5y', hpi?.change5y, hpi?.period ?? null);
+
+    const fmr = property.fmr?.get(metro.city);
+    fmr?.rents.forEach((rent, beds) => set(`fmr${beds}`, rent, fmr.period));
+
+    const lihtc = property.lihtc?.get(metro.area);
+    const lihtcPeriod = lihtc ? `HUD database, ${now.getUTCFullYear()}` : null;
+    set('lihtcProjects', lihtc?.projects, lihtcPeriod);
+    set('lihtcUnits', lihtc?.units, lihtcPeriod);
+    set('lihtcRecent', lihtc?.recentProjects, lihtcPeriod);
 
     for (const metric of METRICS) {
       values[metric.key] ??= null;

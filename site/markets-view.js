@@ -411,7 +411,7 @@ function rates() {
   const head = el('div', 'rates-head');
   const title = el('h3', 'group-title', 'Interest rates and lending');
   title.id = 'm-rates-title';
-  head.append(title, el('p', 'group-blurb', 'National figures that set what every deal can borrow at. Change is from a year earlier.'));
+  head.append(title, el('p', 'group-blurb', 'National figures that set what every deal can borrow at, plus the Dallas Fed\'s Texas manufacturing survey. Change is from a year earlier.'));
   const grid = el('div', 'rates-grid');
   for (const rate of list) {
     const tile = el('a', 'rate-tile');
@@ -422,7 +422,11 @@ function rates() {
     const survey = /tightening/i.test(rate.label);
     tile.append(
       el('span', 'rate-label', rate.label),
-      el('span', 'rate-value', survey ? formatValue(rate.value, 'rate') : formatValue(rate.value, 'taxRate')),
+      el(
+        'span',
+        'rate-value',
+        rate.format === 'index' ? (Math.round(rate.value * 10) / 10).toFixed(1) : survey ? formatValue(rate.value, 'rate') : formatValue(rate.value, 'taxRate')
+      ),
       el('span', 'rate-change', rate.change == null ? rate.period : `${formatPoints(rate.change)} vs. a year ago · ${rate.period}`)
     );
     grid.append(tile);

@@ -3,7 +3,9 @@
  * Apartment List, the Census Building Permits Survey, FRED interest rates,
  * Census population estimates, Texas Comptroller tax rates, HUD Opportunity
  * Zones, TxDOT highway projects and TDLR's register of current development
- * projects. All free; only the Census API needs a (free) key.
+ * projects, plus Redfin, Realtor.com, FHFA and HUD (Fair Market Rents and
+ * LIHTC). All free; the Census API needs a (free) key, and HUD Fair Market
+ * Rents need HUD_API_TOKEN (free) or are skipped.
  *
  *   npm run export:market                     # writes ../site/market.json
  *   npm run export:market -- --out <path> --previous <path> --appraisal <path>
@@ -34,6 +36,11 @@ import { fetchAcs } from '../market/census.js';
 import { METROS } from '../market/metros.js';
 import { fetchPermits } from '../market/permits.js';
 import { fetchZillow } from '../market/zillow.js';
+import { fetchRedfin } from '../market/redfin.js';
+import { fetchRealtor } from '../market/realtor.js';
+import { fetchFhfa } from '../market/fhfa.js';
+import { fetchHudFmr } from '../market/hudFmr.js';
+import { fetchLihtc } from '../market/lihtc.js';
 import { blsSeriesFor, buildMarketSnapshot, filledCount, fillFromPrevious, type MarketSnapshot } from '../market/snapshot.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -120,6 +127,24 @@ async function main(): Promise<void> {
     }
   }
 
+  const hudToken = process.env.HUD_API_TOKEN?.trim();
+  if (!hudToken) console.log('HUD Fair Market Rents: HUD_API_TOKEN not set; skipped.');
+  const [redfin, realtor, fhfa, fmrResult, lihtc] = await Promise.all([
+    attempt('Redfin', () => fetchRedfin(cities)),
+    attempt('Realtor.com', () => fetchRealtor(METROS)),
+    attempt('FHFA', () => fetchFhfa(METROS.map((m) => m.area))),
+    hudToken ? attempt('HUD Fair Market Rents', () => fetchHudFmr(METROS, hudToken)) : Promise.resolve(null),
+    attempt('HUD LIHTC', () => fetchLihtc(METROS, { now }))
+  ]);
+  if (redfin) console.log(`Redfin: ${[...redfin].map(([city, r]) => `${city} ${r.period} $${r.medianSalePrice ?? '?'}`).join(', ') || 'no cities'}`);
+  if (realtor) console.log(`Realtor.com: ${[...realtor].map(([cbsa, r]) => `${cbsa} ${r.period} $${r.medianListingPrice ?? '?'}`).join(', ') || 'no metros'}`);
+  if (fhfa) console.log(`FHFA: ${[...fhfa].map(([code, r]) => `${code} ${r.period} ${r.index}`).join(', ') || 'no metros'}`);
+  if (fmrResult) {
+    console.log(`HUD Fair Market Rents: ${[...fmrResult.readings].map(([city, r]) => `${city} ${r.period} 2BR $${r.rents[2] ?? '?'}`).join(', ') || 'no areas'}`);
+    if (fmrResult.failed.length) console.error(`HUD Fair Market Rents: not read: ${fmrResult.failed.join(', ')}`);
+  }
+  if (lihtc) console.log(`HUD LIHTC: ${[...lihtc].map(([area, c]) => `${area} ${c.projects} properties, ${c.units} units`).join(', ') || 'no metros'}`);
+
   // Last so a slow TDLR day cannot hold up the other sources; projects read on
   // an earlier build keep their page and map point.
   const developments = await attempt('TDLR TABS', () =>
@@ -145,7 +170,12 @@ async function main(): Promise<void> {
       population,
       taxes,
       zones,
-      txdot: txdot?.districts ?? null
+      txdot: txdot?.districts ?? null,
+      redfin,
+      realtor,
+      fhfa,
+      fmr: fmrResult?.readings ?? null,
+      lihtc
     }),
     previous
   );
