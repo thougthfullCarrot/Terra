@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resumeSkills, scoreJobs, STRONG_MATCH, type SiteProfile } from '../src/site/browserMatch.js';
+import { BEST_MATCH, resumeSkills, scoreJobs, STRONG_MATCH, type SiteProfile } from '../src/site/browserMatch.js';
 import { matchInputs, scoreMatch } from '../src/matching/score.js';
 import type { Posting, Profile } from '../src/types.js';
 import { sortJobs, type Job } from '../../site/feed.js';
@@ -41,9 +41,16 @@ describe('browser matcher', () => {
       posting,
       now
     );
-    expect(site).toEqual({ score: server.score, note: server.note, lines: server.lines, strong: server.strong });
+    expect(site).toEqual({ score: server.score, note: server.note, lines: server.lines, strong: true });
     expect(site.score).toBeGreaterThanOrEqual(STRONG_MATCH);
     expect(site.strong).toBe(true);
+  });
+
+  it('marks a best match from BEST_MATCH, below the alert threshold', () => {
+    expect(BEST_MATCH).toBeLessThan(STRONG_MATCH);
+    const job = { id: 'p1', city: 'Dallas', sector: 'Investment', kind: 'Internship', pay: null, match: matchInputs(posting) };
+    const match = scoreJobs(profile, [job], now).get('p1')!;
+    expect(match.strong).toBe(match.score >= BEST_MATCH);
   });
 
   it('scores nothing without a resume', () => {

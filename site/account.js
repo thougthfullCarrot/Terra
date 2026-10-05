@@ -63,6 +63,7 @@ export async function startAccounts(hooks) {
 
 function show(view) {
   for (const id of ['gate', 'paywall', 'profile', 'feed']) $(id).hidden = id !== view;
+  $('welcome').hidden = view !== 'gate';
   $('account-button').hidden = !user || view === 'profile';
 }
 
@@ -77,6 +78,8 @@ function signedOut() {
   $('gate-lede').textContent = CONFIG.paymentLink
     ? `Terra is free with a college (.edu) email. Any other email can subscribe${price}.`
     : 'Terra is free for students. Sign in with your college (.edu) email.';
+  $('plan-paid').hidden = !CONFIG.paymentLink;
+  $('plan-price').textContent = CONFIG.priceLabel || 'Monthly';
   show('gate');
 }
 
@@ -168,6 +171,10 @@ function clearCheckoutFlag() {
 let pendingEmail = '';
 
 function bindSignIn() {
+  $('welcome-start').addEventListener('click', () => {
+    $('gate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    ($('verify').hidden ? $('signin-email') : $('verify-code')).focus({ preventScroll: true });
+  });
   $('signin').addEventListener('submit', async (event) => {
     event.preventDefault();
     const email = $('signin-email').value.trim();

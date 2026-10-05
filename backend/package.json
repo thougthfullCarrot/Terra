@@ -20,7 +20,8 @@
     "export:market": "tsx src/bin/export-market.ts",
     "export:appraisal": "tsx src/bin/export-appraisal.ts",
     "build:site": "tsx src/bin/build-site.ts",
-    "sync:sheets": "tsx src/bin/sync-sheets.ts"
+    "sync:sheets": "tsx src/bin/sync-sheets.ts",
+    "test-users": "tsx src/bin/test-users.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"

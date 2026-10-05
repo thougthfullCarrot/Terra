@@ -1,0 +1,55 @@
+# Creates, checks or removes the website's ten test accounts
+# (backend/src/testUsers/people.ts) and reports what each one can see: access,
+# profile, files, and best-match ordering. No email is sent and Stripe is
+# never called; see backend/src/bin/test-users.ts.
+#
+# Actions tab > Test accounts > Run workflow, then pick seed, check or remove.
+# The report is in the run summary.
+name: Test accounts
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'seed (create or refresh, then check), check, or remove'
+        type: choice
+        options: [check, seed, remove]
+        default: check
+  # The branch that introduced the accounts seeds them when the script changes.
+  push:
+    branches: [claude/project-thread-sq7qyk]
+    paths: ['backend/src/bin/test-users.ts', 'backend/src/testUsers/**', 'backend/src/site/browserMatch.ts', '.github/workflows/test-users.yml']
+
+concurrency:
+  group: test-users
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Run
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+            echo "::notice::Accounts are not set up (docs/accounts-setup.md), so there is nothing to test."
+            exit 0
+          fi
+          npm run --silent test-users -- "${{ inputs.command || 'seed' }}"

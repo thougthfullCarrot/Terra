@@ -1921,3 +1921,165 @@ th[aria-sort] .sort-button {
     transition: none !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Welcome: what signed-out visitors see under the sign-in form.
+   --------------------------------------------------------------------------- */
+
+.welcome-block {
+  margin-top: 56px;
+}
+
+.welcome-block h2,
+.welcome-cta h2 {
+  margin: 8px 0 0;
+  font-size: clamp(22px, 3.2vw, 28px);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.welcome h3 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: -0.005em;
+}
+
+.steps p,
+.feature p,
+.plan p {
+  margin: 6px 0 0;
+  color: var(--secondary);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li,
+.feature,
+.plan {
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--on-tint);
+  background: var(--accent-tint);
+  border-radius: 999px;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.feature svg {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 10px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.preview-card {
+  max-width: 560px;
+  margin-top: 20px;
+}
+
+.preview-card .role {
+  margin: 0;
+  font-size: 16px;
+}
+
+.preview .hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.plan.featured {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.plan-price {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink) !important;
+}
+
+.faq {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.faq details + details {
+  border-top: 1px solid var(--divider);
+}
+
+.faq summary {
+  padding: 14px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.faq details p {
+  margin: 0;
+  padding: 0 18px 16px;
+  color: var(--secondary);
+}
+
+.welcome-cta {
+  margin-top: 56px;
+  padding: 32px 22px;
+  text-align: center;
+  background: var(--accent-tint);
+  border-radius: var(--radius);
+}
+
+.welcome-cta h2 {
+  margin: 0 0 16px;
+  color: var(--on-tint);
+}
+
+@media (max-width: 640px) {
+  .steps,
+  .features,
+  .plans {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-block {
+    margin-top: 40px;
+  }
+}
