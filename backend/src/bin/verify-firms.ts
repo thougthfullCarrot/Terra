@@ -17,21 +17,16 @@
  *   EMPTY the board answered with 0 Texas entry-level roles -> slug is fine,
  *         the firm just is not hiring into this funnel right now
  */
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
 import type { FirmRow } from '../db/store.js';
-import { loadFirmSeed } from '../collector/firmSeed.js';
+import { loadFirmSeed, SEED_PATHS } from '../collector/firmSeed.js';
 import { SupabaseStore } from '../db/supabase.js';
 import { fetchGreenhouse } from '../collector/sources/greenhouse.js';
 import { fetchLever } from '../collector/sources/lever.js';
 import { fetchWorkday, type WorkdayStats } from '../collector/sources/workday.js';
 import { fetchIcims } from '../collector/sources/icims.js';
+import { fetchWorkable } from '../collector/sources/workable.js';
 import { normalize, type RejectReason } from '../collector/normalize.js';
 
-const SEED_PATH = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../supabase/migrations/0002_seed_firms.sql'
-);
 
 type Verdict = 'OK' | 'EMPTY' | 'FAIL' | 'SKIP';
 
@@ -57,14 +52,14 @@ async function main(): Promise<void> {
   const fromDb = process.argv.includes('--from-db');
   const wantSql = process.argv.includes('--sql');
 
-  const firms = fromDb ? await SupabaseStore.fromEnv().listFirms() : await loadFirmSeed(SEED_PATH);
+  const firms = fromDb ? await SupabaseStore.fromEnv().listFirms() : await loadFirmSeed();
   if (!firms.length) {
     console.error('No firms found.');
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Checking ${firms.length} firms from ${fromDb ? 'the database' : SEED_PATH}\n`);
+  console.log(`Checking ${firms.length} firms from ${fromDb ? 'the database' : SEED_PATHS.join(' + ')}\n`);
 
   const results: Result[] = [];
   // Four at a time: these are other people's servers.
@@ -159,6 +154,8 @@ async function fetchFor(firm: FirmRow, stats: WorkdayStats) {
         maxPages: 10,
         stats
       });
+    case 'workable':
+      return fetchWorkable(firm.name, firm.atsSlug, { retries: 1 });
   }
 }
 

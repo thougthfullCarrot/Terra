@@ -41,7 +41,7 @@ export function normalize(raw: RawJob, now = new Date()): NormalizeResult {
   const description = collapseBlank(raw.description ?? '');
   // An 'Analyst' title can still ask for three years; the description says so.
   if (!withinExperienceLimit(description)) return { ok: false, reason: 'not-entry-level' };
-  const guess = classifySector(role, description);
+  const guess = raw.sector ? { sector: raw.sector } : classifySector(role, description);
 
   return {
     ok: true,
@@ -75,6 +75,7 @@ function provenance(ats: RawJob['ats']): string {
     case 'lever':
     case 'workday':
     case 'icims':
+    case 'workable':
       return 'Posted on the firm careers page';
     case 'aggregator':
       return 'Aggregated from a Texas jobs board';

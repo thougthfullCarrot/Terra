@@ -172,7 +172,7 @@ export function parseAdzuna(payload: AdzunaResponse): RawJob[] {
  * car leases and talent acquisition.
  */
 const REAL_ESTATE =
-  /\b(real estate|cre|reits?|multifamily|commercial property|property management|property manager|apprais(?:er|al))\b/i;
+  /\b(real estate|cre|reits?|multifamily|commercial property|property management|property manager|apprais(?:er|al)|home ?build(?:er|ers|ing))\b/i;
 
 /** Residential sales jobs share the vocabulary but are not what Terra covers. */
 const RESIDENTIAL =

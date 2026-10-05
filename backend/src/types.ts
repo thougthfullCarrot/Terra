@@ -16,7 +16,8 @@ export const SECTORS = [
   'Property Mgmt',
   'Asset Mgmt',
   'Appraisal',
-  'Capital Markets'
+  'Capital Markets',
+  'Homebuilder'
 ] as const;
 export type Sector = (typeof SECTORS)[number];
 
@@ -39,7 +40,13 @@ export interface RawJob {
   /** Some boards expose an explicit seniority/level field; far more reliable than the title. */
   level?: string;
   /** Which board this came from, for provenance copy. */
-  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'aggregator';
+  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable' | 'aggregator';
+  /**
+   * Set when the firm's row names its sector (every homebuilder does). Wins
+   * over the keyword guess: a builder's land analyst is a homebuilder seat even
+   * though 'analyst' and 'acquisition' read as Investment.
+   */
+  sector?: Sector;
 }
 
 /** A row of `postings`. */

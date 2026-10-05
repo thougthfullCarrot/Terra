@@ -30,7 +30,6 @@ import { sheetsClientFromEnv } from '../sheets/env.js';
 import { firmStatuses, loadFirms } from '../sheets/firms.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SEED_PATH = resolve(here, '../../supabase/migrations/0002_seed_firms.sql');
 const DEFAULT_OUT = resolve(here, '../../../site/postings.json');
 
 async function main(): Promise<void> {
@@ -39,7 +38,7 @@ async function main(): Promise<void> {
 
   const sheets = sheetsClientFromEnv();
   const write = process.env.SHEETS_WRITE === 'true';
-  const firms = await loadFirms(sheets, await loadFirmSeed(SEED_PATH), { write });
+  const firms = await loadFirms(sheets, await loadFirmSeed(), { write });
   console.log(`Firm list: ${firms.note}`);
 
   const store = new MemoryStore(firms.firms);

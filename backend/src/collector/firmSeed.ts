@@ -1,5 +1,16 @@
 import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { FirmRow } from '../db/store.js';
+import { SECTORS, type Sector } from '../types.js';
+
+const MIGRATIONS = resolve(dirname(fileURLToPath(import.meta.url)), '../../supabase/migrations');
+
+/** Every migration that inserts firms, in the order they apply. */
+export const SEED_PATHS = [
+  resolve(MIGRATIONS, '0002_seed_firms.sql'),
+  resolve(MIGRATIONS, '0006_homebuilders.sql')
+];
 
 /**
  * Parse the firm list out of the seed migration.
@@ -50,7 +61,8 @@ export function parseFirmSeed(sql: string): FirmRow[] {
         atsHost: text(row.get('ats_host')),
         // Columns the migration leaves out fall back to the schema defaults.
         active: row.has('active') ? row.get('active') === true : true,
-        slugVerified: row.get('slug_verified') === true
+        slugVerified: row.get('slug_verified') === true,
+        sector: sectorOf(row.get('sector'))
       });
     }
   }
@@ -58,8 +70,15 @@ export function parseFirmSeed(sql: string): FirmRow[] {
   return firms;
 }
 
-export async function loadFirmSeed(path: string): Promise<FirmRow[]> {
-  return parseFirmSeed(await readFile(path, 'utf8'));
+/** Reads one migration, or several as one list with ids running on across files. */
+export async function loadFirmSeed(paths: string | string[] = SEED_PATHS): Promise<FirmRow[]> {
+  const files = await Promise.all((Array.isArray(paths) ? paths : [paths]).map((path) => readFile(path, 'utf8')));
+  return parseFirmSeed(files.join('\n'));
+}
+
+function sectorOf(value: string | boolean | null | undefined): Sector | null {
+  const name = text(value);
+  return name && (SECTORS as readonly string[]).includes(name) ? (name as Sector) : null;
 }
 
 /**

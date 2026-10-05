@@ -44,7 +44,11 @@ const ENTRY = [
   /\bassistant\b/,
   /\bgraduate\b/,
   /\bnew grad\b/,
-  /\brotational\b/
+  /\brotational\b/,
+  // Homebuilder training seats: 'Superintendent in Training', 'Early Career
+  // Construction Program'. 'Assistant Superintendent' is already caught above.
+  /\bin[- ]training\b/,
+  /\bearly[- ]career\b/
 ];
 
 /**

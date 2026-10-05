@@ -5,7 +5,7 @@ hours:
 
 | Tab | What it is | Who edits it |
 | --- | --- | --- |
-| **Firms** | The companies the site checks for jobs. Add a row to add a company, delete a row (or set **Active** to `no`) to drop one. The workflow writes **Last check** beside each row: how many jobs it found, or why it failed. | You |
+| **Firms** | The companies the site checks for jobs. Add a row to add a company, delete a row (or set **Active** to `no`) to drop one. The workflow writes **Last check** beside each row: how many jobs it found, or why it failed. **Sector** set to `Homebuilder` files a company's jobs under Homebuilder. | You |
 | **Jobs** | Every job on the site right now. | The workflow (rewritten each run) |
 | **Market** | The Market data table. | The workflow (rewritten each run) |
 | **Sign-ups** | One row per account: joined date, email, access (college, subscriber, not paid), school, grad year, major, last sign-in. No resumes, pictures or profile text. | The workflow (rewritten each run) |
@@ -78,10 +78,11 @@ Add a row to **Firms**:
 | Column | What to put |
 | --- | --- |
 | Firm | The company's name, as it appears on its job board. |
-| Board type | `greenhouse`, `lever`, `workday` or `icims`. It's in the careers page's address: `boards.greenhouse.io/...`, `jobs.lever.co/...`, `....myworkdayjobs.com/...`, `....icims.com/...`. |
-| Board id | The part of that address that names the company: for `boards.greenhouse.io/lincoln` it's `lincoln`. For Workday it's `<first word of the host>/<site name>`: `jll.wd1.myworkdayjobs.com/en-US/jllcareers` is `jll/jllcareers`. |
+| Board type | `greenhouse`, `lever`, `workday`, `icims` or `workable`. It's in the careers page's address: `boards.greenhouse.io/...`, `jobs.lever.co/...`, `....myworkdayjobs.com/...`, `....icims.com/...`, `apply.workable.com/...`. |
+| Board id | The part of that address that names the company: for `boards.greenhouse.io/lincoln` it's `lincoln`. For Workday it's `<first word of the host>/<site name>`: `jll.wd1.myworkdayjobs.com/en-US/jllcareers` is `jll/jllcareers`. For Workable it's the word after `apply.workable.com/`: `perryhomes`. |
 | Workday host | Workday only (optional for iCIMS): the host, e.g. `jll.wd1.myworkdayjobs.com`. |
 | Active | Blank or `yes` to check it, `no` to pause it. |
+| Sector | Optional. `Homebuilder` (or any sector the site lists) files every job from this company under it. Blank lets the job title decide. |
 
 The next run (at most two hours) checks it and writes the result in **Last
 check**. "Failed ... 404" usually means a wrong board id.

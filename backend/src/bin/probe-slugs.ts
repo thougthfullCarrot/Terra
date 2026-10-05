@@ -31,13 +31,13 @@
  */
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { loadFirmSeed } from '../collector/firmSeed.js';
+import { loadFirmSeed, SEED_PATHS } from '../collector/firmSeed.js';
 import { loadFirmCandidates } from '../collector/firmCandidates.js';
 import { slugCandidates } from '../collector/slugCandidates.js';
 import { namesMatch } from '../collector/nameMatch.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SEED_PATH = resolve(HERE, '../../supabase/migrations/0002_seed_firms.sql');
+
 const CANDIDATES_PATH = resolve(HERE, '../../data/firm-candidates.txt');
 
 /** Workday spreads tenants across numbered hosts; these cover almost all of them. */
@@ -72,9 +72,9 @@ async function main(): Promise<void> {
   // Candidates by default: the seed migration holds only verified firms, so
   // re-probing it learns nothing. --from-seed re-checks the verified ones.
   const fromSeed = process.argv.includes('--from-seed');
-  const source = fromSeed ? SEED_PATH : CANDIDATES_PATH;
+  const source = fromSeed ? SEED_PATHS.join(' + ') : CANDIDATES_PATH;
   const firms = fromSeed
-    ? (await loadFirmSeed(SEED_PATH)).map((firm) => firm.name)
+    ? (await loadFirmSeed()).map((firm) => firm.name)
     : await loadFirmCandidates(CANDIDATES_PATH);
 
   if (!firms.length) {

@@ -44,10 +44,14 @@ function fakeGoogle(initial: Record<string, string[][]> = {}, options: { fail?: 
       return json({});
     }
     if (method === 'PUT') {
-      const start = Number(/!\D*(\d+)/.exec(path)?.[1] ?? 1);
+      const [, col = 'A', start = '1'] = /!([A-Z]+)(\d+)/.exec(path) ?? [];
+      const offset = [...col].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
       const grid = tabs.get(title) ?? [];
       (body as { values: string[][] }).values.forEach((row, i) => {
-        grid[start - 1 + i] = path.includes('!A') ? row : [...(grid[start - 1 + i] ?? []).slice(0, 5), ...row];
+        const cells = [...(grid[Number(start) - 1 + i] ?? [])];
+        while (cells.length < offset) cells.push('');
+        cells.splice(offset, row.length, ...row);
+        grid[Number(start) - 1 + i] = cells;
       });
       tabs.set(title, grid);
       return json({});
@@ -104,7 +108,7 @@ describe('the Firms tab', () => {
     ]);
     expect(sheet.firms.map((entry) => entry.firm?.name ?? entry.problem)).toEqual([
       'Lincoln Property Company',
-      'Skipped: board type must be one of greenhouse, lever, workday, icims',
+      'Skipped: board type must be one of greenhouse, lever, workday, icims, workable',
       'Skipped: Workday needs a host',
       'Cortland'
     ]);
@@ -153,6 +157,53 @@ describe('the Firms tab', () => {
     expect(result.source).toBe('seed');
   });
 
+  it('adds the Sector column and the homebuilders to a tab made before them, once', async () => {
+    const withBuilder: FirmRow[] = [
+      ...seed,
+      { id: 3, name: 'Perry Homes', ats: 'workable', atsSlug: 'perryhomes', atsHost: null, active: true, slugVerified: true, sector: 'Homebuilder' }
+    ];
+    const google = fakeGoogle({
+      [FIRMS_TAB]: [
+        ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check'],
+        ['Lincoln Property Company', 'greenhouse', 'lincoln', '', 'yes', 'OK']
+      ]
+    });
+
+    const result = await loadFirms(google.client, withBuilder, { write: true });
+    expect(result.source).toBe('sheet');
+    expect(result.firms.map((firm) => [firm.name, firm.sector])).toEqual([
+      ['Lincoln Property Company', null],
+      ['Perry Homes', 'Homebuilder']
+    ]);
+    expect(google.tabs.get(FIRMS_TAB)).toEqual([
+      ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector'],
+      ['Lincoln Property Company', 'greenhouse', 'lincoln', '', 'yes', 'OK', ''],
+      ['Perry Homes', 'workable', 'perryhomes', '', 'yes', '', 'Homebuilder']
+    ]);
+
+    // The owner deletes the builder; the next build leaves it deleted.
+    google.tabs.get(FIRMS_TAB)!.pop();
+    const again = await loadFirms(google.client, withBuilder, { write: true });
+    expect(again.firms.map((firm) => firm.name)).toEqual(['Lincoln Property Company']);
+    expect(google.tabs.get(FIRMS_TAB)).toHaveLength(2);
+  });
+
+  it('reads a typed sector, and pins the seed\'s on a read-only build of an old tab', async () => {
+    expect(
+      parseFirmTab([
+        ['Firm', 'Board type', 'Board id', 'Sector'],
+        ['Brightland', 'lever', 'brightland', 'homebuilder'],
+        ['Cortland', 'greenhouse', 'cortland', 'Nonsense']
+      ]).firms.map((entry) => entry.firm?.sector)
+    ).toEqual(['Homebuilder', null]);
+
+    const google = fakeGoogle({ [FIRMS_TAB]: [['Firm', 'Board type', 'Board id'], ['Perry Homes', 'workable', 'perryhomes']] });
+    const pinned: FirmRow[] = [{ id: 1, name: 'Perry Homes', ats: 'workable', atsSlug: 'perryhomes', active: true, slugVerified: true, sector: 'Homebuilder' }];
+    const result = await loadFirms(google.client, pinned, { write: false });
+    expect(result.firms[0]!.sector).toBe('Homebuilder');
+    expect(google.calls.some((call) => call.method === 'PUT')).toBe(false);
+  });
+
   it('writes each firm\'s result beside it', async () => {
     const sheet = parseFirmTab([
       ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check'],
@@ -172,7 +223,7 @@ describe('the Firms tab', () => {
       ['OK 2026-10-05 01:20 UTC: 3 matching jobs'],
       ['Failed 2026-10-05 01:20 UTC: 404'],
       [''],
-      ['Skipped: board type must be one of greenhouse, lever, workday, icims'],
+      ['Skipped: board type must be one of greenhouse, lever, workday, icims, workable'],
       ['Not polled (Active is no)']
     ]);
   });

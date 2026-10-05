@@ -96,6 +96,27 @@ const KEYWORDS: Record<Sector, string[]> = {
     'equity placement',
     'loan origination',
     'servicing'
+  ],
+  // Mostly reached through the firm row (a builder's postings are all pinned
+  // to this sector); the keywords catch builder roles from search sources.
+  Homebuilder: [
+    'homebuilder',
+    'homebuilders',
+    'home builder',
+    'home builders',
+    'homebuilding',
+    'home building',
+    'new home',
+    'new homes',
+    'new home sales',
+    'model home',
+    'homesite',
+    'homesites',
+    'production builder',
+    'assistant superintendent',
+    'lot takedown',
+    'homebuyer',
+    'homebuyers'
   ]
 };
 
