@@ -12,6 +12,11 @@
  * With ADZUNA_APP_ID and ADZUNA_APP_KEY set, Adzuna search results are added
  * too, minus any seat a firm board already listed. Without them it is boards
  * only, as before.
+ *
+ * With GOOGLE_SERVICE_ACCOUNT_JSON and TERRA_SHEET_ID set, the firm list comes
+ * from the sheet's "Firms" tab instead, falling back to the seed list when the
+ * sheet cannot be read (src/sheets/firms.ts). SHEETS_WRITE=true also fills an
+ * empty tab from the seed and writes each firm's result to "Last check".
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -21,6 +26,8 @@ import { loadFirmSeed } from '../collector/firmSeed.js';
 import { runCollector } from '../collector/run.js';
 import { adzunaAggregators } from '../collector/sources/adzuna.js';
 import { buildSnapshot } from '../site/snapshot.js';
+import { sheetsClientFromEnv } from '../sheets/env.js';
+import { firmStatuses, loadFirms } from '../sheets/firms.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SEED_PATH = resolve(here, '../../supabase/migrations/0002_seed_firms.sql');
@@ -30,10 +37,27 @@ async function main(): Promise<void> {
   const outFlag = process.argv.indexOf('--out');
   const out = outFlag >= 0 && process.argv[outFlag + 1] ? resolve(process.argv[outFlag + 1]!) : DEFAULT_OUT;
 
-  const store = new MemoryStore(await loadFirmSeed(SEED_PATH));
+  const sheets = sheetsClientFromEnv();
+  const write = process.env.SHEETS_WRITE === 'true';
+  const firms = await loadFirms(sheets, await loadFirmSeed(SEED_PATH), { write });
+  console.log(`Firm list: ${firms.note}`);
+
+  const store = new MemoryStore(firms.firms);
   const aggregators = adzunaAggregators();
   if (!aggregators.length) console.warn('ADZUNA_APP_ID / ADZUNA_APP_KEY not set; boards only.');
   const report = await runCollector({ store, aggregators });
+
+  if (sheets && write && firms.sheet) {
+    const jobsByFirm = new Map<string, number>();
+    for (const posting of store.postings.values()) jobsByFirm.set(posting.firm, (jobsByFirm.get(posting.firm) ?? 0) + 1);
+    const statuses = firmStatuses(firms.sheet, report, jobsByFirm);
+    if (statuses) {
+      await sheets.write(statuses.range, statuses.rows).then(
+        () => console.log('Wrote each firm\'s result to the Last check column.'),
+        (error: unknown) => console.warn(`Could not write firm results to the sheet: ${error instanceof Error ? error.message : String(error)}`)
+      );
+    }
+  }
   const snapshot = buildSnapshot([...store.postings.values()], report);
 
   await mkdir(dirname(out), { recursive: true });
