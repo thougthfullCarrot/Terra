@@ -130,6 +130,16 @@
               <h3>Market data by city</h3>
               <p>Rents, vacancy, jobs and population for Dallas, Fort Worth, Houston, Austin, San Antonio and El Paso.</p>
             </article>
+            <article class="feature">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></svg>
+              <h3>New jobs in your inbox</h3>
+              <p>Turn on daily alerts and each morning brings the new roles that fit your resume, cities and role type.</p>
+            </article>
+            <article class="feature">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z" /><path d="m8 9 2 2 4-4M8 15h8" /></svg>
+              <h3>Track every application</h3>
+              <p>Move jobs from Saved to Applied to Interviewing, keep notes, and get a reminder when it's time to follow up.</p>
+            </article>
           </div>
         </section>
 
@@ -165,12 +175,18 @@
             <article class="plan featured">
               <h3>Students</h3>
               <p class="plan-price">Free</p>
-              <p>Sign in with any college email ending in .edu. Every job, market data and resume matching included.</p>
+              <p>
+                Sign in with any college email ending in .edu. Every job, resume matching, daily alerts, the application
+                tracker and market data included.
+              </p>
             </article>
             <article class="plan" id="plan-paid" hidden>
               <h3>Everyone else</h3>
               <p class="plan-price" id="plan-price">Monthly</p>
-              <p>Not in school? Subscribe with any email for the same access. Cancel anytime.</p>
+              <p>
+                Not in school? Subscribe with any email for the same access: every job, daily alerts matched to your resume,
+                the application tracker with reminders, and market data. Cancel anytime.
+              </p>
             </article>
           </div>
         </section>
@@ -278,6 +294,25 @@
             <legend class="eyebrow">SECTORS YOU'RE INTERESTED IN</legend>
             <div id="sector-options"></div>
           </fieldset>
+          <fieldset class="sectors alerts" id="alert-settings">
+            <legend class="eyebrow">DAILY JOB ALERTS</legend>
+            <label class="check">
+              <input type="checkbox" name="emailAlerts" />
+              <span>Email me new jobs and tracker reminders every morning</span>
+            </label>
+            <p class="hint">
+              One email a day, only when a new job fits or a follow-up or deadline in your tracker comes due. Leave cities
+              or role types blank for all of them.
+            </p>
+            <div id="alert-options">
+              <div id="alert-city-options"></div>
+              <div id="alert-kind-options"></div>
+              <label class="check">
+                <input type="checkbox" name="goodMatchesOnly" />
+                <span>Only jobs that fit my resume well (75% match or better)</span>
+              </label>
+            </div>
+          </fieldset>
           <div class="actions">
             <button type="submit" class="primary" id="profile-save">Save profile</button>
             <a class="link" id="billing" target="_blank" rel="noopener noreferrer" hidden>Manage subscription</a>
@@ -290,6 +325,7 @@
       <div id="feed">
       <nav class="tabs" aria-label="Sections">
         <a href="#" id="tab-jobs" class="tab" aria-current="page">Jobs</a>
+        <a href="#tracker" id="tab-tracker" class="tab" hidden>Tracker</a>
         <a href="#markets" id="tab-markets" class="tab">Market data</a>
       </nav>
 
@@ -345,6 +381,15 @@
         <div class="skeleton" aria-hidden="true"></div>
       </section>
       </div>
+
+      <!-- The member's applications by stage: tracker-view.js draws it from tracked_jobs. -->
+      <section id="tracker-view" hidden aria-labelledby="tracker-title">
+        <div class="tracker-top">
+          <h2 id="tracker-title">Your applications</h2>
+          <p id="t-summary" class="muted"></p>
+        </div>
+        <div id="t-body" class="tracker-body"></div>
+      </section>
 
       <!-- Market data by city: markets-view.js draws it from market.json or the members-only snapshot. -->
       <section id="markets-view" hidden aria-labelledby="markets-title">
@@ -447,6 +492,10 @@
         <div class="sheet-actions">
           <a class="primary" id="jp-apply" target="_blank" rel="noopener noreferrer">Apply on the firm's site</a>
           <button type="button" class="secondary" id="jp-save" aria-pressed="false">Save</button>
+          <label class="stage-pick" id="jp-stage-wrap" hidden>
+            <span class="visually-hidden">Where this application stands</span>
+            <select id="jp-stage"></select>
+          </label>
           <button type="button" class="secondary" id="jp-share">Copy link</button>
         </div>
         <section id="jp-why-wrap" hidden>

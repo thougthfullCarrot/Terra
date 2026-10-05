@@ -1,0 +1,75 @@
+# Emails members the new jobs that fit them, once a day.
+#
+# Members turn alerts on in their profile (migration 0007 adds the settings).
+# This reads the feed the Website workflow stores in Supabase and sends
+# through the same Gmail sender the sign-in codes use, so it needs the
+# variable SUPABASE_URL and the secrets SUPABASE_SERVICE_ROLE_KEY, SMTP_USER
+# and SMTP_PASSWORD. Gmail allows about 500 emails a day shared with the
+# sign-in codes; MAX_EMAILS (default 300) keeps alerts under that, and anyone
+# over the cap gets their jobs the next morning.
+#
+# The run log is public: it reports counts only, never an address.
+name: Job alerts
+
+on:
+  schedule:
+    # 13:00 UTC is 8am in Texas during daylight time, 7am in winter. Offset
+    # from the Website workflow's :20 runs so the 12:20 feed is in place.
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Work out who would get what, without sending anything
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: job-alerts
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+      SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+      SMTP_SENDER_NAME: ${{ vars.SMTP_SENDER_NAME || 'Terra' }}
+      MAX_EMAILS: ${{ vars.ALERT_MAX_EMAILS || '300' }}
+      # Scheduled runs send; a manual run sends only when dry run is unticked.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+    steps:
+      - name: Check settings
+        id: check
+        working-directory: .
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+            echo "::notice::Accounts are not configured (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY), so there is nobody to email."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ "$DRY_RUN" != "true" ] && { [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ]; }; then
+            echo "::error::Set the SMTP_USER and SMTP_PASSWORD secrets (the Gmail sender in docs/accounts-setup.md)."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        if: steps.check.outputs.skip != 'true'
+      - name: Send alerts
+        if: steps.check.outputs.skip != 'true'
+        run: npm run --silent send:alerts

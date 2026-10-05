@@ -10,8 +10,11 @@
 // this file only decides which panel to show.
 import { CONFIG } from './config.js';
 import {
+  ALERT_GOOD_MATCH,
+  ALERT_KINDS,
   PROFILE_CITIES,
   PROFILE_SECTORS,
+  alertRow,
   checkoutUrl,
   fileProblem,
   gradYears,
@@ -117,12 +120,29 @@ async function loadFeed() {
     return;
   }
   app.showFeed(data.data);
+  app.setTracker(trackerStore());
   // Market data sits in the same members-only table, one row of its own.
   app.setMarketLoader(async () => {
     const market = await supabase.from('site_snapshots').select('data').eq('id', 'market').maybeSingle();
     if (market.error) throw new Error(market.error.message);
     return market.data?.data ?? null;
   });
+}
+
+/** The member's application tracker, kept in tracked_jobs (migration 0008). Each call throws on error. */
+function trackerStore() {
+  const table = () => supabase.from('tracked_jobs');
+  const check = ({ data, error }) => {
+    if (error) throw new Error(error.message);
+    return data;
+  };
+  return {
+    list: async () => check(await table().select('*').eq('user_id', user.id)) ?? [],
+    save: async (row) => check(await table().upsert({ user_id: user.id, ...row }).select('*').single()),
+    saveMany: async (rows) =>
+      check(await table().upsert(rows.map((row) => ({ user_id: user.id, ...row }))).select('*')) ?? [],
+    remove: async (jobId) => check(await table().delete().eq('user_id', user.id).eq('job_id', jobId))
+  };
 }
 
 function showPaywall() {
@@ -229,18 +249,9 @@ function bindProfile() {
   const form = $('profile-form');
   for (const year of gradYears()) form.gradYear.append(new Option(String(year), String(year)));
   for (const city of PROFILE_CITIES) form.homeCity.append(new Option(city, city));
-  $('sector-options').replaceChildren(
-    ...PROFILE_SECTORS.map((sector) => {
-      const label = document.createElement('label');
-      label.className = 'check';
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.name = 'sectors';
-      box.value = sector;
-      label.append(box, document.createTextNode(sector));
-      return label;
-    })
-  );
+  $('sector-options').replaceChildren(...PROFILE_SECTORS.map((sector) => checkChip('sectors', sector)));
+  $('alert-city-options').replaceChildren(...PROFILE_CITIES.map((city) => checkChip('alertCities', city)));
+  $('alert-kind-options').replaceChildren(...ALERT_KINDS.map((kind) => checkChip('alertKinds', kind)));
 
   $('account-button').addEventListener('click', openProfile);
   $('profile-close').addEventListener('click', closeProfile);
@@ -248,6 +259,26 @@ function bindProfile() {
   $('avatar-file').addEventListener('change', (event) => uploadAvatar(event.target));
   $('resume-file').addEventListener('change', (event) => uploadResume(event.target));
   $('resume-remove').addEventListener('click', removeResume);
+}
+
+/** False when the profile row predates migration 0007's alert columns. */
+function alertsReady() {
+  return !profile || 'email_alerts' in profile;
+}
+
+function checkChip(name, value) {
+  const label = document.createElement('label');
+  label.className = 'check';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.name = name;
+  box.value = value;
+  label.append(box, document.createTextNode(value));
+  return label;
+}
+
+function checked(form, name) {
+  return [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((box) => box.value);
 }
 
 function openProfile() {
@@ -297,6 +328,11 @@ function fillProfile() {
   form.homeCity.value = profile?.home_city ?? '';
   form.relocationOpen.checked = Boolean(profile?.relocation_open);
   for (const box of form.querySelectorAll('input[name="sectors"]')) box.checked = (profile?.sectors ?? []).includes(box.value);
+  $('alert-settings').hidden = !alertsReady();
+  form.emailAlerts.checked = Boolean(profile?.email_alerts);
+  for (const box of form.querySelectorAll('input[name="alertCities"]')) box.checked = (profile?.alert_cities ?? []).includes(box.value);
+  for (const box of form.querySelectorAll('input[name="alertKinds"]')) box.checked = (profile?.alert_kinds ?? []).includes(box.value);
+  form.goodMatchesOnly.checked = (profile?.alert_min_match ?? 0) >= ALERT_GOOD_MATCH;
 
   $('profile-email').textContent = user.email;
   $('profile-access').textContent =
@@ -351,13 +387,26 @@ async function saveProfile(event) {
     major: form.major.value,
     homeCity: form.homeCity.value,
     relocationOpen: form.relocationOpen.checked,
-    sectors: [...form.querySelectorAll('input[name="sectors"]:checked')].map((box) => box.value)
+    sectors: checked(form, 'sectors')
   });
+  const alerts = alertRow({
+    emailAlerts: form.emailAlerts.checked,
+    alertCities: checked(form, 'alertCities'),
+    alertKinds: checked(form, 'alertKinds'),
+    goodMatchesOnly: form.goodMatchesOnly.checked
+  });
+  const turnedOn = alerts.email_alerts && !profile?.email_alerts;
 
   $('profile-save').disabled = true;
-  const saved = await writeProfile(row);
+  const saved = await writeProfile({ ...row, ...alerts });
+  // The alert columns arrive with migration 0007; until it has run, save the rest.
+  if (!saved && (await writeProfile(row))) {
+    $('profile-save').disabled = false;
+    $('alert-settings').hidden = true;
+    return note('profile-status', "Saved. Job alerts aren't available yet.");
+  }
   $('profile-save').disabled = false;
-  if (saved) note('profile-status', 'Saved.');
+  if (saved) note('profile-status', turnedOn ? `Saved. Job alerts will go to ${user.email} each morning.` : 'Saved.');
 }
 
 /** Upsert part of the user's profile row and refresh everything that reads it. */

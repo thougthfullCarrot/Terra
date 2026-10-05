@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  alertRow,
   checkoutUrl,
   fileProblem,
   gradYears,
@@ -120,5 +121,17 @@ describe('uploads', () => {
   it('falls back to initials without a picture', () => {
     expect(initials('jane van doe', 'x@y.edu')).toBe('JV');
     expect(initials('', 'sam@y.edu')).toBe('S');
+  });
+});
+
+describe('alertRow', () => {
+  it('keeps only offered cities and role types, and maps the match toggle', () => {
+    expect(
+      alertRow({ emailAlerts: true, alertCities: ['Austin', 'Paris'], alertKinds: ['Internship', 'CEO'], goodMatchesOnly: true })
+    ).toEqual({ email_alerts: true, alert_cities: ['Austin'], alert_kinds: ['Internship'], alert_min_match: 75 });
+  });
+
+  it('defaults to off, everywhere, every role, every match', () => {
+    expect(alertRow({})).toEqual({ email_alerts: false, alert_cities: [], alert_kinds: [], alert_min_match: 0 });
   });
 });

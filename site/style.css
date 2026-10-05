@@ -1410,14 +1410,18 @@ label.check {
   margin-bottom: 8px;
 }
 
-#sector-options {
+#sector-options,
+#alert-city-options,
+#alert-kind-options {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-/* Sector checkboxes read as toggle chips. */
-#sector-options label {
+/* Sector, alert city and role type checkboxes read as toggle chips. */
+#sector-options label,
+#alert-city-options label,
+#alert-kind-options label {
   display: inline-flex;
   padding: 6px 12px 6px 10px;
   background: var(--chip);
@@ -1427,15 +1431,190 @@ label.check {
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-#sector-options label:has(input:checked) {
+#sector-options label:has(input:checked),
+#alert-city-options label:has(input:checked),
+#alert-kind-options label:has(input:checked) {
   color: var(--on-tint);
   background: var(--accent-tint);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-#sector-options input[type='checkbox'] {
+#sector-options input[type='checkbox'],
+#alert-city-options input[type='checkbox'],
+#alert-kind-options input[type='checkbox'] {
   width: 15px;
   height: 15px;
+}
+
+/* Alert settings: the choices only matter once alerts are on. */
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alerts .hint {
+  margin: 0;
+}
+
+#alert-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#alert-settings:not(:has(input[name='emailAlerts']:checked)) #alert-options {
+  opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------------------
+   Tracker: a member's applications by stage.
+   --------------------------------------------------------------------------- */
+
+.tracker-top {
+  margin: 22px 2px 14px;
+}
+
+.tracker-top h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.tracker-top p {
+  margin: 0;
+}
+
+.tracker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.track-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.track-stage-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.track-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.track-head .role {
+  margin: 0;
+  font-size: 16px;
+}
+
+.track-head .open {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.track-head .open:hover {
+  color: var(--accent);
+}
+
+.track-head .firm {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.track-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.track-controls label,
+.track-note {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.track-controls input[type='date'],
+.track-note textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+}
+
+.track-note textarea {
+  resize: vertical;
+  min-height: 44px;
+}
+
+.track-controls input[type='date']:focus,
+.track-note textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.track-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: 14px;
+}
+
+.track-foot .follow {
+  margin-right: auto;
+  color: var(--muted);
+}
+
+.track-foot .follow.due {
+  font-weight: 600;
+  color: var(--red);
+}
+
+.stage-pick select {
+  height: 100%;
+  min-height: 44px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .track-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .sheet-actions .stage-pick {
+    flex: 1 1 100%;
+  }
 }
 
 /* ---------------------------------------------------------------------------

@@ -119,3 +119,21 @@ export function initials(name, email) {
   if (words.length) return words.slice(0, 2).map((word) => word[0].toUpperCase()).join('');
   return String(email ?? '?').trim().charAt(0).toUpperCase() || '?';
 }
+
+export const ALERT_KINDS = ['Internship', 'Entry-level'];
+/** Match % behind "only jobs that fit my resume well"; the site's "good match" line (GOOD_MATCH in app.js). */
+export const ALERT_GOOD_MATCH = 75;
+
+/**
+ * The email alert settings as `profiles` columns (migration 0007). Cities and
+ * role types outside the offered choices are dropped; none picked means all.
+ */
+export function alertRow(values) {
+  const list = (value) => (Array.isArray(value) ? value : []);
+  return {
+    email_alerts: Boolean(values.emailAlerts),
+    alert_cities: PROFILE_CITIES.filter((city) => list(values.alertCities).includes(city)),
+    alert_kinds: ALERT_KINDS.filter((kind) => list(values.alertKinds).includes(kind)),
+    alert_min_match: values.goodMatchesOnly ? ALERT_GOOD_MATCH : 0
+  };
+}

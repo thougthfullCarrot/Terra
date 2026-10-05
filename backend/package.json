@@ -21,13 +21,16 @@
     "export:appraisal": "tsx src/bin/export-appraisal.ts",
     "build:site": "tsx src/bin/build-site.ts",
     "sync:sheets": "tsx src/bin/sync-sheets.ts",
-    "test-users": "tsx src/bin/test-users.ts"
+    "test-users": "tsx src/bin/test-users.ts",
+    "send:alerts": "tsx src/bin/send-alerts.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0"
+    "@supabase/supabase-js": "^2.45.0",
+    "nodemailer": "^10.0.14"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
+    "@types/nodemailer": "^8.0.2",
     "esbuild": "^0.28.2",
     "mammoth": "^1.13.0",
     "pdfjs-dist": "^4.10.38",
