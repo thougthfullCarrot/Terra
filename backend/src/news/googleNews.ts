@@ -3,7 +3,8 @@ import { CITIES, type City } from '../types.js';
 
 /**
  * Commercial real estate headlines for each Terra city, from Google News
- * search RSS feeds (free, no key). Only the headline, publisher, date and
+ * search RSS feeds and Yahoo Finance's headline RSS for listed real estate
+ * companies (both free, no key). Only the headline, publisher, date and
  * link are kept: the page links out to the article and never copies its text.
  */
 
@@ -32,6 +33,8 @@ export interface RssItem {
   source: string;
   sourceUrl: string | null;
   publishedAt: string | null;
+  /** The feed's description, read only to tell which city a story is about; never published. */
+  summary?: string;
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -63,6 +66,7 @@ export function parseRss(xml: string): RssItem[] {
     const link = tag(block, 'link')?.text ?? '';
     if (!title || !/^https?:\/\//i.test(link)) continue;
     const source = tag(block, 'source');
+    const summary = (tag(block, 'description')?.text ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     const sourceUrl = source ? (/url="([^"]+)"/i.exec(source.attrs)?.[1] ?? null) : null;
     const date = tag(block, 'pubDate')?.text;
     const time = date ? Date.parse(date) : NaN;
@@ -71,7 +75,8 @@ export function parseRss(xml: string): RssItem[] {
       link,
       source: source?.text ?? '',
       sourceUrl: sourceUrl && /^https?:\/\//i.test(sourceUrl) ? decodeXml(sourceUrl) : null,
-      publishedAt: Number.isFinite(time) ? new Date(time).toISOString() : null
+      publishedAt: Number.isFinite(time) ? new Date(time).toISOString() : null,
+      ...(summary ? { summary } : {})
     });
   }
   return items;
@@ -167,42 +172,103 @@ export function headlinesFrom(items: RssItem[], now: Date, options: { maxAgeDays
   return out;
 }
 
-export async function fetchCityNews(city: City, now: Date, options: FetchJsonOptions = {}): Promise<Headline[]> {
+export async function fetchCityNews(city: City, options: FetchJsonOptions = {}): Promise<RssItem[]> {
   const xml = await fetchText(newsSearchUrl(city), { timeoutMs: 30_000, ...options, accept: 'application/rss+xml, application/xml, text/xml' });
-  return headlinesFrom(parseRss(xml), now);
+  return parseRss(xml);
+}
+
+export interface NewsSources {
+  /** One city's Google News search results. */
+  fetchCity?: (city: City) => Promise<RssItem[]>;
+  /** Stories not searched by city (Yahoo Finance); each goes to the cities it names. */
+  fetchShared?: () => Promise<RssItem[]>;
+  log?: (line: string) => void;
 }
 
 /**
- * Every city's headlines. A city whose feed fails, or answers with nothing,
- * keeps its headlines from the previous file so one bad run doesn't blank it.
+ * Every city's headlines. A city whose search fails, or answers with
+ * nothing, keeps its headlines from the previous file so one bad run doesn't
+ * blank it. A shared source that fails only costs its own stories.
  */
-export async function buildNewsFile(
-  now: Date,
-  previous: NewsFile | null,
-  fetchCity: (city: City) => Promise<Headline[]> = (city) => fetchCityNews(city, now),
-  log: (line: string) => void = console.log
-): Promise<NewsFile> {
+export async function buildNewsFile(now: Date, previous: NewsFile | null, sources: NewsSources = {}): Promise<NewsFile> {
+  const { fetchCity = (city) => fetchCityNews(city), fetchShared = () => fetchYahooFinance(), log = console.log } = sources;
+  const shared = await fetchShared().catch((error: unknown) => {
+    log(`Yahoo Finance: ${error instanceof Error ? error.message : String(error)}`);
+    return [] as RssItem[];
+  });
+  log(`Yahoo Finance: ${shared.length} stories.`);
+
   const cities: CityNews[] = [];
   for (const city of CITIES) {
     const before = previous?.cities.find((c) => c.city === city) ?? null;
+    const named = shared.filter((item) => citiesNamedIn(`${item.title} ${item.summary ?? ''}`).includes(city));
+    let searched: RssItem[] | null = null;
     try {
-      const headlines = await fetchCity(city);
-      if (headlines.length === 0 && before?.headlines.length) {
-        log(`${city}: no headlines this run; keeping ${before.headlines.length} from ${before.fetchedAt}.`);
+      searched = await fetchCity(city);
+    } catch (error) {
+      log(`${city}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const headlines = headlinesFrom([...(searched ?? []), ...named], now);
+    if (searched === null || (headlines.length === 0 && before?.headlines.length)) {
+      if (before) {
+        log(`${city}: keeping ${before.headlines.length} headlines from ${before.fetchedAt}.`);
         cities.push(before);
-      } else {
-        log(`${city}: ${headlines.length} headlines.`);
+      } else if (headlines.length) {
         cities.push({ city, fetchedAt: now.toISOString(), headlines });
       }
-    } catch (error) {
-      log(`${city}: ${error instanceof Error ? error.message : String(error)}${before ? `; keeping ${before.headlines.length} from ${before.fetchedAt}` : ''}`);
-      if (before) cities.push(before);
+      continue;
     }
+    log(`${city}: ${headlines.length} headlines (${named.length} Yahoo Finance stories name it).`);
+    cities.push({ city, fetchedAt: now.toISOString(), headlines });
   }
   return {
     generatedAt: now.toISOString(),
-    source: 'Google News',
+    source: 'Google News and Yahoo Finance',
     topics: TOPIC_RULES.map((rule) => rule.topic),
     cities
   };
+}
+
+/**
+ * Yahoo Finance headline RSS for listed real estate companies with big Texas
+ * footprints: brokerages, industrial and apartment REITs, and Texas-based
+ * developers. Free, no key. Its stories aren't sorted by city, so only those
+ * naming a Terra city are kept.
+ */
+export const YAHOO_TICKERS = [
+  'CBRE', // CBRE Group, Dallas
+  'JLL', // JLL
+  'CWK', // Cushman & Wakefield
+  'NMRK', // Newmark
+  'MMI', // Marcus & Millichap
+  'PLD', // Prologis
+  'EGP', // EastGroup Properties, heavy in Texas
+  'CPT', // Camden Property Trust, Houston
+  'MAA', // Mid-America Apartment Communities
+  'HHH', // Howard Hughes, The Woodlands
+  'HR', // Healthcare Realty
+  'O' // Realty Income
+] as const;
+
+export function yahooFinanceUrl(tickers: readonly string[] = YAHOO_TICKERS): string {
+  return `https://feeds.finance.yahoo.com/rss/2.0/headline?${new URLSearchParams({ s: tickers.join(','), region: 'US', lang: 'en-US' })}`;
+}
+
+export async function fetchYahooFinance(options: FetchJsonOptions = {}): Promise<RssItem[]> {
+  const xml = await fetchText(yahooFinanceUrl(), { timeoutMs: 30_000, ...options, accept: 'application/rss+xml, application/xml, text/xml' });
+  return parseRss(xml).map((item) => ({ ...item, source: item.source || 'Yahoo Finance' }));
+}
+
+const CITY_NAMES: Array<{ city: City; pattern: RegExp }> = [
+  { city: 'Dallas', pattern: /\b(Dallas|DFW|Dallas-Fort Worth)\b/ },
+  { city: 'Fort Worth', pattern: /\b(Fort Worth|Ft\.? Worth|DFW|Dallas-Fort Worth)\b/ },
+  { city: 'Houston', pattern: /\bHouston\b/ },
+  { city: 'Austin', pattern: /\bAustin\b/ },
+  { city: 'San Antonio', pattern: /\bSan Antonio\b/ },
+  { city: 'El Paso', pattern: /\bEl Paso\b/ }
+];
+
+/** The Terra cities a story names. */
+export function citiesNamedIn(text: string): City[] {
+  return CITY_NAMES.filter((c) => c.pattern.test(text)).map((c) => c.city);
 }

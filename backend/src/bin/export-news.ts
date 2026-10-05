@@ -1,6 +1,7 @@
 /**
  * Build the website's news file: commercial real estate headlines for each
- * city, from Google News search RSS (free, no key).
+ * city, from Google News search RSS and Yahoo Finance headline RSS (free,
+ * no key).
  *
  *   npm run export:news                          # writes ../site/news.json
  *   npm run export:news -- --out <path> --previous <path>

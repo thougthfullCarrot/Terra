@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildNewsFile,
+  citiesNamedIn,
   cleanTitle,
   decodeXml,
   headlinesFrom,
@@ -9,6 +10,7 @@ import {
   parseRss,
   topicsFor,
   type NewsFile,
+  yahooFinanceUrl,
   type RssItem
 } from '../src/news/googleNews.js';
 import { filterHeadlines, newsDate, readNewsHash, topicCounts, writeNewsHash } from '../../site/news.js';
@@ -54,7 +56,7 @@ describe('Google News RSS', () => {
   it('parses items, decoding entities and CDATA and skipping non-http links', () => {
     const items = parseRss(RSS);
     expect(items).toHaveLength(2);
-    expect(items[0]).toEqual({
+    expect(items[0]).toMatchObject({
       title: 'Developer breaks ground on 30-story Montrose tower & plaza - Houston Business Journal',
       link: 'https://news.google.com/rss/articles/abc?oc=5',
       source: 'Houston Business Journal',
@@ -102,18 +104,41 @@ describe('Google News RSS', () => {
       topics: [],
       cities: [{ city: 'Austin', fetchedAt: '2026-10-04T00:00:00Z', headlines: [{ title: 'Old', url: 'https://x', source: 'X', publishedAt: null, topics: [] }] }]
     };
-    const file = await buildNewsFile(
-      now,
-      previous,
-      async (city) => {
+    const file = await buildNewsFile(now, previous, {
+      fetchCity: async (city) => {
         if (city === 'Austin' || city === 'El Paso') throw new Error('timeout');
-        return [{ title: `${city} tower`, url: `https://x/${city}`, source: 'X', publishedAt: null, topics: [] }];
+        return [item(`${city} tower planned`, '2026-10-04T00:00:00Z')];
       },
-      () => {}
-    );
+      fetchShared: async () => [],
+      log: () => {}
+    });
     expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio']);
     expect(file.cities.find((c) => c.city === 'Austin')?.headlines[0]?.title).toBe('Old');
     expect(file.topics).toContain('Development');
+  });
+
+  it('adds Yahoo Finance stories to the cities they name', async () => {
+    const yahoo: RssItem[] = [
+      { ...item('Camden buys apartment community', '2026-10-03T00:00:00Z'), source: 'Yahoo Finance', summary: 'The 300-unit Houston property...' },
+      { ...item('Prologis leases DFW warehouse', '2026-10-02T00:00:00Z'), source: 'Yahoo Finance' },
+      { ...item('CBRE reports third-quarter property results', '2026-10-02T00:00:00Z'), source: 'Yahoo Finance' }
+    ];
+    const file = await buildNewsFile(now, null, { fetchCity: async () => [], fetchShared: async () => yahoo, log: () => {} });
+    const titles = (city: string) => file.cities.find((c) => c.city === city)?.headlines.map((h) => h.title) ?? [];
+    expect(titles('Houston')).toEqual(['Camden buys apartment community']);
+    expect(titles('Dallas')).toEqual(['Prologis leases DFW warehouse']);
+    expect(titles('Fort Worth')).toEqual(['Prologis leases DFW warehouse']);
+    expect(file.cities.find((c) => c.city === 'Austin')?.headlines).toEqual([]);
+  });
+
+  it('asks Yahoo Finance for the real estate tickers and names cities in text', () => {
+    expect(new URL(yahooFinanceUrl(['CBRE', 'PLD'])).searchParams.get('s')).toBe('CBRE,PLD');
+    expect(citiesNamedIn('Hines plans San Antonio and Ft. Worth projects')).toEqual(['Fort Worth', 'San Antonio']);
+    expect(citiesNamedIn('Austin Powers')).toEqual(['Austin']);
+  });
+
+  it('keeps the description out of parsed items’ published fields', () => {
+    expect(parseRss(RSS)[0]!.summary).toBe('Developer breaks ground');
   });
 });
 
