@@ -32,7 +32,13 @@ export interface EventSource {
   kind: 'tribe' | 'growthzone';
   /** Site root, no trailing slash. */
   base: string;
+  /** Keep only titles matching RELEVANT (chamber hubs list ribbon cuttings, yoga, etc. next to networking events). */
+  relevantOnly?: boolean;
 }
+
+/** Business networking and real estate words; used for sources with relevantOnly. */
+export const RELEVANT =
+  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership/i;
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
@@ -262,7 +268,8 @@ const defaultFetcher: Fetcher = {
 };
 
 export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
-  return tidy(await fetchRaw(source, now, fetcher, log));
+  const events = tidy(await fetchRaw(source, now, fetcher, log));
+  return source.relevantOnly ? events.filter((e) => RELEVANT.test(e.title)) : events;
 }
 
 async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (m: string) => void): Promise<TerraEvent[]> {
