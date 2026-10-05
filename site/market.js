@@ -57,8 +57,14 @@ export function ordinal(n) {
 export function formatValue(value, unit) {
   if (value == null || !Number.isFinite(value)) return '—';
   switch (unit) {
-    case 'usd':
+    case 'usd': {
+      // Whole roll values run to billions; $/sq ft figures can be under $10.
+      const abs = Math.abs(value);
+      if (abs >= 1e9) return `$${trim(value / 1e9, 1)}B`;
+      if (abs >= 1e7) return `$${trim(value / 1e6, 1)}M`;
+      if (abs < 10) return `$${value.toFixed(2)}`;
       return `$${Math.round(value).toLocaleString('en-US')}`;
+    }
     case 'change': {
       const rounded = Math.round(value * 10) / 10;
       const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '';

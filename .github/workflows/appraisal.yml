@@ -1,0 +1,75 @@
+# Summarizes the county appraisal district rolls (Harris, Dallas, Tarrant,
+# Travis) for the market data page: appraised values and land value per
+# square foot for each city's apartment, commercial and industrial properties.
+#
+# The districts publish their rolls as free bulk downloads, about 1.5 GB in
+# all, which is why this runs on its own once a week rather than in every
+# site build. It keeps only per-city summaries (appraisal.json, a few KB) and
+# saves them to the Actions cache, where site.yml picks up the newest.
+# Values change once a year, when the rolls are certified in July; the weekly
+# run keeps the cache from expiring and catches the new roll.
+name: Appraisal districts
+
+on:
+  schedule:
+    - cron: '40 9 * * 0'
+  workflow_dispatch:
+  push:
+    branches: [claude/new-session-6xvm0u]
+    paths: ['backend/src/market/appraisal.ts', 'backend/src/bin/export-appraisal.ts', '.github/workflows/appraisal.yml']
+  pull_request:
+    paths: ['backend/src/market/appraisal.ts', 'backend/src/bin/export-appraisal.ts', '.github/workflows/appraisal.yml']
+
+concurrency:
+  group: appraisal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      # Last week's summary, so a district that is down keeps its figures.
+      - name: Restore the last summary
+        uses: actions/cache/restore@v4
+        with:
+          path: appraisal.json
+          key: appraisal-none
+          restore-keys: appraisal-
+
+      - name: Summarize the rolls
+        id: export
+        run: |
+          set -o pipefail
+          npm run --silent export:appraisal 2>&1 | tee /tmp/appraisal.log
+
+      - name: Save the summary
+        if: steps.export.outputs.answered != '0'
+        uses: actions/cache/save@v4
+        with:
+          path: appraisal.json
+          key: appraisal-${{ github.run_id }}
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo '## Appraisal districts'
+            echo '```'
+            cat /tmp/appraisal.log 2>/dev/null || true
+            echo '```'
+            echo '```json'
+            cat ../appraisal.json 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
