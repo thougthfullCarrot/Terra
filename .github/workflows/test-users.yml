@@ -18,7 +18,7 @@ on:
   # The branch that introduced the accounts seeds them when the script changes.
   push:
     branches: [claude/project-thread-sq7qyk]
-    paths: ['backend/src/bin/test-users.ts', 'backend/src/testUsers/**', '.github/workflows/test-users.yml']
+    paths: ['backend/src/bin/test-users.ts', 'backend/src/testUsers/**', 'backend/src/site/browserMatch.ts', '.github/workflows/test-users.yml']
 
 concurrency:
   group: test-users

@@ -9,6 +9,14 @@ import { STRONG_MATCH, type City, type Kind, type Profile, type Sector } from '.
 
 export { STRONG_MATCH };
 
+/**
+ * Score at or above which the website marks a job "Best match". Lower than
+ * STRONG_MATCH, which still decides the app's alerts: across ten test
+ * profiles against a live feed, 92 badged one job for one user and nothing
+ * for the other five, so the badge almost never showed.
+ */
+export const BEST_MATCH = 80;
+
 /** The profile fields the website stores, as the site holds them. */
 export interface SiteProfile {
   school: string | null;
@@ -65,8 +73,8 @@ export function scoreJobs(profile: SiteProfile, jobs: SiteJob[], now = new Date(
   for (const job of jobs) {
     if (!job.match) continue;
     const posting = { city: job.city as City, sector: job.sector as Sector, kind: job.kind as Kind, pay: job.pay };
-    const { score, note, lines, strong } = scoreWithInputs(asProfile, posting, job.match, now);
-    scores.set(job.id, { score, note, lines, strong });
+    const { score, note, lines } = scoreWithInputs(asProfile, posting, job.match, now);
+    scores.set(job.id, { score, note, lines, strong: score >= BEST_MATCH });
   }
   return scores;
 }

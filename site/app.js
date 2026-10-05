@@ -36,7 +36,7 @@ let snapshot = null;
 let state = readQuery(location.search);
 // A sort named in the link wins; otherwise a signed-in user with a resume sees best matches first.
 let sortChosen = new URLSearchParams(location.search).has('sort');
-/** Match % at or above which a card is drawn heavier, below which lighter. Strong matches (STRONG_MATCH) get the full highlight. */
+/** Match % at or above which a card is drawn heavier, below which lighter. Best matches (BEST_MATCH in match.js) get the full highlight. */
 const GOOD_MATCH = 75;
 const WEAK_MATCH = 50;
 let bound = false;
