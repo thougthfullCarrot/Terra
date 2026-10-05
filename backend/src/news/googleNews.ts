@@ -141,12 +141,38 @@ export interface NewsFile {
   cities: CityNews[];
 }
 
-function sameStory(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+/**
+ * Stories that mention a property but aren't about real estate: crime and
+ * accidents "at Dallas apartments", sports and weather "developments",
+ * and places that share a Terra city's name.
+ */
+const OFF_TOPIC =
+  /\b(shooting|shot|killed|killing|murder\w*|stabb\w*|body found|dead|death|police|arrest\w*|suspect\w*|crash\w*|injur\w*|explosion|fire|burglar\w*|robbery|homicide|cowboys|texans|astros|rangers|mavericks|rockets|longhorns|week \d+|tropical|hurricane|storm|monsoon|flood\w*|power outage|without power|sanctions|ICE|deportation\w*|letters to the editor|opinion)\b|^Letters\b|\b(Houston County|Stewart-Houston|Austin,? (MN|Minn|Minnesota)|San Antonio,? (FL|Fla|Florida))\b/i;
+
+export function isOffTopic(title: string): boolean {
+  return OFF_TOPIC.test(title);
+}
+
+const STOP_WORDS = new Set('a an and at for in of on the to with by from as is are its it new texas tx'.split(' '));
+
+function words(title: string): Set<string> {
+  return new Set(
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .split(' ')
+      .filter((w) => w && !STOP_WORDS.has(w))
+  );
+}
+
+/** Two papers' headlines for one story: most of their words are shared. */
+export function sameStory(a: string, b: string): boolean {
+  const x = words(a);
+  const y = words(b);
+  if (!x.size || !y.size) return false;
+  let shared = 0;
+  for (const w of x) if (y.has(w)) shared++;
+  return shared / Math.min(x.size, y.size) >= 0.6;
 }
 
 /**
@@ -156,16 +182,13 @@ function sameStory(title: string): string {
 export function headlinesFrom(items: RssItem[], now: Date, options: { maxAgeDays?: number; limit?: number } = {}): Headline[] {
   const { maxAgeDays = 30, limit = 25 } = options;
   const oldest = now.getTime() - maxAgeDays * 86_400_000;
-  const seen = new Set<string>();
   const out: Headline[] = [];
   const sorted = [...items].sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''));
   for (const item of sorted) {
     const title = cleanTitle(item.title, item.source);
-    if (!isCreHeadline(title)) continue;
+    if (!isCreHeadline(title) || isOffTopic(title)) continue;
     if (item.publishedAt && Date.parse(item.publishedAt) < oldest) continue;
-    const key = sameStory(title);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (out.some((kept) => sameStory(kept.title, title))) continue;
     out.push({ title, url: item.link, source: item.source, publishedAt: item.publishedAt, topics: topicsFor(title) });
     if (out.length >= limit) break;
   }

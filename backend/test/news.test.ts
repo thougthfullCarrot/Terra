@@ -83,6 +83,26 @@ describe('Google News RSS', () => {
     expect(topicsFor('Law firm signs lease for new office headquarters')).toEqual(['Office', 'Deals']);
   });
 
+  it('drops crime, sports, weather and same-name places, and merges one story from two papers', () => {
+    const headlines = headlinesFrom(
+      [
+        item('Man critically injured in late-night shooting outside Dallas apartments', '2026-10-04T00:00:00Z'),
+        item("Unexpected development on final injury report boosts the Dallas Cowboys' chances", '2026-10-04T00:00:00Z'),
+        item('Tropical update: 40% chance for development in the Gulf', '2026-10-04T00:00:00Z'),
+        item('Houston County candidates oppose data center development', '2026-10-04T00:00:00Z'),
+        item('Letters — Public education, Mesquite apartments', '2026-10-04T00:00:00Z'),
+        item('Machine Investment Group Acquires 490-Unit North Dallas Multifamily Community', '2026-10-03T00:00:00Z'),
+        item('Machine Investment Group Acquires 490-Unit Multifamily Community in North Dallas', '2026-10-02T00:00:00Z'),
+        item('Freehill Starts Work on 1.6M-SF Houston Warehouse Project', '2026-10-01T00:00:00Z')
+      ],
+      now
+    );
+    expect(headlines.map((h) => h.title)).toEqual([
+      'Machine Investment Group Acquires 490-Unit North Dallas Multifamily Community',
+      'Freehill Starts Work on 1.6M-SF Houston Warehouse Project'
+    ]);
+  });
+
   it('filters, dedupes and sorts a city’s headlines newest first', () => {
     const headlines = headlinesFrom(
       [
