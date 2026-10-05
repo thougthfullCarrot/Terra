@@ -40,7 +40,7 @@ export interface RawJob {
   /** Some boards expose an explicit seniority/level field; far more reliable than the title. */
   level?: string;
   /** Which board this came from, for provenance copy. */
-  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable' | 'aggregator';
+  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable' | 'ashby' | 'smartrecruiters' | 'aggregator';
   /**
    * Set when the firm's row names its sector (every homebuilder does). Wins
    * over the keyword guess: a builder's land analyst is a homebuilder seat even

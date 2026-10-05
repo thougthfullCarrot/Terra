@@ -59,11 +59,7 @@ describe('detectAts', () => {
   it('flags a platform with no fetcher rather than ignoring it', () => {
     // These counts are the whole point: an unsupported platform that shows up
     // ten times is the next fetcher worth writing.
-    expect(detectAts('https://someco.smartrecruiters.com/jobs')).toMatchObject({
-      ats: 'smartrecruiters',
-      supported: false
-    });
-    expect(detectAts('https://jobs.ashbyhq.com/someco')?.supported).toBe(false);
+    expect(detectAts('https://someco.jobvite.com/careers')).toMatchObject({ ats: 'jobvite', supported: false });
     expect(detectAts('https://someco.bamboohr.com/careers')?.ats).toBe('bamboohr');
     expect(detectAts('https://sjobs.brassring.com/x')).toBeNull(); // unknown, not guessed
   });

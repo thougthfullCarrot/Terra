@@ -25,6 +25,8 @@ import { fetchLever } from '../collector/sources/lever.js';
 import { fetchWorkday, type WorkdayStats } from '../collector/sources/workday.js';
 import { fetchIcims } from '../collector/sources/icims.js';
 import { fetchWorkable } from '../collector/sources/workable.js';
+import { fetchAshby } from '../collector/sources/ashby.js';
+import { fetchSmartRecruiters } from '../collector/sources/smartrecruiters.js';
 import { normalize, type RejectReason } from '../collector/normalize.js';
 
 
@@ -156,6 +158,10 @@ async function fetchFor(firm: FirmRow, stats: WorkdayStats) {
       });
     case 'workable':
       return fetchWorkable(firm.name, firm.atsSlug, { retries: 1 });
+    case 'ashby':
+      return fetchAshby(firm.name, firm.atsSlug, { retries: 1 });
+    case 'smartrecruiters':
+      return fetchSmartRecruiters(firm.name, firm.atsSlug, { retries: 1, maxPages: 5 });
   }
 }
 

@@ -108,7 +108,7 @@ describe('the Firms tab', () => {
     ]);
     expect(sheet.firms.map((entry) => entry.firm?.name ?? entry.problem)).toEqual([
       'Lincoln Property Company',
-      'Skipped: board type must be one of greenhouse, lever, workday, icims, workable',
+      'Skipped: board type must be one of greenhouse, lever, workday, icims, workable, ashby, smartrecruiters',
       'Skipped: Workday needs a host',
       'Cortland'
     ]);
@@ -223,7 +223,7 @@ describe('the Firms tab', () => {
       ['OK 2026-10-05 01:20 UTC: 3 matching jobs'],
       ['Failed 2026-10-05 01:20 UTC: 404'],
       [''],
-      ['Skipped: board type must be one of greenhouse, lever, workday, icims, workable'],
+      ['Skipped: board type must be one of greenhouse, lever, workday, icims, workable, ashby, smartrecruiters'],
       ['Not polled (Active is no)']
     ]);
   });

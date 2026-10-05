@@ -1,7 +1,9 @@
 import type { Match, Posting, Profile, RawJob } from '../types.js';
 import type { FirmRow, Store } from '../db/store.js';
 import { normalize, type RejectReason } from './normalize.js';
+import { fetchAshby } from './sources/ashby.js';
 import { fetchGreenhouse } from './sources/greenhouse.js';
+import { fetchSmartRecruiters } from './sources/smartrecruiters.js';
 import { fetchLever } from './sources/lever.js';
 import { fetchWorkday } from './sources/workday.js';
 import { fetchIcims } from './sources/icims.js';
@@ -289,6 +291,10 @@ async function defaultFetcher(firm: FirmRow): Promise<RawJob[]> {
       return fetchIcims(firm.name, firm.atsHost, firm.atsSlug);
     case 'workable':
       return fetchWorkable(firm.name, firm.atsSlug);
+    case 'ashby':
+      return fetchAshby(firm.name, firm.atsSlug);
+    case 'smartrecruiters':
+      return fetchSmartRecruiters(firm.name, firm.atsSlug);
   }
 }
 

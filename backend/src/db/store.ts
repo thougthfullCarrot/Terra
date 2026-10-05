@@ -3,7 +3,7 @@ import type { Match, Posting, Profile, Sector } from '../types.js';
 export interface FirmRow {
   id: number;
   name: string;
-  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable';
+  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable' | 'ashby' | 'smartrecruiters';
   atsSlug: string;
   atsHost?: string | null;
   active: boolean;
