@@ -181,7 +181,12 @@ function bindSignIn() {
     });
     $('signin-submit').disabled = false;
 
-    if (error) return note('signin-status', `Couldn't send the link: ${error.message}`, true);
+    if (error) {
+      const busy = error.status === 429 || /rate limit/i.test(error.message);
+      return note('signin-status', busy
+        ? 'Too many sign-in emails were sent in the last hour. Please try again in a little while.'
+        : `Couldn't send the link: ${error.message}`, true);
+    }
     const extra = isCollegeEmail(email) ? '' : " Since it isn't a college email, you'll be asked to subscribe after signing in.";
     note('signin-status', `Check ${email} for a sign-in link. It works once and expires in an hour.${extra}`);
   });

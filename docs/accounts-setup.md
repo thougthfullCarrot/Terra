@@ -31,16 +31,22 @@ You need three accounts: Supabase (database, sign-in, file storage), Stripe
    - **Redirect URLs** > **Add URL**: `https://thougthfullcarrot.github.io/Terra/**`
    - Click **Save**.
 5. Left sidebar, **Project Settings** > **API** (or **Data API** / **API Keys**). Copy:
-   - **Project URL** (looks like `https://abcdefgh.supabase.co`)
+   - **Project URL** (looks like `https://<your-project-id>.supabase.co`)
    - the **anon / public** key
    - the **service_role** key (click **Reveal**). This one is secret; it only goes into GitHub secrets below.
 6. Go to <https://supabase.com/dashboard/account/tokens>, click **Generate new token**,
    name it `terra-github`, copy it. GitHub uses it to deploy the payment webhook.
 
 Note on email: Supabase's built-in sender only sends a few sign-in emails per
-hour. That is fine for testing. Before sharing the site widely, add a free SMTP
-sender under **Authentication** > **Emails** > **SMTP Settings** (Resend's free
-plan works).
+hour, so other people quickly see "email rate limit exceeded". Use Gmail as the
+sender instead (free, about 500 emails a day):
+
+1. Turn on 2-Step Verification at <https://myaccount.google.com/security>.
+2. Open <https://myaccount.google.com/apppasswords>, name it `terra`, click **Create**,
+   and copy the 16-letter password.
+3. In GitHub secrets (section 3) add `SMTP_USER` (your Gmail address) and
+   `SMTP_PASSWORD` (that 16-letter password).
+4. **Actions** tab > **Email sender** > **Run workflow**.
 
 ## 2. Stripe (test mode)
 
@@ -61,7 +67,8 @@ Nobody can be charged real money in test mode.
    **Create key** and copy it (starts with `rk_test_`).
 6. **Developers** > **Webhooks** > **Add endpoint**:
    - **Endpoint URL**: your Project URL from Supabase plus `/functions/v1/stripe-webhook`,
-     for example `https://abcdefgh.supabase.co/functions/v1/stripe-webhook`
+     for example `https://<your-project-id>.supabase.co/functions/v1/stripe-webhook`. Use your own
+     project ID; the Stripe webhook workflow prints the exact URL in its run summary
    - **Select events**: `checkout.session.completed`, `customer.subscription.created`,
      `customer.subscription.updated`, `customer.subscription.deleted`
    - Click **Add endpoint**, then **Reveal** the **Signing secret** and copy it (starts with `whsec_`).
