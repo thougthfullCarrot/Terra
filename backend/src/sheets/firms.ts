@@ -22,7 +22,7 @@ export const FIRMS_TAB = 'Firms';
  */
 export const FIRM_HEADERS = ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector'] as const;
 
-const ATS = ['greenhouse', 'lever', 'workday', 'icims', 'workable'] as const;
+const ATS = ['greenhouse', 'lever', 'workday', 'icims', 'workable', 'ashby', 'smartrecruiters'] as const;
 
 export interface SheetFirm {
   /** 1-based sheet row, so a status can be written back beside it. */

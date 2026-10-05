@@ -76,6 +76,8 @@ function provenance(ats: RawJob['ats']): string {
     case 'workday':
     case 'icims':
     case 'workable':
+    case 'ashby':
+    case 'smartrecruiters':
       return 'Posted on the firm careers page';
     case 'aggregator':
       return 'Aggregated from a Texas jobs board';

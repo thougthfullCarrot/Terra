@@ -8,14 +8,12 @@
  * a guess, already attached to the right firm.
  */
 
-export type SupportedAts = 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable';
+export type SupportedAts = 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable' | 'ashby' | 'smartrecruiters';
 
 /** Platforms worth counting even though no fetcher exists for them yet. */
 export type OtherAts =
   | 'bamboohr'
   | 'jazzhr'
-  | 'smartrecruiters'
-  | 'ashby'
   | 'paylocity'
   | 'adp'
   | 'taleo'
@@ -92,6 +90,21 @@ export function detectAts(rawUrl: string): AtsMatch | null {
     return hit('workable', true, host.split('.')[0] ?? null, null, rawUrl);
   }
 
+  // Ashby: jobs.ashbyhq.com/<slug>.
+  if (host === 'jobs.ashbyhq.com') {
+    const slug = firstSegment(path);
+    return hit('ashby', true, slug && slug !== 'api' ? slug : null, null, rawUrl);
+  }
+
+  // SmartRecruiters: jobs.smartrecruiters.com/<company>, careers.smartrecruiters.com/<company>.
+  if (host === 'jobs.smartrecruiters.com' || host === 'careers.smartrecruiters.com') {
+    const slug = firstSegment(path);
+    return hit('smartrecruiters', true, slug && !/^(oneclick-ui|ni|sr-jobs)$/i.test(slug) ? slug : null, null, rawUrl);
+  }
+  if (host.endsWith('smartrecruiters.com') || host.endsWith('ashbyhq.com')) {
+    return hit(host.endsWith('ashbyhq.com') ? 'ashby' : 'smartrecruiters', true, null, null, rawUrl);
+  }
+
   for (const [pattern, ats] of OTHERS) {
     if (pattern.test(host)) return hit(ats, false, null, host, rawUrl);
   }
@@ -102,8 +115,6 @@ export function detectAts(rawUrl: string): AtsMatch | null {
 const OTHERS: [RegExp, OtherAts][] = [
   [/(^|\.)bamboohr\.com$/, 'bamboohr'],
   [/(^|\.)applytojob\.com$/, 'jazzhr'],
-  [/(^|\.)smartrecruiters\.com$/, 'smartrecruiters'],
-  [/(^|\.)ashbyhq\.com$/, 'ashby'],
   [/(^|\.)paylocity\.com$/, 'paylocity'],
   [/(^|\.)(myjobs|workforcenow|recruiting)\.adp\.com$/, 'adp'],
   [/(^|\.)taleo\.net$/, 'taleo'],
