@@ -9,6 +9,7 @@ import {
   parseZcta,
   projectDetails,
   searchForm,
+  TABS_CITY_IDS,
   spread,
   zipOf,
   type Development,
@@ -179,11 +180,8 @@ describe('fetchDevelopments', () => {
     }) as typeof fetch;
   }
 
-  it('skips a city with no TABS city id yet', async () => {
-    const calls: string[] = [];
-    const result = await fetchDevelopments(['New Braunfels'], { now: new Date('2026-10-05T00:00:00Z'), pauseMs: 0, fetchImpl: fakeFetch(calls) });
-    expect(result.projects).toHaveLength(0);
-    expect(calls).toHaveLength(0);
+  it('has a TABS city id for every market', () => {
+    expect(TABS_CITY_IDS['New Braunfels']).toBe('1216');
   });
 
   it('reads new projects, reuses earlier ones, and places them on the map', async () => {

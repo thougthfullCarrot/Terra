@@ -27,17 +27,13 @@ export const tabsProjectUrl = (number: string) => `${TABS}/Search/Project/${numb
 export const tabsPermalink = (number: string) => `${TABS}/Projects/${number}`;
 
 /** TABS location city ids, from the search form's city list. */
-/**
- * TODO: New Braunfels's id is not known yet (the sandbox that added the city
- * could not reach TDLR). Read it off the LocationCity <select> on the TABS
- * search page and add it here; until then New Braunfels gets no map pins.
- */
 export const TABS_CITY_IDS: Partial<Record<City, string>> = {
   Dallas: '415',
   'Fort Worth': '606',
   Houston: '785',
   Austin: '77',
   'San Antonio': '1537',
+  'New Braunfels': '1216',
   'El Paso': '522'
 };
 
