@@ -302,7 +302,7 @@ describe('market.js (site)', () => {
     expect(state).toEqual({ open: true, city: 'Houston', focus: 'multifamily', sort: 'rentalVacancy', order: 'asc' });
 
     // Vacancy defaults to lowest first; a city or sort the data lacks falls back.
-    expect(readMarketHash('#markets&focus=multifamily', snapshot)).toMatchObject({ sort: 'rentalVacancy', order: 'asc', city: '' });
+    expect(readMarketHash('#markets&focus=multifamily', snapshot)).toMatchObject({ sort: 'aptVacancy', order: 'asc', city: '' });
     expect(readMarketHash('#markets&city=Nowhere&focus=office&sort=rentalVacancy', snapshot)).toMatchObject({
       city: '',
       sort: 'officeJobsGrowth',

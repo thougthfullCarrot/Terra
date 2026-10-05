@@ -10,7 +10,11 @@ import {
   type Point
 } from './bls.js';
 import { censusKey, growth, rentalVacancy, renterShare, type AcsResult } from './census.js';
+import type { ApartmentListResult } from './apartmentList.js';
+import type { MonthlyReading } from './csv.js';
 import type { Metro } from './metros.js';
+import type { PermitResult } from './permits.js';
+import type { ZillowResult } from './zillow.js';
 
 /**
  * The market data page's file: one row per Terra city, a value per metric.
@@ -27,7 +31,7 @@ export interface MarketMetric {
   unit: Unit;
   /** Which end ranks first when sorting "best first"; null when neither end is better. */
   better: 'high' | 'low' | null;
-  source: 'BLS' | 'Census ACS';
+  source: 'BLS' | 'Census ACS' | 'Zillow' | 'Apartment List' | 'Census BPS';
   /** One line on what the figure is, shown on hover and in the method notes. */
   note: string;
 }
@@ -104,7 +108,59 @@ export const METRICS: MarketMetric[] = [
   },
   { key: 'renterShare', label: 'Renter households', unit: 'rate', better: 'high', source: 'Census ACS', note: 'Share of occupied homes that are rented: the apartment demand pool.' },
   { key: 'medianHomeValue', label: 'Median home value', unit: 'usd', better: null, source: 'Census ACS', note: 'Owner-estimated value of owner-occupied homes.' },
-  { key: 'homeValueGrowth', label: 'Home value growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Median home value vs. the year before.' }
+  { key: 'homeValueGrowth', label: 'Home value growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Median home value vs. the year before.' },
+  {
+    key: 'zhvi',
+    label: 'Typical home value (Zillow)',
+    unit: 'usd',
+    better: null,
+    source: 'Zillow',
+    note: 'Zillow Home Value Index for the city itself: the typical home (middle third), latest month.'
+  },
+  { key: 'zhviGrowth', label: 'Home value growth (Zillow)', unit: 'change', better: 'high', source: 'Zillow', note: 'Zillow Home Value Index vs. the same month a year earlier.' },
+  {
+    key: 'zori',
+    label: 'Typical asking rent (Zillow)',
+    unit: 'usd',
+    better: null,
+    source: 'Zillow',
+    note: 'Zillow Observed Rent Index for the city: asking rent on homes and apartments listed, latest month.'
+  },
+  { key: 'zoriGrowth', label: 'Asking rent growth (Zillow)', unit: 'change', better: 'high', source: 'Zillow', note: 'Zillow Observed Rent Index vs. a year earlier.' },
+  {
+    key: 'aptRent',
+    label: 'Apartment rent (Apartment List)',
+    unit: 'usd',
+    better: null,
+    source: 'Apartment List',
+    note: 'Median rent on apartments in the city, all bedroom counts, latest month.'
+  },
+  { key: 'aptRentGrowth', label: 'Apartment rent growth (Apartment List)', unit: 'change', better: 'high', source: 'Apartment List', note: 'Apartment rent vs. a year earlier.' },
+  {
+    key: 'aptVacancy',
+    label: 'Apartment vacancy (Apartment List)',
+    unit: 'rate',
+    better: 'low',
+    source: 'Apartment List',
+    note: 'Share of apartment units in the city sitting vacant, latest month. Lower means a tighter market.'
+  },
+  {
+    key: 'permitUnits',
+    label: 'New homes permitted',
+    unit: 'count',
+    better: 'high',
+    source: 'Census BPS',
+    note: 'Housing units the city authorized in new buildings this year so far, as reported to the Census Building Permits Survey.'
+  },
+  {
+    key: 'multifamilyPermitUnits',
+    label: 'Apartment units permitted',
+    unit: 'count',
+    better: 'high',
+    source: 'Census BPS',
+    note: 'Of those, units in buildings of five or more: the apartment pipeline.'
+  },
+  { key: 'permitGrowth', label: 'Permit growth', unit: 'change', better: 'high', source: 'Census BPS', note: 'Homes permitted this year so far vs. the same months last year.' }
 ];
 
 export const GROUPS: MarketGroup[] = [
@@ -136,13 +192,13 @@ export const GROUPS: MarketGroup[] = [
     key: 'multifamily',
     label: 'Multifamily',
     blurb: 'Apartments: how tight the rental market is and where rents are heading.',
-    metrics: ['rentalVacancy', 'medianRent', 'rentGrowth', 'renterShare', 'populationGrowth']
+    metrics: ['aptVacancy', 'aptRent', 'aptRentGrowth', 'zori', 'zoriGrowth', 'multifamilyPermitUnits', 'rentalVacancy', 'medianRent', 'rentGrowth', 'renterShare']
   },
   {
     key: 'development',
     label: 'Development',
     blurb: 'Building activity and land and home values.',
-    metrics: ['constructionJobsGrowth', 'constructionJobs', 'medianHomeValue', 'homeValueGrowth']
+    metrics: ['permitUnits', 'permitGrowth', 'multifamilyPermitUnits', 'zhvi', 'zhviGrowth', 'constructionJobsGrowth', 'constructionJobs', 'medianHomeValue', 'homeValueGrowth']
   }
 ];
 
@@ -156,8 +212,30 @@ export const SOURCES: MarketSnapshot['sources'] = [
     name: 'U.S. Census Bureau, American Community Survey',
     url: 'https://www.census.gov/programs-surveys/acs',
     detail: 'Population, income, rent, home value and rental vacancy, 1-year estimates. Updated each September.'
+  },
+  {
+    name: 'Zillow Research',
+    url: 'https://www.zillow.com/research/data/',
+    detail: 'Zillow Home Value Index and Zillow Observed Rent Index, city level. Updated monthly.'
+  },
+  {
+    name: 'Apartment List',
+    url: 'https://www.apartmentlist.com/research/category/data-rent-estimates',
+    detail: 'Apartment rent estimates and vacancy index, city level. Updated monthly.'
+  },
+  {
+    name: 'U.S. Census Bureau, Building Permits Survey',
+    url: 'https://www.census.gov/construction/bps/',
+    detail: 'New housing units each city authorized, by building size, year to date. Updated monthly.'
   }
 ];
+
+/** The property-market sources, each null when it did not answer. */
+export interface PropertyData {
+  zillow?: ZillowResult | null;
+  apartmentList?: ApartmentListResult | null;
+  permits?: PermitResult | null;
+}
 
 /** Every BLS series the snapshot reads, for one request batch. */
 export function blsSeriesFor(metros: Metro[]): string[] {
@@ -182,7 +260,8 @@ export function buildMarketSnapshot(
   metros: Metro[],
   bls: Map<string, Point[]> | null,
   acs: AcsResult | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  property: PropertyData = {}
 ): MarketSnapshot {
   const markets = metros.map((metro): MarketArea => {
     const values: Record<string, number | null> = {};
@@ -240,6 +319,23 @@ export function buildMarketSnapshot(
     set('renterShare', renterShare(row), year);
     set('medianHomeValue', row?.medianHomeValue, year);
     set('homeValueGrowth', growth(row?.medianHomeValue, before?.medianHomeValue), span);
+
+    // Monthly city figures: a level and its change from a year earlier.
+    const monthly = (key: string, reading: MonthlyReading | undefined, growthKey?: string) => {
+      set(key, reading?.value, reading?.period ?? null);
+      if (growthKey) set(growthKey, growth(reading?.value, reading?.yearAgo), reading?.period ?? null);
+    };
+    monthly('zhvi', property.zillow?.homeValue.get(metro.city), 'zhviGrowth');
+    monthly('zori', property.zillow?.rent.get(metro.city), 'zoriGrowth');
+    monthly('aptRent', property.apartmentList?.rent.get(metro.city), 'aptRentGrowth');
+    monthly('aptVacancy', property.apartmentList?.vacancy.get(metro.city));
+
+    const permits = property.permits;
+    const issued = permits?.current.get(metro.city);
+    const lastYear = permits?.previous.get(metro.city);
+    set('permitUnits', issued?.units, permits?.period ?? null);
+    set('multifamilyPermitUnits', issued?.multifamilyUnits, permits?.period ?? null);
+    set('permitGrowth', growth(issued?.units, lastYear?.units), permits?.period ?? null);
 
     for (const metric of METRICS) {
       values[metric.key] ??= null;
