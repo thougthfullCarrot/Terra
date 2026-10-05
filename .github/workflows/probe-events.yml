@@ -27,3 +27,18 @@ jobs:
               done
             done
           done
+      - name: Probe hubs and StarChapter
+        run: |
+          UA="Mozilla/5.0 (compatible; TerraEventsBot/1.0; +https://github.com/thougthfullCarrot/Terra)"
+          probe() { u="$1"; f=/tmp/p$RANDOM; out=$(curl -sS -L -A "$UA" -m 20 -o $f -w '%{http_code} %{size_download} %{url_effective}' "$u" 2>&1 | tail -c 200); hits=$(grep -oiE 'BEGIN:VCALENDAR|/events/details/[a-z0-9-]+|meetinginfo\.php\?id=[0-9]+|"@type" ?: ?"Event"|tribe-events|wix|/event-[0-9]+|/events/[a-z0-9-]+/' $f 2>/dev/null | sort | uniq -c | sort -rn | head -6 | tr '\n' ';'); echo "$u -> $out | $hits"; case "$u" in *robots.txt) grep -iE '^(user-agent|disallow)' $f | head -10 | sed 's/^/    /';; esac; }
+          for h in newbraunfelschamber.growthzoneapp.com members.metrosa.com business.southtexaspartnership.org business.boerne.org; do
+            for p in /robots.txt /events /events/calendar /events/ical /events/calendarical "/events/search?from=10/05/2026&to=01/31/2027"; do probe "https://$h$p"; done
+          done
+          for h in ccimsa sanantoniosmps ccimhouston ccimaustin ccimnorthtexas ccimelpaso texasccim houstonccim northtexasccim austinccim smpsdfw smpshouston smpsaustin; do
+            for p in /robots.txt /index.php /meetinglist.php /meetings.php /calendar.php; do probe "https://$h.starchapter.com$p"; done
+          done
+          for u in https://aiasa.org/robots.txt https://aiasa.org/events/ "https://aiasa.org/wp-json/tribe/events/v1/events" "https://aiasa.org/events/?ical=1" https://www.nawicsatx.org/robots.txt https://www.nawicsatx.org/events-1 https://www.fwitexas.org/robots.txt https://www.fwitexas.org/events https://www.fwitexas.org/Events "https://www.fwitexas.org/Events?format=ical" https://www.acg.org/robots.txt https://www.acg.org/asa/events https://sawomenschamber.org/robots.txt "https://sawomenschamber.org/wp-json/tribe/events/v1/events" https://www.sahcc.org/robots.txt https://www.sahcc.org/events; do probe "$u"; done
+          echo "--- samples"
+          curl -sSL -A "$UA" -m 20 "https://ccimsa.starchapter.com/meetinginfo.php?id=93" | sed 's/<[^>]*>/ /g' | tr -s ' \n' | head -c 2500; echo
+          curl -sSL -A "$UA" -m 20 "https://ccimsa.starchapter.com/index.php" | grep -oiE '<a[^>]*meetinginfo[^>]*>[^<]*' | head -20
+          curl -sSL -A "$UA" -m 20 "https://members.metrosa.com/events/calendar" | grep -oiE 'href="[^"]*events/details/[^"]*"[^>]*>[^<]*' | head -20
