@@ -1,0 +1,29 @@
+name: Probe event sources (temporary)
+on:
+  push:
+    branches: [claude/more-market-data-gnlj26]
+    paths: [.github/workflows/probe-events.yml]
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Probe
+        run: |
+          UA="Mozilla/5.0 (compatible; TerraEventsBot/1.0; +https://github.com/thougthfullCarrot/Terra)"
+          HOSTS="ycran.org www.ycran.org ycranaustin.org ycransa.org ycran-austin.org ycransanantonio.org boma-houston.org houstonboma.org www.bomahouston.org bomasanantonio.org www.bomasa.org bomasa.org bomafortworth.org www.bomafortworth.org bomaaustin.org www.bomaaustin.org texasccim.com www.texasccim.com ccimhouston.com houstonccim.com ccimaustin.org austinccim.com sanantonioccim.com ccimsa.org naiopaustin.org www.naiopaustin.org naiopsa.com www.naiopsa.org sanantonio.naiop.org naiopnt.org www.naiopnt.org naiopnorthtexas.org crewaustin.org www.crewaustin.org crewsa.org crewsanantonio.org www.crewsa.org crewdallas.org crewhouston.org crewfortworth.org recsa.org www.recsa.org recaustin.org www.recaustin.org recouncil.com www.recouncil.com elpasochamber.org www.elpaso.org newbraunfels.org www.newbraunfels.org newbraunfelschamber.org elpasoaor.com nbaor.org"
+          PATHS="/ /robots.txt /events /events/ /calendar /events/?ical=1 /?ical=1 /?post_type=tribe_events&ical=1 /wp-json/tribe/events/v1/events /feed /events/calendar /events/ical /events/calendarical"
+          for h in $HOSTS; do
+            echo "======== $h"
+            for p in $PATHS; do
+              for s in https http; do
+                u="$s://$h$p"
+                out=$(curl -sS -L -A "$UA" -m 15 -o /tmp/b -w '%{http_code} %{size_download} %{url_effective}' "$u" 2>&1 | tail -c 300)
+                hits=$(grep -oiE 'BEGIN:VCALENDAR|tribe-events|"events":\[|growthzone|chambermaster|eventbrite\.com/[a-z/0-9-]*|"@type" ?: ?"Event"|ics|ical|/event/[a-z0-9-]+|/events/details/[a-z0-9-]+|wild ?apricot|memberclicks|ymcareers|cvent|eventbrite' /tmp/b 2>/dev/null | sort | uniq -c | sort -rn | head -8 | tr '\n' ';')
+                echo "$u -> $out | $hits"
+                if [ "$p" = "/robots.txt" ]; then grep -iE '^(user-agent|disallow)' /tmp/b 2>/dev/null | head -12 | sed 's/^/    /'; fi
+                [ "$s" = https ] && echo "$out" | grep -qv '^000' && break
+              done
+            done
+          done
