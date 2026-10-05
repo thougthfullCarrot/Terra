@@ -38,7 +38,7 @@ export function checkoutUrl(paymentLink, { userId, email }) {
   return url.toString();
 }
 
-export const PROFILE_CITIES = ['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso'];
+export const PROFILE_CITIES = ['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels'];
 export const PROFILE_SECTORS = [
   'Investment',
   'Brokerage',

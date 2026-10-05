@@ -232,8 +232,24 @@ describe('buildMarketSnapshot', () => {
     expect(h.periods.rentGrowth).toBe('2024–25');
   });
 
+  it('gives New Braunfels San Antonio metro figures, labeled, and dedupes the shared requests', () => {
+    const sa = METROS.find((m) => m.city === 'San Antonio')!;
+    const s = new Map(series);
+    s.set(unemploymentSeries(sa), points([2026, 8], [4.1]));
+    const both = buildMarketSnapshot(METROS, s, { year: 2025, current: new Map([['41700', row]]), previous: new Map() }, now);
+    const nb = both.markets.find((m) => m.city === 'New Braunfels')!;
+    const satx = both.markets.find((m) => m.city === 'San Antonio')!;
+    expect(nb.values.unemployment).toBe(4.1);
+    expect(nb.values.population).toBe(satx.values.population);
+    expect(nb.periods.population).toBe('2025, San Antonio metro');
+    expect(satx.periods.population).toBe('2025');
+    const ids = blsSeriesFor(METROS);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(acsUrls(2025, METROS)[0]!.match(/41700/g)).toHaveLength(1);
+  });
+
   it('lists every metric for every city, blank where a source had nothing', () => {
-    expect(snapshot.markets.map((m) => m.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso']);
+    expect(snapshot.markets.map((m) => m.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels']);
     for (const market of snapshot.markets) expect(Object.keys(market.values).sort()).toEqual(METRICS.map((m) => m.key).sort());
     expect(snapshot.markets.find((m) => m.city === 'Austin')!.values.jobs).toBeNull();
   });

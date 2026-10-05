@@ -45,7 +45,7 @@ export function acsUrls(year: number, metros: Metro[], apiKey?: string): string[
   const key = apiKey ? `&key=${encodeURIComponent(apiKey)}` : '';
   const urls: string[] = [];
 
-  const whole = metros.filter((m) => !m.census.division).map((m) => m.census.msa);
+  const whole = [...new Set(metros.filter((m) => !m.census.division).map((m) => m.census.msa))];
   if (whole.length) urls.push(`${base}&for=${geo(`${MSA}:${whole.join(',')}`)}${key}`);
 
   const parents = [...new Set(metros.filter((m) => m.census.division).map((m) => m.census.msa))];

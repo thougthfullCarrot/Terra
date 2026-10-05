@@ -335,7 +335,7 @@ export const METRICS: MarketMetric[] = [
     unit: 'taxRate',
     better: 'low',
     source: 'Texas Comptroller',
-    note: `The main school district in the city (Houston ISD, Dallas ISD, Fort Worth ISD, Austin ISD, San Antonio ISD, El Paso ISD): usually the biggest piece. ${TAX_NOTE}`
+    note: `The main school district in the city (Houston ISD, Dallas ISD, Fort Worth ISD, Austin ISD, San Antonio ISD, El Paso ISD, New Braunfels ISD): usually the biggest piece. ${TAX_NOTE}`
   },
   {
     key: 'taxRateOther',
@@ -621,7 +621,7 @@ export const SOURCES: MarketSnapshot['sources'] = [
     name: 'County appraisal districts (Harris, Dallas, Tarrant, Travis)',
     url: 'https://comptroller.texas.gov/taxes/property-tax/county-directory/',
     detail:
-      'Appraised values and land values from each district\'s free certified roll download. Appraised, not sale prices. Bexar and El Paso do not allow automated downloads. Updated yearly.'
+      'Appraised values and land values from each district\'s free certified roll download. Appraised, not sale prices. Bexar and El Paso do not allow automated downloads; Comal (New Braunfels) is not read yet. Updated yearly.'
   }
 ];
 
@@ -661,7 +661,8 @@ export function blsSeriesFor(metros: Metro[]): string[] {
     'financial',
     'professional'
   ];
-  return metros.flatMap((metro) => [...industries.map((industry) => cesSeries(metro, industry)), unemploymentSeries(metro)]);
+  // A city sharing its metro (New Braunfels in San Antonio's) asks for the same series once.
+  return [...new Set(metros.flatMap((metro) => [...industries.map((industry) => cesSeries(metro, industry)), unemploymentSeries(metro)]))];
 }
 
 /** CES values are thousands of jobs. */
@@ -682,13 +683,16 @@ export function buildMarketSnapshot(
       values[key] = ok ? value : null;
       periods[key] = ok ? period : null;
     };
+    // Metro-wide figures for a city that shares its metro say whose they are.
+    const metroWide = (period: string | null | undefined): string | null =>
+      period && metro.sharedMetro ? `${period}, ${metro.sharedMetro}` : (period ?? null);
 
     // Jobs: levels and year-over-year change, per industry group.
     const series = (industry: Industry) => bls?.get(cesSeries(metro, industry));
     const jobs = (key: string, points: Point[] | undefined) => {
       const last = latest(points);
-      set(key, last ? Math.round(last.value * THOUSANDS) : null, monthLabel(last));
-      set(`${key}Growth`, yearOverYear(points), monthLabel(last));
+      set(key, last ? Math.round(last.value * THOUSANDS) : null, metroWide(monthLabel(last)));
+      set(`${key}Growth`, yearOverYear(points), metroWide(monthLabel(last)));
     };
     jobs('jobs', series('total'));
     jobs(
@@ -714,13 +718,13 @@ export function buildMarketSnapshot(
     jobs('constructionJobs', series('construction') ?? series('miningConstruction'));
 
     const unemployment = bls?.get(unemploymentSeries(metro));
-    set('unemployment', latest(unemployment)?.value, monthLabel(latest(unemployment)));
+    set('unemployment', latest(unemployment)?.value, metroWide(monthLabel(latest(unemployment))));
 
     // Census: levels for the latest year, growth against the year before.
     const row = acs?.current.get(censusKey(metro));
     const before = acs?.previous.get(censusKey(metro));
-    const year = acs ? String(acs.year) : null;
-    const span = acs ? `${acs.year - 1}–${String(acs.year).slice(2)}` : null;
+    const year = metroWide(acs ? String(acs.year) : null);
+    const span = metroWide(acs ? `${acs.year - 1}–${String(acs.year).slice(2)}` : null);
     set('population', row?.population, year);
     set('populationGrowth', growth(row?.population, before?.population), span);
     set('medianIncome', row?.medianIncome, year);
@@ -768,7 +772,7 @@ export function buildMarketSnapshot(
     // Population estimates: the latest July 1 and where the change came from.
     const pep = property.population;
     const people = pep?.metros.get(metro.area);
-    const pepYear = pep ? `July ${pep.year}` : null;
+    const pepYear = metroWide(pep ? `July ${pep.year}` : null);
     set('pepPopulation', people?.population, pepYear);
     set('pepGrowth', people?.change != null ? growth(people.population, people.population - people.change) : null, pepYear);
     set('migrationRate', shareOf(people?.migration, people?.population), pepYear);
@@ -791,7 +795,7 @@ export function buildMarketSnapshot(
     set('taxRateOther', tax?.other, taxYear);
 
     const zones = property.zones;
-    set('ozTracts', zones ? metroZoneCount(metro, zones) : null, zones ? 'Designated 2018' : null);
+    set('ozTracts', zones ? metroZoneCount(metro, zones) : null, metroWide(zones ? 'Designated 2018' : null));
 
     const roads = property.txdot?.get(metro.txdotDistrict);
     const asOfToday = `${metro.txdotDistrict} district, ${now.toISOString().slice(0, 10)}`;
@@ -807,22 +811,22 @@ export function buildMarketSnapshot(
     set('redfinSaleToList', sale?.saleToList, salePeriod);
 
     const listing = property.realtor?.get(metro.census.msa);
-    const listPeriod = listing ? (metro.census.division ? `${listing.period}, DFW metro` : listing.period) : null;
+    const listPeriod = listing ? (metro.census.division ? `${listing.period}, DFW metro` : metroWide(listing.period)) : null;
     set('rdcListPrice', listing?.medianListingPrice, listPeriod);
     set('rdcListings', listing?.activeListings, listPeriod);
     set('rdcDom', listing?.medianDom, listPeriod);
     set('rdcPriceReduced', listing?.priceReducedShare, listPeriod);
 
     const hpi = property.fhfa?.get(metro.area);
-    set('hpi', hpi?.index, hpi?.period ?? null);
-    set('hpiGrowth', hpi?.change1y, hpi?.period ?? null);
-    set('hpiGrowth5y', hpi?.change5y, hpi?.period ?? null);
+    set('hpi', hpi?.index, metroWide(hpi?.period));
+    set('hpiGrowth', hpi?.change1y, metroWide(hpi?.period));
+    set('hpiGrowth5y', hpi?.change5y, metroWide(hpi?.period));
 
     const fmr = property.fmr?.get(metro.city);
-    fmr?.rents.forEach((rent, beds) => set(`fmr${beds}`, rent, fmr.period));
+    fmr?.rents.forEach((rent, beds) => set(`fmr${beds}`, rent, metroWide(fmr.period)));
 
     const lihtc = property.lihtc?.get(metro.area);
-    const lihtcPeriod = lihtc ? `HUD database, ${now.getUTCFullYear()}` : null;
+    const lihtcPeriod = metroWide(lihtc ? `HUD database, ${now.getUTCFullYear()}` : null);
     set('lihtcProjects', lihtc?.projects, lihtcPeriod);
     set('lihtcUnits', lihtc?.units, lihtcPeriod);
     set('lihtcRecent', lihtc?.recentProjects, lihtcPeriod);

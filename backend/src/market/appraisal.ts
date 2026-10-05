@@ -21,7 +21,8 @@ import { csvNumber, parseCsvLine } from './csv.js';
  *   Travis (Austin)        fixed-width PACS export: PROP.TXT and LAND_DET.TXT
  *
  * Bexar (San Antonio) and El Paso refuse automated downloads, so they have
- * none of these figures.
+ * none of these figures. Comal (New Braunfels) has no reader written yet
+ * (TODO), so it has none either.
  */
 
 /** The property types the Texas comptroller's state codes separate. Office and retail are both "commercial". */

@@ -27,12 +27,13 @@ export const tabsProjectUrl = (number: string) => `${TABS}/Search/Project/${numb
 export const tabsPermalink = (number: string) => `${TABS}/Projects/${number}`;
 
 /** TABS location city ids, from the search form's city list. */
-export const TABS_CITY_IDS: Record<City, string> = {
+export const TABS_CITY_IDS: Partial<Record<City, string>> = {
   Dallas: '415',
   'Fort Worth': '606',
   Houston: '785',
   Austin: '77',
   'San Antonio': '1537',
+  'New Braunfels': '1216',
   'El Paso': '522'
 };
 
@@ -43,7 +44,8 @@ export const CITY_CENTERS: Record<City, [number, number]> = {
   Houston: [29.7604, -95.3698],
   Austin: [30.2672, -97.7431],
   'San Antonio': [29.4241, -98.4936],
-  'El Paso': [31.7619, -106.485]
+  'El Paso': [31.7619, -106.485],
+  'New Braunfels': [29.703, -98.1245]
 };
 
 const STATUS: Record<number, string> = {
@@ -131,7 +133,7 @@ export function searchForm(city: City, since: Date, until: Date, length = 200): 
     'order[0][column]': '9',
     'order[0][dir]': 'desc',
     'columns[9][data]': 'EstimatedCost',
-    LocationCity: TABS_CITY_IDS[city],
+    LocationCity: TABS_CITY_IDS[city] ?? '',
     RegistrationDateBegin: usDate(since),
     RegistrationDateEnd: usDate(until),
     DataVersionId: '900001'
@@ -336,6 +338,10 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   let pages = 0;
 
   for (const city of cities) {
+    if (!TABS_CITY_IDS[city]) {
+      log(`${city}: no TABS city id yet; skipped.`);
+      continue;
+    }
     const rows = currentDevelopments(await searchCity(city, now, http)).slice(0, PER_CITY);
     for (const row of rows) {
       const old = known.get(row.ProjectNumber);

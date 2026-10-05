@@ -205,6 +205,17 @@ describe('Texas Comptroller tax rates', () => {
     expect(rate.missing).toContain('Port of Houston');
     expect(rate.missing).not.toContain('Houston Community College');
   });
+
+  it('adds up New Braunfels from its city and school names and Comal County', () => {
+    const units: TaxingUnit[] = [
+      { id: '046-000-00', name: 'Comal', rate: 0.3 },
+      { id: '046-901-02', name: 'New Braunfels ISD', rate: 1.0 },
+      { id: '046-104-03', name: 'New Braunfels', rate: 0.4 }
+    ];
+    const rate = cityTaxRate(units, 'New Braunfels')!;
+    expect(rate).toMatchObject({ city: 0.4, county: 0.3, school: 1.0, missing: [] });
+    expect(rate.total).toBeCloseTo(1.7, 5);
+  });
 });
 
 describe('Opportunity Zones', () => {

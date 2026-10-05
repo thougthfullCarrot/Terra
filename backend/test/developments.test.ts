@@ -9,6 +9,7 @@ import {
   parseZcta,
   projectDetails,
   searchForm,
+  TABS_CITY_IDS,
   spread,
   zipOf,
   type Development,
@@ -178,6 +179,10 @@ describe('fetchDevelopments', () => {
       return new Response('', { status: 404 });
     }) as typeof fetch;
   }
+
+  it('has a TABS city id for every market', () => {
+    expect(TABS_CITY_IDS['New Braunfels']).toBe('1216');
+  });
 
   it('reads new projects, reuses earlier ones, and places them on the map', async () => {
     const calls: string[] = [];
