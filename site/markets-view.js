@@ -1,6 +1,6 @@
 // markets-view.js — draws the market data section. The rules live in market.js.
 //
-// The page has three sections, Jobs, Tracker and Market data, switched by the URL hash
+// The page has four sections, Jobs, Tracker, Market data and News, switched by the URL hash
 // so a link can open a city's market directly (#markets&city=Houston). The
 // data comes from a loader app.js hands over: market.json on the open site,
 // or the members-only Supabase row when accounts are on.
@@ -15,6 +15,7 @@ import {
   sortMarkets,
   writeMarketHash
 } from './market.js';
+import { readNewsHash } from './news.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,6 +72,7 @@ function update(change) {
 /** Which section the hash opens. The tracker only exists for signed-in members, so without its tab it falls back to jobs. */
 function section() {
   if (readMarketHash(location.hash, null).open) return 'markets';
+  if (readNewsHash(location.hash, null).open) return 'news';
   if (new URLSearchParams(location.hash.replace(/^#/, '')).has('tracker') && !$('tab-tracker').hidden) return 'tracker';
   return 'jobs';
 }
@@ -78,8 +80,9 @@ function section() {
 async function show() {
   const active = section();
   const open = active === 'markets';
-  for (const name of ['jobs', 'markets', 'tracker']) {
-    $(`${name}-view`).hidden = name !== active;
+  // news-view.js shows its own section; the others step aside for it.
+  for (const name of ['jobs', 'markets', 'tracker']) $(`${name}-view`).hidden = name !== active;
+  for (const name of ['jobs', 'markets', 'tracker', 'news']) {
     if (name === active) $(`tab-${name}`).setAttribute('aria-current', 'page');
     else $(`tab-${name}`).removeAttribute('aria-current');
   }

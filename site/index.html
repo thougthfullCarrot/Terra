@@ -128,7 +128,7 @@
             <article class="feature">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6" /></svg>
               <h3>Market data by city</h3>
-              <p>Rents, vacancy, jobs and population for Dallas, Fort Worth, Houston, Austin, San Antonio and El Paso.</p>
+              <p>Rents, vacancy, jobs and population for Dallas, Fort Worth, Houston, Austin, San Antonio and El Paso, plus local development and deal headlines.</p>
             </article>
             <article class="feature">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></svg>
@@ -327,6 +327,7 @@
         <a href="#" id="tab-jobs" class="tab" aria-current="page">Jobs</a>
         <a href="#tracker" id="tab-tracker" class="tab" hidden>Tracker</a>
         <a href="#markets" id="tab-markets" class="tab">Market data</a>
+        <a href="#news" id="tab-news" class="tab">News</a>
       </nav>
 
       <div id="jobs-view">
@@ -421,6 +422,26 @@
         <div id="m-chart"></div>
         <div id="m-body"></div>
         <div id="m-sources" class="market-sources"></div>
+      </section>
+
+      <!-- Commercial real estate headlines by city: news-view.js draws them from news.json. -->
+      <section id="news-view" hidden aria-labelledby="news-title">
+        <h2 id="news-title" class="visually-hidden">Commercial real estate news</h2>
+        <form class="controls" id="news-controls" onsubmit="return false">
+          <div class="filters news-filters">
+            <label>
+              <span class="eyebrow">CITY</span>
+              <select id="n-city"><option value="">All cities</option></select>
+            </label>
+          </div>
+          <div class="chip-group">
+            <span class="eyebrow">TOPIC</span>
+            <div class="chip-row" id="n-topics" role="group" aria-label="Topic"></div>
+          </div>
+        </form>
+        <div class="summary"><p id="n-count" aria-live="polite"></p></div>
+        <section id="n-list" class="list news-list" aria-label="Headlines"></section>
+        <div id="n-sources" class="market-sources"></div>
       </section>
       </div>
 
