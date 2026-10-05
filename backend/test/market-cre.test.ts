@@ -175,6 +175,20 @@ describe('Texas Comptroller tax rates', () => {
     expect(rate).toMatchObject({ city: 0.6988, county: 0.2155, school: 0.993835, missing: [] });
   });
 
+  it('reads the older layout, with long ids repeated per county', () => {
+    const older = [
+      ['2024 Statewide Report of Tax Rates'],
+      ['County ID', 'County Name', 'Taxing Unit ID', 'Taxing Unit Name', 'Split Indicator', 'Total Tax Rate'],
+      ['057', 'Dallas', '057-117-03-057-057', 'Dallas', 'X', '0.7357'],
+      ['061', 'Denton', '057-117-03-057-057', 'Dallas', 'X', '0.7357'],
+      ['057', 'Dallas', '057-905-02-057-057', 'Dallas ISD   ', '', '1.0']
+    ];
+    expect(parseTaxRates(older)).toEqual([
+      { id: '057-117-03', name: 'Dallas', rate: 0.7357 },
+      { id: '057-905-02', name: 'Dallas ISD', rate: 1 }
+    ]);
+  });
+
   it('gives no total when the city, county or school district is missing', () => {
     expect(cityTaxRate(parseTaxRates(rows), 'Houston')).toBeNull();
   });
@@ -210,7 +224,7 @@ describe('Opportunity Zones', () => {
 describe('TxDOT', () => {
   it('sorts phases into underway and planned', () => {
     expect(phaseBucket('Construction begins within 4 years')).toBe('planned');
-    expect(phaseBucket('Under construction')).toBe('underway');
+    expect(phaseBucket('Construction Underway or Begins Soon')).toBe('underway');
     expect(phaseBucket('Completed')).toBeNull();
   });
 

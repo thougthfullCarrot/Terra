@@ -335,11 +335,11 @@ export const METRICS: MarketMetric[] = [
   },
   {
     key: 'txdotUnderway',
-    label: 'Highway projects under construction',
+    label: 'Highway projects underway or starting soon',
     unit: 'usd',
     better: 'high',
     source: 'TxDOT',
-    note: "Estimated construction cost of state highway projects being built now in the area's TxDOT district."
+    note: "Estimated construction cost of state highway projects in the area's TxDOT district that are under construction or about to start."
   },
   ...appraisalMetrics(),
   {

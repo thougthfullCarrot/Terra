@@ -22,7 +22,7 @@ export const TXDOT_STATS_URL =
   }).toString();
 
 export interface DistrictProjects {
-  /** Estimated cost of projects under construction now. */
+  /** Estimated cost of projects under construction or about to start (TxDOT: "Construction Underway or Begins Soon"). */
   underway: number;
   underwayCount: number;
   /** Estimated cost of projects set to start construction within four years. */
@@ -37,7 +37,7 @@ interface StatsResponse {
 
 /** Which bucket a Project Tracker phase belongs in, or null for ones counted in neither (finished, long-range). */
 export function phaseBucket(phase: string): 'underway' | 'planned' | null {
-  if (/under\s*construction|construction\s+(underway|in progress|has begun|began)/i.test(phase)) return 'underway';
+  if (/under\s*construction|construction\s+underway|begins soon/i.test(phase)) return 'underway';
   if (/construction begins within/i.test(phase)) return 'planned';
   return null;
 }

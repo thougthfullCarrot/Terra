@@ -86,7 +86,7 @@ export interface TaxingUnit {
   rate: number;
 }
 
-/** Rows of the Statewide sheet: name, unit id, total rate, under a header row naming them. */
+/** Rows of the Statewide sheet: unit id, name and total rate, found by the header row naming them. */
 export function parseTaxRates(rows: string[][]): TaxingUnit[] {
   const headerAt = rows.findIndex((row) => row.some((cell) => /taxing unit id/i.test(cell)));
   if (headerAt < 0) return [];
@@ -95,13 +95,16 @@ export function parseTaxRates(rows: string[][]): TaxingUnit[] {
   const name = header.indexOf('taxing unit name');
   const rate = header.findIndex((cell) => cell === 'total tax rate');
   if (id < 0 || name < 0 || rate < 0) return [];
-  const out: TaxingUnit[] = [];
+  const out = new Map<string, TaxingUnit>();
   for (const row of rows.slice(headerAt + 1)) {
     const value = Number(row[rate]);
-    if (!/^\d{3}-\d{3}-\d{2}$/.test(row[id]?.trim() ?? '') || !Number.isFinite(value)) continue;
-    out.push({ id: row[id]!.trim(), name: (row[name] ?? '').replace(/\*+/g, '').trim(), rate: value });
+    // Older files suffix the id with the appraisal district and county
+    // (001-000-00-001-001) and repeat a unit once per county it spans.
+    const unit = /^(\d{3}-\d{3}-\d{2})(?:-\d{3}-\d{3})?$/.exec(row[id]?.trim() ?? '')?.[1];
+    if (!unit || !Number.isFinite(value) || out.has(unit)) continue;
+    out.set(unit, { id: unit, name: (row[name] ?? '').replace(/\*+/g, '').trim(), rate: value });
   }
-  return out;
+  return [...out.values()];
 }
 
 export interface CityTaxRate {
