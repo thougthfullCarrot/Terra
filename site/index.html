@@ -70,7 +70,14 @@
             <span class="eyebrow">EMAIL</span>
             <input id="signin-email" type="email" autocomplete="email" placeholder="you@school.edu" required />
           </label>
-          <button type="submit" class="primary" id="signin-submit">Email me a sign-in link</button>
+          <button type="submit" class="primary" id="signin-submit">Email me a sign-in code</button>
+        </form>
+        <form id="verify" class="signin" novalidate hidden>
+          <label>
+            <span class="eyebrow">6-DIGIT CODE</span>
+            <input id="verify-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="123456" required />
+          </label>
+          <button type="submit" class="primary" id="verify-submit">Sign in</button>
         </form>
         <p class="notice" id="signin-status" aria-live="polite" hidden></p>
       </section>

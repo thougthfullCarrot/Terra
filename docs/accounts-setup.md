@@ -1,6 +1,6 @@
 # Website accounts: setup
 
-The website can require sign-in. Anyone signs in with a link emailed to them.
+The website can require sign-in. Anyone signs in with a 6-digit code emailed to them.
 A college (.edu) email gets the jobs free; any other email pays a monthly
 subscription through Stripe. Signed-in users get a profile (name, college,
 grad year, major, picture, resume) and the jobs that best fit their resume are

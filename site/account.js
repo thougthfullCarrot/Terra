@@ -165,6 +165,8 @@ function clearCheckoutFlag() {
 // Sign-in
 // ---------------------------------------------------------------------------
 
+let pendingEmail = '';
+
 function bindSignIn() {
   $('signin').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -175,20 +177,36 @@ function bindSignIn() {
     }
 
     $('signin-submit').disabled = true;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${location.origin}${location.pathname}` }
-    });
+    // A typed code rather than a link: school mail filters often flag sign-in
+    // links as suspicious, and a code also works when the email is opened on
+    // another device.
+    const { error } = await supabase.auth.signInWithOtp({ email });
     $('signin-submit').disabled = false;
 
     if (error) {
       const busy = error.status === 429 || /rate limit/i.test(error.message);
       return note('signin-status', busy
         ? 'Too many sign-in emails were sent in the last hour. Please try again in a little while.'
-        : `Couldn't send the link: ${error.message}`, true);
+        : `Couldn't send the code: ${error.message}`, true);
     }
+    pendingEmail = email;
+    $('verify').hidden = false;
+    $('verify-code').focus();
     const extra = isCollegeEmail(email) ? '' : " Since it isn't a college email, you'll be asked to subscribe after signing in.";
-    note('signin-status', `Check ${email} for a sign-in link. It works once and expires in an hour.${extra}`);
+    note('signin-status', `We emailed a code to ${email}. Enter it above. It expires in an hour.${extra}`);
+  });
+
+  $('verify').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const token = $('verify-code').value.replace(/\s/g, '');
+    if (!pendingEmail || !/^\d{6,10}$/.test(token)) return note('signin-status', 'Enter the code from the email.', true);
+    $('verify-submit').disabled = true;
+    const { error } = await supabase.auth.verifyOtp({ email: pendingEmail, token, type: 'email' });
+    $('verify-submit').disabled = false;
+    if (error) return note('signin-status', "That code didn't work. Check it, or send a new one.", true);
+    $('verify').hidden = true;
+    $('verify-code').value = '';
+    $('signin-status').hidden = true;
   });
 
   for (const id of ['paywall-signout', 'signout']) {
