@@ -2621,3 +2621,13 @@ th[aria-sort] .sort-button {
     max-height: 420px;
   }
 }
+
+/* Events (events-view.js) reuse the news cards, grouped by month. */
+.events-month {
+  display: grid;
+  gap: 10px;
+}
+
+.events-month-title {
+  margin: 14px 0 2px;
+}

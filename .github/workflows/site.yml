@@ -24,6 +24,10 @@
 # link are kept. Headlines are public, so the file stays published with
 # accounts on.
 #
+# Events (site/events.json): real estate networking events per city from
+# chapter calendars (CREDA Houston's events API, BOMA Dallas's GrowthZone
+# calendar). Public like the news, so it stays published with accounts on.
+#
 # Google Sheets (docs/sheets-setup.md): with the secret
 # GOOGLE_SERVICE_ACCOUNT_JSON and the variable TERRA_SHEET_ID, the firm list
 # is read from the sheet's Firms tab (the seed list when the sheet can't be
@@ -156,6 +160,30 @@ jobs:
           path: site/news.json
           key: news-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Chapter event calendars, fetched every run; a source that fails keeps
+      # the events the last deploy published.
+      - name: Restore the last events
+        uses: actions/cache/restore@v4
+        with:
+          path: site/events.json
+          key: events-none
+          restore-keys: events-
+
+      - name: Export events
+        id: events
+        # An events outage must never hold back the job list.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run --silent export:events 2>&1 | tee /tmp/events.log
+
+      - name: Cache the events
+        if: steps.events.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: site/events.json
+          key: events-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Summarize
         if: always()
         run: |
@@ -193,6 +221,16 @@ jobs:
             echo
             echo '```'
             cat /tmp/news.log 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## Events'
+            echo
+            if [ -f ../site/events.json ]; then
+              echo "- Events: $(jq -c '[.cities[] | {(.city): (.events | length)}] | add' ../site/events.json)"
+            fi
+            echo
+            echo '```'
+            cat /tmp/events.log 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

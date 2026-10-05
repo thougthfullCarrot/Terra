@@ -18,6 +18,7 @@ import {
 } from './market.js';
 import { developmentMap, disposeMap } from './devmap.js';
 import { readNewsHash } from './news.js';
+import { readEventsHash } from './events.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -79,6 +80,7 @@ function update(change) {
 function section() {
   if (readMarketHash(location.hash, null).open) return 'markets';
   if (readNewsHash(location.hash, null).open) return 'news';
+  if (readEventsHash(location.hash, null).open) return 'events';
   if (new URLSearchParams(location.hash.replace(/^#/, '')).has('tracker') && !$('tab-tracker').hidden) return 'tracker';
   return 'jobs';
 }
@@ -86,9 +88,9 @@ function section() {
 async function show() {
   const active = section();
   const open = active === 'markets';
-  // news-view.js shows its own section; the others step aside for it.
+  // news-view.js and events-view.js show their own sections; the others step aside for it.
   for (const name of ['jobs', 'markets', 'tracker']) $(`${name}-view`).hidden = name !== active;
-  for (const name of ['jobs', 'markets', 'tracker', 'news']) {
+  for (const name of ['jobs', 'markets', 'tracker', 'news', 'events']) {
     if (name === active) $(`tab-${name}`).setAttribute('aria-current', 'page');
     else $(`tab-${name}`).removeAttribute('aria-current');
   }

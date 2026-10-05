@@ -24,4 +24,5 @@ site/market.json
 
 # News headlines, written by `npm run export:news` in site.yml
 site/news.json
+site/events.json
 /appraisal.json
