@@ -82,7 +82,7 @@ function render() {
   }
 
   const updated = new Date(file.generatedAt);
-  const names = (file.sources ?? []).map((s) => s.organizer).join(', ');
+  const names = (file.sources ?? []).filter((s) => s.url).map((s) => s.organizer).join(', ');
   $('e-sources').replaceChildren(
     el(
       'p',
@@ -111,16 +111,21 @@ function item(event, index) {
   time.dateTime = event.start;
   meta.append(time, el('span', 'news-source', event.organizer));
   const title = el('h3', 'news-title');
-  const link = el('a', '', event.title);
-  link.href = event.url;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  title.append(link);
+  if (event.url) {
+    const link = el('a', '', event.title);
+    link.href = event.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    title.append(link);
+  } else {
+    title.textContent = event.title;
+  }
   card.append(meta, title);
   const tags = el('ul', 'chips');
   if (!state.city) tags.append(el('li', 'kind', event.city));
   if (event.venue) tags.append(el('li', '', event.venue));
   if (event.cost) tags.append(el('li', '', event.cost));
+  if (event.source) tags.append(el('li', '', event.source));
   if (tags.childElementCount) card.append(tags);
   return card;
 }

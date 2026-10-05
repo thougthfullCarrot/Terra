@@ -1,0 +1,221 @@
+{
+  "note": "Events added by hand (same columns as the Google Sheet's Events tab). Merged with the sheet rows as 'Added by hand'. Seeded from Rod's San Antonio October 2026 calendar.",
+  "events": [
+    {
+      "date": "2026-10-01",
+      "time": "8:00 AM",
+      "title": "Tech Breakfast Club",
+      "city": "San Antonio",
+      "organizer": "Metro SA Chamber",
+      "venue": "Metro SA Chamber",
+      "link": "https://members.metrosa.com/events/details/2026-tech-breakfast-club-oct-14974"
+    },
+    {
+      "date": "2026-10-01",
+      "time": "3:00 PM",
+      "title": "Speed Networking Event",
+      "city": "San Antonio",
+      "organizer": "SA Women's Chamber",
+      "venue": "Jefferson Bank",
+      "link": "https://sawomenschamber.org/mixers/"
+    },
+    {
+      "date": "2026-10-02",
+      "time": "9:00 AM",
+      "title": "CONNECT: Coffee & Conversations",
+      "city": "San Antonio",
+      "organizer": "ULI SA",
+      "venue": "Crème Coffee",
+      "link": "https://sanantonio.uli.org/events/detail/F7D3A82C-DC19-4A5E-9267-D51714489421"
+    },
+    {
+      "date": "2026-10-02",
+      "time": "2:45 PM",
+      "title": "LiA+COTE: Airport Tour",
+      "city": "San Antonio",
+      "organizer": "AIA San Antonio",
+      "venue": "San Antonio International Airport (details to registrants)",
+      "link": "https://aiasa.org/events/liacote-airport-tour/"
+    },
+    {
+      "date": "2026-10-06",
+      "time": "8:00 AM",
+      "title": "29th Annual Golf Tournament",
+      "city": "San Antonio",
+      "organizer": "SAHCC",
+      "venue": "The Quarry Golf Course, San Antonio",
+      "link": "https://www.sahcc.org/29th-annual-golf-tournament"
+    },
+    {
+      "date": "2026-10-07",
+      "time": "2:00 PM",
+      "title": "COTE + USGBC SARA Tour",
+      "city": "San Antonio",
+      "organizer": "AIA San Antonio",
+      "venue": "San Antonio River Authority - Sheridan Campus",
+      "link": "https://aiasa.org/events/cote-usgbc-sara-tour/"
+    },
+    {
+      "date": "2026-10-07",
+      "time": "5:30 PM",
+      "title": "October General Meeting",
+      "city": "San Antonio",
+      "organizer": "NAWIC SA",
+      "venue": "Alamo Café",
+      "link": "https://www.nawicsatx.org/events-1/october-general-meeting-2"
+    },
+    {
+      "date": "2026-10-08",
+      "time": "7:45 AM",
+      "title": "SOTX Networking Breakfast",
+      "city": "San Antonio",
+      "organizer": "South Texas Business Partnership",
+      "venue": "Don Pedro's Mexican Restaurant",
+      "link": "https://business.southtexaspartnership.org/events/details/sotx-networking-breakfast-sustainability-community-impact-10-08-2026-6866"
+    },
+    {
+      "date": "2026-10-08",
+      "time": "11:30 AM",
+      "title": "FWIT San Antonio Meeting",
+      "city": "San Antonio",
+      "organizer": "FWI Texas",
+      "venue": "Old San Francisco",
+      "link": "https://www.fwitexas.org/event-6833214"
+    },
+    {
+      "date": "2026-10-08",
+      "time": "5:00 PM",
+      "title": "Business After-Hours Networking",
+      "city": "San Antonio",
+      "organizer": "Seguin Chamber",
+      "venue": "Guadalupe County Fairgrounds",
+      "link": "https://www.seguinchamber.com/event-detail/hVMZ336q54XjZx3PY6AFfQ2/business-after-hours-networking"
+    },
+    {
+      "date": "2026-10-13",
+      "time": "11:30 AM",
+      "title": "Market Luncheon: Comal ISD Inside the $567 Million Bond",
+      "city": "San Antonio",
+      "organizer": "SMPS SA",
+      "venue": "Witte Museum",
+      "link": "https://sanantoniosmps.starchapter.com/meetinginfo.php?id=256"
+    },
+    {
+      "date": "2026-10-15",
+      "time": "11:30 AM",
+      "title": "Women's Business Alliance Luncheon",
+      "city": "New Braunfels",
+      "organizer": "New Braunfels Chamber",
+      "venue": "McKenna Events Center",
+      "link": "https://newbraunfelschamber.growthzoneapp.com/events/Details/women-s-business-alliance-luncheon-october-2026-1630452?sourceTypeId=Hub"
+    },
+    {
+      "date": "2026-10-15",
+      "time": "5:00 PM",
+      "title": "San Antonio Happy Hour",
+      "city": "San Antonio",
+      "organizer": "ULI SA",
+      "venue": "Idle Beer Hall & Brewery",
+      "link": "https://sanantonio.uli.org/events/detail/30E04788-8471-4C67-A231-0EA08DFB8658/"
+    },
+    {
+      "date": "2026-10-16",
+      "time": "8:00 AM",
+      "title": "Hispanic Business Alliance: Buenos Dias Breakfast",
+      "city": "New Braunfels",
+      "organizer": "New Braunfels Chamber",
+      "venue": "Honors Hall",
+      "link": "https://newbraunfelschamber.growthzoneapp.com/events/Details/hispanic-business-alliance-buenos-dias-breakfast-1744894?sourceTypeId=Hub"
+    },
+    {
+      "date": "2026-10-20",
+      "time": "11:00 AM",
+      "title": "AIA Centro Joint Luncheon",
+      "city": "San Antonio",
+      "organizer": "AIA San Antonio",
+      "venue": "Centre Club",
+      "link": "https://aiasa.org/events/aia-centro-joint-luncheon/"
+    },
+    {
+      "date": "2026-10-21",
+      "time": "11:45 AM",
+      "title": "SA / South Texas CCIM Symposium",
+      "city": "San Antonio",
+      "organizer": "CCIM SA",
+      "venue": "Security Service Event Center",
+      "link": "https://ccimsa.starchapter.com/meetinginfo.php?id=93"
+    },
+    {
+      "date": "2026-10-21",
+      "time": "",
+      "title": "Smart Women Series",
+      "city": "San Antonio",
+      "organizer": "SA Women's Chamber",
+      "venue": "",
+      "link": "https://sawomenschamber.org/smart-women/"
+    },
+    {
+      "date": "2026-10-22",
+      "time": "11:00 AM",
+      "title": "CFO Forum: What Buyers Are Looking For (and It's More Than Financial Metrics)",
+      "city": "San Antonio",
+      "organizer": "Metro SA Chamber",
+      "venue": "The Veranda",
+      "link": "https://members.metrosa.com/events/details/2026-cfo-forum-what-buyers-are-looking-for-and-it-s-more-than-financial-metrics-15144"
+    },
+    {
+      "date": "2026-10-27",
+      "time": "11:15 AM",
+      "title": "ACG ASA October Lunch in S.A. (feat. Marty Wender)",
+      "city": "San Antonio",
+      "organizer": "ACG",
+      "venue": "San Antonio Country Club",
+      "link": "https://www.acg.org/asa/events/acg-asa-october-27th-lunch-sa"
+    },
+    {
+      "date": "2026-10-27",
+      "time": "11:30 AM",
+      "title": "GNBEDF Luncheon: Q4 2026 - State of the City Quarterly Luncheon",
+      "city": "New Braunfels",
+      "organizer": "New Braunfels Chamber",
+      "venue": "McKenna Events Center",
+      "link": "https://newbraunfelschamber.growthzoneapp.com/events/Details/gnbedf-luncheon-q4-2026-state-of-the-city-1652649?sourceTypeId=Hub"
+    },
+    {
+      "date": "2026-10-27",
+      "time": "5:00 PM",
+      "title": "Trivia Night",
+      "city": "San Antonio",
+      "organizer": "AIA San Antonio",
+      "venue": "AIA San Antonio",
+      "link": "https://aiasa.org/events/eya-road-to-licensure-are-opardy/"
+    },
+    {
+      "date": "2026-10-28",
+      "time": "11:30 AM",
+      "title": "POWERhour! Luncheon",
+      "city": "San Antonio",
+      "organizer": "SA Women's Chamber",
+      "venue": "Paesano's",
+      "link": "https://sawomenschamber.org/power-hour/"
+    },
+    {
+      "date": "2026-10-29",
+      "time": "11:00 AM",
+      "title": "Annual State of the City Address and Luncheon",
+      "city": "San Antonio",
+      "organizer": "Boerne Chamber",
+      "venue": "The Cana Ballroom, Boerne",
+      "link": "https://business.boerne.org/events/details/state-of-the-city-presented-by-liberty-capital-bank-33019"
+    },
+    {
+      "date": "2026-10-29",
+      "time": "6:00 PM",
+      "title": "2026 SMPS Evening of Excellence",
+      "city": "San Antonio",
+      "organizer": "SMPS SA",
+      "venue": "The Alamo",
+      "link": "https://sanantoniosmps.starchapter.com/meetinginfo.php?id=270"
+    }
+  ]
+}

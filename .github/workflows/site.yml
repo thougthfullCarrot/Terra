@@ -174,6 +174,12 @@ jobs:
         id: events
         # An events outage must never hold back the job list.
         continue-on-error: true
+        env:
+          # Optional: rows typed into the sheet's Events tab join the calendars.
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          TERRA_SHEET_ID: ${{ vars.TERRA_SHEET_ID }}
+          # Pull requests read the sheet but never add the tab.
+          SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
           npm run --silent export:events 2>&1 | tee /tmp/events.log

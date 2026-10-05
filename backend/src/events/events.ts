@@ -20,6 +20,8 @@ export interface TerraEvent {
   organizer: string;
   venue: string | null;
   cost: string | null;
+  /** "Added by hand" for rows from the Google Sheet's Events tab; absent for calendar feeds. */
+  source?: string;
 }
 
 export interface EventSource {
@@ -37,6 +39,9 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'creda-houston', organizer: 'CREDA Houston', city: 'Houston', kind: 'tribe', base: 'https://credahouston.org' },
   { key: 'boma-dallas', organizer: 'BOMA Dallas', city: 'Dallas', kind: 'growthzone', base: 'https://members.bomadallas.org' }
 ];
+
+/** The source label of events typed into the Google Sheet. */
+export const MANUAL_SOURCE = 'Added by hand';
 
 export const WINDOW_DAYS = 120;
 
@@ -324,17 +329,18 @@ export function upcoming(events: TerraEvent[], now: Date, days = WINDOW_DAYS): T
   const limit = now.getTime() + days * 86_400_000;
   const byUrl = new Map<string, TerraEvent>();
   for (const e of events) {
+    const key = e.url || e.id;
     const start = new Date(e.start).getTime();
     const end = e.end ? new Date(e.end).getTime() : start + 86_400_000;
     if (!Number.isFinite(start) || start > limit || end < now.getTime()) continue;
-    if (!byUrl.has(e.url)) byUrl.set(e.url, e);
+    if (!byUrl.has(key)) byUrl.set(key, e);
   }
   return [...byUrl.values()].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
 export interface EventsFile {
   generatedAt: string;
-  sources: Array<{ organizer: string; city: City; url: string; fetchedAt: string; count: number }>;
+  sources: Array<{ organizer: string; city: City | null; url: string; fetchedAt: string; count: number }>;
   cities: Array<{ city: City; events: TerraEvent[] }>;
 }
 
@@ -342,14 +348,20 @@ export interface EventsFile {
 export async function buildEventsFile(
   now: Date,
   previous: EventsFile | null,
-  options: { sources?: EventSource[]; fetcher?: Fetcher; log?: (m: string) => void } = {}
+  options: {
+    sources?: EventSource[];
+    fetcher?: Fetcher;
+    log?: (m: string) => void;
+    /** Rows from the sheet's Events tab; null when the sheet could not be read (the previous ones are kept). */
+    manual?: TerraEvent[] | null;
+  } = {}
 ): Promise<EventsFile> {
-  const { sources = EVENT_SOURCES, fetcher = defaultFetcher, log = console.log } = options;
+  const { sources = EVENT_SOURCES, fetcher = defaultFetcher, log = console.log, manual = null } = options;
   const all: TerraEvent[] = [];
   const meta: EventsFile['sources'] = [];
   for (const source of sources) {
     const before = previous?.sources.find((s) => s.organizer === source.organizer);
-    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer);
+    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && e.source !== MANUAL_SOURCE);
     try {
       const events = upcoming(await fetchSource(source, now, fetcher, log), now);
       log(`${source.organizer}: ${events.length} upcoming events.`);
@@ -362,7 +374,12 @@ export async function buildEventsFile(
       if (before) meta.push({ ...before, count: still.length });
     }
   }
-  const sorted = upcoming(all, now);
+  const previousManual = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.source === MANUAL_SOURCE);
+  const hand = upcoming((manual ?? previousManual).map((e) => ({ ...e, source: MANUAL_SOURCE })), now);
+  if (hand.length) {
+    meta.push({ organizer: MANUAL_SOURCE, city: null, url: '', fetchedAt: now.toISOString(), count: hand.length });
+  }
+  const sorted = upcoming([...all, ...hand], now);
   return {
     generatedAt: now.toISOString(),
     sources: meta,
