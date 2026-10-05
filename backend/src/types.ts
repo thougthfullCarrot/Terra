@@ -6,7 +6,11 @@ export const CITIES = [
   'Austin',
   'San Antonio',
   'El Paso',
-  'New Braunfels'
+  'New Braunfels',
+  'College Station',
+  'Galveston',
+  'Lubbock',
+  'Midland'
 ] as const;
 export type City = (typeof CITIES)[number];
 

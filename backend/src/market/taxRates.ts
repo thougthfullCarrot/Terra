@@ -26,6 +26,12 @@ interface Unit {
   id?: string;
   /** For a unit whose id is not stable, its name. */
   name?: RegExp;
+  /**
+   * With name: the Comptroller county number the unit must be in. The county
+   * itself (NNN-000-00) never matches, so "Galveston" finds the city, not
+   * Galveston County.
+   */
+  within?: string;
   label: string;
 }
 
@@ -86,6 +92,29 @@ export const CITY_UNITS: Record<City, Unit[]> = {
     { part: 'city', name: /^(City of )?New Braunfels( City)?$/i, label: 'City of New Braunfels' },
     { part: 'county', id: '046-000-00', label: 'Comal County' },
     { part: 'school', name: /^New Braunfels ISD\b/i, label: 'New Braunfels ISD' }
+  ],
+  // The four below match the city and school district by name inside their
+  // county (Comptroller numbers counties alphabetically: Brazos 021,
+  // Galveston 084, Lubbock 152, Midland 165).
+  'College Station': [
+    { part: 'city', name: /^(City of )?College Station( City)?$/i, within: '021', label: 'City of College Station' },
+    { part: 'county', id: '021-000-00', label: 'Brazos County' },
+    { part: 'school', name: /^College Station ISD\b/i, within: '021', label: 'College Station ISD' }
+  ],
+  Galveston: [
+    { part: 'city', name: /^(City of )?Galveston( City)?$/i, within: '084', label: 'City of Galveston' },
+    { part: 'county', id: '084-000-00', label: 'Galveston County' },
+    { part: 'school', name: /^Galveston ISD\b/i, within: '084', label: 'Galveston ISD' }
+  ],
+  Lubbock: [
+    { part: 'city', name: /^(City of )?Lubbock( City)?$/i, within: '152', label: 'City of Lubbock' },
+    { part: 'county', id: '152-000-00', label: 'Lubbock County' },
+    { part: 'school', name: /^Lubbock ISD\b/i, within: '152', label: 'Lubbock ISD' }
+  ],
+  Midland: [
+    { part: 'city', name: /^(City of )?Midland( City)?$/i, within: '165', label: 'City of Midland' },
+    { part: 'county', id: '165-000-00', label: 'Midland County' },
+    { part: 'school', name: /^Midland ISD\b/i, within: '165', label: 'Midland ISD' }
   ]
 };
 
@@ -132,7 +161,7 @@ export function cityTaxRate(units: TaxingUnit[], city: City): CityTaxRate | null
   const parts: Record<Part, number | null> = { city: null, county: null, school: null, other: 0 };
   const missing: string[] = [];
   for (const unit of CITY_UNITS[city]) {
-    const found = unit.id ? byId.get(unit.id) : units.find((u) => unit.name!.test(u.name));
+    const found = unit.id ? byId.get(unit.id) : units.find((u) => unit.name!.test(u.name) && (!unit.within || (u.id.startsWith(`${unit.within}-`) && !u.id.endsWith('-000-00'))));
     if (!found) {
       missing.push(unit.label);
       continue;

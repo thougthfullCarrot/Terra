@@ -33,9 +33,9 @@ describe('BLS series ids', () => {
     expect(unemploymentSeries(dallas)).toBe('LAUDV481912400000003');
   });
 
-  it('asks for ten series per metro', () => {
-    expect(blsSeriesFor(METROS)).toHaveLength(60);
-    expect(new Set(blsSeriesFor(METROS)).size).toBe(60);
+  it('asks for ten series per metro, once for a shared metro', () => {
+    expect(blsSeriesFor(METROS)).toHaveLength(90);
+    expect(new Set(blsSeriesFor(METROS)).size).toBe(90);
   });
 });
 
@@ -249,7 +249,7 @@ describe('buildMarketSnapshot', () => {
   });
 
   it('lists every metric for every city, blank where a source had nothing', () => {
-    expect(snapshot.markets.map((m) => m.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels']);
+    expect(snapshot.markets.map((m) => m.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels', 'College Station', 'Galveston', 'Lubbock', 'Midland']);
     for (const market of snapshot.markets) expect(Object.keys(market.values).sort()).toEqual(METRICS.map((m) => m.key).sort());
     expect(snapshot.markets.find((m) => m.city === 'Austin')!.values.jobs).toBeNull();
   });

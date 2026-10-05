@@ -19,7 +19,11 @@ const CENTERS = {
   Austin: [30.2672, -97.7431],
   'San Antonio': [29.4241, -98.4936],
   'El Paso': [31.7619, -106.485],
-  'New Braunfels': [29.703, -98.1245]
+  'New Braunfels': [29.703, -98.1245],
+  'College Station': [30.628, -96.3344],
+  Galveston: [29.3013, -94.7977],
+  Lubbock: [33.5779, -101.8552],
+  Midland: [31.9973, -102.0779]
 };
 
 let leaflet = null;

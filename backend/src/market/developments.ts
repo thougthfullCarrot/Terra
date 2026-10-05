@@ -53,13 +53,22 @@ export const TABS_COUNTY_IDS: Record<string, string> = {
   Kendall: '2130',
   Wilson: '2247',
   Comal: '2046',
-  'El Paso': '2071'
+  'El Paso': '2071',
+  // TABS numbers counties 2000 + the state's alphabetical county number.
+  Brazos: '2021',
+  Burleson: '2026',
+  Robertson: '2198',
+  Lubbock: '2152',
+  Midland: '2165',
+  Ector: '2068'
 };
 
 /**
  * The counties each market's map covers: the whole metro, each county in one
  * market only (Comal goes to New Braunfels, Tarrant and its west side to Fort
- * Worth, the rest of the Metroplex to Dallas).
+ * Worth, the rest of the Metroplex to Dallas). The one exception is Galveston
+ * County, on both the Houston map (Rod asked for it there) and Galveston's.
+ * Midland's map takes in Odessa (Ector County) too.
  */
 export const METRO_COUNTIES: Partial<Record<City, string[]>> = {
   Houston: ['Harris', 'Galveston', 'Fort Bend', 'Montgomery', 'Brazoria'],
@@ -68,7 +77,11 @@ export const METRO_COUNTIES: Partial<Record<City, string[]>> = {
   Austin: ['Travis', 'Williamson', 'Hays', 'Bastrop'],
   'San Antonio': ['Bexar', 'Guadalupe', 'Medina', 'Kendall', 'Wilson'],
   'New Braunfels': ['Comal'],
-  'El Paso': ['El Paso']
+  'El Paso': ['El Paso'],
+  'College Station': ['Brazos', 'Burleson', 'Robertson'],
+  Galveston: ['Galveston'],
+  Lubbock: ['Lubbock'],
+  Midland: ['Midland', 'Ector']
 };
 
 /** How far from the metro's center a geocode may land before it counts as a wrong match. */
@@ -79,7 +92,11 @@ export const METRO_RADIUS_KM: Record<City, number> = {
   Austin: 80,
   'San Antonio': 80,
   'El Paso': 50,
-  'New Braunfels': 50
+  'New Braunfels': 50,
+  'College Station': 60,
+  Galveston: 50,
+  Lubbock: 50,
+  Midland: 60
 };
 
 /** Rough city centers, to drop a geocode that landed in the wrong place. */
@@ -90,7 +107,11 @@ export const CITY_CENTERS: Record<City, [number, number]> = {
   Austin: [30.2672, -97.7431],
   'San Antonio': [29.4241, -98.4936],
   'El Paso': [31.7619, -106.485],
-  'New Braunfels': [29.703, -98.1245]
+  'New Braunfels': [29.703, -98.1245],
+  'College Station': [30.628, -96.3344],
+  Galveston: [29.3013, -94.7977],
+  Lubbock: [33.5779, -101.8552],
+  Midland: [31.9973, -102.0779]
 };
 
 const STATUS: Record<number, string> = {

@@ -29,7 +29,7 @@ describe('sheet events', () => {
         ['2026-11-03', '', 'Market Outlook', 'ft worth', '', '', ''],
         ['2026-09-01', '', 'Old event', 'Dallas', 'X', '', ''],
         ['soon', '', 'No date', 'Dallas', 'X', '', ''],
-        ['2026-10-30', '', 'Lubbock thing', 'Lubbock', 'X', '', ''],
+        ['2026-10-30', '', 'Amarillo thing', 'Amarillo', 'X', '', ''],
         []
       ],
       now,
@@ -46,7 +46,7 @@ describe('sheet events', () => {
       source: MANUAL_SOURCE
     });
     expect(events[1]).toMatchObject({ city: 'Fort Worth', organizer: MANUAL_SOURCE, url: '', start: '2026-11-03T00:00:00-06:00' });
-    expect(logs.some((l) => l.includes('Lubbock'))).toBe(true);
+    expect(logs.some((l) => l.includes('Amarillo'))).toBe(true);
     expect(logs.some((l) => l.includes('row 5'))).toBe(true);
   });
 

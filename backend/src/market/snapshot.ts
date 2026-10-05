@@ -335,7 +335,7 @@ export const METRICS: MarketMetric[] = [
     unit: 'taxRate',
     better: 'low',
     source: 'Texas Comptroller',
-    note: `The main school district in the city (Houston ISD, Dallas ISD, Fort Worth ISD, Austin ISD, San Antonio ISD, El Paso ISD, New Braunfels ISD): usually the biggest piece. ${TAX_NOTE}`
+    note: `The main school district in the city (Houston ISD, Dallas ISD, Fort Worth ISD, Austin ISD, San Antonio ISD, El Paso ISD, New Braunfels ISD, College Station ISD, Galveston ISD, Lubbock ISD, Midland ISD): usually the biggest piece. ${TAX_NOTE}`
   },
   {
     key: 'taxRateOther',
@@ -621,7 +621,7 @@ export const SOURCES: MarketSnapshot['sources'] = [
     name: 'County appraisal districts (Harris, Dallas, Tarrant, Travis)',
     url: 'https://comptroller.texas.gov/taxes/property-tax/county-directory/',
     detail:
-      'Appraised values and land values from each district\'s free certified roll download. Appraised, not sale prices. Bexar and El Paso do not allow automated downloads; Comal (New Braunfels) is not read yet. Updated yearly.'
+      'Appraised values and land values from each district\'s free certified roll download. Appraised, not sale prices. Bexar and El Paso do not allow automated downloads; Comal (New Braunfels), Brazos, Galveston, Lubbock and Midland are not read yet. Updated yearly.'
   }
 ];
 
@@ -661,7 +661,7 @@ export function blsSeriesFor(metros: Metro[]): string[] {
     'financial',
     'professional'
   ];
-  // A city sharing its metro (New Braunfels in San Antonio's) asks for the same series once.
+  // A city sharing its metro (New Braunfels in San Antonio's, Galveston in Houston's) asks for the same series once.
   return [...new Set(metros.flatMap((metro) => [...industries.map((industry) => cesSeries(metro, industry)), unemploymentSeries(metro)]))];
 }
 
