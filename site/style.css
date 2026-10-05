@@ -2863,3 +2863,43 @@ th[aria-sort] .sort-button {
 .chip[aria-pressed='true']:disabled {
   opacity: 0.85;
 }
+
+.lease-table .city-col {
+  min-width: 140px;
+}
+
+.lease-table .metric-meta {
+  text-align: right;
+}
+
+.lease-period {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.report-list {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-list li {
+  display: grid;
+  gap: 3px;
+}
+
+.report-firm {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.report-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 13.5px;
+}

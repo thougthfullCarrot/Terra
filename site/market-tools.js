@@ -259,6 +259,128 @@ function glossary() {
   return box;
 }
 
+const TYPES = [
+  ['office', 'Office'],
+  ['industrial', 'Industrial'],
+  ['retail', 'Retail']
+];
+
+/**
+ * Vacancy and average asking rent by city from brokerage quarterly reports,
+ * one table per property type. Firms measure differently (which buildings,
+ * full-service or net rent), so each firm's figure gets its own row with its
+ * name and a link to the report.
+ */
+export function leasesView(snapshot, city) {
+  const leases = (snapshot.research?.leases ?? []).filter((l) => !city || l.city === city);
+  const frag = document.createDocumentFragment();
+  if (!leases.length) {
+    frag.append(el('div', 'state', city ? `No broker figures for ${city} yet. The firms Terra reads cover Dallas, Houston, Austin, San Antonio and El Paso.` : 'Broker figures are being gathered. Check back after the next update.'));
+    return frag;
+  }
+  const order = snapshot.markets.map((m) => m.city);
+  for (const [type, label] of TYPES) {
+    const rows = leases
+      .filter((l) => l.type === type)
+      .sort((a, b) => order.indexOf(a.city) - order.indexOf(b.city) || a.broker.localeCompare(b.broker));
+    if (!rows.length) continue;
+    const box = el('section', 'compare-block');
+    box.append(el('h3', 'group-title', label));
+    const wrap = el('div', 'table-wrap');
+    const table = el('table', 'market-table lease-table');
+    table.append(el('caption', 'visually-hidden', `${label} vacancy and asking rent by city`));
+    const head = el('tr');
+    for (const [text, cls] of [['Market', 'city-col'], ['Vacancy', 'num'], ['Asking rent', 'num'], ['Firm', ''], ['Period', '']]) {
+      const th = el('th', cls, text);
+      th.scope = 'col';
+      head.append(th);
+    }
+    const thead = el('thead');
+    thead.append(head);
+    const body = el('tbody');
+    rows.forEach((row, i) => {
+      const tr = el('tr');
+      const name = el('th', 'city-col');
+      name.scope = 'row';
+      // A city with two firms shows its name once.
+      if (i === 0 || rows[i - 1].city !== row.city) name.append(el('span', 'city-link', row.city));
+      const rent = el('td', 'num');
+      rent.append(el('span', 'value', row.rent == null ? '—' : `$${row.rent.toFixed(2)}`));
+      if (row.rent != null) rent.append(el('span', 'metric-meta', `per sq ft a year${row.rentBasis ? `, ${row.rentBasis}` : ''}`));
+      const firm = el('td');
+      const link = el('a', 'link', row.broker);
+      link.href = row.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      firm.append(link);
+      const vacancy = el('td', 'num');
+      vacancy.append(el('span', 'value', row.vacancy == null ? '—' : `${row.vacancy.toFixed(1)}%`));
+      tr.append(name, vacancy, rent, firm, el('td', 'lease-period', row.period));
+      body.append(tr);
+    });
+    table.append(thead, body);
+    wrap.append(table);
+    box.append(wrap);
+    frag.append(box);
+  }
+  frag.append(
+    el(
+      'p',
+      'market-asof',
+      'Figures as each firm published them. Firms track different sets of buildings and quote rent differently (full service includes operating costs; net does not), so compare a city across quarters within one firm, not one firm against another.'
+    )
+  );
+  return frag;
+}
+
+/** The latest free reports per city, grouped by firm. */
+export function reportsView(snapshot, city) {
+  const reports = snapshot.research?.reports ?? [];
+  const frag = document.createDocumentFragment();
+  if (!reports.length) {
+    frag.append(el('div', 'state', 'Report links are being gathered. Check back after the next update.'));
+    return frag;
+  }
+  const cities = snapshot.markets.map((m) => m.city).filter((c) => (!city || c === city) && reports.some((r) => r.city === c));
+  const grid = el('div', 'market-groups reports-grid');
+  for (const c of cities) {
+    const card = el('section', 'card market-group');
+    card.append(el('h3', 'group-title', c));
+    const byFirm = new Map();
+    for (const report of reports.filter((r) => r.city === c)) {
+      if (!byFirm.has(report.broker)) byFirm.set(report.broker, []);
+      byFirm.get(report.broker).push(report);
+    }
+    // Firms with a report for this city first, then the research libraries.
+    const firms = [...byFirm].sort((a, b) => Number(b[1].some((r) => r.period)) - Number(a[1].some((r) => r.period)));
+    const list = el('ul', 'report-list');
+    for (const [firm, items] of firms) {
+      const li = el('li');
+      li.append(el('span', 'report-firm', firm));
+      const links = el('span', 'report-links');
+      items
+        .sort((a, b) => (a.type === 'all') - (b.type === 'all'))
+        .forEach((item) => {
+          const a = el('a', 'link', item.type === 'all' ? (item.period ? item.title : 'All reports') : `${item.type[0].toUpperCase()}${item.type.slice(1)}${item.period ? ` ${item.period}` : ''}`);
+          a.href = item.url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.title = item.title;
+          links.append(a);
+        });
+      li.append(links);
+      list.append(li);
+    }
+    card.append(list);
+    grid.append(card);
+  }
+  frag.append(
+    grid,
+    el('p', 'market-asof', 'Reports open on each firm\'s own site. Some ask for a name and email before the download; all are free.')
+  );
+  return frag;
+}
+
 /** Green for a change for the better, red for the worse, on growth figures only (as on the city table). */
 function tone(value, metric) {
   if (metric.unit !== 'change' || value == null) return '';

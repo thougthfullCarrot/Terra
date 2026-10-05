@@ -1,25 +1,26 @@
-// Temporary probe, round 5: more parcel layers.
-const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
-const json = async (url) => { try { const r = await fetch(url, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(60000) }); const t = await r.text(); try { return JSON.parse(t); } catch { return { _status: r.status, _text: t.slice(0, 300) }; } } catch (e) { return { err: e.message }; } };
-const show = (label, v) => console.log(`${label}: ${JSON.stringify(v).slice(0, 2500)}`);
-const q = (base, params) => json(`${base}/query?${new URLSearchParams({ f: 'json', ...params })}`);
-const layers = {
-  BCAD: 'https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/BCAD_Parcels/FeatureServer',
-  BCAD_SARA: 'https://gis.sara-tx.org/ags1/rest/services/FW_Bexar/BCAD_Parcels_PROD/FeatureServer',
-  DCAD_LittleElm: 'https://littleelmgis.newedgeservices.com/arcgis/rest/services/AMS/DCAD_Parcels/FeatureServer',
-  TCAD_Dec2025: 'https://services1.arcgis.com/HGcSYZ5bvjRswoCb/arcgis/rest/services/TCAD_Parcels_Dec_2025/FeatureServer',
-  AustinZoningLarge: 'https://services.arcgis.com/0L95CJ0VTaxqcmED/arcgis/rest/services/PLANNINGCADASTRE_zoning_large_map_scale/FeatureServer',
-  DallasTax2019: 'https://services2.arcgis.com/rwnOSbfKSwyTBcwN/arcgis/rest/services/DallasTaxParcels/FeatureServer'
-};
-for (const [name, svc] of Object.entries(layers)) {
-  const info = await json(`${svc}?f=json`);
-  const ids = (info.layers ?? []).map((l) => [l.id, l.name]);
-  console.log(`\n# ${name} layers ${JSON.stringify(ids)} ${info.err ?? info._status ?? ''}`);
-  for (const [id] of ids.slice(0, 2)) {
-    const li = await json(`${svc}/${id}?f=json`);
-    console.log(`  [${id}] max=${li.maxRecordCount} fields: ${(li.fields ?? []).map((f) => f.name).join(', ')}`);
-    show('  sample', (await q(`${svc}/${id}`, { where: '1=1', outFields: '*', returnGeometry: 'false', resultRecordCount: '1' })).features);
+// Temporary probe, round 6: run the real research and site exports.
+import { readFileSync } from 'node:fs';
+import { fetchResearch } from './src/market/research.ts';
+const research = await fetchResearch({ cities: ['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso'], log: (l) => console.log('research:', l) });
+for (const l of research.leases) console.log(`LEASE ${l.city} ${l.type} ${l.broker} vac=${l.vacancy} rent=${l.rent} ${l.rentBasis} ${l.period}`);
+console.log(`reports: ${research.reports.length}`);
+for (const r of research.reports.filter((r) => r.period)) console.log(`REPORT ${r.city} ${r.broker} ${r.type} ${r.period} ${r.url}`);
+
+const file = JSON.parse(readFileSync('/tmp/sites.json', 'utf8'));
+const by = {};
+for (const s of file.sites) by[`${s.city} ${s.use}`] = (by[`${s.city} ${s.use}`] ?? 0) + 1;
+console.log('sites per city/use', by);
+console.log('zoned', file.sites.filter((s) => s.zoning).length, 'of', file.sites.length, 'size bytes', JSON.stringify(file).length);
+for (const city of ['Houston', 'Fort Worth', 'San Antonio', 'Austin']) {
+  const list = file.sites.filter((s) => s.city === city);
+  console.log(`\n${city} samples:`);
+  for (const s of list.filter((_, i) => i % 50 === 0)) console.log(JSON.stringify(s));
+  const one = list[0];
+  if (one?.url) {
+    try {
+      const r = await fetch(one.url, { redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+      const t = await r.text();
+      console.log(`CAD link ${one.url} -> ${r.status} ${r.url} title=${/<title[^>]*>([^<]*)/i.exec(t)?.[1]?.trim()} hasId=${t.includes(one.id)}`);
+    } catch (e) { console.log('CAD link error', one.url, e.message); }
   }
 }
-show('Austin large zoning at 6th & Congress', await q(`${layers.AustinZoningLarge}/0`, { geometry: '-97.7431,30.2682', geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: '*', returnGeometry: 'false' }));
-show('Austin small zoning near Domain', await q('https://services.arcgis.com/0L95CJ0VTaxqcmED/arcgis/rest/services/PLANNINGCADASTRE_zoning_small_map_scale/FeatureServer/0', { geometry: '-97.7253,30.4021', geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: '*', returnGeometry: 'false' }));

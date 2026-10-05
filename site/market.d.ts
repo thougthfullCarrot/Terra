@@ -26,7 +26,7 @@ export interface Market {
   periods?: Record<string, string | null>;
 }
 
-export type Tool = '' | 'compare' | 'calc';
+export type Tool = '' | 'compare' | 'calc' | 'leases' | 'reports' | 'sites';
 
 export interface MarketState {
   open: boolean;

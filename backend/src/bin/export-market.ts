@@ -41,6 +41,7 @@ import { fetchRedfin } from '../market/redfin.js';
 import { fetchRealtor } from '../market/realtor.js';
 import { fetchFhfa } from '../market/fhfa.js';
 import { fetchHudFmr } from '../market/hudFmr.js';
+import { fetchResearch, keepResearch } from '../market/research.js';
 import { blsSeriesFor, buildMarketSnapshot, filledCount, fillFromPrevious, type MarketSnapshot } from '../market/snapshot.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -152,6 +153,10 @@ async function main(): Promise<void> {
     fetchDevelopments(cities, { now, previous: previous?.developments?.projects, log: (line) => console.log(`TDLR TABS: ${line}`) })
   );
 
+  const research = await attempt('Broker research', () =>
+    fetchResearch({ cities, log: (line) => console.log(`Broker research: ${line}`) })
+  );
+
   const appraisal = await readFile(resolve(flag('--appraisal') ?? DEFAULT_APPRAISAL), 'utf8')
     .then((text) => JSON.parse(text) as AppraisalFile)
     .catch(() => null);
@@ -181,6 +186,8 @@ async function main(): Promise<void> {
     previous
   );
   if (developments?.projects.length) snapshot.developments = developments;
+  const keptResearch = research ? keepResearch(research, previous?.research) : previous?.research;
+  if (keptResearch) snapshot.research = keptResearch;
 
   for (const market of snapshot.markets) {
     const missing = Object.entries(market.values)
