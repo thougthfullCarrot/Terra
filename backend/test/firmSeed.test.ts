@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
-import { parseFirmSeed } from '../src/collector/firmSeed.js';
+import { parseFirmSeed, SEED_PATHS } from '../src/collector/firmSeed.js';
 import { parseFirmCandidates } from '../src/collector/firmCandidates.js';
 
 const seedPath = new URL('../supabase/migrations/0002_seed_firms.sql', import.meta.url);
@@ -8,7 +8,7 @@ const candidatesPath = new URL('../data/firm-candidates.txt', import.meta.url);
 
 describe('the seed migration', () => {
   it('contains only firms whose board was verified', async () => {
-    const sql = await readFile(seedPath, 'utf8');
+    const sql = (await Promise.all(SEED_PATHS.map((path) => readFile(path, 'utf8')))).join('\n');
     const firms = parseFirmSeed(sql);
 
     expect(firms.length).toBeGreaterThan(0);
