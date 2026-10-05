@@ -6,10 +6,14 @@ import {
   deadlineLabel,
   facet,
   filterJobs,
+  initials,
+  isNew,
+  parseSaved,
   postedLabel,
   readQuery,
   safeUrl,
   sortJobs,
+  toggleSaved,
   updatedLabel,
   writeQuery,
   type Job
@@ -171,10 +175,53 @@ describe('site feed rules', () => {
     expect(safeUrl('not a url')).toBeNull();
   });
 
+  it('shows only saved jobs when asked, and nothing when none are saved', () => {
+    expect(filterJobs(jobs, { saved: true, savedIds: new Set(['3', 'gone']) }).map((j) => j.id)).toEqual(['3']);
+    expect(filterJobs(jobs, { saved: true, savedIds: new Set() })).toEqual([]);
+    expect(filterJobs(jobs, { saved: true })).toEqual([]);
+    // The saved set alone filters nothing; only the toggle does.
+    expect(filterJobs(jobs, { savedIds: new Set(['3']) })).toHaveLength(3);
+  });
+
+  it('reads saved ids defensively and toggles without mutating', () => {
+    expect([...parseSaved('["a","b",3]')]).toEqual(['a', 'b']);
+    expect(parseSaved('not json').size).toBe(0);
+    expect(parseSaved('{"a":1}').size).toBe(0);
+    expect(parseSaved(null).size).toBe(0);
+    const before = new Set(['a']);
+    expect([...toggleSaved(before, 'b')]).toEqual(['a', 'b']);
+    expect([...toggleSaved(before, 'a')]).toEqual([]);
+    expect([...before]).toEqual(['a']);
+  });
+
+  it('tags postings from the last two days as new', () => {
+    expect(isNew('2026-10-04T01:00:00Z', now)).toBe(true);
+    expect(isNew('2026-10-02T23:00:00Z', now)).toBe(true);
+    expect(isNew('2026-10-01T12:00:00Z', now)).toBe(false);
+  });
+
+  it('builds firm monograms', () => {
+    expect(initials('Lincoln Property Company')).toBe('LP');
+    expect(initials('Cushman & Wakefield')).toBe('CW');
+    expect(initials('JLL')).toBe('JLL');
+    expect(initials('CBRE')).toBe('CBRE');
+    expect(initials('Greystar')).toBe('GR');
+    expect(initials('')).toBe('?');
+  });
+
   it('round-trips filter state through the query string', () => {
-    const state = { q: 'analyst', city: 'Fort Worth', firm: '', kind: 'Internship', sector: '', sort: 'deadline' as const };
+    const state = {
+      q: 'analyst',
+      city: 'Fort Worth',
+      firm: '',
+      kind: 'Internship',
+      sector: '',
+      sort: 'deadline' as const,
+      saved: true,
+      job: 'abc'
+    };
     expect(readQuery(writeQuery(state))).toEqual(state);
-    expect(writeQuery({ q: '', city: '', firm: '', kind: '', sector: '', sort: 'newest' })).toBe('');
+    expect(writeQuery({ q: '', city: '', firm: '', kind: '', sector: '', sort: 'newest', saved: false, job: '' })).toBe('');
     expect(readQuery('?sort=bogus').sort).toBe('newest');
   });
 });

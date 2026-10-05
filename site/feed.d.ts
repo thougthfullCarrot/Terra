@@ -24,6 +24,8 @@ export interface FilterState {
   firm?: string;
   kind?: string;
   sector?: string;
+  saved?: boolean;
+  savedIds?: ReadonlySet<string>;
 }
 
 export interface QueryState {
@@ -33,6 +35,9 @@ export interface QueryState {
   kind: string;
   sector: string;
   sort: 'newest' | 'deadline' | 'match';
+  saved: boolean;
+  /** The job whose detail panel is open, so a link can share one posting. */
+  job: string;
 }
 
 export const FILTERS: readonly ['city', 'firm', 'kind', 'sector'];
@@ -42,6 +47,10 @@ export function daysBetween(from: Date, to: Date): number;
 export function facet<T extends Job>(jobs: T[], field: keyof Job, always?: string[]): { value: string; count: number }[];
 export function filterJobs<T extends Job>(jobs: T[], state?: FilterState): T[];
 export function sortJobs<T extends Job>(jobs: T[], sort?: string): T[];
+export function isNew(postedAt: string, now?: Date): boolean;
+export function initials(name: string): string;
+export function parseSaved(text: string | null): Set<string>;
+export function toggleSaved(saved: ReadonlySet<string>, id: string): Set<string>;
 export function postedLabel(postedAt: string, now?: Date): string;
 export function deadlineLabel(deadline: string | null, now?: Date): { text: string; urgent: boolean } | null;
 export function updatedLabel(generatedAt: string, now?: Date): string;
