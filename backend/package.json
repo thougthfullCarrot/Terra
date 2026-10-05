@@ -18,6 +18,7 @@
     "discover:ats": "tsx src/bin/discover-ats.ts",
     "export:site": "tsx src/bin/export-site.ts",
     "export:market": "tsx src/bin/export-market.ts",
+    "export:news": "tsx src/bin/export-news.ts",
     "export:appraisal": "tsx src/bin/export-appraisal.ts",
     "build:site": "tsx src/bin/build-site.ts",
     "sync:sheets": "tsx src/bin/sync-sheets.ts",

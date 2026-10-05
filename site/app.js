@@ -23,6 +23,7 @@ import {
   writeQuery
 } from './feed.js';
 import { setMarketLoader, startMarkets } from './markets-view.js';
+import { startNews } from './news-view.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { firm: 'All firms', sector: 'All sectors' };
@@ -538,6 +539,7 @@ async function loadMarketFile() {
 
 startTheme();
 startMarkets();
+startNews();
 
 if (isConfigured(CONFIG)) {
   $('meta').textContent = '';
