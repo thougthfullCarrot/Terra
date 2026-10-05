@@ -191,8 +191,12 @@ async function main(): Promise<void> {
       const summary = await read(dir);
       answered++;
       cities.push(summary);
+      const usd = (v: number | null) => (v == null ? 'n/a' : `$${v >= 100 ? Math.round(v).toLocaleString('en-US') : v.toFixed(2)}`);
       const parts = Object.entries(summary.classes).map(
-        ([cls, s]) => `${cls} ${s.parcels} parcels, land on ${s.landParcels}, growth ${s.valueGrowth?.toFixed(1) ?? 'n/a'}%`
+        ([cls, s]) =>
+          `${cls} ${s.parcels} parcels, median ${usd(s.medianValue)}, total ${usd(s.totalValue)}, ` +
+          `change ${s.valueGrowth == null ? 'n/a' : `${s.valueGrowth.toFixed(1)}%`}, ` +
+          `land ${usd(s.landPsf)}/sq ft avg, ${usd(s.medianLandPsf)} median on ${s.landParcels}`
       );
       console.log(`${name}: ${summary.city} ${summary.period}: ${parts.join('; ')} (${Math.round((Date.now() - started) / 1000)}s)`);
     } catch (error) {
