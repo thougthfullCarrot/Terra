@@ -95,7 +95,8 @@ describe('HUD LIHTC database', () => {
     const out = parseLihtc(text, METROS, now);
     expect(out.get('19124')).toEqual({ projects: 2, units: 140, recentProjects: 1 });
     expect(out.get('26420')).toEqual({ projects: 1, units: 200, recentProjects: 0 });
-    expect(out.size).toBe(2);
+    expect(out.get('31180')).toEqual({ projects: 1, units: 40, recentProjects: 1 });
+    expect(out.size).toBe(3);
   });
 });
 

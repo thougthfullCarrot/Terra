@@ -187,7 +187,7 @@ describe('buildEventsFile', () => {
       }
     };
     const file = await buildEventsFile(now, previous, { fetcher, log: () => {} });
-    expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels']);
+    expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels', 'College Station', 'Galveston', 'Lubbock', 'Midland']);
     expect(file.cities.find((c) => c.city === 'Houston')!.events).toHaveLength(2);
     expect(file.cities.find((c) => c.city === 'Dallas')!.events.map((e) => e.start)).toEqual(['2026-10-20T16:00:00Z']);
     expect(file.sources.map((s) => [s.organizer, s.count])).toEqual([

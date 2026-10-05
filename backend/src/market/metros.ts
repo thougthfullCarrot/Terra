@@ -104,5 +104,50 @@ export const METROS: Metro[] = [
     txdotDistrict: 'San Antonio',
     hudFmr: 'METRO41700M41700',
     sharedMetro: 'San Antonio metro'
+  },
+  {
+    city: 'College Station',
+    name: 'College Station-Bryan metro',
+    area: '17780',
+    census: { msa: '17780' },
+    laus: 'MT4817780000000',
+    counties: ['041', '051', '395'],
+    txdotDistrict: 'Bryan',
+    hudFmr: 'METRO17780M17780'
+  },
+  {
+    // In the Houston metro, like New Braunfels in San Antonio's: metro-level
+    // figures repeat Houston's, labeled; city-level sources read Galveston's rows.
+    city: 'Galveston',
+    name: 'Houston-Pasadena-The Woodlands metro',
+    area: '26420',
+    census: { msa: '26420' },
+    laus: 'MT4826420000000',
+    counties: ['015', '039', '071', '157', '167', '201', '291', '339', '407', '473'],
+    txdotDistrict: 'Houston',
+    hudFmr: 'METRO26420M26420',
+    sharedMetro: 'Houston metro'
+  },
+  {
+    city: 'Lubbock',
+    name: 'Lubbock metro',
+    area: '31180',
+    census: { msa: '31180' },
+    laus: 'MT4831180000000',
+    counties: ['107', '303', '305'],
+    txdotDistrict: 'Lubbock',
+    hudFmr: 'METRO31180M31180'
+  },
+  {
+    // Midland metro only; Odessa (Ector County) is its own metro and shows
+    // only on the development map and in the news search.
+    city: 'Midland',
+    name: 'Midland metro',
+    area: '33260',
+    census: { msa: '33260' },
+    laus: 'MT4833260000000',
+    counties: ['317', '329'],
+    txdotDistrict: 'Odessa',
+    hudFmr: 'METRO33260M33260'
   }
 ];

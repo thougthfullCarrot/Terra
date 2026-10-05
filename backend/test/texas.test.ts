@@ -2,8 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { resolveCity } from '../src/collector/texas.js';
 
 describe('resolveCity', () => {
-  it('resolves the seven tracked cities', () => {
+  it('resolves the eleven tracked cities', () => {
     expect(resolveCity('New Braunfels, TX')).toBe('New Braunfels');
+    expect(resolveCity('College Station, TX')).toBe('College Station');
+    expect(resolveCity('Bryan, Texas')).toBe('College Station');
+    expect(resolveCity('Galveston, TX')).toBe('Galveston');
+    expect(resolveCity('League City, TX')).toBe('Houston');
+    expect(resolveCity('Lubbock, TX')).toBe('Lubbock');
+    expect(resolveCity('Midland, TX')).toBe('Midland');
+    expect(resolveCity('Odessa, TX')).toBe('Midland');
+    expect(resolveCity('Midland, MI')).toBeNull();
     expect(resolveCity('Dallas, TX')).toBe('Dallas');
     expect(resolveCity('Fort Worth, TX')).toBe('Fort Worth');
     expect(resolveCity('Houston, Texas')).toBe('Houston');

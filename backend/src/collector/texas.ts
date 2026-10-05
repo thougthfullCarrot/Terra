@@ -1,7 +1,7 @@
 import { CITIES, type City } from '../types.js';
 
 /**
- * Suburbs and metro aliases that should roll up to one of the six tracked
+ * Suburbs and metro aliases that should roll up to one of the tracked
  * cities. Keys are lowercase; longest key wins so 'north richland hills' is not
  * shadowed by 'richland'.
  */
@@ -88,7 +88,20 @@ const ALIASES: Record<string, City> = {
 
   // New Braunfels (Comal County; its own market, inside the San Antonio metro)
   'new braunfels': 'New Braunfels',
-  'gruene': 'New Braunfels'
+  'gruene': 'New Braunfels',
+
+  // College Station (Brazos County, with Bryan next door)
+  bryan: 'College Station',
+  'bryan-college station': 'College Station',
+  'brazos valley': 'College Station',
+
+  // Galveston (the island; League City and Texas City stay with Houston)
+  'galveston island': 'Galveston',
+
+  // Midland, with Odessa next door (Permian Basin)
+  odessa: 'Midland',
+  'midland-odessa': 'Midland',
+  'permian basin': 'Midland'
 };
 
 /** US state markers other than Texas, used to reject out-of-state postings. */
@@ -103,7 +116,7 @@ const CITY_KEYS: [string, City][] = [
 ].sort((a, b) => b[0].length - a[0].length);
 
 /**
- * Resolve a free-text ATS location to one of the six tracked Texas cities, or
+ * Resolve a free-text ATS location to one of the tracked Texas cities, or
  * null when the posting is not in Texas.
  *
  * Policy, in order:

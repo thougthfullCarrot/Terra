@@ -183,9 +183,16 @@ describe('fetchDevelopments', () => {
     }) as typeof fetch;
   }
 
-  it('covers each metro by county, each county in one market', () => {
+  it('covers each metro by county, each county in one market but Galveston', () => {
+    // Galveston County is on both the Houston map (Rod asked for it there)
+    // and Galveston's own; every other county belongs to one market.
     const all = Object.values(METRO_COUNTIES).flat();
-    expect(new Set(all).size).toBe(all.length);
+    expect(all.filter((c) => c === 'Galveston')).toHaveLength(2);
+    const rest = all.filter((c) => c !== 'Galveston');
+    expect(new Set(rest).size).toBe(rest.length);
+    expect(METRO_COUNTIES.Galveston).toEqual(['Galveston']);
+    expect(METRO_COUNTIES.Midland).toEqual(['Midland', 'Ector']);
+    expect(METRO_COUNTIES['College Station']).toEqual(['Brazos', 'Burleson', 'Robertson']);
     for (const county of all) expect(TABS_COUNTY_IDS[county!]).toMatch(/^2\d{3}$/);
     expect(METRO_COUNTIES.Houston).toContain('Galveston');
     expect(METRO_COUNTIES['New Braunfels']).toEqual(['Comal']);
