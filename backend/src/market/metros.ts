@@ -21,6 +21,8 @@ export interface Metro {
   counties: string[];
   /** The TxDOT district that plans the area's state highways. */
   txdotDistrict: string;
+  /** HUD Fair Market Rent area id (the FMR API's entity id). */
+  hudFmr: string;
 }
 
 export const METROS: Metro[] = [
@@ -31,7 +33,8 @@ export const METROS: Metro[] = [
     census: { msa: '19100', division: '19124' },
     laus: 'DV4819124000000',
     counties: ['085', '113', '121', '139', '231', '257', '397'],
-    txdotDistrict: 'Dallas'
+    txdotDistrict: 'Dallas',
+    hudFmr: 'METRO19100M19100'
   },
   {
     city: 'Fort Worth',
@@ -40,7 +43,8 @@ export const METROS: Metro[] = [
     census: { msa: '19100', division: '23104' },
     laus: 'DV4823104000000',
     counties: ['251', '367', '439', '497'],
-    txdotDistrict: 'Fort Worth'
+    txdotDistrict: 'Fort Worth',
+    hudFmr: 'METRO19100MM2800'
   },
   {
     city: 'Houston',
@@ -49,7 +53,8 @@ export const METROS: Metro[] = [
     census: { msa: '26420' },
     laus: 'MT4826420000000',
     counties: ['015', '039', '071', '157', '167', '201', '291', '339', '407', '473'],
-    txdotDistrict: 'Houston'
+    txdotDistrict: 'Houston',
+    hudFmr: 'METRO26420M26420'
   },
   {
     city: 'Austin',
@@ -58,7 +63,8 @@ export const METROS: Metro[] = [
     census: { msa: '12420' },
     laus: 'MT4812420000000',
     counties: ['021', '055', '209', '453', '491'],
-    txdotDistrict: 'Austin'
+    txdotDistrict: 'Austin',
+    hudFmr: 'METRO12420M12420'
   },
   {
     city: 'San Antonio',
@@ -67,7 +73,8 @@ export const METROS: Metro[] = [
     census: { msa: '41700' },
     laus: 'MT4841700000000',
     counties: ['013', '019', '029', '091', '187', '259', '325', '493'],
-    txdotDistrict: 'San Antonio'
+    txdotDistrict: 'San Antonio',
+    hudFmr: 'METRO41700M41700'
   },
   {
     city: 'El Paso',
@@ -76,6 +83,7 @@ export const METROS: Metro[] = [
     census: { msa: '21340' },
     laus: 'MT4821340000000',
     counties: ['141', '229'],
-    txdotDistrict: 'El Paso'
+    txdotDistrict: 'El Paso',
+    hudFmr: 'METRO21340M21340'
   }
 ];

@@ -33,7 +33,8 @@ export const PAGE_SIZE = 50;
 export const DEFAULT_QUERIES: AdzunaQuery[] = [
   { what_phrase: 'commercial real estate' },
   { what: 'real estate', what_or: 'intern internship analyst associate trainee coordinator' },
-  { what_or: 'acquisitions underwriting appraiser leasing asset', what_and: 'real estate' }
+  { what_or: 'acquisitions underwriting appraiser leasing asset', what_and: 'real estate' },
+  { what_or: 'LIHTC affordable housing tax credit' , what_and: 'housing' }
 ];
 
 export interface AdzunaQuery {
@@ -106,7 +107,7 @@ export async function fetchAdzuna(
   credentials: AdzunaCredentials,
   options: AdzunaOptions = {}
 ): Promise<RawJob[]> {
-  const { queries = DEFAULT_QUERIES, maxRequests = 6, maxPages = 2, maxDaysOld = 30, ...http } = options;
+  const { queries = DEFAULT_QUERIES, maxRequests = 8, maxPages = 2, maxDaysOld = 30, ...http } = options;
 
   const seen = new Set<string>();
   const jobs: RawJob[] = [];
@@ -172,7 +173,7 @@ export function parseAdzuna(payload: AdzunaResponse): RawJob[] {
  * car leases and talent acquisition.
  */
 const REAL_ESTATE =
-  /\b(real estate|cre|reits?|multifamily|commercial property|property management|property manager|apprais(?:er|al)|home ?build(?:er|ers|ing))\b/i;
+  /\b(real estate|cre|reits?|multifamily|commercial property|property management|property manager|apprais(?:er|al)|home ?build(?:er|ers|ing)|affordable housing|lihtc|housing tax credit|housing authority|public housing)\b/i;
 
 /** Residential sales jobs share the vocabulary but are not what Terra covers. */
 const RESIDENTIAL =

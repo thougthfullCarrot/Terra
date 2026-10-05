@@ -234,6 +234,7 @@
           <div class="profile-who">
             <h2 id="profile-title">Your profile</h2>
             <p class="muted" id="profile-email"></p>
+            <p class="school-line" id="profile-school" hidden></p>
             <p class="badge" id="profile-access"></p>
           </div>
           <button type="button" class="link close" id="profile-close">Back to jobs</button>
@@ -328,6 +329,7 @@
         <a href="#tracker" id="tab-tracker" class="tab" hidden>Tracker</a>
         <a href="#markets" id="tab-markets" class="tab">Market data</a>
         <a href="#news" id="tab-news" class="tab">News</a>
+        <a href="#events" id="tab-events" class="tab">Events</a>
       </nav>
 
       <div id="jobs-view">
@@ -443,6 +445,20 @@
         <div class="summary"><p id="n-count" aria-live="polite"></p></div>
         <section id="n-list" class="list news-list" aria-label="Headlines"></section>
         <div id="n-sources" class="market-sources"></div>
+      </section>
+
+      <!-- Real estate networking events by city: events-view.js draws them from events.json. -->
+      <section id="events-view" hidden aria-labelledby="events-title">
+        <h2 id="events-title" class="visually-hidden">Real estate events</h2>
+        <form class="controls" id="events-controls" onsubmit="return false">
+          <div class="chip-group">
+            <span class="eyebrow">CITY</span>
+            <div class="chip-row" id="e-cities" role="group" aria-label="City"></div>
+          </div>
+        </form>
+        <div class="summary"><p id="e-count" aria-live="polite"></p></div>
+        <section id="e-list" class="list news-list" aria-label="Events"></section>
+        <div id="e-sources" class="market-sources"></div>
       </section>
       </div>
 
