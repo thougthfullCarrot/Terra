@@ -9,7 +9,10 @@ import {
   parseZcta,
   projectDetails,
   searchForm,
-  TABS_CITY_IDS,
+  METRO_COUNTIES,
+  TABS_COUNTY_IDS,
+  parseCityOptions,
+  placeOf,
   spread,
   zipOf,
   type Development,
@@ -106,10 +109,10 @@ describe('which filings count as current developments', () => {
     expect(currentDevelopments(rows).map((r) => r.ProjectNumber)).toEqual(['TABS2026021473', 'add']);
   });
 
-  it('searches one city for the last year, biggest first', () => {
-    const form = searchForm('Houston', new Date('2025-10-05T00:00:00Z'), new Date('2026-10-05T00:00:00Z'));
+  it('searches one county for the last year, biggest first', () => {
+    const form = searchForm('Galveston', new Date('2025-10-05T00:00:00Z'), new Date('2026-10-05T00:00:00Z'));
     expect(form).toMatchObject({
-      LocationCity: '785',
+      LocationCounty: '2084',
       RegistrationDateBegin: '10/05/2025',
       RegistrationDateEnd: '10/05/2026',
       'order[0][dir]': 'desc',
@@ -180,8 +183,21 @@ describe('fetchDevelopments', () => {
     }) as typeof fetch;
   }
 
-  it('has a TABS city id for every market', () => {
-    expect(TABS_CITY_IDS['New Braunfels']).toBe('1216');
+  it('covers each metro by county, each county in one market', () => {
+    const all = Object.values(METRO_COUNTIES).flat();
+    expect(new Set(all).size).toBe(all.length);
+    for (const county of all) expect(TABS_COUNTY_IDS[county!]).toMatch(/^2\d{3}$/);
+    expect(METRO_COUNTIES.Houston).toContain('Galveston');
+    expect(METRO_COUNTIES['New Braunfels']).toEqual(['Comal']);
+    expect(METRO_COUNTIES['San Antonio']).not.toContain('Comal');
+  });
+
+  it('names the town each project is in', () => {
+    const html = '<select name="filter-location-city"><option value=""></option><option value="633">Galveston</option></select><select name="filter-location-county"><option value="2084">Galveston</option></select>';
+    expect(parseCityOptions(html)).toEqual(new Map([[633, 'Galveston']]));
+    expect(placeOf('2828 Seawall Blvd, Galveston, TX 77550')).toBe('Galveston');
+    expect(placeOf('100 Main St, League City, Texas 77573-1234')).toBe('League City');
+    expect(placeOf(null)).toBeNull();
   });
 
   it('reads new projects, reuses earlier ones, and places them on the map', async () => {
@@ -198,6 +214,7 @@ describe('fetchDevelopments', () => {
     expect(fresh).toMatchObject({
       id: 'TABS2026021473',
       city: 'Houston',
+      place: 'Houston',
       owner: 'Hanover Rankin LLC',
       cost: 37246815,
       status: 'Registered',
@@ -215,7 +232,11 @@ describe('fetchDevelopments', () => {
     // One search, one project page and one geocode: the earlier project is not read again.
     expect(calls.filter((c) => c.includes('/Search/Project/'))).toHaveLength(1);
     expect(calls.filter((c) => c.includes('geocoding'))).toHaveLength(1);
-    expect(calls[0]).toContain('LocationCity=785');
+    // One search per Harris-area county, the same project found twice counted once.
+    const searches = calls.filter((c) => c.startsWith('POST'));
+    expect(searches).toHaveLength(METRO_COUNTIES.Houston!.length);
+    expect(searches[0]).toContain('LocationCounty=2101');
+    expect(searches[1]).toContain('LocationCounty=2084');
   });
 
   it('leaves a project off the map when the geocoder places it in another city', async () => {

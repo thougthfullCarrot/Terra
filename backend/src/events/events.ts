@@ -20,6 +20,8 @@ export interface TerraEvent {
   organizer: string;
   venue: string | null;
   cost: string | null;
+  /** "Added by hand" for rows from the Google Sheet's Events tab; absent for calendar feeds. */
+  source?: string;
 }
 
 export interface EventSource {
@@ -27,16 +29,40 @@ export interface EventSource {
   key: string;
   organizer: string;
   city: City;
-  kind: 'tribe' | 'growthzone';
+  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages';
   /** Site root, no trailing slash. */
   base: string;
+  /** The listing page (default base + /events). */
+  page?: string;
+  /** pages: path prefix of event detail links on the listing (each detail page carries schema.org Event JSON-LD). */
+  detailPath?: string;
+  /** Drop titles matching this (internal committee meetings on a public calendar). */
+  exclude?: RegExp;
+  /** Keep only titles matching RELEVANT (chamber hubs list ribbon cuttings, yoga, etc. next to networking events). */
+  relevantOnly?: boolean;
 }
+
+/** Business networking and real estate words; used for sources with relevantOnly. */
+export const RELEVANT =
+  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership/i;
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
   { key: 'creda-houston', organizer: 'CREDA Houston', city: 'Houston', kind: 'tribe', base: 'https://credahouston.org' },
-  { key: 'boma-dallas', organizer: 'BOMA Dallas', city: 'Dallas', kind: 'growthzone', base: 'https://members.bomadallas.org' }
+  { key: 'boma-dallas', organizer: 'BOMA Dallas', city: 'Dallas', kind: 'growthzone', base: 'https://members.bomadallas.org' },
+  { key: 'boma-houston', organizer: 'Houston BOMA', city: 'Houston', kind: 'pages', base: 'https://www.houstonboma.org', page: 'https://www.houstonboma.org/events/', detailPath: '/events/' },
+  { key: 'trec-dallas', organizer: 'The Real Estate Council', city: 'Dallas', kind: 'jsonld', base: 'https://recouncil.com', page: 'https://recouncil.com/calendar/', exclude: /committee|advisory board|board meeting|check-in call|consulting services meeting|core committee/i },
+  { key: 'nawic-sa', organizer: 'NAWIC San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://www.nawicsatx.org', page: 'https://www.nawicsatx.org/events', detailPath: '/events-1/' },
+  // Chamber calendars (GrowthZone): only networking, real estate and economic events (see RELEVANT).
+  { key: 'metro-sa', organizer: 'Metro SA Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://members.metrosa.com', page: 'https://members.metrosa.com/events/calendar', relevantOnly: true },
+  { key: 'sotx-partnership', organizer: 'South Texas Business Partnership', city: 'San Antonio', kind: 'growthzone', base: 'https://business.southtexaspartnership.org', relevantOnly: true },
+  { key: 'boerne-chamber', organizer: 'Boerne Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://business.boerne.org', page: 'https://business.boerne.org/events/calendar', relevantOnly: true },
+  { key: 'nb-chamber', organizer: 'New Braunfels Chamber', city: 'New Braunfels', kind: 'growthzone', base: 'https://newbraunfelschamber.growthzoneapp.com', relevantOnly: true },
+  { key: 'elpaso-chamber', organizer: 'El Paso Chamber', city: 'El Paso', kind: 'growthzone', base: 'https://members.elpaso.org', relevantOnly: true }
 ];
+
+/** The source label of events typed into the Google Sheet. */
+export const MANUAL_SOURCE = 'Added by hand';
 
 export const WINDOW_DAYS = 120;
 
@@ -220,6 +246,109 @@ function normalizeDate(value: string): string | null {
   return centralIso(value);
 }
 
+// ---- schema.org JSON-LD on a listing page ----
+
+interface LdEvent {
+  '@type'?: string | string[];
+  '@graph'?: unknown[];
+  name?: string;
+  url?: string;
+  startDate?: string;
+  endDate?: string;
+  location?: { name?: string } | Array<{ name?: string }> | string;
+  offers?: { price?: string | number } | Array<{ price?: string | number }>;
+}
+
+function ldNodes(data: unknown): LdEvent[] {
+  if (Array.isArray(data)) return data.flatMap(ldNodes);
+  if (!data || typeof data !== 'object') return [];
+  const n = data as LdEvent;
+  return [n, ...(n['@graph'] ? ldNodes(n['@graph']) : [])];
+}
+
+/** Every schema.org Event in a page's JSON-LD blocks. */
+export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: string): TerraEvent[] {
+  const out: TerraEvent[] = [];
+  for (const [, json = ''] of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    let data: unknown;
+    try {
+      data = JSON.parse(json.trim());
+    } catch {
+      continue;
+    }
+    for (const n of ldNodes(data)) {
+      const types = Array.isArray(n['@type']) ? n['@type'] : [n['@type']];
+      if (!types.some((t) => typeof t === 'string' && /Event$/.test(t))) continue;
+      const title = decodeText(n.name ?? '');
+      const start = n.startDate ? normalizeDate(n.startDate) : null;
+      let url: string | null = null;
+      try {
+        // Without its own url the event links to the listing, made unique per event with a fragment.
+        url = httpUrl(new URL(n.url || `#${(start ?? '').slice(0, 10)}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`, pageUrl).href);
+      } catch {
+        url = null;
+      }
+      if (!title || !start || !url) continue;
+      const loc = Array.isArray(n.location) ? n.location[0] : n.location;
+      const venue = typeof loc === 'string' ? loc : loc?.name;
+      out.push({
+        id: `${source.key}-${url}`,
+        title,
+        url,
+        start,
+        end: n.endDate ? normalizeDate(n.endDate) : null,
+        city: source.city,
+        organizer: source.organizer,
+        venue: venue ? decodeText(venue) || null : null,
+        cost: null
+      });
+    }
+  }
+  return out;
+}
+
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
+/** Title and start from a Novi AMS event page (no JSON-LD): the c-event-details start-date and time spans. */
+export function parseNoviDetail(html: string): { title: string; start: string } | null {
+  // The text after the marker class (icons and wrappers may come first).
+  const span = (cls: string) => {
+    const at = html.search(new RegExp(`class="[^"]*${cls}[\\s"]`, 'i'));
+    return at < 0 ? undefined : html.slice(at, at + 600).replace(/^[^>]*>/, '');
+  };
+  const dateText = decodeText(span('c-event-details__start-date') ?? '');
+  const d = /([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/.exec(dateText);
+  const mo = d ? MONTHS.indexOf(d[1]!.toLowerCase()) : -1;
+  if (!d || mo < 0) return null;
+  const date = `${d[3]}-${String(mo + 1).padStart(2, '0')}-${d[2]!.padStart(2, '0')}`;
+  const t = /(\d{1,2}):(\d{2})\s*([AP])\.?M/i.exec(decodeText(span('c-event-details__time') ?? ''));
+  const h = t ? (Number(t[1]) % 12) + (t[3]!.toUpperCase() === 'P' ? 12 : 0) : null;
+  const og = /<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i.exec(html)?.[1];
+  const h1 = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1];
+  const title = decodeText(og ?? h1 ?? '').replace(/\s*[|\u2013-]\s*Houston BOMA\s*$/i, '');
+  if (!title) return null;
+  return { title, start: centralIso(h === null ? date : `${date} ${String(h).padStart(2, '0')}:${t![2]}`)! };
+}
+
+/** Same-site links under detailPath on a listing page (one level deeper than the prefix, no query). */
+export function detailLinks(html: string, page: string, detailPath: string): string[] {
+  const origin = new URL(page).origin;
+  const out = new Set<string>();
+  for (const [, href = ''] of html.matchAll(/<a\b[^>]*href="([^"#]+)"/gi)) {
+    let url: URL;
+    try {
+      url = new URL(decodeXml(href), page);
+    } catch {
+      continue;
+    }
+    if (url.origin !== origin || url.search || !url.pathname.startsWith(detailPath)) continue;
+    const rest = url.pathname.slice(detailPath.length).replace(/\/$/, '');
+    if (!rest || rest.includes('/')) continue;
+    out.add(`${url.origin}${url.pathname}`);
+  }
+  return [...out];
+}
+
 /** Housekeeping entries ("BOMA CLOSED - Labor Day", office-closure holidays), not real events. */
 export function isClosure(title: string): boolean {
   return /^\s*(?:[\w&.' ]+\s+)?closed(?:\s*[\u2013\u2014:]|\s*-(?!\w))/i.test(title) || /\boffices?\s+(?:will\s+be\s+)?closed\b/i.test(title);
@@ -257,7 +386,8 @@ const defaultFetcher: Fetcher = {
 };
 
 export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
-  return tidy(await fetchRaw(source, now, fetcher, log));
+  const events = tidy(await fetchRaw(source, now, fetcher, log));
+  return events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
 }
 
 async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (m: string) => void): Promise<TerraEvent[]> {
@@ -283,6 +413,32 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
     throw restError instanceof Error ? restError : new Error('no event feed reachable');
   }
 
+  if (source.kind === 'jsonld') {
+    const page = source.page ?? `${source.base}/events`;
+    const events = parseJsonLdEvents(await fetcher.text(page), source, page);
+    log(`${source.organizer}: ${events.length} events from ${page}`);
+    return events;
+  }
+
+  if (source.kind === 'pages') {
+    const page = source.page ?? `${source.base}/events`;
+    const links = detailLinks(await fetcher.text(page), page, source.detailPath ?? '/events/').slice(0, 30);
+    log(`${source.organizer}: reading ${links.length} event pages.`);
+    const out: TerraEvent[] = [];
+    for (const link of links) {
+      try {
+        const html = await fetcher.text(link);
+        const ld = parseJsonLdEvents(html, source, link)[0];
+        const novi = ld ? null : parseNoviDetail(html);
+        if (ld) out.push({ ...ld, url: link, id: `${source.key}-${link}` });
+        else if (novi) out.push({ id: `${source.key}-${link}`, url: link, end: null, city: source.city, organizer: source.organizer, venue: null, cost: null, ...novi });
+      } catch (error) {
+        log(`${link}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return out;
+  }
+
   for (const feed of growthZoneFeeds(source.base)) {
     try {
       const events = parseIcs(await fetcher.text(feed), source);
@@ -294,7 +450,9 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       log(`${source.organizer}: ${feed}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  const links = growthZoneLinks(await fetcher.text(`${source.base}/events`), source.base).slice(0, 30);
+  const links = growthZoneLinks(await fetcher.text(source.page ?? `${source.base}/events`), source.base)
+    .filter((l) => !source.relevantOnly || !l.title || RELEVANT.test(l.title))
+    .slice(0, 30);
   log(`${source.organizer}: no calendar feed; reading ${links.length} event pages.`);
   const out: TerraEvent[] = [];
   for (const link of links) {
@@ -303,7 +461,7 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       if (!detail.start) continue;
       out.push({
         id: `${source.key}-${/-(\d+)\/?$/.exec(link.url)?.[1] ?? link.url}`,
-        title: detail.title || link.title,
+        title: detail.title || (/-->/.test(link.title) ? slugTitle(link.url) : link.title),
         url: link.url,
         start: detail.start,
         end: detail.end,
@@ -319,22 +477,34 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
   return out;
 }
 
+/** A url compared loosely: no tracking params (GrowthZone's sourceTypeId, calendarMonth), case-folded path, no trailing slash. */
+export function urlKey(url: string): string {
+  try {
+    const u = new URL(url);
+    for (const p of [...u.searchParams.keys()]) if (/^(sourcetypeid|calendarmonth|utm_\w+)$/i.test(p)) u.searchParams.delete(p);
+    return `${u.host.replace(/^www\./, '')}${u.pathname.toLowerCase().replace(/\/$/, '')}${u.search}${u.hash}`;
+  } catch {
+    return url;
+  }
+}
+
 /** Upcoming (not yet ended, starting within the window), one per url, by start. */
 export function upcoming(events: TerraEvent[], now: Date, days = WINDOW_DAYS): TerraEvent[] {
   const limit = now.getTime() + days * 86_400_000;
   const byUrl = new Map<string, TerraEvent>();
   for (const e of events) {
+    const key = e.url ? urlKey(e.url) : e.id;
     const start = new Date(e.start).getTime();
     const end = e.end ? new Date(e.end).getTime() : start + 86_400_000;
     if (!Number.isFinite(start) || start > limit || end < now.getTime()) continue;
-    if (!byUrl.has(e.url)) byUrl.set(e.url, e);
+    if (!byUrl.has(key)) byUrl.set(key, e);
   }
   return [...byUrl.values()].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
 export interface EventsFile {
   generatedAt: string;
-  sources: Array<{ organizer: string; city: City; url: string; fetchedAt: string; count: number }>;
+  sources: Array<{ organizer: string; city: City | null; url: string; fetchedAt: string; count: number }>;
   cities: Array<{ city: City; events: TerraEvent[] }>;
 }
 
@@ -342,19 +512,25 @@ export interface EventsFile {
 export async function buildEventsFile(
   now: Date,
   previous: EventsFile | null,
-  options: { sources?: EventSource[]; fetcher?: Fetcher; log?: (m: string) => void } = {}
+  options: {
+    sources?: EventSource[];
+    fetcher?: Fetcher;
+    log?: (m: string) => void;
+    /** Rows from the sheet's Events tab; null when the sheet could not be read (the previous ones are kept). */
+    manual?: TerraEvent[] | null;
+  } = {}
 ): Promise<EventsFile> {
-  const { sources = EVENT_SOURCES, fetcher = defaultFetcher, log = console.log } = options;
+  const { sources = EVENT_SOURCES, fetcher = defaultFetcher, log = console.log, manual = null } = options;
   const all: TerraEvent[] = [];
   const meta: EventsFile['sources'] = [];
   for (const source of sources) {
     const before = previous?.sources.find((s) => s.organizer === source.organizer);
-    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer);
+    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && e.source !== MANUAL_SOURCE);
     try {
       const events = upcoming(await fetchSource(source, now, fetcher, log), now);
       log(`${source.organizer}: ${events.length} upcoming events.`);
       all.push(...events);
-      meta.push({ organizer: source.organizer, city: source.city, url: `${source.base}/events`, fetchedAt: now.toISOString(), count: events.length });
+      meta.push({ organizer: source.organizer, city: source.city, url: source.page ?? `${source.base}/events`, fetchedAt: now.toISOString(), count: events.length });
     } catch (error) {
       log(`${source.organizer}: ${error instanceof Error ? error.message : String(error)}; keeping ${kept.length} earlier events.`);
       const still = upcoming(kept, now);
@@ -362,7 +538,12 @@ export async function buildEventsFile(
       if (before) meta.push({ ...before, count: still.length });
     }
   }
-  const sorted = upcoming(all, now);
+  const previousManual = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.source === MANUAL_SOURCE);
+  const hand = upcoming((manual ?? previousManual).map((e) => ({ ...e, source: MANUAL_SOURCE })), now);
+  if (hand.length) {
+    meta.push({ organizer: MANUAL_SOURCE, city: null, url: '', fetchedAt: now.toISOString(), count: hand.length });
+  }
+  const sorted = upcoming([...all, ...hand], now);
   return {
     generatedAt: now.toISOString(),
     sources: meta,

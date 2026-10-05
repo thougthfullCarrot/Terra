@@ -1,5 +1,6 @@
 // devmap.js — the development map on the market data section: each city's
-// biggest current projects from the state's TABS register, as pins on an
+// metro area's biggest current projects (the whole region by county, so
+// Houston includes Galveston, Sugar Land and The Woodlands) from the state's TABS register, as pins on an
 // OpenStreetMap map, with a list beside it. Each project links to its
 // developer's website and its state filing.
 //
@@ -10,7 +11,7 @@ import { cityProjects, markerRadius, projectDates } from './market.js';
 const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
 
-/** Where to center a city with no pins. */
+/** Where to center a metro with no pins. */
 const CENTERS = {
   Dallas: [32.7767, -96.797],
   'Fort Worth': [32.7555, -97.3308],
@@ -59,14 +60,14 @@ export function developmentMap({ data, cities, city, onCity }) {
   const box = el('section', 'card dev-card');
   box.setAttribute('aria-labelledby', 'dev-title');
   const head = el('div', 'dev-head');
-  const title = el('h3', 'group-title', `${city} development map`);
+  const title = el('h3', 'group-title', `${city} metro development map`);
   title.id = 'dev-title';
   head.append(
     title,
     el(
       'p',
       'group-blurb',
-      'The biggest new buildings and additions registered with the state in the last year. Click a pin or a project for the details and a link to the developer.'
+      `The biggest new buildings and additions registered with the state in the last year in the ${city} metro. Click a pin or a project for the details and a link to the developer.`
     )
   );
   box.append(head);
@@ -98,9 +99,9 @@ export function developmentMap({ data, cities, city, onCity }) {
   const layout = el('div', 'dev-layout');
   const mapNode = el('div', 'dev-map');
   mapNode.setAttribute('role', 'region');
-  mapNode.setAttribute('aria-label', `Map of ${city} development projects`);
+  mapNode.setAttribute('aria-label', `Map of ${city} metro development projects`);
   const list = el('ol', 'dev-list');
-  list.setAttribute('aria-label', `${city} development projects, biggest first`);
+  list.setAttribute('aria-label', `${city} metro development projects, biggest first`);
   layout.append(mapNode, list);
   const note = el('p', 'dev-note');
   box.append(layout, note);
@@ -163,7 +164,7 @@ async function drawMap(node, list, projects, city) {
     markers.set(project.id, marker);
   }
   if (placed.length) map.fitBounds(L.latLngBounds(placed.map((p) => [p.lat, p.lng])), { padding: [28, 28], maxZoom: 14 });
-  else map.setView(CENTERS[city] ?? [31, -99], 11);
+  else map.setView(CENTERS[city] ?? [31, -99], 9);
 }
 
 function drawList(list, projects) {
@@ -174,7 +175,7 @@ function drawList(list, projects) {
       const onMap = project.lat != null && project.lng != null;
       const button = el('button', 'dev-pick');
       button.type = 'button';
-      const meta = [money(project.cost), project.work, project.status].filter(Boolean).join(' · ');
+      const meta = [project.place, money(project.cost), project.work, project.status].filter(Boolean).join(' · ');
       button.append(
         el('span', `dot ${project.isPublic ? 'public' : 'private'}`),
         el('span', 'dev-name', project.name),
@@ -204,6 +205,7 @@ function popup(project) {
   const box = el('div', 'dev-pop');
   box.append(el('strong', 'dev-pop-title', project.name));
   if (project.facility) box.append(el('span', 'dev-pop-line', project.facility));
+  if (project.place && !project.address) box.append(el('span', 'dev-pop-line muted', project.place));
   if (project.address) box.append(el('span', 'dev-pop-line muted', project.address));
   if (project.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
   const facts = [money(project.cost), project.work, project.squareFeet ? `${project.squareFeet.toLocaleString('en-US')} sq ft` : ''].filter(Boolean);

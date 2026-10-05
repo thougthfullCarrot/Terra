@@ -11,9 +11,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildEventsFile, type EventsFile } from '../events/events.js';
+import { loadSheetEvents, mergeManual, parseManualFile } from '../events/sheetEvents.js';
+import { sheetsClientFromEnv } from '../sheets/env.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = resolve(here, '../../../site/events.json');
+const MANUAL_FILE = resolve(here, '../../data/events-manual.json');
 
 function flag(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -25,7 +28,13 @@ async function main(): Promise<void> {
   const previous = await readFile(resolve(flag('--previous') ?? out), 'utf8')
     .then((text) => JSON.parse(text) as EventsFile)
     .catch(() => null);
-  const file = await buildEventsFile(new Date(), previous);
+  const now = new Date();
+  // Optional: rows typed into the Google Sheet's Events tab (needs GOOGLE_SERVICE_ACCOUNT_JSON and TERRA_SHEET_ID).
+  const sheet = await loadSheetEvents(sheetsClientFromEnv(), now, { write: process.env.SHEETS_WRITE === 'true' });
+  // Plus the committed hand list, always read.
+  const listed = parseManualFile(JSON.parse(await readFile(MANUAL_FILE, 'utf8')) as { events?: Array<Record<string, string>> }, now);
+  const manual = mergeManual(listed, sheet, (previous?.cities ?? []).flatMap((c) => c.events));
+  const file = await buildEventsFile(now, previous, { manual });
   for (const city of file.cities) {
     if (!city.events.length) continue;
     console.log(`\n${city.city}:`);
