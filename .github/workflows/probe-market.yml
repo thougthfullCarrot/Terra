@@ -1,0 +1,13 @@
+# Temporary: runs .github/probe/probe.sh on push to this branch. Removed before merge.
+name: Probe market data sources
+on:
+  push:
+    branches: [claude/more-market-data-gnlj26]
+    paths: ['.github/probe/**', '.github/workflows/probe-market.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash .github/probe/probe.sh
