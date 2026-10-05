@@ -48,6 +48,8 @@ Nothing in this project needs to run on your computer. The split:
 | The website | GitHub Pages, built by `site.yml` | every 2 hours, and every push to the default branch |
 | Tests and typecheck | GitHub Actions (`ci.yml`) | every push and pull request |
 | Deployment check | GitHub Actions (`check-deployment.yml`) | every push to the default branch, daily |
+| Job alert emails | GitHub Actions (`alerts.yml`) | daily at 13:00 UTC, or the Actions tab |
+| Database migrations | GitHub Actions (`migrate.yml`) | a push to the default branch that adds a migration |
 
 **The collector runs on Actions rather than Vercel Cron on purpose.** A Hobby
 plan *rejects the deploy* for any schedule more frequent than daily, and the

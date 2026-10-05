@@ -1,6 +1,6 @@
 // markets-view.js — draws the market data section. The rules live in market.js.
 //
-// The page has three sections, Jobs, Market data and News, switched by the URL hash
+// The page has four sections, Jobs, Tracker, Market data and News, switched by the URL hash
 // so a link can open a city's market directly (#markets&city=Houston). The
 // data comes from a loader app.js hands over: market.json on the open site,
 // or the members-only Supabase row when accounts are on.
@@ -36,6 +36,11 @@ export function setMarketLoader(next) {
   if (next && readMarketHash(location.hash, null).open) show();
 }
 
+/** Show whichever section the hash names; the tracker calls this when its tab appears or goes. */
+export function showSection() {
+  return show();
+}
+
 export function startMarkets() {
   if (bound) return;
   bound = true;
@@ -64,15 +69,22 @@ function update(change) {
   render();
 }
 
+/** Which section the hash opens. The tracker only exists for signed-in members, so without its tab it falls back to jobs. */
+function section() {
+  if (readMarketHash(location.hash, null).open) return 'markets';
+  if (readNewsHash(location.hash, null).open) return 'news';
+  if (new URLSearchParams(location.hash.replace(/^#/, '')).has('tracker') && !$('tab-tracker').hidden) return 'tracker';
+  return 'jobs';
+}
+
 async function show() {
-  const open = readMarketHash(location.hash, null).open;
-  // news-view.js shows its own section; the jobs list steps aside for either.
-  const news = readNewsHash(location.hash, null).open;
-  $('jobs-view').hidden = open || news;
-  $('markets-view').hidden = !open;
-  for (const [id, on] of [['tab-jobs', !open && !news], ['tab-markets', open], ['tab-news', news]]) {
-    if (on) $(id).setAttribute('aria-current', 'page');
-    else $(id).removeAttribute('aria-current');
+  const active = section();
+  const open = active === 'markets';
+  // news-view.js shows its own section; the others step aside for it.
+  for (const name of ['jobs', 'markets', 'tracker']) $(`${name}-view`).hidden = name !== active;
+  for (const name of ['jobs', 'markets', 'tracker', 'news']) {
+    if (name === active) $(`tab-${name}`).setAttribute('aria-current', 'page');
+    else $(`tab-${name}`).removeAttribute('aria-current');
   }
   if (!open) return;
 

@@ -24,8 +24,13 @@ You need three accounts: Supabase (database, sign-in, file storage), Stripe
    - `backend/supabase/migrations/0003_markets_seed.sql`
    - `backend/supabase/migrations/0004_cron.sql`
    - `backend/supabase/migrations/0005_site_access.sql`
+   - `backend/supabase/migrations/0007_email_alerts.sql`
+   - `backend/supabase/migrations/0008_job_tracker.sql`
 
-   Each should end with "Success. No rows returned".
+   Each should end with "Success. No rows returned". Later migrations run on
+   their own: once the secret `SUPABASE_ACCESS_TOKEN` is set, the **Database
+   migrations** workflow runs every new migration file when it reaches the
+   default branch.
 4. Left sidebar, **Authentication** > **URL Configuration**:
    - **Site URL**: `https://thougthfullcarrot.github.io/Terra/`
    - **Redirect URLs** > **Add URL**: `https://thougthfullcarrot.github.io/Terra/**`
@@ -129,6 +134,16 @@ the live values. Then run both workflows again.
 - `backend/supabase/migrations/0005_site_access.sql`: who may read the jobs
   (`access_level()`), the `subscriptions` table, private picture and resume storage.
 - `backend/supabase/functions/stripe-webhook/`: records Stripe payments in `subscriptions`.
+- `backend/supabase/migrations/0007_email_alerts.sql` and `.github/workflows/alerts.yml`:
+  daily job alert emails. Members turn them on in their profile; the **Job alerts**
+  workflow sends at 13:00 UTC through the Gmail sender (`SMTP_USER`, `SMTP_PASSWORD`)
+  and logs what it sent in `alert_sends`. Gmail allows about 500 emails a day shared
+  with the sign-in codes, so alerts stop at `ALERT_MAX_EMAILS` (default 300) and the
+  rest go out the next morning. Run it by hand with **dry run** ticked to see the counts
+  without sending.
+- `backend/supabase/migrations/0008_job_tracker.sql`: the application tracker
+  (`tracked_jobs`), shown as the **Tracker** tab. Follow-up dates and closing
+  deadlines of saved jobs become reminders in the same morning email.
 - `.github/workflows/site.yml`: writes `site/config.js` from the variables and stores
   each snapshot in Supabase instead of publishing `postings.json`.
 - Resumes are read in the browser; their text is stored with the profile and scored

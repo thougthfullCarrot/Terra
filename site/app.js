@@ -23,6 +23,8 @@ import {
   writeQuery
 } from './feed.js';
 import { setMarketLoader, startMarkets } from './markets-view.js';
+import { STAGES, importRows } from './tracker.js';
+import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedIds, trackerOn, untrack } from './tracker-view.js';
 import { startNews } from './news-view.js';
 
 const $ = (id) => document.getElementById(id);
@@ -45,7 +47,7 @@ let bound = false;
 let scores = new Map();
 let profile = null;
 let matcher = null;
-/** Starred job ids, kept on this device only. */
+/** Starred job ids: this device's list on the open site, the member's tracker when signed in. */
 let saved = readSaved();
 /** The jobs on screen, in order, so the detail panel can step through them. */
 let shown = [];
@@ -74,12 +76,51 @@ function showFeed(next) {
 
 function hideFeed(message) {
   snapshot = null;
+  setTracker(null);
   setMarketLoader(null);
   $('meta').textContent = message ?? '';
   $('list').replaceChildren();
   $('count').textContent = '';
   $('stats').hidden = true;
   if ($('job-panel').open) $('job-panel').close();
+}
+
+/**
+ * Called by account.js with the member's tracker store once the feed is in,
+ * or null on sign-out. Jobs starred on this device before signing in move
+ * into the account the first time.
+ */
+async function setTracker(store) {
+  const on = await setTrackerStore(store);
+  if (!on) {
+    saved = readSaved();
+    trackerChanged();
+    return;
+  }
+  const local = readSaved();
+  if (local.size && snapshot) {
+    const moved = await importTracked(importRows(local, snapshot.jobs, trackedIds()));
+    try {
+      localStorage.removeItem(SAVED_KEY);
+    } catch {
+      // Nothing to clear.
+    }
+    if (moved) toast(`Moved ${moved} saved ${moved === 1 ? 'job' : 'jobs'} into your tracker.`);
+  }
+  trackerChanged();
+}
+
+/** Redraw what shows saved state after the tracker changes. */
+function trackerChanged() {
+  if (trackerOn()) saved = trackedIds();
+  if (!snapshot) return;
+  drawSavedToggle();
+  for (const button of $('list').querySelectorAll('.card .save')) {
+    const job = snapshot.jobs.find((j) => j.id === button.closest('.card').dataset.id);
+    if (job) paintSave(button, job);
+  }
+  if (panelJob) paintPanelSave();
+  if (state.saved) render();
 }
 
 /** Called by account.js whenever the signed-in user's profile changes. */
@@ -338,6 +379,17 @@ function paintSave(button, job) {
 }
 
 function flipSaved(job) {
+  if (trackerOn()) {
+    const stage = stageOf(job.id);
+    if (!stage) {
+      track(job, { stage: 'Saved' }).then((ok) => ok && toast('Saved. Find it under Tracker.'));
+    } else if (stage === 'Saved') {
+      untrack(job.id).then((ok) => ok && toast('Removed from your tracker.'));
+    } else {
+      toast(`It's in your tracker as ${stage}. Change or remove it there.`);
+    }
+    return;
+  }
   saved = toggleSaved(saved, job.id);
   try {
     localStorage.setItem(SAVED_KEY, JSON.stringify([...saved]));
@@ -375,6 +427,13 @@ function bindPanel() {
     paintPanelSave();
     const save = $('list').querySelector(`[data-id="${CSS.escape(panelJob.id)}"] .save`);
     if (save) paintSave(save, panelJob);
+  });
+  for (const value of ['', ...STAGES]) $('jp-stage').append(new Option(value || 'Not tracking', value));
+  $('jp-stage').addEventListener('change', (event) => {
+    if (!panelJob) return;
+    const stage = event.target.value;
+    if (stage) track(panelJob, { stage });
+    else untrack(panelJob.id);
   });
   $('jp-share').addEventListener('click', async () => {
     try {
@@ -469,6 +528,11 @@ function paintPanelSave() {
   const button = $('jp-save');
   button.setAttribute('aria-pressed', String(on));
   button.textContent = on ? 'Saved' : 'Save';
+  // Members get the full stage picker in place of the plain bookmark.
+  const tracking = trackerOn();
+  button.hidden = tracking;
+  $('jp-stage-wrap').hidden = !tracking;
+  if (tracking && panelJob) $('jp-stage').value = stageOf(panelJob.id) ?? '';
 }
 
 let toastTimer;
@@ -539,13 +603,22 @@ async function loadMarketFile() {
 
 startTheme();
 startMarkets();
+startTracker({
+  toast,
+  changed: trackerChanged,
+  openJob(id) {
+    const job = snapshot?.jobs.find((j) => j.id === id);
+    if (job) openPanel(job);
+    return Boolean(job);
+  }
+});
 startNews();
 
 if (isConfigured(CONFIG)) {
   $('meta').textContent = '';
   $('feed').hidden = true;
   import('./account.js')
-    .then(({ startAccounts }) => startAccounts({ showFeed, hideFeed, setProfile, setMarketLoader }))
+    .then(({ startAccounts }) => startAccounts({ showFeed, hideFeed, setProfile, setMarketLoader, setTracker }))
     .catch((error) => showState(`Couldn't start sign-in. ${error instanceof Error ? error.message : ''}`.trim(), true));
 } else {
   setMarketLoader(loadMarketFile);

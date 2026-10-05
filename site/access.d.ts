@@ -40,3 +40,19 @@ export function fileProblem(file: FileLike | null | undefined, kind: 'avatar' | 
 export function storagePath(userId: string, kind: 'avatar' | 'resume', fileName?: string): string;
 export function resumeContentType(fileName: string): string;
 export function initials(name: string | null | undefined, email: string | null | undefined): string;
+
+export const ALERT_KINDS: string[];
+export const ALERT_GOOD_MATCH: number;
+export interface AlertValues {
+  emailAlerts?: boolean;
+  alertCities?: string[];
+  alertKinds?: string[];
+  goodMatchesOnly?: boolean;
+}
+export interface AlertRow {
+  email_alerts: boolean;
+  alert_cities: string[];
+  alert_kinds: string[];
+  alert_min_match: number;
+}
+export function alertRow(values: AlertValues): AlertRow;
