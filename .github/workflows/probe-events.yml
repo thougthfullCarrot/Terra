@@ -16,9 +16,16 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - name: Export events (live run 1)
+      - name: Export events (live run 2)
         run: |
           npm run --silent export:events -- --out /tmp/events.json --previous /nonexistent 2>&1 | grep -vE '^  20'
           jq -c '[.cities[] | {(.city): (.events | length)}] | add' /tmp/events.json
           jq -c '.sources' /tmp/events.json
           jq -r '.cities[].events[] | "\(.city) | \(.start[0:16]) | \(.organizer) | \(.title)"' /tmp/events.json
+      - name: Inspect
+        run: |
+          curl -sSL -m 20 -A "Mozilla/5.0" https://www.houstonboma.org/events/annual-awards-extravaganza-2026 > /tmp/h.html
+          grep -oiE 'application/ld\+json.{0,300}|itemprop="[a-z]+"[^>]{0,120}|datetime="[^"]+"|class="[^"]*(date|time)[^"]*"[^>]*>[^<]{0,80}|<meta[^>]*(og:|event)[^>]{0,160}' /tmp/h.html | head -25
+          sed 's/<[^>]*>/ /g' /tmp/h.html | tr -s ' \n' | grep -oiE '(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? [A-Z][a-z]+ [0-9]{1,2},? 20[0-9]{2}.{0,80}' | head -5
+          jq -r '.cities[].events[] | select(.organizer=="The Real Estate Council")' /tmp/events.json
+          curl -sSL -m 40 https://recouncil.com/calendar/ | grep -oE '"startDate":"[^"]+"' | sort | uniq -c | head -30

@@ -32,7 +32,7 @@ export interface EventSource {
   kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages';
   /** Site root, no trailing slash. */
   base: string;
-  /** jsonld/pages: the listing page (default base + /events). */
+  /** The listing page (default base + /events). */
   page?: string;
   /** pages: path prefix of event detail links on the listing (each detail page carries schema.org Event JSON-LD). */
   detailPath?: string;
@@ -52,9 +52,9 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'trec-dallas', organizer: 'The Real Estate Council', city: 'Dallas', kind: 'jsonld', base: 'https://recouncil.com', page: 'https://recouncil.com/calendar/' },
   { key: 'nawic-sa', organizer: 'NAWIC San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://www.nawicsatx.org', page: 'https://www.nawicsatx.org/events', detailPath: '/events-1/' },
   // Chamber calendars (GrowthZone): only networking, real estate and economic events (see RELEVANT).
-  { key: 'metro-sa', organizer: 'Metro SA Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://members.metrosa.com', relevantOnly: true },
+  { key: 'metro-sa', organizer: 'Metro SA Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://members.metrosa.com', page: 'https://members.metrosa.com/events/calendar', relevantOnly: true },
   { key: 'sotx-partnership', organizer: 'South Texas Business Partnership', city: 'San Antonio', kind: 'growthzone', base: 'https://business.southtexaspartnership.org', relevantOnly: true },
-  { key: 'boerne-chamber', organizer: 'Boerne Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://business.boerne.org', relevantOnly: true },
+  { key: 'boerne-chamber', organizer: 'Boerne Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://business.boerne.org', page: 'https://business.boerne.org/events/calendar', relevantOnly: true },
   { key: 'nb-chamber', organizer: 'New Braunfels Chamber', city: 'New Braunfels', kind: 'growthzone', base: 'https://newbraunfelschamber.growthzoneapp.com', relevantOnly: true },
   { key: 'elpaso-chamber', organizer: 'El Paso Chamber', city: 'El Paso', kind: 'growthzone', base: 'https://members.elpaso.org', relevantOnly: true }
 ];
@@ -420,7 +420,7 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       log(`${source.organizer}: ${feed}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  const links = growthZoneLinks(await fetcher.text(`${source.base}/events`), source.base)
+  const links = growthZoneLinks(await fetcher.text(source.page ?? `${source.base}/events`), source.base)
     .filter((l) => !source.relevantOnly || !l.title || RELEVANT.test(l.title))
     .slice(0, 30);
   log(`${source.organizer}: no calendar feed; reading ${links.length} event pages.`);
