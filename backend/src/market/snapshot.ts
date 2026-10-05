@@ -10,7 +10,12 @@ import {
   type Point
 } from './bls.js';
 import { censusKey, growth, rentalVacancy, renterShare, type AcsResult } from './census.js';
+import type { ApartmentListResult } from './apartmentList.js';
+import type { AppraisalFile, PropertyClass } from './appraisal.js';
+import type { MonthlyReading } from './csv.js';
 import type { Metro } from './metros.js';
+import type { PermitResult } from './permits.js';
+import type { ZillowResult } from './zillow.js';
 
 /**
  * The market data page's file: one row per Terra city, a value per metric.
@@ -27,7 +32,7 @@ export interface MarketMetric {
   unit: Unit;
   /** Which end ranks first when sorting "best first"; null when neither end is better. */
   better: 'high' | 'low' | null;
-  source: 'BLS' | 'Census ACS';
+  source: 'BLS' | 'Census ACS' | 'Zillow' | 'Apartment List' | 'Census BPS' | 'Appraisal districts';
   /** One line on what the figure is, shown on hover and in the method notes. */
   note: string;
 }
@@ -55,6 +60,62 @@ export interface MarketSnapshot {
   markets: MarketArea[];
   sources: { name: string; url: string; detail: string }[];
 }
+
+/** Appraisal district figures per property type, keyed cad{Type}{Figure}. */
+const CAD_TYPES: { cls: PropertyClass; key: string; label: string; what: string }[] = [
+  { cls: 'multifamily', key: 'Apartment', label: 'apartments', what: 'apartment properties (state code B)' },
+  { cls: 'commercial', key: 'Commercial', label: 'commercial', what: 'commercial properties: office, retail, hotel and other (state code F1)' },
+  { cls: 'industrial', key: 'Industrial', label: 'industrial', what: 'industrial properties (state code F2)' }
+];
+
+const APPRAISED = 'Appraised by the county appraisal district, not a sale price: Texas does not disclose sale prices.';
+
+function appraisalMetrics(): MarketMetric[] {
+  return CAD_TYPES.flatMap(({ key, label, what }): MarketMetric[] => [
+    {
+      key: `cad${key}Value`,
+      label: `Median appraised value, ${label}`,
+      unit: 'usd',
+      better: null,
+      source: 'Appraisal districts',
+      note: `Median appraised value of the city's ${what}. ${APPRAISED}`
+    },
+    {
+      key: `cad${key}Growth`,
+      label: `Appraised value change, ${label}`,
+      unit: 'change',
+      better: 'high',
+      source: 'Appraisal districts',
+      note: `Change in appraised value of the same ${label} properties from last year's roll.`
+    },
+    {
+      key: `cad${key}LandPsf`,
+      label: `Land value per sq ft, ${label} (average)`,
+      unit: 'usd',
+      better: null,
+      source: 'Appraisal districts',
+      note: `Average appraised land value per square foot under the city's ${what}, leaving out parcels under 500 sq ft and the top and bottom 1%. ${APPRAISED}`
+    },
+    {
+      key: `cad${key}LandPsfMedian`,
+      label: `Land value per sq ft, ${label} (median)`,
+      unit: 'usd',
+      better: null,
+      source: 'Appraisal districts',
+      note: `Median appraised land value per square foot under the city's ${label} properties. ${APPRAISED}`
+    },
+    {
+      key: `cad${key}Total`,
+      label: `Total appraised value, ${label}`,
+      unit: 'usd',
+      better: 'high',
+      source: 'Appraisal districts',
+      note: `All ${what} in the city, added up. ${APPRAISED}`
+    }
+  ]);
+}
+
+const cad = (type: string, ...figures: string[]) => figures.map((figure) => `cad${type}${figure}`);
 
 export const METRICS: MarketMetric[] = [
   { key: 'jobs', label: 'Total jobs', unit: 'count', better: 'high', source: 'BLS', note: 'Nonfarm payroll jobs, latest month.' },
@@ -104,8 +165,70 @@ export const METRICS: MarketMetric[] = [
   },
   { key: 'renterShare', label: 'Renter households', unit: 'rate', better: 'high', source: 'Census ACS', note: 'Share of occupied homes that are rented: the apartment demand pool.' },
   { key: 'medianHomeValue', label: 'Median home value', unit: 'usd', better: null, source: 'Census ACS', note: 'Owner-estimated value of owner-occupied homes.' },
-  { key: 'homeValueGrowth', label: 'Home value growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Median home value vs. the year before.' }
+  { key: 'homeValueGrowth', label: 'Home value growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Median home value vs. the year before.' },
+  {
+    key: 'zhvi',
+    label: 'Typical home value (Zillow)',
+    unit: 'usd',
+    better: null,
+    source: 'Zillow',
+    note: 'Zillow Home Value Index for the city itself: the typical home (middle third), latest month.'
+  },
+  { key: 'zhviGrowth', label: 'Home value growth (Zillow)', unit: 'change', better: 'high', source: 'Zillow', note: 'Zillow Home Value Index vs. the same month a year earlier.' },
+  {
+    key: 'zori',
+    label: 'Typical asking rent (Zillow)',
+    unit: 'usd',
+    better: null,
+    source: 'Zillow',
+    note: 'Zillow Observed Rent Index for the city: asking rent on homes and apartments listed, latest month.'
+  },
+  { key: 'zoriGrowth', label: 'Asking rent growth (Zillow)', unit: 'change', better: 'high', source: 'Zillow', note: 'Zillow Observed Rent Index vs. a year earlier.' },
+  {
+    key: 'aptRent',
+    label: 'Apartment rent (Apartment List)',
+    unit: 'usd',
+    better: null,
+    source: 'Apartment List',
+    note: 'Median rent on apartments in the city, all bedroom counts, latest month.'
+  },
+  { key: 'aptRentGrowth', label: 'Apartment rent growth (Apartment List)', unit: 'change', better: 'high', source: 'Apartment List', note: 'Apartment rent vs. a year earlier.' },
+  {
+    key: 'aptVacancy',
+    label: 'Apartment vacancy (Apartment List)',
+    unit: 'rate',
+    better: 'low',
+    source: 'Apartment List',
+    note: 'Share of apartment units in the city sitting vacant, latest month. Lower means a tighter market.'
+  },
+  {
+    key: 'permitUnits',
+    label: 'New homes permitted',
+    unit: 'count',
+    better: 'high',
+    source: 'Census BPS',
+    note: 'Housing units the city authorized in new buildings this year so far, as reported to the Census Building Permits Survey.'
+  },
+  {
+    key: 'multifamilyPermitUnits',
+    label: 'Apartment units permitted',
+    unit: 'count',
+    better: 'high',
+    source: 'Census BPS',
+    note: 'Of those, units in buildings of five or more: the apartment pipeline.'
+  },
+  { key: 'permitGrowth', label: 'Permit growth', unit: 'change', better: 'high', source: 'Census BPS', note: 'Homes permitted this year so far vs. the same months last year.' },
+  ...appraisalMetrics(),
+  {
+    key: 'cadNewConstruction',
+    label: 'New construction added to the roll',
+    unit: 'usd',
+    better: 'high',
+    source: 'Appraisal districts',
+    note: 'Appraised value of new commercial, industrial and apartment construction added this year. Only Harris County reports it.'
+  }
 ];
+
 
 export const GROUPS: MarketGroup[] = [
   {
@@ -118,31 +241,63 @@ export const GROUPS: MarketGroup[] = [
     key: 'office',
     label: 'Office',
     blurb: 'Office demand follows the industries that work at desks.',
-    metrics: ['officeJobsGrowth', 'officeJobs', 'jobsGrowth', 'unemployment']
+    metrics: ['officeJobsGrowth', 'officeJobs', 'jobsGrowth', 'unemployment', ...cad('Commercial', 'Growth', 'Value', 'LandPsf', 'LandPsfMedian', 'Total')]
   },
   {
     key: 'industrial',
     label: 'Industrial',
     blurb: 'Warehouses and plants fill as manufacturing, distribution and logistics hire.',
-    metrics: ['industrialJobsGrowth', 'industrialJobs', 'populationGrowth', 'jobsGrowth']
+    metrics: [
+      'industrialJobsGrowth',
+      'industrialJobs',
+      'populationGrowth',
+      'jobsGrowth',
+      ...cad('Industrial', 'Growth', 'Value', 'LandPsf', 'LandPsfMedian', 'Total')
+    ]
   },
   {
     key: 'retail',
     label: 'Retail',
     blurb: 'Stores follow rooftops and spending power.',
-    metrics: ['retailJobsGrowth', 'retailJobs', 'medianIncome', 'populationGrowth']
+    metrics: ['retailJobsGrowth', 'retailJobs', 'medianIncome', 'populationGrowth', ...cad('Commercial', 'Growth', 'Value', 'LandPsf')]
   },
   {
     key: 'multifamily',
     label: 'Multifamily',
     blurb: 'Apartments: how tight the rental market is and where rents are heading.',
-    metrics: ['rentalVacancy', 'medianRent', 'rentGrowth', 'renterShare', 'populationGrowth']
+    metrics: [
+      'aptVacancy',
+      'aptRent',
+      'aptRentGrowth',
+      'zori',
+      'zoriGrowth',
+      'multifamilyPermitUnits',
+      ...cad('Apartment', 'Growth', 'Value', 'LandPsf', 'LandPsfMedian', 'Total'),
+      'rentalVacancy',
+      'medianRent',
+      'rentGrowth',
+      'renterShare'
+    ]
   },
   {
     key: 'development',
     label: 'Development',
     blurb: 'Building activity and land and home values.',
-    metrics: ['constructionJobsGrowth', 'constructionJobs', 'medianHomeValue', 'homeValueGrowth']
+    metrics: [
+      'permitUnits',
+      'permitGrowth',
+      'multifamilyPermitUnits',
+      'cadNewConstruction',
+      ...cad('Commercial', 'LandPsf'),
+      ...cad('Industrial', 'LandPsf'),
+      ...cad('Apartment', 'LandPsf'),
+      'zhvi',
+      'zhviGrowth',
+      'constructionJobsGrowth',
+      'constructionJobs',
+      'medianHomeValue',
+      'homeValueGrowth'
+    ]
   }
 ];
 
@@ -156,8 +311,37 @@ export const SOURCES: MarketSnapshot['sources'] = [
     name: 'U.S. Census Bureau, American Community Survey',
     url: 'https://www.census.gov/programs-surveys/acs',
     detail: 'Population, income, rent, home value and rental vacancy, 1-year estimates. Updated each September.'
+  },
+  {
+    name: 'Zillow Research',
+    url: 'https://www.zillow.com/research/data/',
+    detail: 'Zillow Home Value Index and Zillow Observed Rent Index, city level. Updated monthly.'
+  },
+  {
+    name: 'Apartment List',
+    url: 'https://www.apartmentlist.com/research/category/data-rent-estimates',
+    detail: 'Apartment rent estimates and vacancy index, city level. Updated monthly.'
+  },
+  {
+    name: 'U.S. Census Bureau, Building Permits Survey',
+    url: 'https://www.census.gov/construction/bps/',
+    detail: 'New housing units each city authorized, by building size, year to date. Updated monthly.'
+  },
+  {
+    name: 'County appraisal districts (Harris, Dallas, Tarrant, Travis)',
+    url: 'https://comptroller.texas.gov/taxes/property-tax/county-directory/',
+    detail:
+      'Appraised values and land values from each district\'s free certified roll download. Appraised, not sale prices. Bexar and El Paso do not allow automated downloads. Updated yearly.'
   }
 ];
+
+/** The property-market sources, each null when it did not answer. */
+export interface PropertyData {
+  zillow?: ZillowResult | null;
+  apartmentList?: ApartmentListResult | null;
+  permits?: PermitResult | null;
+  appraisal?: AppraisalFile | null;
+}
 
 /** Every BLS series the snapshot reads, for one request batch. */
 export function blsSeriesFor(metros: Metro[]): string[] {
@@ -182,7 +366,8 @@ export function buildMarketSnapshot(
   metros: Metro[],
   bls: Map<string, Point[]> | null,
   acs: AcsResult | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  property: PropertyData = {}
 ): MarketSnapshot {
   const markets = metros.map((metro): MarketArea => {
     const values: Record<string, number | null> = {};
@@ -240,6 +425,37 @@ export function buildMarketSnapshot(
     set('renterShare', renterShare(row), year);
     set('medianHomeValue', row?.medianHomeValue, year);
     set('homeValueGrowth', growth(row?.medianHomeValue, before?.medianHomeValue), span);
+
+    // Monthly city figures: a level and its change from a year earlier.
+    const monthly = (key: string, reading: MonthlyReading | undefined, growthKey?: string) => {
+      set(key, reading?.value, reading?.period ?? null);
+      if (growthKey) set(growthKey, growth(reading?.value, reading?.yearAgo), reading?.period ?? null);
+    };
+    monthly('zhvi', property.zillow?.homeValue.get(metro.city), 'zhviGrowth');
+    monthly('zori', property.zillow?.rent.get(metro.city), 'zoriGrowth');
+    monthly('aptRent', property.apartmentList?.rent.get(metro.city), 'aptRentGrowth');
+    monthly('aptVacancy', property.apartmentList?.vacancy.get(metro.city));
+
+    const permits = property.permits;
+    const issued = permits?.current.get(metro.city);
+    const lastYear = permits?.previous.get(metro.city);
+    set('permitUnits', issued?.units, permits?.period ?? null);
+    set('multifamilyPermitUnits', issued?.multifamilyUnits, permits?.period ?? null);
+    set('permitGrowth', growth(issued?.units, lastYear?.units), permits?.period ?? null);
+
+    // Appraisal district roll summaries, for the cities whose district publishes one.
+    const roll = property.appraisal?.cities.find((c) => c.city === metro.city);
+    for (const { cls, key } of CAD_TYPES) {
+      const summary = roll?.classes[cls];
+      const period = roll?.period ?? null;
+      set(`cad${key}Value`, summary?.medianValue, period);
+      set(`cad${key}Growth`, summary?.valueGrowth, period);
+      set(`cad${key}LandPsf`, summary?.landPsf, period);
+      set(`cad${key}LandPsfMedian`, summary?.medianLandPsf, period);
+      set(`cad${key}Total`, summary?.totalValue, period);
+    }
+    const built = roll ? Object.values(roll.classes).map((c) => c.newConstruction) : [];
+    set('cadNewConstruction', built.some((v) => v != null) ? built.reduce<number>((a, b) => a + (b ?? 0), 0) : null, roll?.period ?? null);
 
     for (const metric of METRICS) {
       values[metric.key] ??= null;

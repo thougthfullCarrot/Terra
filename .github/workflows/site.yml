@@ -14,9 +14,10 @@
 # only college emails and subscribers can read it, and postings.json is left
 # out of the published site. Without them the site stays open, as before.
 #
-# Market data (site/market.json, from BLS and the Census, no key needed) is
-# built in the same job and gated the same way: with accounts on it goes to
-# Supabase as the 'market' row and is left out of the published site.
+# Market data (site/market.json, from BLS, the Census, Zillow, Apartment List
+# and the appraisal district summary appraisal.yml caches) is built in the
+# same job and gated the same way: with accounts on it goes to Supabase as the
+# 'market' row and is left out of the published site.
 #
 # Google Sheets (docs/sheets-setup.md): with the secret
 # GOOGLE_SERVICE_ACCOUNT_JSON and the variable TERRA_SHEET_ID, the firm list
@@ -89,15 +90,25 @@ jobs:
         id: today
         run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
+      # The newest appraisal district summary appraisal.yml saved (weekly).
+      - name: Restore appraisal district summary
+        uses: actions/cache/restore@v4
+        with:
+          path: appraisal.json
+          key: appraisal-none
+          restore-keys: appraisal-
+
+      # Keyed on the market code and the appraisal summary too, so a change to
+      # either rebuilds the file the same day.
       - name: Restore market data
         id: market-cache
         uses: actions/cache/restore@v4
         with:
           path: site/market.json
-          key: market-${{ steps.today.outputs.date }}
+          key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json') }}-${{ steps.today.outputs.date }}
           restore-keys: market-
 
-      - name: Export market data from BLS and the Census
+      - name: Export market data
         id: market
         if: steps.market-cache.outputs.cache-hit != 'true'
         # A market data outage must never hold back the job list.
@@ -114,7 +125,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: site/market.json
-          key: market-${{ steps.today.outputs.date }}
+          key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json') }}-${{ steps.today.outputs.date }}
 
       - name: Summarize
         if: always()

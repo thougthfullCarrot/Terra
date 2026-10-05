@@ -282,6 +282,9 @@ describe('market.js (site)', () => {
     expect(formatValue(456_300, 'count')).toBe('456K');
     expect(formatValue(1_500, 'count')).toBe('1.5K');
     expect(formatValue(1412.4, 'usd')).toBe('$1,412');
+    expect(formatValue(45_120_000_000, 'usd')).toBe('$45.1B');
+    expect(formatValue(12_340_000, 'usd')).toBe('$12.3M');
+    expect(formatValue(4.5, 'usd')).toBe('$4.50');
     expect(formatValue(2.345, 'change')).toBe('+2.3%');
     expect(formatValue(-0.96, 'change')).toBe('−1.0%');
     expect(formatValue(0.01, 'change')).toBe('0.0%');
@@ -302,7 +305,7 @@ describe('market.js (site)', () => {
     expect(state).toEqual({ open: true, city: 'Houston', focus: 'multifamily', sort: 'rentalVacancy', order: 'asc' });
 
     // Vacancy defaults to lowest first; a city or sort the data lacks falls back.
-    expect(readMarketHash('#markets&focus=multifamily', snapshot)).toMatchObject({ sort: 'rentalVacancy', order: 'asc', city: '' });
+    expect(readMarketHash('#markets&focus=multifamily', snapshot)).toMatchObject({ sort: 'aptVacancy', order: 'asc', city: '' });
     expect(readMarketHash('#markets&city=Nowhere&focus=office&sort=rentalVacancy', snapshot)).toMatchObject({
       city: '',
       sort: 'officeJobsGrowth',
