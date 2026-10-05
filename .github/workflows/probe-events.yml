@@ -8,23 +8,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Probe
+      - name: Probe round 2
         run: |
           UA="Mozilla/5.0 (compatible; TerraEventsBot/1.0; +https://github.com/thougthfullCarrot/Terra)"
-          probe() { u="$1"; f=$(mktemp); out=$(curl -sS -L -A "$UA" -m 10 --connect-timeout 5 -o $f -w '%{http_code} %{size_download} %{url_effective}' "$u" 2>&1 | tail -c 160); hits=$(grep -oiE 'BEGIN:VCALENDAR|/events/details/[a-z0-9-]+|meetinginfo\.php\?id=[0-9]+|"@type" ?: ?"Event"|tribe-events|"events":\[|growthzone|wix\.com|/event-[0-9]+|eventbrite\.com|starchapter|memberclicks|wildapricot|/events/[a-z0-9-]+/' $f 2>/dev/null | tr 'A-Z' 'a-z' | sed -E 's#/events/details/.*#/events/details/X#; s#meetinginfo.*#meetinginfo#; s#/events/[a-z0-9-]+/#/events/X/#; s#/event-[0-9]+#/event-N#' | sort | uniq -c | sort -rn | head -6 | tr '\n' ';'); r=""; case "$u" in *robots.txt) r=$(grep -iE '^(user-agent|disallow)' $f | head -8 | tr '\n' '|');; esac; echo "$u -> $out | $hits $r"; rm -f $f; }
-          host() { h=$1; shift; for p in "$@"; do probe "https://$h$p"; done; }
-          STD="/ /robots.txt /events /events/ /calendar /events/?ical=1 /wp-json/tribe/events/v1/events /events/calendar /events/ical"
-          GZ="/robots.txt /events /events/calendar /events/ical /events/calendarical"
-          SC="/robots.txt /index.php /meetinglist.php /meetings.php /calendar.php"
-          {
-          for h in ycran.org www.ycran.org ycranaustin.org ycransa.org ycransanantonio.org boma-houston.org houstonboma.org www.bomahouston.org bomasanantonio.org www.bomasa.org bomafortworth.org www.bomafortworth.org www.bomaaustin.org www.texasccim.com naiopaustin.org www.naiopsa.org naiopsa.com naiopnt.org www.naiopnorthtexas.org www.crewaustin.org crewsa.org www.crewsanantonio.org crewdallas.org crewhouston.org www.recsa.org www.recaustin.org www.recouncil.com www.elpaso.org www.innewbraunfels.com aiasa.org www.nawicsatx.org www.fwitexas.org sawomenschamber.org www.sahcc.org; do host $h $STD > /tmp/o.$h & done
-          for h in newbraunfelschamber.growthzoneapp.com members.metrosa.com business.southtexaspartnership.org business.boerne.org; do host $h $GZ > /tmp/o.$h & done
-          for c in ccimsa sanantoniosmps ccimhouston ccimaustin ccimnorthtexas ccimelpaso texasccim houstonccim northtexasccim austinccim smpsdfw smpshouston smpsaustin; do host $c.starchapter.com $SC > /tmp/o.$c & done
-          wait
-          }
-          for f in /tmp/o.*; do echo "=== ${f#/tmp/o.}"; cat $f; done
-          echo "--- samples"
-          curl -sSL -A "$UA" -m 15 "https://ccimsa.starchapter.com/meetinginfo.php?id=93" | sed 's/<[^>]*>/ /g' | tr -s ' \n' | head -c 1500; echo
-          curl -sSL -A "$UA" -m 15 "https://ccimsa.starchapter.com/index.php" | grep -oiE '<a[^>]*meetinginfo[^>]*>[^<]*' | head -15
-          curl -sSL -A "$UA" -m 15 "https://members.metrosa.com/events/calendar" | grep -oiE 'href="[^"]*events/details/[^"]*"[^>]*>[^<]*' | head -15
-          curl -sSL -A "$UA" -m 15 "https://www.acg.org/asa/events" | grep -oiE 'href="[^"]*asa/events/[^"]*"' | head -10
+          g() { curl -sSL -A "$UA" -m 20 "$1"; }
+          echo "=== houstonboma robots"; g https://www.houstonboma.org/robots.txt
+          echo "=== houstonboma events links"; g https://www.houstonboma.org/events | grep -oiE 'href="[^"]*event[^"]*"[^>]*>[^<]{0,80}' | sort -u | head -15
+          g https://www.houstonboma.org/events | grep -oiE 'application/ld\+json|"@type":"Event"|ical|\.ics' | sort | uniq -c
+          echo "=== bomafortworth gz"; g https://www.bomafortworth.org/events/ | grep -oiE 'https?://[a-z0-9.-]*(growthzone|chambermaster)[a-z0-9./-]*|href="[^"]*/events/details/[^"]*"' | sort | uniq -c | sort -rn | head -10
+          echo "=== ycran"; g https://www.ycran.org/events | grep -oiE 'https://www\.ycran\.org/(event-details|events?)/[a-z0-9-]+' | sort -u | head -20
+          E=$(g https://www.ycran.org/events | grep -oiE 'https://www\.ycran\.org/event-details/[a-z0-9-]+' | head -1); echo "detail $E"; [ -n "$E" ] && g "$E" | grep -oiE '<script type="application/ld\+json">.{0,700}' | head -3
+          g https://www.ycran.org/events | grep -oiE '"title":"[^"]{0,80}","[^}]{0,300}' | head -10
+          echo "=== nawic"; g https://www.nawicsatx.org/events | grep -oiE 'https://www\.nawicsatx\.org/(event-details|events-1)/[a-z0-9-]+' | sort -u | head -10
+          E=$(g https://www.nawicsatx.org/events | grep -oiE 'https://www\.nawicsatx\.org/(event-details|events-1)/[a-z0-9-]+' | head -1); [ -n "$E" ] && g "$E" | grep -oiE '<script type="application/ld\+json">.{0,500}' | head -2
+          echo "=== recouncil"; g https://recouncil.com/calendar/ | grep -oiE '<script type="application/ld\+json">.{0,1500}' | head -2
+          echo "=== acg"; g https://www.acg.org/robots.txt | head -30; g https://www.acg.org/asa/events/acg-asa-october-27th-lunch-sa | grep -oiE '<script type="application/ld\+json">.{0,600}|itemprop="startDate"[^>]*|class="[^"]*date[^"]*"[^>]*>[^<]{0,60}' | head -5
+          echo "=== fwi"; g https://www.fwitexas.org/robots.txt; g https://www.fwitexas.org/events | grep -oiE 'href="[^"]*event-[0-9]+[^"]*"[^>]*>[^<]{0,60}' | head; g "https://www.fwitexas.org/event-6833214" | grep -oiE 'ical[^"]{0,80}|application/ld\+json.{0,300}' | head -3
+          echo "=== elpaso"; g https://members.elpaso.org/events | grep -oiE 'href="[^"]*events/details/[^"]*"[^>]*>[^<]{0,70}' | sort -u | head -12
+          echo "=== nb"; g https://newbraunfelschamber.growthzoneapp.com/events | grep -oiE 'href="[^"]*events/details/[^"]*"[^>]*>[^<]{0,70}' | sort -u | head -12
+          echo "=== nb detail"; g "https://newbraunfelschamber.growthzoneapp.com/events/Details/gnbedf-luncheon-q4-2026-state-of-the-city-1652649" | grep -oiE 'application/ld\+json.{0,400}|itemprop="startDate"[^>]*' | head -3
