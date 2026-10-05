@@ -99,7 +99,7 @@ describe('new event sources', async () => {
     const out = ev.parseJsonLdEvents(html, src, 'https://x.org/calendar/');
     expect(out).toHaveLength(2);
     expect(out[0]).toMatchObject({ title: 'Market & Mixer', url: 'https://x.org/events/mixer', start: '2026-10-07T17:30:00-05:00', venue: 'Alamo Café' });
-    expect(out[1]!.url).toBe('https://x.org/calendar/');
+    expect(out[1]!.url).toBe('https://x.org/calendar/#2026-11-01-no-url');
   });
 
   it('finds detail links one level under the prefix', () => {
@@ -127,5 +127,23 @@ describe('new event sources', async () => {
     const a = { id: 'a', title: 'A', url: 'https://members.metrosa.com/events/details/x-1?calendarMonth=2026-10-01', start: '2026-10-22T11:00:00-05:00', end: null, city: 'San Antonio' as const, organizer: 'M', venue: null, cost: null };
     const b = { ...a, id: 'b', url: 'https://members.metrosa.com/events/Details/x-1?sourceTypeId=Hub', source: MANUAL_SOURCE };
     expect(ev.upcoming([a, b], now)).toHaveLength(1);
+  });
+});
+
+describe('Novi and JSON-LD without urls', async () => {
+  const ev = await import('../src/events/events.js');
+  it('reads a Novi event page', () => {
+    const html = `<meta property="og:title" content="Annual Awards Extravaganza 2026" /><h1>x</h1>
+      <span class="c-event-details__span c-event-details__start-date" role="listitem">Friday, December 4, 2026</span>
+      <span class="c-event-details__span c-event-details__time">6:00 PM - 10:00 PM CST</span>`;
+    expect(ev.parseNoviDetail(html)).toEqual({ title: 'Annual Awards Extravaganza 2026', start: '2026-12-04T18:00:00-06:00' });
+    expect(ev.parseNoviDetail('<h1>No date</h1>')).toBeNull();
+  });
+  it('gives url-less JSON-LD events distinct fragment links', () => {
+    const src = { key: 't', organizer: 'T', city: 'Dallas' as const, kind: 'jsonld' as const, base: 'https://t.org' };
+    const html = `<script type="application/ld+json">[{"@type":"Event","name":"Policy Committee","startDate":"2026-10-06 08:30"},{"@type":"Event","name":"Golf","startDate":"2026-10-07 08:00"}]</script>`;
+    const out = ev.parseJsonLdEvents(html, src, 'https://t.org/calendar/');
+    expect(out.map((e) => e.url)).toEqual(['https://t.org/calendar/#2026-10-06-policy-committee', 'https://t.org/calendar/#2026-10-07-golf']);
+    expect(ev.upcoming(out, now)).toHaveLength(2);
   });
 });

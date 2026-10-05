@@ -281,7 +281,8 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
       const start = n.startDate ? normalizeDate(n.startDate) : null;
       let url: string | null = null;
       try {
-        url = httpUrl(new URL(n.url || pageUrl, pageUrl).href);
+        // Without its own url the event links to the listing, made unique per event with a fragment.
+        url = httpUrl(new URL(n.url || `#${(start ?? '').slice(0, 10)}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`, pageUrl).href);
       } catch {
         url = null;
       }
@@ -302,6 +303,25 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
     }
   }
   return out;
+}
+
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
+/** Title and start from a Novi AMS event page (no JSON-LD): the c-event-details start-date and time spans. */
+export function parseNoviDetail(html: string): { title: string; start: string } | null {
+  const span = (cls: string) => new RegExp(`class="[^"]*\\b${cls}\\b[^"]*"[^>]*>([\\s\\S]*?)</(?:span|div|td|li)>`, 'i').exec(html)?.[1];
+  const dateText = decodeText(span('c-event-details__start-date') ?? '');
+  const d = /([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/.exec(dateText);
+  const mo = d ? MONTHS.indexOf(d[1]!.toLowerCase()) : -1;
+  if (!d || mo < 0) return null;
+  const date = `${d[3]}-${String(mo + 1).padStart(2, '0')}-${d[2]!.padStart(2, '0')}`;
+  const t = /(\d{1,2}):(\d{2})\s*([AP])\.?M/i.exec(decodeText(span('c-event-details__time') ?? ''));
+  const h = t ? (Number(t[1]) % 12) + (t[3]!.toUpperCase() === 'P' ? 12 : 0) : null;
+  const og = /<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i.exec(html)?.[1];
+  const h1 = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1];
+  const title = decodeText(og ?? h1 ?? '').replace(/\s*[|\u2013-]\s*Houston BOMA\s*$/i, '');
+  if (!title) return null;
+  return { title, start: centralIso(h === null ? date : `${date} ${String(h).padStart(2, '0')}:${t![2]}`)! };
 }
 
 /** Same-site links under detailPath on a listing page (one level deeper than the prefix, no query). */
@@ -401,7 +421,11 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
     const out: TerraEvent[] = [];
     for (const link of links) {
       try {
-        out.push(...parseJsonLdEvents(await fetcher.text(link), source, link).map((e) => ({ ...e, url: link, id: `${source.key}-${link}` })).slice(0, 1));
+        const html = await fetcher.text(link);
+        const ld = parseJsonLdEvents(html, source, link)[0];
+        const novi = ld ? null : parseNoviDetail(html);
+        if (ld) out.push({ ...ld, url: link, id: `${source.key}-${link}` });
+        else if (novi) out.push({ id: `${source.key}-${link}`, url: link, end: null, city: source.city, organizer: source.organizer, venue: null, cost: null, ...novi });
       } catch (error) {
         log(`${link}: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -431,7 +455,7 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       if (!detail.start) continue;
       out.push({
         id: `${source.key}-${/-(\d+)\/?$/.exec(link.url)?.[1] ?? link.url}`,
-        title: detail.title || link.title,
+        title: detail.title || (/\.\.\.|\u2026|-->/.test(link.title) ? slugTitle(link.url) : link.title),
         url: link.url,
         start: detail.start,
         end: detail.end,
@@ -452,7 +476,7 @@ export function urlKey(url: string): string {
   try {
     const u = new URL(url);
     for (const p of [...u.searchParams.keys()]) if (/^(sourcetypeid|calendarmonth|utm_\w+)$/i.test(p)) u.searchParams.delete(p);
-    return `${u.host.replace(/^www\./, '')}${u.pathname.toLowerCase().replace(/\/$/, '')}${u.search}`;
+    return `${u.host.replace(/^www\./, '')}${u.pathname.toLowerCase().replace(/\/$/, '')}${u.search}${u.hash}`;
   } catch {
     return url;
   }
