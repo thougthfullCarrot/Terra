@@ -87,13 +87,20 @@ describe('profileRow', () => {
   });
 
   it('nulls a grad year or city outside the offered choices', () => {
-    const row = profileRow({ gradYear: '1999', homeCity: 'Chicago' }, now);
+    const row = profileRow({ gradYear: '2040', homeCity: 'Chicago' }, now);
     expect(row.grad_year).toBeNull();
     expect(row.home_city).toBeNull();
   });
 
-  it('offers last year through six years out', () => {
-    expect(gradYears(now)).toEqual([2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032]);
+  it('offers six years out back to thirty years ago, newest first', () => {
+    const years = gradYears(now);
+    expect(years[0]).toBe(2032);
+    expect(years.at(-1)).toBe(1996);
+    expect(years).toHaveLength(37);
+  });
+
+  it('keeps an alum\'s grad year when the form is saved', () => {
+    expect(profileRow({ gradYear: '2022' }, now).grad_year).toBe(2022);
   });
 });
 
