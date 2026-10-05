@@ -324,7 +324,7 @@ describe('market.js (site)', () => {
   it('round-trips the view through the hash and drops what the data does not have', () => {
     const snapshot = { groups: GROUPS, metrics: METRICS, markets: [{ city: 'Houston', values: {} }] };
     const state = readMarketHash(writeMarketHash({ city: 'Houston', focus: 'multifamily', sort: 'rentalVacancy', order: 'asc' }), snapshot);
-    expect(state).toEqual({ open: true, city: 'Houston', focus: 'multifamily', sort: 'rentalVacancy', order: 'asc' });
+    expect(state).toEqual({ open: true, city: 'Houston', focus: 'multifamily', sort: 'rentalVacancy', order: 'asc', tool: '', compare: [] });
 
     // Vacancy defaults to lowest first; a city or sort the data lacks falls back.
     expect(readMarketHash('#markets&focus=multifamily', snapshot)).toMatchObject({ sort: 'aptVacancy', order: 'asc', city: '' });

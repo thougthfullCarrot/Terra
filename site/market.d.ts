@@ -26,13 +26,26 @@ export interface Market {
   periods?: Record<string, string | null>;
 }
 
+export type Tool = '' | 'compare' | 'calc' | 'leases' | 'reports' | 'sites';
+
 export interface MarketState {
   open: boolean;
   city: string;
   focus: string;
   sort: string;
   order: Order;
+  tool: Tool;
+  compare: string[];
 }
+
+export const TOOLS: Tool[];
+export const MAX_COMPARE: number;
+export const KEY_METRICS: string[];
+export function compareRows<M extends Pick<Metric, 'key' | 'better'>>(
+  markets: Market[],
+  metrics: M[],
+  cities: string[]
+): { metric: M; values: (number | null)[]; best: string[] }[];
 
 export const ORDERS: Order[];
 export function defaultOrder(metric: Pick<Metric, 'better'> | undefined): Order;

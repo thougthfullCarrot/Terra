@@ -1,3 +1,4 @@
+import type { Research } from './research.js';
 import type { City } from '../types.js';
 import {
   cesSeries,
@@ -104,6 +105,8 @@ export interface MarketSnapshot {
   counties?: { year: number; rows: CountyRow[] };
   /** Current development projects per city, for the map (TDLR TABS filings). */
   developments?: DevelopmentsResult;
+  /** Brokerage vacancy and asking rents, and links to their free quarterly reports. */
+  research?: Research;
 }
 
 /** Appraisal district figures per property type, keyed cad{Type}{Figure}. */
@@ -536,6 +539,11 @@ export const GROUPS: MarketGroup[] = [
 ];
 
 export const SOURCES: MarketSnapshot['sources'] = [
+  {
+    name: 'Partners Real Estate and Cushman & Wakefield',
+    url: 'https://partnersrealestate.com/research/',
+    detail: 'Office, industrial and retail vacancy and average asking rent from each firm\'s free quarterly market reports, credited and linked on the Lease rates view. Updated quarterly.'
+  },
   {
     name: 'U.S. Bureau of Labor Statistics',
     url: 'https://www.bls.gov/sae/',

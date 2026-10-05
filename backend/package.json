@@ -21,6 +21,7 @@
     "export:news": "tsx src/bin/export-news.ts",
     "export:events": "tsx src/bin/export-events.ts",
     "export:appraisal": "tsx src/bin/export-appraisal.ts",
+    "export:sites": "tsx src/bin/export-sites.ts",
     "build:site": "tsx src/bin/build-site.ts",
     "sync:sheets": "tsx src/bin/sync-sheets.ts",
     "test-users": "tsx src/bin/test-users.ts",

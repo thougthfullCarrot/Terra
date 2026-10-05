@@ -17,6 +17,8 @@ import {
   writeMarketHash
 } from './market.js';
 import { developmentMap, disposeMap } from './devmap.js';
+import { calculatorView, compareView, leasesView, reportsView } from './market-tools.js';
+import { sitesView } from './sites-view.js';
 import { readNewsHash } from './news.js';
 import { readEventsHash } from './events.js';
 
@@ -140,17 +142,54 @@ function render() {
   $('m-order').value = state.order;
   $('m-city').value = state.city;
   $('m-focus').value = state.focus;
-  // Sorting means nothing with one market on screen.
-  $('m-sort-label').hidden = Boolean(state.city);
-  $('m-order-label').hidden = Boolean(state.city);
+  // Sorting means nothing with one market on screen, or in the tools.
+  const tool = state.tool;
+  $('m-sort-label').hidden = Boolean(state.city) || Boolean(tool);
+  $('m-order-label').hidden = Boolean(state.city) || Boolean(tool);
+  // The comparison picks its own cities; the calculator brings its own inputs; the topic means nothing to the broker views.
+  $('m-city-label').hidden = tool === 'compare';
+  $('m-focus-label').hidden = ['leases', 'reports', 'sites'].includes(tool);
+  $('m-filters').hidden = tool === 'calc';
+  for (const name of ['', 'compare', 'calc', 'leases', 'sites', 'reports']) {
+    const link = $(`m-tool-${name || 'data'}`);
+    link.href = writeMarketHash({ ...state, tool: name, compare: name === 'compare' ? state.compare : [] });
+    if (tool === name) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+
+  disposeMap();
+  if (tool) {
+    $('m-blurb').textContent = TOOL_BLURBS[tool];
+    $('m-rates').replaceChildren();
+    $('m-chart').replaceChildren();
+    $('m-body').replaceChildren(toolView(tool));
+    // The broker and parcel tools carry their own source notes.
+    $('m-sources').replaceChildren(...(['leases', 'reports', 'sites'].includes(tool) ? [] : [sources()]));
+    return;
+  }
 
   $('m-blurb').textContent = group.blurb ?? '';
-  disposeMap();
   $('m-rates').replaceChildren(rates());
   $('m-chart').replaceChildren(...(state.city ? [] : group.key === 'development' ? [devMap(), chart(group)] : [chart(group)]));
   $('m-body').replaceChildren(state.city ? cityView(state.city, group) : table(group));
   if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
+}
+
+const TOOL_BLURBS = {
+  compare: 'Rents, permits, job growth and taxes for the cities you pick, side by side.',
+  calc: "Run the numbers on a property with today's rates and a Texas city's property tax.",
+  leases: 'Office, industrial and retail vacancy and asking rents from brokerages\' free quarterly reports.',
+  sites: 'Land and buildings from county appraisal rolls, with zoning from the city: filter by use, size and appraised value per square foot.',
+  reports: 'The latest free quarterly market reports from the big brokerages, by city.'
+};
+
+function toolView(tool) {
+  if (tool === 'calc') return calculatorView(snapshot);
+  if (tool === 'compare') return compareView(snapshot, state, update);
+  if (tool === 'leases') return leasesView(snapshot, state.city);
+  if (tool === 'reports') return reportsView(snapshot, state.city);
+  return sitesView(snapshot, state.city);
 }
 
 function table(group) {
@@ -534,7 +573,7 @@ function sources() {
     el(
       'p',
       '',
-      'Office, industrial and retail vacancy and asking rents come from brokerage research that is licensed, so Terra shows the public figures that drive them instead: who is hiring in each property type, and how tight the rental market is. Tax rates are for a typical property inside each city; a parcel in another school district or a utility district pays a different total.'
+      'Office, industrial and retail vacancy and asking rents are under Lease rates, read from the free quarterly reports brokerages publish. Tax rates are for a typical property inside each city; a parcel in another school district or a utility district pays a different total.'
     )
   );
   return box;

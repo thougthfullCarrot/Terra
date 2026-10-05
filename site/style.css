@@ -2655,3 +2655,287 @@ th[aria-sort] .sort-button {
     font-size: 13px;
   }
 }
+
+/* Market data views: city data, compare cities, deal calculator (market-tools.js). */
+.market-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.market-tools .chip {
+  text-decoration: none;
+}
+
+.market-tools .chip[aria-current='page'] {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.chip:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.chip:disabled:active {
+  transform: none;
+}
+
+.compare-pick,
+.calc-card,
+.calc-glossary {
+  margin-bottom: 12px;
+  padding: 18px;
+}
+
+.compare-pick .metric-pills {
+  margin-bottom: 0;
+}
+
+.compare-block {
+  margin-bottom: 16px;
+}
+
+.compare-block > .group-title {
+  margin: 0 2px;
+}
+
+.compare-block > .group-blurb {
+  margin: 4px 2px 10px;
+}
+
+.compare-table .city-col {
+  min-width: 180px;
+  font-weight: 500;
+  color: var(--secondary);
+}
+
+.compare-table thead .city-link {
+  font-family: var(--ui);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.compare-table td.best {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.compare-table td.best .value {
+  font-weight: 700;
+}
+
+.best-tag {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.calc-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.calc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.calc-input {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+}
+
+.calc-input:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.calc-input input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.calc-affix {
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.calc-input .calc-affix:first-child {
+  padding-right: 0;
+}
+
+.calc-input input + .calc-affix {
+  padding-left: 0;
+}
+
+.calc-fills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.calc-fills .eyebrow {
+  margin-right: 4px;
+}
+
+.calc-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.calc-tile:hover {
+  border-color: var(--hairline);
+}
+
+.calc-tile.good .rate-value {
+  color: var(--green);
+}
+
+.calc-tile.warn .rate-value {
+  color: var(--amber);
+}
+
+.calc-tile.bad .rate-value {
+  color: var(--red);
+}
+
+.calc-note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.calc-warning {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--secondary);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  border-radius: 10px;
+}
+
+.calc-glossary summary {
+  cursor: pointer;
+}
+
+.calc-terms {
+  margin-top: 12px;
+  grid-template-columns: minmax(90px, auto) 1fr;
+}
+
+.calc-def {
+  text-align: left !important;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--secondary);
+}
+
+.chip[aria-pressed='true']:disabled {
+  opacity: 0.85;
+}
+
+.lease-table .city-col {
+  min-width: 140px;
+}
+
+.lease-table .metric-meta {
+  text-align: right;
+}
+
+.lease-period {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.report-list {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-list li {
+  display: grid;
+  gap: 3px;
+}
+
+.report-firm {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.report-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 13.5px;
+}
+
+.sites-filters {
+  margin-bottom: 12px;
+  padding: 18px;
+}
+
+.sites-filters .metric-pills {
+  margin-bottom: 4px;
+}
+
+.sites-table .city-col {
+  min-width: 220px;
+}
+
+.site-address {
+  display: block;
+  font-weight: 500;
+}
+
+.sites-table .metro {
+  margin-left: 0;
+}
+
+.site-zoning {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.sites-table td .metric-meta {
+  display: block;
+}
+
+.sites-more {
+  margin-top: 12px;
+}
