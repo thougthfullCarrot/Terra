@@ -1,6 +1,6 @@
 // markets-view.js — draws the market data section. The rules live in market.js.
 //
-// The page has two sections, Jobs and Market data, switched by the URL hash
+// The page has three sections, Jobs, Market data and News, switched by the URL hash
 // so a link can open a city's market directly (#markets&city=Houston). The
 // data comes from a loader app.js hands over: market.json on the open site,
 // or the members-only Supabase row when accounts are on.
@@ -15,6 +15,7 @@ import {
   sortMarkets,
   writeMarketHash
 } from './market.js';
+import { readNewsHash } from './news.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -65,9 +66,11 @@ function update(change) {
 
 async function show() {
   const open = readMarketHash(location.hash, null).open;
-  $('jobs-view').hidden = open;
+  // news-view.js shows its own section; the jobs list steps aside for either.
+  const news = readNewsHash(location.hash, null).open;
+  $('jobs-view').hidden = open || news;
   $('markets-view').hidden = !open;
-  for (const [id, on] of [['tab-jobs', !open], ['tab-markets', open]]) {
+  for (const [id, on] of [['tab-jobs', !open && !news], ['tab-markets', open], ['tab-news', news]]) {
     if (on) $(id).setAttribute('aria-current', 'page');
     else $(id).removeAttribute('aria-current');
   }

@@ -19,6 +19,11 @@
 # same job and gated the same way: with accounts on it goes to Supabase as the
 # 'market' row and is left out of the published site.
 #
+# News (site/news.json): commercial real estate headlines per city from
+# Google News search RSS (free, no key). Only headline, publisher, date and
+# link are kept. Headlines are public, so the file stays published with
+# accounts on.
+#
 # Google Sheets (docs/sheets-setup.md): with the secret
 # GOOGLE_SERVICE_ACCOUNT_JSON and the variable TERRA_SHEET_ID, the firm list
 # is read from the sheet's Firms tab (the seed list when the sheet can't be
@@ -127,6 +132,30 @@ jobs:
           path: site/market.json
           key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json') }}-${{ steps.today.outputs.date }}
 
+      # Headlines change through the day, so they are fetched every run; a
+      # city whose feed fails keeps the headlines the last deploy published.
+      - name: Restore the last headlines
+        uses: actions/cache/restore@v4
+        with:
+          path: site/news.json
+          key: news-none
+          restore-keys: news-
+
+      - name: Export news headlines
+        id: news
+        # A news outage must never hold back the job list.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run --silent export:news 2>&1 | tee /tmp/news.log
+
+      - name: Cache the headlines
+        if: steps.news.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: site/news.json
+          key: news-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Summarize
         if: always()
         run: |
@@ -154,6 +183,16 @@ jobs:
             echo
             echo '```'
             cat /tmp/market.log 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## News'
+            echo
+            if [ -f ../site/news.json ]; then
+              echo "- Headlines: $(jq -c '[.cities[] | {(.city): (.headlines | length)}] | add' ../site/news.json)"
+            fi
+            echo
+            echo '```'
+            cat /tmp/news.log 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
