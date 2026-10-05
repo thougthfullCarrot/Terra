@@ -12,4 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node backend/probe.mjs
+      - run: npm ci --silent
+        working-directory: backend
+      - run: node probe.mjs
+        working-directory: backend

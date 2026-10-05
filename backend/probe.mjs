@@ -1,78 +1,68 @@
-// Temporary probe, round 2: parcel layer fields, broker report text, zoning layers.
-import { execSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+// Temporary probe, round 3.
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
 async function get(url) {
   try {
-    const r = await fetch(url, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(45000) });
+    const r = await fetch(url, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(60000) });
     return { status: r.status, url: r.url, text: await r.text() };
   } catch (e) { return { status: 'ERR ' + e.message, url, text: '' }; }
 }
 const json = async (url) => { const r = await get(url); try { return JSON.parse(r.text); } catch { return { _status: r.status, _text: r.text.slice(0, 300) }; } };
-const strip = (html) => html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+const show = (label, v) => console.log(`${label}: ${JSON.stringify(v).slice(0, 2500)}`);
 
-console.log('==== TxGIO Parcels folder');
-const base = 'https://feature.geographic.texas.gov/arcgis/rest/services';
-const folder = await json(`${base}/Parcels?f=json`);
-console.log(JSON.stringify(folder).slice(0, 1500));
-for (const s of folder.services ?? []) {
-  const svc = await json(`${base}/${s.name}/${s.type}?f=json`);
-  console.log(`\n# ${s.name} ${s.type}: layers ${JSON.stringify((svc.layers ?? []).map((l) => [l.id, l.name])).slice(0, 600)}`);
-  const layer = (svc.layers ?? [])[0];
-  if (!layer) continue;
-  const info = await json(`${base}/${s.name}/${s.type}/${layer.id}?f=json`);
-  console.log('fields: ' + (info.fields ?? []).map((f) => `${f.name}:${f.type.replace('esriFieldType', '')}`).join(', '));
-  console.log('maxRecordCount', info.maxRecordCount, 'caps', info.capabilities);
-  for (const where of ["COUNTY='Dallas' AND SITUS_CITY='DALLAS'", "SITUS_CITY='DALLAS'", "CNTY_NM='Dallas'"]) {
-    const q = await json(`${base}/${s.name}/${s.type}/${layer.id}/query?where=${encodeURIComponent(where)}&outFields=*&returnGeometry=false&resultRecordCount=3&f=json`);
-    console.log(`where ${where}: ${JSON.stringify(q).slice(0, 1800)}`);
-    if (q.features?.length) break;
+console.log('==== StratMap query variants');
+const sm = 'https://feature.geographic.texas.gov/arcgis/rest/services/Parcels/stratmap_land_parcels_48_most_recent/MapServer/0';
+show('1=1', await json(`${sm}/query?where=1%3D1&outFields=county,situs_city,stat_land_use&resultRecordCount=2&f=json`));
+show('county', await json(`${sm}/query?where=${encodeURIComponent("county='DALLAS'")}&outFields=*&returnGeometry=false&f=json&resultRecordCount=2`));
+show('objectIds', await json(`${sm}/query?objectIds=1,2&outFields=*&f=json`));
+show('pjson info', (await json(`${sm}?f=pjson`)).advancedQueryCapabilities);
+show('identify', await json(`https://feature.geographic.texas.gov/arcgis/rest/services/Parcels/stratmap_land_parcels_48_most_recent/MapServer/identify?geometry=-96.797,32.78&geometryType=esriGeometryPoint&sr=4326&layers=all&tolerance=2&mapExtent=-97,32,-96,33&imageDisplay=400,400,96&returnGeometry=false&f=json`));
+
+console.log('\n==== County CAD parcel layers');
+const cads = {
+  HCAD: 'https://services.arcgis.com/0L95CJ0VTaxqcmED/arcgis/rest/services/EXTERNAL_hcad_parcels/FeatureServer/0',
+  TCAD: 'https://services.arcgis.com/0L95CJ0VTaxqcmED/arcgis/rest/services/EXTERNAL_tcad_parcel/FeatureServer/0',
+  TCADtravis: 'https://gis.traviscountytx.gov/server1/rest/services/Boundaries_and_Jurisdictions/TCAD_public/MapServer/0',
+  DallasViewer: 'https://services8.arcgis.com/9e1lVZPGgkrztAhh/arcgis/rest/services/Dallas_ParcelViewer_Service/FeatureServer/0',
+  FWParcels: 'https://services5.arcgis.com/3ddLCBXe1bRt7mzj/arcgis/rest/services/Parcels_Public_Vview/FeatureServer/0',
+  BexarUndeveloped: 'https://services1.arcgis.com/8onVmslF2KXErTHT/arcgis/rest/services/Undeveloped_Lands/FeatureServer/0',
+  ElPaso: 'https://gisservices.elpasoco.com/arcgis2/rest/services/HubPublic/Parcels/MapServer/0',
+  COH: 'https://mycity2.houstontx.gov/gisweb02/rest/services/HoustonMap/Cadastral/MapServer/0'
+};
+for (const [name, url] of Object.entries(cads)) {
+  const info = await json(`${url}?f=json`);
+  console.log(`\n# ${name} ${info.name ?? info._status} max=${info.maxRecordCount} caps=${info.capabilities}\n  fields: ${(info.fields ?? []).map((f) => f.name).join(', ')}`);
+  show('  sample', (await json(`${url}/query?where=1%3D1&outFields=*&returnGeometry=false&resultRecordCount=2&f=json`)).features ?? 'none');
+}
+
+console.log('\n==== Zoning layers');
+for (const svc of ['https://services2.arcgis.com/rwnOSbfKSwyTBcwN/arcgis/rest/services/Dallas_Zoning/FeatureServer', 'https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/COSA_Zoning/FeatureServer', 'https://services.arcgis.com/0L95CJ0VTaxqcmED/arcgis/rest/services/PLANNINGCADASTRE_zoning_small_map_scale/FeatureServer']) {
+  const info = await json(`${svc}?f=json`);
+  console.log(`\n# ${svc}\n  layers ${JSON.stringify(info.layers?.map((l) => [l.id, l.name]))}`);
+  for (const l of info.layers ?? []) {
+    const li = await json(`${svc}/${l.id}?f=json`);
+    console.log(`  [${l.id}] ${li.name}: ${(li.fields ?? []).map((f) => f.name).join(', ')}`);
   }
 }
+show('Dallas point', await json(`https://services2.arcgis.com/rwnOSbfKSwyTBcwN/arcgis/rest/services/Dallas_Zoning/FeatureServer/1/query?geometry=-96.797,32.78&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json`));
 
-console.log('\n\n==== Zoning layers');
-const zoning = {
-  Dallas: 'https://services2.arcgis.com/rwnOSbfKSwyTBcwN/arcgis/rest/services/Dallas_Zoning/FeatureServer/0',
-  'Fort Worth': 'https://mapit.fortworthtexas.gov/ags/rest/services/CIVIC/OpenData_Boundaries/MapServer/54',
-  'El Paso': 'https://gis.elpasotexas.gov/dev/rest/services/Planning/Zoning/FeatureServer/0'
-};
-for (const q of ['owner:CoSAGIS_Opendata zoning', 'owner:CTM.Publisher zoning', 'austin zoning district', 'New Braunfels zoning districts']) {
-  const r = await json(`https://www.arcgis.com/sharing/rest/search?f=json&num=10&q=${encodeURIComponent(q)}`);
-  console.log(`\n# search ${q}`);
-  for (const i of r.results ?? []) console.log(`  ${i.title} | ${i.type} | ${i.owner} | ${i.url}`);
-}
-for (const [city, url] of Object.entries(zoning)) {
-  const info = await json(`${url}?f=json`);
-  console.log(`\n# ${city} ${info.name}: ${(info.fields ?? []).map((f) => f.name).join(', ')}`);
-  const q = await json(`${url}/query?where=1%3D1&outFields=*&returnGeometry=false&resultRecordCount=2&f=json`);
-  console.log(JSON.stringify(q.features ?? q).slice(0, 700));
-}
-
-console.log('\n\n==== Partners report pages');
-for (const url of ['https://partnersrealestate.com/research/dallas-office-q2-2026-quarterly-market-report/', 'https://partnersrealestate.com/research/houston-industrial-q2-2026-quarterly-market-report/', 'https://partnersrealestate.com/research/san-antonio-retail-q2-2026-quarterly-market-report/']) {
+console.log('\n==== Partners research listing pages');
+for (const url of ['https://partnersrealestate.com/research/?type=quarterly-report', 'https://partnersrealestate.com/research/page/2/', 'https://partnersrealestate.com/research/austin-office-q2-2026-quarterly-market-report/', 'https://partnersrealestate.com/research/austin-industrial-q2-2026-quarterly-market-report/', 'https://partnersrealestate.com/research/fort-worth-industrial-q2-2026-quarterly-market-report/']) {
   const r = await get(url);
-  const text = strip(r.text);
-  const i = text.search(/vacancy|asking/i);
-  console.log(`\n# ${url} ${r.status}\n${text.slice(Math.max(0, i - 600), i + 2500)}`);
-  const pdfs = [...new Set([...r.text.matchAll(/https?:[^"'\s<>]+\.pdf/gi)].map((m) => m[0]))];
-  console.log('PDFs: ' + pdfs.join(' '));
+  const links = [...new Set([...r.text.matchAll(/href=["'](https:\/\/partnersrealestate\.com\/research\/[^"']+quarterly[^"']*)["']/gi)].map((m) => m[1]))];
+  console.log(`\n# ${url} ${r.status}\n  ${links.join('\n  ')}`);
 }
 
-console.log('\n\n==== Lee & Associates Texas');
-const lee = await get('https://www.lee-associates.com/research/');
-console.log([...new Set([...lee.text.matchAll(/https?:[^"'\s<>]+\.pdf/gi)].map((m) => m[0]))].filter((u) => /-TX-|texas/i.test(u)).join('\n'));
-
-console.log('\n\n==== Cushman PDFs as text');
-try { execSync('sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1'); } catch {}
-const dfw = await get('https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/dallas-ft-worth-marketbeats');
-const hou = await get('https://www.cushmanwakefield.com/en/united-states/insights/us-marketbeats/houston-marketbeats');
-const pdfs = [...new Set([...(dfw.text + hou.text).matchAll(/https?:[^"'\s<>]+\.pdf/gi)].map((m) => m[0]))];
-console.log(pdfs.join('\n'));
-for (const pdf of pdfs.filter((p) => !/multifamily/i.test(p)).slice(0, 5)) {
-  const r = await fetch(pdf, { headers: { 'user-agent': UA } });
-  writeFileSync('/tmp/r.pdf', Buffer.from(await r.arrayBuffer()));
-  const text = execSync('pdftotext -layout /tmp/r.pdf - 2>&1 || true').toString();
-  console.log(`\n######## ${pdf} (${r.status})\n${text.split('\n').slice(0, 90).join('\n')}`);
-  const tail = text.split('\n').filter((l) => /TOTAL|Total|Overall|Class A|CBD|Asking/i.test(l)).slice(0, 40);
-  console.log('--- lines with totals:\n' + tail.join('\n'));
+console.log('\n==== Cushman Austin office PDF text');
+for (const pdf of ['https://assets.cushmanwakefield.com/-/media/cw/marketbeat-pdfs/2026/q2/us-reports/office/austin_americas_marketbeat_office_q22026.pdf', 'https://assets.cushmanwakefield.com/-/media/cw/marketbeat-pdfs/2026/q2/us-reports/industrial/el-paso_americas_alliance_marketbeat_industrial_q2-2026.pdf']) {
+  try {
+    const buf = new Uint8Array(await (await fetch(pdf, { headers: { 'user-agent': UA } })).arrayBuffer());
+    const doc = await getDocument({ data: buf }).promise;
+    let text = '';
+    for (let p = 1; p <= Math.min(doc.numPages, 3); p++) {
+      const c = await (await doc.getPage(p)).getTextContent();
+      text += `\n--- page ${p}\n` + c.items.map((i) => i.str + (i.hasEOL ? '\n' : ' ')).join('');
+    }
+    console.log(`\n######## ${pdf}\n${text.slice(0, 6000)}`);
+  } catch (e) { console.log('pdf error', pdf, e.message); }
 }
