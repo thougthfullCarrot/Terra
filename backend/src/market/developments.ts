@@ -54,12 +54,12 @@ export const TABS_COUNTY_IDS: Record<string, string> = {
   Wilson: '2247',
   Comal: '2046',
   'El Paso': '2071',
-  // TABS numbers counties 2000 + the state's alphabetical county number.
+  // Read off the filter-location-county list on the TABS search page.
   Brazos: '2021',
   Burleson: '2026',
   Robertson: '2198',
   Lubbock: '2152',
-  Midland: '2165',
+  Midland: '2162',
   Ector: '2068'
 };
 
