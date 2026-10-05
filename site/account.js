@@ -54,9 +54,18 @@ export async function startAccounts(hooks) {
   // Runs once at start (INITIAL_SESSION) and on every sign-in and sign-out.
   // Supabase warns against awaiting its own calls inside this callback, so
   // the work is deferred a tick.
+  //
+  // A page that opens with a stored session gets INITIAL_SESSION and then
+  // SIGNED_IN for the same account, back to back. Both used to start
+  // signedIn() before either had finished, and the two feed loads raced: one
+  // cleared the list while the other drew it, leaving an empty job list or a
+  // script error. The account is noted as soon as an event names it, so a
+  // repeat (or a token refresh) is ignored.
+  let shownUserId;
   supabase.auth.onAuthStateChange((_event, session) => {
     const next = session?.user ?? null;
-    if (next?.id === user?.id && access !== null) return; // token refresh
+    if ((next?.id ?? null) === shownUserId) return;
+    shownUserId = next?.id ?? null;
     setTimeout(() => (next ? signedIn(next) : signedOut()), 0);
   });
 }
@@ -352,7 +361,10 @@ function fillProfile() {
   const form = $('profile-form');
   form.elements.name.value = profile?.name ?? '';
   form.school.value = profile?.school ?? '';
-  form.gradYear.value = profile?.grad_year ? String(profile.grad_year) : '';
+  // A year older than the list still shows, so saving doesn't drop it.
+  const year = profile?.grad_year ? String(profile.grad_year) : '';
+  if (year && ![...form.gradYear.options].some((option) => option.value === year)) form.gradYear.append(new Option(year, year));
+  form.gradYear.value = year;
   form.major.value = profile?.major ?? '';
   form.homeCity.value = profile?.home_city ?? '';
   form.relocationOpen.checked = Boolean(profile?.relocation_open);

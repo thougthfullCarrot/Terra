@@ -51,16 +51,21 @@ export const PROFILE_SECTORS = [
   'Affordable Housing'
 ];
 
-/** Graduation years offered on the form: last year through six years out. */
+/**
+ * Graduation years offered on the form, newest first: six years out back to
+ * thirty years ago. Subscribers are often alumni changing careers, and a
+ * student's own year falls into the past once they graduate; a narrower list
+ * left their year blank on the form and wiped it on the next save.
+ */
 export function gradYears(now = new Date()) {
   const year = now.getUTCFullYear();
-  return Array.from({ length: 8 }, (_, i) => year - 1 + i);
+  return Array.from({ length: 37 }, (_, i) => year + 6 - i);
 }
 
 /**
  * Turn the form's raw values into a `profiles` row. Blank text becomes null,
- * and a grad year or city outside the offered choices is dropped rather than
- * stored, since the matcher compares them exactly.
+ * and a city outside the offered choices, or a grad year past them, is
+ * dropped rather than stored, since the matcher compares them exactly.
  */
 export function profileRow(values, now = new Date()) {
   const text = (value, max = 120) => {
@@ -72,7 +77,8 @@ export function profileRow(values, now = new Date()) {
   return {
     name: text(values.name),
     school: text(values.school),
-    grad_year: gradYears(now).includes(year) ? year : null,
+    // Any real year up to the last one offered: an older year an account already has is kept.
+    grad_year: Number.isInteger(year) && year > 1900 && year <= gradYears(now)[0] ? year : null,
     major: text(values.major),
     home_city: PROFILE_CITIES.includes(values.homeCity) ? values.homeCity : null,
     relocation_open: Boolean(values.relocationOpen),

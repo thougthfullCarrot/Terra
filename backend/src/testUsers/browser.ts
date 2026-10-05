@@ -95,16 +95,18 @@ export class SiteTester {
     private browser: Browser,
     private server: Server,
     readonly origin: string,
-    private storageKey: string
+    private storageKey: string,
+    private setup?: (context: BrowserContext) => Promise<void>
   ) {}
 
-  static async start(config: SiteConfig): Promise<SiteTester> {
+  /** `setup` runs on each new browser context, e.g. to stand in for Supabase when trying the checks offline. */
+  static async start(config: SiteConfig, setup?: (context: BrowserContext) => Promise<void>): Promise<SiteTester> {
     const { chromium } = await import('playwright-core');
     const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
     const { server, origin } = await serveSite(config);
     // supabase-js keeps the session under sb-<project ref>-auth-token.
     const ref = new URL(config.supabaseUrl).hostname.split('.')[0];
-    return new SiteTester(browser, server, origin, `sb-${ref}-auth-token`);
+    return new SiteTester(browser, server, origin, `sb-${ref}-auth-token`, setup);
   }
 
   async stop(): Promise<void> {
@@ -117,6 +119,7 @@ export class SiteTester {
       mobile ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : { viewport: { width: 1280, height: 900 } }
     );
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: this.origin });
+    await this.setup?.(context);
     if (session) {
       await context.addInitScript(
         ([key, value]) => {
@@ -350,6 +353,7 @@ export class SiteTester {
       check(!/Couldn't load/.test(text) && text.length > 40, `${tab === 'news' ? 'News' : 'Events'} tab loads`, text.slice(0, 120));
     }
     await page.click('#tab-jobs');
-    check(await page.locator('#jobs-view').isVisible(), 'back to Jobs from the tabs');
+    const back = await page.locator('#jobs-view').waitFor({ state: 'visible', timeout: 5_000 }).then(() => true, () => false);
+    check(back, 'back to Jobs from the tabs');
   }
 }

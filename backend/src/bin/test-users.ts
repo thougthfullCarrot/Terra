@@ -491,6 +491,11 @@ async function check(env: Env, admin: SupabaseClient): Promise<boolean> {
   }
   lines.push('');
 
+  const problems = reports.flatMap((r) =>
+    r.results.filter((result) => !result.ok).map((result) => `- ${r.person.name}: ${result.label}${result.detail ? ` (${result.detail})` : ''}`)
+  );
+  lines.push('## Problems', '', ...(problems.length ? problems : ['None.']), '');
+
   for (const r of reports) {
     lines.push(`## ${r.person.name} (${r.person.email})`, '', `_${r.person.covers}_`, '');
     for (const result of r.results) {

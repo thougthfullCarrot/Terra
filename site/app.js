@@ -235,6 +235,8 @@ function update(change) {
 }
 
 function render() {
+  // A filter tapped while the feed reloads (sign-in, sign-out) has nothing to draw yet.
+  if (!snapshot) return;
   const now = new Date();
   const { jobs, generatedAt, boards } = snapshot;
 
