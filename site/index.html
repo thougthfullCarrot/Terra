@@ -8,7 +8,16 @@
       name="description"
       content="Internships and entry-level commercial real estate jobs in Texas, collected from firm career boards every two hours."
     />
+    <meta name="theme-color" content="#f4f2ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121416" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="favicon.png" />
+    <script>
+      // Before first paint, so a dark-mode visitor never sees a white flash.
+      try {
+        const theme = localStorage.getItem('terra-theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,20 +28,37 @@
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <main class="page">
-      <header class="masthead">
-        <div class="topbar">
-          <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
+    <header class="appbar">
+      <div class="appbar-inner">
+        <a class="brand" href="./" aria-label="Terra home">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span class="brand-name">Terra</span>
+        </a>
+        <div class="appbar-actions">
+          <button type="button" id="theme-toggle" class="icon-button" aria-label="Switch to dark mode" title="Switch theme">
+            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.5" />
+              <path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" />
+            </svg>
+          </button>
           <button type="button" id="account-button" class="account-button" hidden>
             <span class="avatar small" id="account-avatar" aria-hidden="true"></span>
             <span>Profile</span>
           </button>
         </div>
-        <h1>Terra</h1>
+      </div>
+    </header>
+
+    <main class="page">
+      <header class="masthead">
+        <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
+        <h1>Your first job in Texas commercial real estate.</h1>
         <p class="lede">
-          Internships and first jobs at Texas CRE firms, read straight from their career boards every two hours.
+          Internships and roles asking for 0-2 years, read straight from firm career boards every two hours.
         </p>
         <p class="meta" id="meta" aria-live="polite">Loading postings…</p>
+        <dl class="stats" id="stats" hidden></dl>
       </header>
 
       <!-- Shown when accounts are configured and nobody is signed in. -->
@@ -146,20 +172,22 @@
       <form class="controls" id="controls" role="search" onsubmit="return false">
         <label class="search">
           <span class="visually-hidden">Search postings</span>
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <input id="q" name="q" type="search" placeholder="Search role, firm, skill…" autocomplete="off" />
+          <kbd class="search-hint" aria-hidden="true">/</kbd>
         </label>
+        <div class="chip-group">
+          <span class="eyebrow">CITY</span>
+          <div class="chip-row" id="city-chips" role="group" aria-label="City"></div>
+        </div>
+        <div class="chip-group">
+          <span class="eyebrow">ROLE TYPE</span>
+          <div class="chip-row" id="kind-chips" role="group" aria-label="Role type"></div>
+        </div>
         <div class="filters">
-          <label>
-            <span class="eyebrow">CITY</span>
-            <select id="city" name="city"><option value="">All cities</option></select>
-          </label>
           <label>
             <span class="eyebrow">FIRM</span>
             <select id="firm" name="firm"><option value="">All firms</option></select>
-          </label>
-          <label>
-            <span class="eyebrow">ROLE TYPE</span>
-            <select id="kind" name="kind"><option value="">All types</option></select>
           </label>
           <label>
             <span class="eyebrow">SECTOR</span>
@@ -177,10 +205,20 @@
 
       <div class="summary">
         <p id="count" aria-live="polite"></p>
-        <button type="button" id="clear" class="link" hidden>Clear filters</button>
+        <div class="summary-actions">
+          <button type="button" id="saved-toggle" class="toggle" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z" /></svg>
+            <span>Saved</span> <span class="toggle-count" id="saved-count">0</span>
+          </button>
+          <button type="button" id="clear" class="link" hidden>Clear filters</button>
+        </div>
       </div>
 
-      <section id="list" class="list" aria-label="Job postings"></section>
+      <section id="list" class="list" aria-label="Job postings">
+        <div class="skeleton" aria-hidden="true"></div>
+        <div class="skeleton" aria-hidden="true"></div>
+        <div class="skeleton" aria-hidden="true"></div>
+      </section>
       </div>
 
       <!-- Market data by city: markets-view.js draws it from market.json or the members-only snapshot. -->
@@ -210,6 +248,7 @@
           </div>
         </form>
         <div class="summary"><p id="m-blurb" class="market-blurb"></p></div>
+        <div id="m-chart"></div>
         <div id="m-body"></div>
         <div id="m-sources" class="market-sources"></div>
       </section>
@@ -232,24 +271,78 @@
       <article class="card">
         <p class="match-badge" hidden></p>
         <div class="card-head">
-          <div>
-            <h2 class="role"></h2>
+          <span class="monogram" aria-hidden="true"></span>
+          <div class="card-title">
+            <h2 class="role"><button type="button" class="open"></button></h2>
             <p class="firm"></p>
           </div>
-          <a class="apply" target="_blank" rel="noopener noreferrer">Apply</a>
+          <button type="button" class="save" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z" /></svg>
+          </button>
         </div>
         <ul class="chips"></ul>
-        <p class="dates">
-          <span class="posted"></span><span class="deadline"></span><span class="score"></span>
-          <a class="via" href="https://www.adzuna.com" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>
-        </p>
-        <details class="more">
-          <summary>Details</summary>
-          <ul class="why"></ul>
-          <p class="desc"></p>
-          <ul class="reqs"></ul>
-        </details>
+        <div class="card-foot">
+          <p class="dates">
+            <span class="new-tag" hidden>New</span><span class="posted"></span><span class="deadline"></span
+            ><span class="score"></span>
+            <a class="via" href="https://www.adzuna.com" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>
+          </p>
+          <a class="apply" target="_blank" rel="noopener noreferrer">Apply</a>
+        </div>
       </article>
     </template>
+
+    <!-- One posting in full: opened from a card, or from a ?job= link. -->
+    <dialog id="job-panel" class="panel-sheet" aria-labelledby="jp-role">
+      <div class="sheet-bar">
+        <div class="sheet-nav">
+          <button type="button" class="icon-button" id="jp-prev" aria-label="Previous job" title="Previous (←)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+          </button>
+          <span id="jp-position" class="sheet-position"></span>
+          <button type="button" class="icon-button" id="jp-next" aria-label="Next job" title="Next (→)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+          </button>
+        </div>
+        <button type="button" class="icon-button" id="jp-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div class="sheet-head">
+          <span class="monogram large" id="jp-monogram" aria-hidden="true"></span>
+          <div>
+            <h2 id="jp-role"></h2>
+            <p class="firm" id="jp-firm"></p>
+          </div>
+        </div>
+        <p class="match-badge" id="jp-badge" hidden></p>
+        <ul class="chips" id="jp-chips"></ul>
+        <p class="dates" id="jp-dates"></p>
+        <div class="sheet-actions">
+          <a class="primary" id="jp-apply" target="_blank" rel="noopener noreferrer">Apply on the firm's site</a>
+          <button type="button" class="secondary" id="jp-save" aria-pressed="false">Save</button>
+          <button type="button" class="secondary" id="jp-share">Copy link</button>
+        </div>
+        <section id="jp-why-wrap" hidden>
+          <h3 class="sheet-h">Why it fits you</h3>
+          <ul class="why" id="jp-why"></ul>
+        </section>
+        <section id="jp-desc-wrap">
+          <h3 class="sheet-h">About the role</h3>
+          <p class="desc" id="jp-desc"></p>
+        </section>
+        <section id="jp-reqs-wrap">
+          <h3 class="sheet-h">What they ask for</h3>
+          <ul class="reqs" id="jp-reqs"></ul>
+        </section>
+        <p class="hint" id="jp-via" hidden>
+          Listed through <a href="https://www.adzuna.com" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>; the
+          apply link opens on Adzuna.
+        </p>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </body>
 </html>

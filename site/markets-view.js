@@ -31,6 +31,7 @@ export function setMarketLoader(next) {
   snapshot = null;
   loading = null;
   $('m-body').replaceChildren();
+  $('m-chart').replaceChildren();
   if (next && readMarketHash(location.hash, null).open) show();
 }
 
@@ -121,6 +122,7 @@ function render() {
   $('m-order-label').hidden = Boolean(state.city);
 
   $('m-blurb').textContent = group.blurb ?? '';
+  $('m-chart').replaceChildren(state.city ? '' : chart(group));
   $('m-body').replaceChildren(state.city ? cityView(state.city, group) : table(group));
   $('m-sources').replaceChildren(sources());
 }
@@ -177,6 +179,115 @@ function table(group) {
   return frag;
 }
 
+/**
+ * One metric across every market as horizontal bars, the metric picked from
+ * the pills above it. A growth figure can be negative, so its bars grow either
+ * way from a zero line; everything else starts at zero on the left. Hovering a
+ * bar names its rank and period; clicking opens that market.
+ */
+function chart(group) {
+  const metrics = group.metrics.map(metricFor).filter(Boolean);
+  const metric = metricFor(state.sort) ?? metrics[0];
+  const box = el('section', 'card chart-card');
+  if (!metric) return box;
+
+  const pills = el('div', 'metric-pills');
+  pills.setAttribute('role', 'group');
+  pills.setAttribute('aria-label', 'Metric to chart');
+  for (const m of metrics) {
+    const pill = el('button', 'chip', m.label);
+    pill.type = 'button';
+    pill.setAttribute('aria-pressed', String(m.key === metric.key));
+    if (m.note) pill.title = m.note;
+    pill.addEventListener('click', () => update({ sort: m.key, order: defaultOrder(m) }));
+    pills.append(pill);
+  }
+
+  const head = el('div', 'chart-head');
+  head.append(el('h3', 'group-title', metric.label), el('p', 'group-blurb', metric.note ?? ''));
+
+  const markets = sortMarkets(snapshot.markets, metric.key, state.sort === metric.key ? state.order : defaultOrder(metric));
+  const values = markets.map((m) => m.values[metric.key]).filter((v) => v != null && Number.isFinite(v));
+  const min = Math.min(0, ...values);
+  const max = Math.max(0, ...values);
+  const span = max - min || 1;
+  const zero = ((0 - min) / span) * 100;
+  const place = ranks(snapshot.markets, metric);
+  const counted = values.length;
+
+  const rows = el('ol', 'bars');
+  rows.setAttribute('aria-label', `${metric.label} by market`);
+  for (const market of markets) {
+    const value = market.values[metric.key];
+    const row = el('li', 'bar-row');
+    const link = el('a', 'bar-link');
+    link.href = writeMarketHash({ ...state, city: market.city });
+    const label = el('span', 'bar-label', market.city);
+    const track = el('span', 'bar-track');
+    if (min < 0) {
+      const axis = el('span', 'bar-zero');
+      axis.style.left = `${zero}%`;
+      track.append(axis);
+    }
+    if (value != null && Number.isFinite(value)) {
+      const fill = el('span', `bar-fill${value < 0 ? ' neg' : ''}`);
+      const from = value < 0 ? ((value - min) / span) * 100 : zero;
+      const width = (Math.abs(value) / span) * 100;
+      fill.style.left = `${from}%`;
+      fill.style.width = `${Math.max(width, 0.5)}%`;
+      track.append(fill);
+    }
+    const text = el('span', `bar-value value ${tone(value, metric)}`, formatValue(value, metric.unit));
+    link.append(label, track, text);
+
+    const rank = place.get(market.city);
+    const tip = [
+      `${market.city}: ${formatValue(value, metric.unit)}`,
+      rank ? `${ordinal(rank)} of ${counted}` : 'No figure',
+      market.periods?.[metric.key] ?? ''
+    ].filter(Boolean);
+    link.setAttribute('aria-label', `${tip.join(', ')}. Open ${market.city}.`);
+    link.addEventListener('pointerenter', (event) => showTip(tip, event));
+    link.addEventListener('pointermove', moveTip);
+    link.addEventListener('pointerleave', hideTip);
+    link.addEventListener('focus', () => showTip(tip, null, link));
+    link.addEventListener('blur', hideTip);
+    row.append(link);
+    rows.append(row);
+  }
+
+  box.append(pills, head, rows);
+  return box;
+}
+
+let tipNode = null;
+
+function showTip(lines, event, anchor) {
+  tipNode ??= document.body.appendChild(el('div', 'chart-tip'));
+  tipNode.replaceChildren(el('strong', '', lines[0]), ...lines.slice(1).map((line) => el('span', '', line)));
+  tipNode.hidden = false;
+  if (event) moveTip(event);
+  else if (anchor) {
+    const box = anchor.getBoundingClientRect();
+    placeTip(box.left + box.width / 2, box.top);
+  }
+}
+
+function moveTip(event) {
+  placeTip(event.clientX, event.clientY);
+}
+
+function placeTip(x, y) {
+  if (!tipNode) return;
+  const width = tipNode.offsetWidth;
+  const left = Math.min(Math.max(8, x - width / 2), window.innerWidth - width - 8);
+  tipNode.style.transform = `translate(${left}px, ${Math.max(8, y - tipNode.offsetHeight - 14)}px)`;
+}
+
+function hideTip() {
+  if (tipNode) tipNode.hidden = true;
+}
+
 function headerCell(key, label, cls, metric) {
   const th = el('th', cls);
   th.scope = 'col';
@@ -221,6 +332,7 @@ function cityView(city, focus) {
       if (metric.note) term.title = metric.note;
       const detail = el('dd');
       detail.append(el('span', `value ${tone(value, metric)}`, formatValue(value, metric.unit)));
+      if (value != null) detail.append(strip(key, value));
       const bits = [];
       if (place) bits.push(`${ordinal(place)} of ${snapshot.markets.filter((m) => m.values[key] != null).length}`);
       if (market.periods?.[key]) bits.push(market.periods[key]);
@@ -232,6 +344,24 @@ function cityView(city, focus) {
   }
   frag.append(grid);
   return frag;
+}
+
+/** Every market as a tick on one line, this one as a dot: where it sits at a glance. */
+function strip(key, value) {
+  const all = snapshot.markets.map((m) => m.values[key]).filter((v) => v != null && Number.isFinite(v));
+  const min = Math.min(...all);
+  const span = Math.max(...all) - min || 1;
+  const line = el('span', 'strip');
+  line.setAttribute('aria-hidden', 'true');
+  for (const v of all) {
+    const tick = el('i');
+    tick.style.left = `${((v - min) / span) * 100}%`;
+    line.append(tick);
+  }
+  const dot = el('b');
+  dot.style.left = `${((value - min) / span) * 100}%`;
+  line.append(dot);
+  return line;
 }
 
 /** Green for a rise, red for a fall, on growth figures only. */
@@ -285,6 +415,7 @@ function sources() {
 }
 
 function message(text, isError = false) {
+  $('m-chart').replaceChildren();
   $('m-body').replaceChildren(el('div', isError ? 'state error' : 'state', text));
   $('m-blurb').textContent = '';
 }
