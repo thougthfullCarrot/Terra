@@ -72,9 +72,19 @@ export function formatValue(value, unit) {
     }
     case 'rate':
       return `${(Math.round(value * 10) / 10).toFixed(1)}%`;
+    case 'taxRate':
+      return `${value.toFixed(2)}%`;
     default:
       return compactCount(value);
   }
+}
+
+/** A change in a rate, in percentage points: +0.25 pts. */
+export function formatPoints(value) {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const rounded = Math.round(value * 100) / 100;
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '';
+  return `${sign}${Math.abs(rounded).toFixed(2)} pts`;
 }
 
 function compactCount(value) {

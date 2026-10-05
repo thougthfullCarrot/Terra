@@ -1,6 +1,9 @@
 /**
  * Build the website's market data file from BLS, the Census, Zillow Research,
- * Apartment List and the Census Building Permits Survey.
+ * Apartment List, the Census Building Permits Survey, FRED interest rates,
+ * Census population estimates, Texas Comptroller tax rates, HUD Opportunity
+ * Zones and TxDOT highway projects. All free; only the Census API needs a
+ * (free) key.
  *
  *   npm run export:market                     # writes ../site/market.json
  *   npm run export:market -- --out <path> --previous <path> --appraisal <path>
@@ -21,6 +24,11 @@ import { fileURLToPath } from 'node:url';
 import { fetchApartmentList } from '../market/apartmentList.js';
 import type { AppraisalFile } from '../market/appraisal.js';
 import { fetchBls } from '../market/bls.js';
+import { fetchRates } from '../market/fred.js';
+import { fetchOpportunityZones } from '../market/opportunityZones.js';
+import { fetchPep } from '../market/pep.js';
+import { fetchTaxRates } from '../market/taxRates.js';
+import { fetchTxdot } from '../market/txdot.js';
 import { fetchAcs } from '../market/census.js';
 import { METROS } from '../market/metros.js';
 import { fetchPermits } from '../market/permits.js';
@@ -85,6 +93,32 @@ async function main(): Promise<void> {
   if (apartmentList) console.log(`Apartment List: rents for ${apartmentList.rent.size} cities, vacancy for ${apartmentList.vacancy.size}.`);
   if (permits) console.log(`Census BPS: ${permits.period}, ${permits.current.size} cities (${permits.previous.size} for the year before).`);
 
+  const [rateResult, population, taxes, zones, txdot] = await Promise.all([
+    attempt('FRED', () => fetchRates()),
+    attempt('Census population estimates', () => fetchPep(METROS, { now })),
+    attempt('Texas Comptroller', () => fetchTaxRates(cities, { now })),
+    attempt('Opportunity Zones', () => fetchOpportunityZones()),
+    attempt('TxDOT', () => fetchTxdot())
+  ]);
+  if (rateResult) {
+    console.log(`FRED: ${rateResult.rates.map((r) => `${r.key} ${r.value} (${r.period})`).join(', ')}`);
+    if (rateResult.failed.length) console.error(`FRED: not read: ${rateResult.failed.join(', ')}`);
+  }
+  if (population) console.log(`Census population estimates: July ${population.year}, ${population.metros.size} areas, ${population.counties.length} Texas counties.`);
+  if (taxes) {
+    for (const [city, rate] of taxes.current) {
+      console.log(`Tax rates ${taxes.year}: ${city} ${rate.total.toFixed(4)}${rate.missing.length ? ` (not in the file: ${rate.missing.join(', ')})` : ''}`);
+    }
+  }
+  if (zones) console.log(`Opportunity Zones: ${[...zones.values()].reduce((a, b) => a + b, 0)} Texas tracts in ${zones.size} counties.`);
+  if (txdot) {
+    console.log(`TxDOT phases seen: ${txdot.phases.join('; ')}`);
+    for (const metro of METROS) {
+      const d = txdot.districts.get(metro.txdotDistrict);
+      console.log(`TxDOT ${metro.txdotDistrict}: ${d ? `${d.plannedCount} planned ($${Math.round(d.planned / 1e6)}M), ${d.underwayCount} underway ($${Math.round(d.underway / 1e6)}M)` : 'no projects'}`);
+    }
+  }
+
   const appraisal = await readFile(resolve(flag('--appraisal') ?? DEFAULT_APPRAISAL), 'utf8')
     .then((text) => JSON.parse(text) as AppraisalFile)
     .catch(() => null);
@@ -95,7 +129,17 @@ async function main(): Promise<void> {
   );
 
   const snapshot = fillFromPrevious(
-    buildMarketSnapshot(METROS, bls, acs, now, { zillow, apartmentList, permits, appraisal }),
+    buildMarketSnapshot(METROS, bls, acs, now, {
+      zillow,
+      apartmentList,
+      permits,
+      appraisal,
+      rates: rateResult?.rates ?? null,
+      population,
+      taxes,
+      zones,
+      txdot: txdot?.districts ?? null
+    }),
     previous
   );
 

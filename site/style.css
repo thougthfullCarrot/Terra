@@ -1641,6 +1641,57 @@ label.check {
   padding: 18px;
 }
 
+.rates-card,
+.counties-card {
+  margin-bottom: 12px;
+  padding: 18px;
+}
+
+.counties-card {
+  margin-top: 12px;
+}
+
+.rates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.rate-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.rate-tile:hover,
+.rate-tile:focus-visible {
+  border-color: var(--accent);
+}
+
+.rate-label {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.rate-value {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-change {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+}
+
 .metric-pills {
   display: flex;
   flex-wrap: wrap;

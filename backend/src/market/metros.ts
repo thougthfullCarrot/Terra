@@ -17,6 +17,10 @@ export interface Metro {
   census: { msa: string; division?: string };
   /** BLS Local Area Unemployment Statistics area code (type prefix + state + area). */
   laus: string;
+  /** Three-digit Texas county FIPS codes in the area (OMB 2023 delineation). */
+  counties: string[];
+  /** The TxDOT district that plans the area's state highways. */
+  txdotDistrict: string;
 }
 
 export const METROS: Metro[] = [
@@ -25,41 +29,53 @@ export const METROS: Metro[] = [
     name: 'Dallas-Plano-Irving metro division',
     area: '19124',
     census: { msa: '19100', division: '19124' },
-    laus: 'DV4819124000000'
+    laus: 'DV4819124000000',
+    counties: ['085', '113', '121', '139', '231', '257', '397'],
+    txdotDistrict: 'Dallas'
   },
   {
     city: 'Fort Worth',
     name: 'Fort Worth-Arlington-Grapevine metro division',
     area: '23104',
     census: { msa: '19100', division: '23104' },
-    laus: 'DV4823104000000'
+    laus: 'DV4823104000000',
+    counties: ['251', '367', '439', '497'],
+    txdotDistrict: 'Fort Worth'
   },
   {
     city: 'Houston',
     name: 'Houston-Pasadena-The Woodlands metro',
     area: '26420',
     census: { msa: '26420' },
-    laus: 'MT4826420000000'
+    laus: 'MT4826420000000',
+    counties: ['015', '039', '071', '157', '167', '201', '291', '339', '407', '473'],
+    txdotDistrict: 'Houston'
   },
   {
     city: 'Austin',
     name: 'Austin-Round Rock-San Marcos metro',
     area: '12420',
     census: { msa: '12420' },
-    laus: 'MT4812420000000'
+    laus: 'MT4812420000000',
+    counties: ['021', '055', '209', '453', '491'],
+    txdotDistrict: 'Austin'
   },
   {
     city: 'San Antonio',
     name: 'San Antonio-New Braunfels metro',
     area: '41700',
     census: { msa: '41700' },
-    laus: 'MT4841700000000'
+    laus: 'MT4841700000000',
+    counties: ['013', '019', '029', '091', '187', '259', '325', '493'],
+    txdotDistrict: 'San Antonio'
   },
   {
     city: 'El Paso',
     name: 'El Paso metro',
     area: '21340',
     census: { msa: '21340' },
-    laus: 'MT4821340000000'
+    laus: 'MT4821340000000',
+    counties: ['141', '229'],
+    txdotDistrict: 'El Paso'
   }
 ];
