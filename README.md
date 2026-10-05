@@ -98,6 +98,11 @@ subscribe through Stripe, and everyone gets a profile with a picture and resume
 that highlights their best-matching jobs. Without them it stays open. Setup,
 click by click: [docs/accounts-setup.md](docs/accounts-setup.md).
 
+**Google Sheet (optional).** With a free Google service account, the firm list
+is edited in a sheet's Firms tab (the seed list is the fallback), and every run
+copies the jobs, market data and sign-ups into the same sheet. Setup:
+[docs/sheets-setup.md](docs/sheets-setup.md).
+
 ### Connecting the repo to Vercel
 
 1. [vercel.com/new](https://vercel.com/new) → import this repository.
