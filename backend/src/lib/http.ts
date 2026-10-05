@@ -43,6 +43,11 @@ export async function fetchText(url: string, options: FetchJsonOptions = {}): Pr
   return request(url, { accept: 'text/html', ...options }, (response) => response.text());
 }
 
+/** Same policy, for binary downloads such as spreadsheets. */
+export async function fetchBuffer(url: string, options: FetchJsonOptions = {}): Promise<Buffer> {
+  return request(url, { accept: '*/*', ...options }, async (response) => Buffer.from(await response.arrayBuffer()));
+}
+
 async function request<T>(
   url: string,
   options: FetchJsonOptions,

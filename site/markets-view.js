@@ -7,6 +7,7 @@
 import {
   barPercent,
   defaultOrder,
+  formatPoints,
   formatValue,
   ordinal,
   pruneSnapshot,
@@ -33,6 +34,7 @@ export function setMarketLoader(next) {
   loading = null;
   $('m-body').replaceChildren();
   $('m-chart').replaceChildren();
+  $('m-rates').replaceChildren();
   if (next && readMarketHash(location.hash, null).open) show();
 }
 
@@ -137,8 +139,10 @@ function render() {
   $('m-order-label').hidden = Boolean(state.city);
 
   $('m-blurb').textContent = group.blurb ?? '';
+  $('m-rates').replaceChildren(rates());
   $('m-chart').replaceChildren(state.city ? '' : chart(group));
   $('m-body').replaceChildren(state.city ? cityView(state.city, group) : table(group));
+  if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
 }
 
@@ -379,11 +383,85 @@ function strip(key, value) {
   return line;
 }
 
-/** Green for a rise, red for a fall, on growth figures only. */
+/** Green for a change for the better, red for the worse, on growth figures only. A rise is worse where lower is better (tax rates). */
 function tone(value, metric) {
   if (metric.unit !== 'change' || value == null) return '';
   const rounded = Math.round(value * 10) / 10;
-  return rounded > 0 ? 'up' : rounded < 0 ? 'down' : '';
+  if (!rounded) return '';
+  const good = metric.better === 'low' ? rounded < 0 : rounded > 0;
+  return good ? 'up' : 'down';
+}
+
+/**
+ * National interest rates and bank lending conditions, the same for every
+ * city, as a row of tiles above the city figures. Each links to its FRED page.
+ */
+function rates() {
+  const list = snapshot.rates ?? [];
+  if (!list.length) return '';
+  const box = el('section', 'card rates-card');
+  box.setAttribute('aria-labelledby', 'm-rates-title');
+  const head = el('div', 'rates-head');
+  const title = el('h3', 'group-title', 'Interest rates and lending');
+  title.id = 'm-rates-title';
+  head.append(title, el('p', 'group-blurb', 'National figures that set what every deal can borrow at. Change is from a year earlier.'));
+  const grid = el('div', 'rates-grid');
+  for (const rate of list) {
+    const tile = el('a', 'rate-tile');
+    tile.href = rate.url;
+    tile.target = '_blank';
+    tile.rel = 'noopener noreferrer';
+    tile.title = rate.note;
+    const survey = /tightening/i.test(rate.label);
+    tile.append(
+      el('span', 'rate-label', rate.label),
+      el('span', 'rate-value', survey ? formatValue(rate.value, 'rate') : formatValue(rate.value, 'taxRate')),
+      el('span', 'rate-change', rate.change == null ? rate.period : `${formatPoints(rate.change)} vs. a year ago · ${rate.period}`)
+    );
+    grid.append(tile);
+  }
+  box.append(head, grid);
+  return box;
+}
+
+/** The Texas counties that added the most people, on the migration view. */
+function counties() {
+  const data = snapshot.counties;
+  if (!data?.rows?.length) return '';
+  const box = el('section', 'card counties-card');
+  box.append(
+    el('h3', 'group-title', `Texas counties adding the most people, July ${data.year - 1} to July ${data.year}`),
+    el('p', 'group-blurb', 'Developers follow these: fast-growing suburban counties are where new homes, retail and schools go next.')
+  );
+  const wrap = el('div', 'table-wrap');
+  const tableNode = el('table', 'market-table');
+  const head = el('tr');
+  for (const [label, cls] of [['County', 'city-col'], ['People added', 'num'], ['Growth', 'num'], ['Net migration', 'num'], ['Population', 'num']]) {
+    const th = el('th', cls, label);
+    th.scope = 'col';
+    head.append(th);
+  }
+  const thead = el('thead');
+  thead.append(head);
+  const body = el('tbody');
+  data.rows.forEach((row, index) => {
+    const tr = el('tr');
+    const name = el('th', 'city-col');
+    name.scope = 'row';
+    name.append(el('span', 'rank', String(index + 1)), el('span', 'city-link', row.county), el('span', 'metro', row.market ? `${row.market} market` : ''));
+    tr.append(
+      name,
+      el('td', 'num', formatValue(row.change, 'count')),
+      el('td', 'num', formatValue(row.growth, 'change')),
+      el('td', 'num', formatValue(row.migration, 'count')),
+      el('td', 'num', formatValue(row.population, 'count'))
+    );
+    body.append(tr);
+  });
+  tableNode.append(thead, body);
+  wrap.append(tableNode);
+  box.append(wrap);
+  return box;
 }
 
 function asOf(metrics) {
@@ -423,13 +501,14 @@ function sources() {
     el(
       'p',
       '',
-      'Office, industrial and retail vacancy and asking rents come from brokerage research that is licensed, so Terra shows the public figures that drive them instead: who is hiring in each property type, and how tight the rental market is.'
+      'Office, industrial and retail vacancy and asking rents come from brokerage research that is licensed, so Terra shows the public figures that drive them instead: who is hiring in each property type, and how tight the rental market is. Tax rates are for a typical property inside each city; a parcel in another school district or a utility district pays a different total.'
     )
   );
   return box;
 }
 
 function message(text, isError = false) {
+  $('m-rates').replaceChildren();
   $('m-chart').replaceChildren();
   $('m-body').replaceChildren(el('div', isError ? 'state error' : 'state', text));
   $('m-blurb').textContent = '';
