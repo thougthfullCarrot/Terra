@@ -160,3 +160,35 @@ export function pruneSnapshot(snapshot) {
     .filter((g) => g.metrics.length);
   return { ...snapshot, metrics, groups };
 }
+
+/**
+ * One city's development projects for the map, biggest first; with
+ * privateOnly, just the ones built with private money.
+ */
+export function cityProjects(projects, city, { privateOnly = false } = {}) {
+  return (projects ?? [])
+    .filter((p) => p.city === city && (!privateOnly || !p.isPublic))
+    .sort((a, b) => b.cost - a.cost);
+}
+
+/** A map pin's radius in pixels: area grows with cost, from 6 for the smallest to 20 for the biggest. */
+export function markerRadius(cost, maxCost) {
+  if (!(cost > 0) || !(maxCost > 0)) return 6;
+  return Math.round(6 + 14 * Math.sqrt(Math.min(cost, maxCost) / maxCost));
+}
+
+/** "Aug 2026 – Feb 2028", "Starts Aug 2026", or '' with no dates. */
+export function projectDates(start, end) {
+  const month = (iso) => {
+    const match = /^(\d{4})-(\d{2})/.exec(iso ?? '');
+    if (!match) return null;
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${names[Number(match[2]) - 1]} ${match[1]}`;
+  };
+  const from = month(start);
+  const to = month(end);
+  if (from && to && end >= start) return `${from} – ${to}`;
+  if (from) return `Starts ${from}`;
+  if (to) return `Finishes ${to}`;
+  return '';
+}

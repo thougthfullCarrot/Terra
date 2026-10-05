@@ -13,6 +13,7 @@ import { censusKey, growth, rentalVacancy, renterShare, type AcsResult } from '.
 import type { ApartmentListResult } from './apartmentList.js';
 import type { AppraisalFile, PropertyClass } from './appraisal.js';
 import type { MonthlyReading } from './csv.js';
+import type { DevelopmentsResult } from './developments.js';
 import type { RateReading } from './fred.js';
 import type { Metro } from './metros.js';
 import { metroZoneCount } from './opportunityZones.js';
@@ -93,6 +94,8 @@ export interface MarketSnapshot {
   rates?: RateReading[];
   /** The Texas counties that added the most people, with the estimate year. */
   counties?: { year: number; rows: CountyRow[] };
+  /** Current development projects per city, for the map (TDLR TABS filings). */
+  developments?: DevelopmentsResult;
 }
 
 /** Appraisal district figures per property type, keyed cad{Type}{Figure}. */
@@ -411,7 +414,7 @@ export const GROUPS: MarketGroup[] = [
   {
     key: 'development',
     label: 'Development',
-    blurb: 'Building activity and land and home values.',
+    blurb: 'Building activity, land and home values, and a map of the projects under way.',
     metrics: [
       'permitUnits',
       'permitGrowth',
@@ -489,6 +492,12 @@ export const SOURCES: MarketSnapshot['sources'] = [
     name: 'TxDOT Project Tracker',
     url: 'https://apps3.txdot.gov/apps-cq/project_tracker/',
     detail: 'Active state highway projects with estimated construction cost and phase, by TxDOT district.'
+  },
+  {
+    name: 'TDLR Texas Architectural Barriers System (TABS)',
+    url: 'https://www.tdlr.texas.gov/TABS/Search/',
+    detail:
+      'Every commercial and public building project in Texas over $50,000 registers here before construction, with its address, owner and cost. The map shows each city\'s biggest new buildings and additions registered in the last year, placed with the free Census geocoder.'
   },
   {
     name: 'County appraisal districts (Harris, Dallas, Tarrant, Travis)',
@@ -697,6 +706,7 @@ export function fillFromPrevious(next: MarketSnapshot, previous: MarketSnapshot 
     ...next,
     rates: next.rates ?? previous.rates,
     counties: next.counties ?? previous.counties,
+    developments: next.developments ?? previous.developments,
     markets: next.markets.map((market) => {
       const old = previous.markets.find((m) => m.city === market.city);
       if (!old) return market;

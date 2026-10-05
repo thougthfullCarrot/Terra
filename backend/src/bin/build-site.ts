@@ -6,10 +6,11 @@
  *   site/vendor/supabase.js          sign-in and profile storage
  *   site/vendor/resume.js            resume text extraction (PDF, DOCX, text)
  *   site/vendor/pdf.worker.min.mjs   pdf.js's worker, copied as published
+ *   site/vendor/leaflet.js, .css     the market data development map, copied as published
  *
  *   npm run build:site
  *
- * All four are build output (gitignored); site.yml runs this before packaging.
+ * All of them are build output (gitignored); site.yml runs this before packaging.
  */
 import { copyFile, mkdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -36,3 +37,5 @@ await build({
 
 await mkdir(resolve(site, 'vendor'), { recursive: true });
 await copyFile(require.resolve('pdfjs-dist/build/pdf.worker.min.mjs'), resolve(site, 'vendor/pdf.worker.min.mjs'));
+await copyFile(require.resolve('leaflet/dist/leaflet.js'), resolve(site, 'vendor/leaflet.js'));
+await copyFile(require.resolve('leaflet/dist/leaflet.css'), resolve(site, 'vendor/leaflet.css'));

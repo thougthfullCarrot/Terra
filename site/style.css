@@ -2383,3 +2383,241 @@ th[aria-sort] .sort-button {
   z-index: 1;
   pointer-events: none;
 }
+
+/* Development map (devmap.js) */
+.dev-card {
+  margin-bottom: 12px;
+  padding: 18px;
+}
+
+.dev-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+
+.dev-controls .dev-cities {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}
+
+.dev-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--secondary);
+  cursor: pointer;
+}
+
+.dev-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.dev-legend .dot + .dot,
+.dev-legend .dot:not(:first-child) {
+  margin-left: 8px;
+}
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot.private {
+  background: var(--accent);
+}
+
+.dot.public {
+  background: var(--amber);
+}
+
+.dev-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+  height: 480px;
+}
+
+.dev-map {
+  min-height: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  z-index: 0;
+}
+
+/* The site's icon rule sizes every svg at 18px; Leaflet's marker layer sets its own size. */
+.dev-map svg {
+  width: auto;
+  height: auto;
+  stroke-width: initial;
+}
+
+.dev-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+
+.dev-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.dev-item:last-child {
+  border-bottom: 0;
+}
+
+.dev-item.active {
+  background: var(--accent-tint);
+}
+
+.dev-pick {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: baseline;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.dev-pick > :not(.dot) {
+  grid-column: 2;
+}
+
+.dev-pick .dot {
+  align-self: center;
+}
+
+.dev-name {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.dev-pick:hover .dev-name,
+.dev-pick:focus-visible .dev-name {
+  color: var(--accent);
+}
+
+.dev-meta {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.dev-off {
+  font-size: 11.5px;
+  color: var(--faint);
+  font-style: italic;
+}
+
+.dev-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 0 18px;
+  font-size: 12.5px;
+}
+
+.dev-note {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.dev-pop {
+  display: grid;
+  gap: 3px;
+  font-family: var(--ui);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.dev-pop-title {
+  font-size: 14.5px;
+  line-height: 1.3;
+}
+
+.dev-pop .muted {
+  color: var(--muted);
+}
+
+.dev-pop-people {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  margin: 4px 0 0;
+}
+
+.dev-pop-people dt {
+  color: var(--muted);
+}
+
+.dev-pop-people dd {
+  margin: 0;
+}
+
+.dev-pop-scope {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--secondary);
+}
+
+.dev-pop .dev-links {
+  margin: 6px 0 0;
+}
+
+.dev-card .leaflet-popup-content-wrapper,
+.dev-card .leaflet-popup-tip {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.dev-card .leaflet-container a.leaflet-popup-close-button {
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .dev-map .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88);
+  }
+}
+
+:root[data-theme='dark'] .dev-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88);
+}
+
+@media (max-width: 760px) {
+  .dev-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 340px auto;
+    height: auto;
+  }
+
+  .dev-list {
+    max-height: 420px;
+  }
+}

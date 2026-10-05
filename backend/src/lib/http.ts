@@ -23,6 +23,10 @@ export interface FetchJsonOptions {
   body?: unknown;
   /** Defaults to application/json. iCIMS career pages are HTML. */
   accept?: string;
+  /** Form fields sent url-encoded, as a browser form posts them; implies POST. */
+  form?: Record<string, string>;
+  /** Extra request headers. */
+  headers?: Record<string, string>;
 }
 
 const USER_AGENT = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
@@ -55,13 +59,20 @@ async function request<T>(
 ): Promise<T> {
   const { timeoutMs = 15_000, retries = 2, fetchImpl = fetch, baseDelayMs = 1000 } = options;
 
-  const method = options.method ?? (options.body === undefined ? 'GET' : 'POST');
+  const method = options.method ?? (options.body === undefined && options.form === undefined ? 'GET' : 'POST');
   const headers: Record<string, string> = {
     accept: options.accept ?? 'application/json',
-    'user-agent': USER_AGENT
+    'user-agent': USER_AGENT,
+    ...options.headers
   };
-  if (options.body !== undefined) headers['content-type'] = 'application/json';
-  const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+  let body: string | undefined;
+  if (options.form !== undefined) {
+    headers['content-type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
+    body = new URLSearchParams(options.form).toString();
+  } else if (options.body !== undefined) {
+    headers['content-type'] = 'application/json';
+    body = JSON.stringify(options.body);
+  }
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
