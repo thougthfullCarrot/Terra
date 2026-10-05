@@ -37,11 +37,13 @@ export function facet(jobs, field, always = []) {
 /**
  * Every word of the search must appear somewhere in the posting, so
  * "analyst dallas" narrows rather than widens. Filters are exact matches; an
- * empty one is ignored.
+ * empty one is ignored. `saved` keeps only the ids in `savedIds`, the jobs the
+ * visitor starred on this device.
  */
-export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sector = '' } = {}) {
+export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sector = '', saved = false, savedIds } = {}) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   return jobs.filter((job) => {
+    if (saved && !savedIds?.has(job.id)) return false;
     if (city && job.city !== city) return false;
     if (firm && job.firm !== firm) return false;
     if (kind && job.kind !== kind) return false;
@@ -76,6 +78,42 @@ export function sortJobs(jobs, sort = 'newest') {
     });
   }
   return sorted.sort(newest);
+}
+
+/** Posted within the last two calendar days: worth a "New" tag. */
+export function isNew(postedAt, now = new Date()) {
+  return daysBetween(new Date(postedAt), now) <= 2;
+}
+
+/** A firm's monogram: "Lincoln Property Company" -> "LP", "Greystar" -> "GR", "CBRE" -> "CBRE". */
+export function initials(name) {
+  const words = (name ?? '').replace(/[^\p{L}\p{N}\s&]/gu, ' ').split(/\s+/).filter((w) => w && w !== '&');
+  if (!words.length) return '?';
+  const [first] = words;
+  // An acronym name stays whole: "JLL", "CBRE".
+  if (words.length === 1) return (first.length <= 4 && first === first.toUpperCase() ? first : first.slice(0, 2)).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+/**
+ * The starred job ids, from whatever localStorage held. Anything that is not
+ * a list of strings (an old format, a hand edit) reads as nothing saved.
+ */
+export function parseSaved(text) {
+  try {
+    const list = JSON.parse(text ?? '[]');
+    return new Set(Array.isArray(list) ? list.filter((id) => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** A new set with `id` added, or removed if it was there. */
+export function toggleSaved(saved, id) {
+  const next = new Set(saved);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
 }
 
 export function postedLabel(postedAt, now = new Date()) {
@@ -122,9 +160,10 @@ export function safeUrl(url) {
 /** Filter state <-> query string, so a filtered view is a link someone can send. */
 export function readQuery(search) {
   const params = new URLSearchParams(search);
-  const state = { q: params.get('q') ?? '', sort: params.get('sort') ?? 'newest' };
+  const state = { q: params.get('q') ?? '', sort: params.get('sort') ?? 'newest', saved: params.get('saved') === '1' };
   for (const key of FILTERS) state[key] = params.get(key) ?? '';
   if (!SORTS.includes(state.sort)) state.sort = 'newest';
+  state.job = params.get('job') ?? '';
   return state;
 }
 
@@ -133,6 +172,8 @@ export function writeQuery(state) {
   if (state.q) params.set('q', state.q);
   for (const key of FILTERS) if (state[key]) params.set(key, state[key]);
   if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
+  if (state.saved) params.set('saved', '1');
+  if (state.job) params.set('job', state.job);
   const text = params.toString();
   return text ? `?${text}` : '';
 }
