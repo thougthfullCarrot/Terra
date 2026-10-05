@@ -16,9 +16,13 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - name: Export events (live run 3)
+      - name: Export events (live run 4)
         run: |
           npm run --silent export:events -- --out /tmp/events.json --previous /nonexistent 2>&1 | grep -vE '^  20'
           jq -c '[.cities[] | {(.city): (.events | length)}] | add' /tmp/events.json
           jq -c '.sources' /tmp/events.json
           jq -r '.cities[].events[] | "\(.city) | \(.start[0:16]) | \(.organizer) | \(.title)"' /tmp/events.json
+      - name: Inspect Houston BOMA
+        run: |
+          curl -sSL -m 20 https://www.houstonboma.org/events/annual-awards-extravaganza-2026 | grep -oE 'c-event-details__start-date.{0,400}' | head -2
+          curl -sSL -m 20 https://www.houstonboma.org/events/annual-awards-extravaganza-2026 | grep -oE 'og:title.{0,200}|<h1.{0,200}' | head -3

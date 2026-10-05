@@ -36,6 +36,8 @@ export interface EventSource {
   page?: string;
   /** pages: path prefix of event detail links on the listing (each detail page carries schema.org Event JSON-LD). */
   detailPath?: string;
+  /** Drop titles matching this (internal committee meetings on a public calendar). */
+  exclude?: RegExp;
   /** Keep only titles matching RELEVANT (chamber hubs list ribbon cuttings, yoga, etc. next to networking events). */
   relevantOnly?: boolean;
 }
@@ -49,7 +51,7 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'creda-houston', organizer: 'CREDA Houston', city: 'Houston', kind: 'tribe', base: 'https://credahouston.org' },
   { key: 'boma-dallas', organizer: 'BOMA Dallas', city: 'Dallas', kind: 'growthzone', base: 'https://members.bomadallas.org' },
   { key: 'boma-houston', organizer: 'Houston BOMA', city: 'Houston', kind: 'pages', base: 'https://www.houstonboma.org', page: 'https://www.houstonboma.org/events/', detailPath: '/events/' },
-  { key: 'trec-dallas', organizer: 'The Real Estate Council', city: 'Dallas', kind: 'jsonld', base: 'https://recouncil.com', page: 'https://recouncil.com/calendar/' },
+  { key: 'trec-dallas', organizer: 'The Real Estate Council', city: 'Dallas', kind: 'jsonld', base: 'https://recouncil.com', page: 'https://recouncil.com/calendar/', exclude: /committee|advisory board|board meeting|check-in call|consulting services meeting|core committee/i },
   { key: 'nawic-sa', organizer: 'NAWIC San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://www.nawicsatx.org', page: 'https://www.nawicsatx.org/events', detailPath: '/events-1/' },
   // Chamber calendars (GrowthZone): only networking, real estate and economic events (see RELEVANT).
   { key: 'metro-sa', organizer: 'Metro SA Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://members.metrosa.com', page: 'https://members.metrosa.com/events/calendar', relevantOnly: true },
@@ -309,7 +311,11 @@ const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 
 
 /** Title and start from a Novi AMS event page (no JSON-LD): the c-event-details start-date and time spans. */
 export function parseNoviDetail(html: string): { title: string; start: string } | null {
-  const span = (cls: string) => new RegExp(`class="[^"]*\\b${cls}\\b[^"]*"[^>]*>([\\s\\S]*?)</(?:span|div|td|li)>`, 'i').exec(html)?.[1];
+  // The text after the marker class (icons and wrappers may come first).
+  const span = (cls: string) => {
+    const at = html.search(new RegExp(`class="[^"]*${cls}[\\s"]`, 'i'));
+    return at < 0 ? undefined : html.slice(at, at + 600).replace(/^[^>]*>/, '');
+  };
   const dateText = decodeText(span('c-event-details__start-date') ?? '');
   const d = /([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/.exec(dateText);
   const mo = d ? MONTHS.indexOf(d[1]!.toLowerCase()) : -1;
@@ -381,7 +387,7 @@ const defaultFetcher: Fetcher = {
 
 export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
   const events = tidy(await fetchRaw(source, now, fetcher, log));
-  return source.relevantOnly ? events.filter((e) => RELEVANT.test(e.title)) : events;
+  return events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
 }
 
 async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (m: string) => void): Promise<TerraEvent[]> {
@@ -455,7 +461,7 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       if (!detail.start) continue;
       out.push({
         id: `${source.key}-${/-(\d+)\/?$/.exec(link.url)?.[1] ?? link.url}`,
-        title: detail.title || (/\.\.\.|\u2026|-->/.test(link.title) ? slugTitle(link.url) : link.title),
+        title: detail.title || (/-->/.test(link.title) ? slugTitle(link.url) : link.title),
         url: link.url,
         start: detail.start,
         end: detail.end,

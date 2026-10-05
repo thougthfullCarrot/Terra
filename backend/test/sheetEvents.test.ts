@@ -147,3 +147,18 @@ describe('Novi and JSON-LD without urls', async () => {
     expect(ev.upcoming(out, now)).toHaveLength(2);
   });
 });
+
+describe('Novi markup with icons', async () => {
+  const ev = await import('../src/events/events.js');
+  it('reads the date after an icon span', () => {
+    const html = `<h1>Golf Tournament</h1><span class="c-event-details__span c-event-details__start-date" role="listitem"><span class="novicon"></span>
+      Friday, December 4, 2026</span><span class="c-event-details__time-novicon novicon"></span><span class="c-event-details__span c-event-details__time"><span></span>7:30 AM - 2 PM</span>`;
+    expect(ev.parseNoviDetail(html)).toEqual({ title: 'Golf Tournament', start: '2026-12-04T07:30:00-06:00' });
+  });
+  it('drops excluded titles', async () => {
+    const src = { key: 't', organizer: 'T', city: 'Dallas' as const, kind: 'jsonld' as const, base: 'https://t.org', page: 'https://t.org/c', exclude: /committee/i };
+    const html = `<script type="application/ld+json">[{"@type":"Event","name":"Executive Committee Meeting","startDate":"2026-10-06 08:30"},{"@type":"Event","name":"The Deal","startDate":"2026-10-07 08:00"}]</script>`;
+    const got = await ev.fetchSource(src, now, { json: async () => ({}), text: async () => html }, () => {});
+    expect(got.map((e) => e.title)).toEqual(['The Deal']);
+  });
+});
