@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Match, Posting, Profile } from '../types.js';
+import type { Match, Posting, Profile, Sector } from '../types.js';
 import type { FirmRow, Store, UpsertResult } from './store.js';
 
 /**
@@ -24,7 +24,9 @@ export class SupabaseStore implements Store {
   async listFirms(): Promise<FirmRow[]> {
     const { data, error } = await this.db
       .from('firms')
-      .select('id, name, ats, ats_slug, ats_host, active, slug_verified')
+      // '*' rather than a column list: `sector` arrives with migration 0006, and
+      // a database that has not run it yet should still list its firms.
+      .select('*')
       .eq('active', true)
       .order('id');
     if (error) throw new Error(`listFirms: ${error.message}`);
@@ -36,7 +38,8 @@ export class SupabaseStore implements Store {
       atsSlug: row.ats_slug as string,
       atsHost: (row.ats_host as string | null) ?? null,
       active: row.active as boolean,
-      slugVerified: row.slug_verified as boolean
+      slugVerified: row.slug_verified as boolean,
+      sector: (row.sector as Sector | null | undefined) ?? null
     }));
   }
 

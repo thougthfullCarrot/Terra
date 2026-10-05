@@ -1,13 +1,15 @@
-import type { Match, Posting, Profile } from '../types.js';
+import type { Match, Posting, Profile, Sector } from '../types.js';
 
 export interface FirmRow {
   id: number;
   name: string;
-  ats: 'greenhouse' | 'lever' | 'workday' | 'icims';
+  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable';
   atsSlug: string;
   atsHost?: string | null;
   active: boolean;
   slugVerified: boolean;
+  /** Pins every posting from this firm to one sector; null leaves it to the keyword guess. */
+  sector?: Sector | null;
 }
 
 export interface UpsertResult {

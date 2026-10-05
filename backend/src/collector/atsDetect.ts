@@ -8,11 +8,10 @@
  * a guess, already attached to the right firm.
  */
 
-export type SupportedAts = 'greenhouse' | 'lever' | 'workday' | 'icims';
+export type SupportedAts = 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable';
 
 /** Platforms worth counting even though no fetcher exists for them yet. */
 export type OtherAts =
-  | 'workable'
   | 'bamboohr'
   | 'jazzhr'
   | 'smartrecruiters'
@@ -84,6 +83,15 @@ export function detectAts(rawUrl: string): AtsMatch | null {
     return hit('icims', true, host.split('.')[0] ?? null, host, rawUrl);
   }
 
+  // Workable: apply.workable.com/<slug>, or the older <slug>.workable.com.
+  if (host === 'apply.workable.com') {
+    const slug = firstSegment(path);
+    return hit('workable', true, slug && slug !== 'j' && slug !== 'api' ? slug : null, null, rawUrl);
+  }
+  if (host.endsWith('.workable.com')) {
+    return hit('workable', true, host.split('.')[0] ?? null, null, rawUrl);
+  }
+
   for (const [pattern, ats] of OTHERS) {
     if (pattern.test(host)) return hit(ats, false, null, host, rawUrl);
   }
@@ -92,7 +100,6 @@ export function detectAts(rawUrl: string): AtsMatch | null {
 }
 
 const OTHERS: [RegExp, OtherAts][] = [
-  [/(^|\.)workable\.com$/, 'workable'],
   [/(^|\.)bamboohr\.com$/, 'bamboohr'],
   [/(^|\.)applytojob\.com$/, 'jazzhr'],
   [/(^|\.)smartrecruiters\.com$/, 'smartrecruiters'],

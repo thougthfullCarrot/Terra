@@ -5,6 +5,7 @@ import { fetchGreenhouse } from './sources/greenhouse.js';
 import { fetchLever } from './sources/lever.js';
 import { fetchWorkday } from './sources/workday.js';
 import { fetchIcims } from './sources/icims.js';
+import { fetchWorkable } from './sources/workable.js';
 import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
@@ -120,6 +121,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     let raw: RawJob[];
     try {
       raw = await fetcher(firm);
+      if (firm.sector) raw = raw.map((job) => ({ ...job, sector: firm.sector! }));
       await store.markFirmPolled(firm.id, { ok: true });
     } catch (error) {
       report.firmsFailed++;
@@ -285,6 +287,8 @@ async function defaultFetcher(firm: FirmRow): Promise<RawJob[]> {
       return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug);
     case 'icims':
       return fetchIcims(firm.name, firm.atsHost, firm.atsSlug);
+    case 'workable':
+      return fetchWorkable(firm.name, firm.atsSlug);
   }
 }
 
