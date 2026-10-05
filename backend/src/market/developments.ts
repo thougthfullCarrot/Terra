@@ -26,15 +26,60 @@ export const tabsProjectUrl = (number: string) => `${TABS}/Search/Project/${numb
 /** The public link TDLR prints on each project page. */
 export const tabsPermalink = (number: string) => `${TABS}/Projects/${number}`;
 
-/** TABS location city ids, from the search form's city list. */
-export const TABS_CITY_IDS: Partial<Record<City, string>> = {
-  Dallas: '415',
-  'Fort Worth': '606',
-  Houston: '785',
-  Austin: '77',
-  'San Antonio': '1537',
-  'New Braunfels': '1216',
-  'El Paso': '522'
+/** TABS location county ids, from the search form's county list. */
+export const TABS_COUNTY_IDS: Record<string, string> = {
+  Harris: '2101',
+  Galveston: '2084',
+  'Fort Bend': '2079',
+  Montgomery: '2167',
+  Brazoria: '2020',
+  Dallas: '2057',
+  Collin: '2043',
+  Denton: '2061',
+  Rockwall: '2199',
+  Kaufman: '2129',
+  Ellis: '2070',
+  Tarrant: '2220',
+  Parker: '2184',
+  Johnson: '2126',
+  Wise: '2249',
+  Travis: '2227',
+  Williamson: '2246',
+  Hays: '2105',
+  Bastrop: '2011',
+  Bexar: '2015',
+  Guadalupe: '2094',
+  Medina: '2160',
+  Kendall: '2130',
+  Wilson: '2247',
+  Comal: '2046',
+  'El Paso': '2071'
+};
+
+/**
+ * The counties each market's map covers: the whole metro, each county in one
+ * market only (Comal goes to New Braunfels, Tarrant and its west side to Fort
+ * Worth, the rest of the Metroplex to Dallas).
+ */
+export const METRO_COUNTIES: Partial<Record<City, string[]>> = {
+  Houston: ['Harris', 'Galveston', 'Fort Bend', 'Montgomery', 'Brazoria'],
+  Dallas: ['Dallas', 'Collin', 'Denton', 'Rockwall', 'Kaufman', 'Ellis'],
+  'Fort Worth': ['Tarrant', 'Parker', 'Johnson', 'Wise'],
+  Austin: ['Travis', 'Williamson', 'Hays', 'Bastrop'],
+  'San Antonio': ['Bexar', 'Guadalupe', 'Medina', 'Kendall', 'Wilson'],
+  'New Braunfels': ['Comal'],
+  'El Paso': ['El Paso']
+};
+
+/** How far from the metro's center a geocode may land before it counts as a wrong match. */
+export const METRO_RADIUS_KM: Record<City, number> = {
+  Dallas: 80,
+  'Fort Worth': 80,
+  Houston: 90,
+  Austin: 80,
+  'San Antonio': 80,
+  'El Paso': 50,
+  'New Braunfels': 50
 };
 
 /** Rough city centers, to drop a geocode that landed in the wrong place. */
@@ -73,6 +118,7 @@ export interface TabsRow {
   ProjectStatus: number;
   FacilityName: string | null;
   City: number;
+  County?: number;
   TypeOfWork: number;
   EstimatedCost: number;
   EstimatedStartDate: string | null;
@@ -82,7 +128,10 @@ export interface TabsRow {
 export interface Development {
   /** TABS project number. */
   id: string;
+  /** The market whose map shows it. */
   city: City;
+  /** The city or town the project is actually in ("Galveston"), when known. */
+  place: string | null;
   name: string;
   facility: string | null;
   status: string;
@@ -116,16 +165,16 @@ export interface DevelopmentsResult {
   projects: Development[];
 }
 
-/** How many projects each city's map shows: the biggest by cost. */
-export const PER_CITY = 40;
+/** How many projects each metro's map shows: the biggest by cost. */
+export const PER_CITY = 80;
 /** Filings above this are typos (a $20 billion school), not projects. */
 const MAX_COST = 5e9;
 
 const isoDate = (value: string | null | undefined) => (value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null);
 const usDate = (d: Date) => `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`;
 
-/** The form DataTables posts: the biggest projects first, registered since `since`. */
-export function searchForm(city: City, since: Date, until: Date, length = 200): Record<string, string> {
+/** The form DataTables posts: one county's biggest projects first, registered since `since`. */
+export function searchForm(county: string, since: Date, until: Date, length = 200): Record<string, string> {
   return {
     draw: '1',
     start: '0',
@@ -133,7 +182,7 @@ export function searchForm(city: City, since: Date, until: Date, length = 200): 
     'order[0][column]': '9',
     'order[0][dir]': 'desc',
     'columns[9][data]': 'EstimatedCost',
-    LocationCity: TABS_CITY_IDS[city] ?? '',
+    LocationCounty: TABS_COUNTY_IDS[county] ?? '',
     RegistrationDateBegin: usDate(since),
     RegistrationDateEnd: usDate(until),
     DataVersionId: '900001'
@@ -305,8 +354,8 @@ export async function geocode(address: string, city: City, options: FetchJsonOpt
   const point = data.result?.addressMatches?.[0]?.coordinates;
   if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
   const at: [number, number] = [point.y, point.x];
-  // A match across the state is a wrong match; a big city spans about 60 km.
-  return distanceKm(at, CITY_CENTERS[city]) <= 70 ? at : null;
+  // A match across the state is a wrong match; a metro spans about 80 km from its center.
+  return distanceKm(at, CITY_CENTERS[city]) <= METRO_RADIUS_KM[city] ? at : null;
 }
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -319,16 +368,44 @@ export interface FetchDevelopmentsOptions extends FetchJsonOptions {
   log?: (line: string) => void;
 }
 
-/** Search one city, newest year, biggest first. */
-export async function searchCity(city: City, now: Date, options: FetchJsonOptions = {}): Promise<TabsRow[]> {
+/** Search one county, newest year, biggest first. */
+export async function searchCounty(county: string, now: Date, options: FetchJsonOptions = {}): Promise<TabsRow[]> {
   const since = new Date(now.getTime() - 365 * 86_400_000);
   const data = await fetchJson<{ data?: TabsRow[] }>(TABS_SEARCH_URL, {
     timeoutMs: 120_000,
     ...options,
-    form: searchForm(city, since, now),
+    form: searchForm(county, since, now),
     headers: { 'x-requested-with': 'XMLHttpRequest', referer: `${TABS}/Search/` }
   });
   return data.data ?? [];
+}
+
+/** A metro's biggest current projects across its counties, each project once. */
+export async function searchMetro(city: City, now: Date, options: FetchJsonOptions = {}): Promise<TabsRow[]> {
+  const seen = new Map<string, TabsRow>();
+  for (const county of METRO_COUNTIES[city] ?? []) {
+    for (const row of currentDevelopments(await searchCounty(county, now, options))) {
+      if (!seen.has(row.ProjectNumber)) seen.set(row.ProjectNumber, row);
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.EstimatedCost - a.EstimatedCost).slice(0, PER_CITY);
+}
+
+/** TABS city id → name, from the search form's city list. */
+export function parseCityOptions(html: string): Map<number, string> {
+  const select = /<select[^>]*name="filter-location-city"[^>]*>([\s\S]*?)<\/select>/i.exec(html)?.[1] ?? '';
+  const out = new Map<number, string>();
+  for (const [, id, name] of select.matchAll(/<option[^>]*value="(\d+)"[^>]*>([^<]*)/gi)) {
+    const text = xmlText(name ?? '').trim();
+    if (text) out.set(Number(id), text);
+  }
+  return out;
+}
+
+/** The town from an address's "…, Galveston, TX 77550" tail. */
+export function placeOf(address: string | null): string | null {
+  const match = /,\s*([A-Za-z][A-Za-z .'-]*?)\s*,?\s*(?:TX|Texas)\b\.?\s*(?:\d{5}(?:-\d{4})?)?\s*$/i.exec(address ?? '');
+  return match?.[1]?.trim() || null;
 }
 
 export async function fetchDevelopments(cities: readonly City[], options: FetchDevelopmentsOptions = {}): Promise<DevelopmentsResult> {
@@ -337,12 +414,17 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   const projects: Development[] = [];
   let pages = 0;
 
+  // City names for each row's city id; the address tail is the fallback.
+  const places = await fetchText(`${TABS}/Search`, { timeoutMs: 60_000, ...http })
+    .then(parseCityOptions)
+    .catch(() => new Map<number, string>());
+
   for (const city of cities) {
-    if (!TABS_CITY_IDS[city]) {
-      log(`${city}: no TABS city id yet; skipped.`);
+    if (!METRO_COUNTIES[city]) {
+      log(`${city}: no TABS counties yet; skipped.`);
       continue;
     }
-    const rows = currentDevelopments(await searchCity(city, now, http)).slice(0, PER_CITY);
+    const rows = await searchMetro(city, now, http);
     for (const row of rows) {
       const old = known.get(row.ProjectNumber);
       let details: ProjectDetails;
@@ -364,6 +446,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       projects.push({
         id: row.ProjectNumber,
         city,
+        place: places.get(row.City) ?? placeOf(details.address),
         name: row.ProjectName.trim(),
         facility: row.FacilityName && row.FacilityName.trim() !== row.ProjectName.trim() ? row.FacilityName.trim() : null,
         status: STATUS[row.ProjectStatus] ?? 'Registered',
@@ -387,7 +470,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
         url: tabsPermalink(row.ProjectNumber)
       });
     }
-    log(`${city}: ${rows.length} projects`);
+    log(`${city} metro: ${rows.length} projects`);
   }
 
   // Whatever the geocoder could not place goes at its ZIP code's center.

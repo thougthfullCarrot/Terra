@@ -162,7 +162,7 @@ export function pruneSnapshot(snapshot) {
 }
 
 /**
- * One city's development projects for the map, biggest first; with
+ * One metro's development projects for the map (p.city is the market, p.place the town), biggest first; with
  * privateOnly, just the ones built with private money.
  */
 export function cityProjects(projects, city, { privateOnly = false } = {}) {
