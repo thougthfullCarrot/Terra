@@ -1,44 +1,58 @@
-// Temporary probe: which free property sources answer from a runner.
-const UA = 'Terra research bot (github.com/thougthfullCarrot/Terra) roddyescamilla3@gmail.com';
+// Temporary probe, round 2.
 async function hit(label, url, { show = 600, headers = {}, method = 'GET', body } = {}) {
   try {
-    const r = await fetch(url, { method, body, headers: { 'user-agent': UA, origin: 'https://thougthfullcarrot.github.io', ...headers }, signal: AbortSignal.timeout(40000) });
+    const r = await fetch(url, { method, body, headers: { 'user-agent': 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)', ...headers }, signal: AbortSignal.timeout(40000) });
     const text = await r.text();
-    console.log(`\n### ${label} ${r.status} cors=${r.headers.get('access-control-allow-origin')} type=${r.headers.get('content-type')} len=${text.length}\n${text.slice(0, show).replace(/\s+/g, ' ')}`);
+    console.log(`\n### ${label} ${r.status} type=${r.headers.get('content-type')} len=${text.length}\n${text.slice(0, show).replace(/\s+/g, ' ')}`);
     return text;
   } catch (e) { console.log(`\n### ${label} FAIL ${e.message}`); return ''; }
 }
+const j = (t) => { try { return JSON.parse(t); } catch { return null; } };
 async function fields(label, layer) {
-  const t = await hit(label, `${layer}?f=json`, { show: 0 });
-  try { console.log((JSON.parse(t).fields ?? []).map((f) => f.name).join(',')); } catch {}
+  const d = j(await hit(label, `${layer}?f=json`, { show: 0 }));
+  console.log(d?.name, d?.editingInfo?.lastEditDate ? new Date(d.editingInfo.lastEditDate).toISOString() : '', (d?.fields ?? []).map((f) => f.name).join(','));
+  const c = j(await hit(label + ' count', `${layer}/query?f=json&where=1%3D1&returnCountOnly=true`, { show: 0 }));
+  console.log('count', c?.count);
+  const s = j(await hit(label + ' sample', `${layer}/query?f=json&where=1%3D1&outFields=*&returnGeometry=false&resultRecordCount=2`, { show: 0 }));
+  console.log(JSON.stringify(s?.features?.map((f) => f.attributes) ?? s).slice(0, 1500));
 }
-await fields('HOU fields', 'https://mycity2.houstontx.gov/gisweb02/rest/services/HoustonMap/Cadastral/MapServer/0');
-await fields('FTW fields', 'https://services5.arcgis.com/3ddLCBXe1bRt7mzj/arcgis/rest/services/Parcels_Public_Vview/FeatureServer/0');
-await fields('SA fields', 'https://gis.sara-tx.org/ags1/rest/services/FW_Bexar/BCAD_Parcels_PROD/FeatureServer/0');
-await fields('AUS fields', 'https://services1.arcgis.com/HGcSYZ5bvjRswoCb/arcgis/rest/services/TCAD_Parcels_Dec_2025/FeatureServer/0');
-await hit('HOU addr query', `https://mycity2.houstontx.gov/gisweb02/rest/services/HoustonMap/Cadastral/MapServer/0/query?f=json&where=${encodeURIComponent("SITE_ADDR_1 LIKE '1000 MAIN%'")}&outFields=*&returnGeometry=false&resultRecordCount=2`, { show: 1500 });
-for (const q of ['DCAD parcels', 'Dallas County parcels owner', 'Collin parcels', 'tax delinquent Texas', 'foreclosure Texas county', 'Denton parcels', 'Hays parcels', 'Comal parcels', 'El Paso parcels'])
-  { const t = await hit(`AGOL ${q}`, `https://www.arcgis.com/sharing/rest/search?f=json&num=8&q=${encodeURIComponent(q + ' type:"Feature Service"')}`, { show: 0 });
-    try { for (const i of JSON.parse(t).results) console.log(`  ${i.title} | ${i.owner} | ${i.url}`); } catch {} }
-await hit('TX franchise', `https://data.texas.gov/resource/9cir-efmm.json?$limit=2&$where=${encodeURIComponent("upper(taxpayer_name) like '%HINES%'")}`, { show: 1500 });
-await hit('EDGAR FTS', `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent('"lease expires" "Houston, Texas"')}&forms=10-K&dateRange=custom&startdt=2025-06-01&enddt=2026-10-01`, { show: 1500 });
-await hit('EDGAR FTS2', `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent('"lease expires" "Dallas, Texas"')}&forms=10-K`, { show: 800 });
-await hit('TWC WARN page', 'https://www.twc.texas.gov/data-reports/warn-notice', { show: 300 }).then((t) => console.log((t.match(/href="[^"]*\.(xlsx?|csv)[^"]*"/gi) ?? []).slice(0, 10)));
-for (const u of ['https://taxsales.lgbs.com/api/property_sales/?limit=2&state=TX', 'https://taxsales.lgbs.com/api/property_sales/?limit=2&county=HARRIS%20COUNTY', 'https://taxsales.lgbs.com/map?area=TX'])
-  await hit('LGBS', u, { show: 1200 });
-await hit('PBFCM', 'https://www.pbfcm.com/taxsale.html', { show: 200 }).then((t) => console.log((t.match(/href="[^"]*\.pdf[^"]*"/gi) ?? []).slice(0, 15)));
-await hit('MVBA', 'https://mvbalaw.com/tax-sales/', { show: 200 }).then((t) => console.log((t.match(/href="[^"]*(pdf|sale)[^"]*"/gi) ?? []).slice(0, 15)));
-for (const [l, u] of [
-  ['Harris FRCL', 'https://www.cclerk.hctx.net/Applications/WebSearch/FRCL_R.aspx'],
-  ['Dallas FRCL', 'https://www.dallascounty.org/government/county-clerk/recording/foreclosures.php'],
-  ['Tarrant FRCL', 'https://www.tarrantcountytx.gov/en/county-clerk/real-property/foreclosures.html'],
-  ['Bexar FRCL', 'https://www.bexar.org/2988/Foreclosures'],
-  ['Travis FRCL', 'https://www.traviscountytx.gov/county-clerk/foreclosures'],
-  ['Collin FRCL', 'https://www.collincountytx.gov/County-Clerk/Pages/Foreclosures.aspx']
-]) await hit(l, u, { show: 300 }).then((t) => console.log((t.match(/href="[^"]*(forecl|\.pdf)[^"]*"/gi) ?? []).slice(0, 12)));
-await hit('Valhalla iso', `https://valhalla1.openstreetmap.de/isochrone?json=${encodeURIComponent(JSON.stringify({ locations: [{ lat: 29.76, lon: -95.37 }], costing: 'auto', contours: [{ time: 10 }, { time: 20 }, { time: 30 }], polygons: true, generalize: 150 }))}`, { show: 300 });
-await hit('ORS', 'https://api.openrouteservice.org/v2/isochrones/driving-car', { show: 200 });
-await hit('LODES', 'https://lehd.ces.census.gov/data/lodes/LODES8/tx/wac/', { show: 0 }).then((t) => console.log((t.match(/tx_wac_S000_JT00_\d+\.csv\.gz/g) ?? []).slice(-3)));
-await hit('Gazetteer', 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_gaz_tracts_48.txt', { show: 300 });
-await hit('ACS tracts', 'https://api.census.gov/data/2023/acs/acs5?get=B01003_001E&for=tract:*&in=state:48&in=county:201', { show: 200 });
-await hit('Google news sale', `https://news.google.com/rss/search?q=${encodeURIComponent('Houston office building sold million')}&hl=en-US&gl=US&ceid=US:en`, { show: 0 }).then((t) => console.log((t.match(/<title>[^<]*<\/title>/g) ?? []).slice(0, 12).join('\n')));
+for (const l of [
+  'https://services5.arcgis.com/GtNPpPrhcOMhYgh4/arcgis/rest/services/Tax_Delinquent_Parcels/FeatureServer/0',
+  'https://services2.arcgis.com/uXyoacYrZTPTKD3R/arcgis/rest/services/CCAD_Parcel_Feature_Set/FeatureServer/0',
+  'https://littleelmgis.newedgeservices.com/arcgis/rest/services/AMS/DCAD_Parcels/FeatureServer/0',
+  'https://services8.arcgis.com/8SOULwP9Vo43JzCT/arcgis/rest/services/Texas_Foreclosures___July_2025_WFL1/FeatureServer/0'
+]) await fields(l.split('/services/')[1].split('/')[0], l);
+// More Dallas candidates
+for (const q of ['Dallas Central Appraisal District', 'DCAD parcel owner', 'Dallas County Appraisal parcels 2025', 'El Paso Central Appraisal District parcels'])
+  { const d = j(await hit(`AGOL ${q}`, `https://www.arcgis.com/sharing/rest/search?f=json&num=10&q=${encodeURIComponent(q + ' type:"Feature Service"')}`, { show: 0 }));
+    for (const i of d?.results ?? []) console.log(`  ${i.title} | ${i.owner} | ${new Date(i.modified).toISOString().slice(0,10)} | ${i.url}`); }
+// EDGAR with a plain UA, no origin
+for (const ua of ['Terra CRE Research terra.cre.research@gmail.com', 'Mozilla/5.0 terra research'])
+  await hit(`EDGAR ua=${ua}`, `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent('"lease expires" "Houston, Texas"')}&forms=10-K`, { show: 300, headers: { 'user-agent': ua } });
+// LGBS per county
+for (const c of ['HARRIS COUNTY', 'DALLAS COUNTY', 'TARRANT COUNTY', 'BEXAR COUNTY', 'TRAVIS COUNTY', 'EL PASO COUNTY', 'COLLIN COUNTY', 'FORT BEND COUNTY', 'LUBBOCK COUNTY', 'COMAL COUNTY', 'GALVESTON COUNTY']) {
+  const d = j(await hit(`LGBS ${c}`, `https://taxsales.lgbs.com/api/property_sales/?limit=200&county=${encodeURIComponent(c)}`, { show: 0 }));
+  const by = {}; for (const r of d?.results ?? []) { const k = `${r.sale_type}|${r.status}|${(r.sale_date_only ?? '').slice(0, 7)}`; by[k] = (by[k] ?? 0) + 1; }
+  console.log(d?.count, JSON.stringify(by));
+  const dated = (d?.results ?? []).find((r) => r.sale_date_only);
+  if (dated) console.log(JSON.stringify(dated).slice(0, 900));
+}
+// Dallas County foreclosures page structure
+const dal = await hit('Dallas FRCL', 'https://www.dallascounty.org/government/county-clerk/recording/foreclosures.php', { show: 0 });
+const i = dal.indexOf('foreclosure/'); console.log(dal.slice(Math.max(0, i - 3000), i + 1500).replace(/\s+/g, ' '));
+console.log('pdf count', (dal.match(/media\/foreclosure\/[^"]+\.pdf/g) ?? []).length, [...new Set((dal.match(/media\/foreclosure\/([^/]+)\//g) ?? []))]);
+// Travis tax office foreclosed
+const tr = await hit('Travis foreclosed', 'https://tax-office.traviscountytx.gov/properties/foreclosed', { show: 2000 });
+// Harris FRCL form fields
+const h = await hit('Harris FRCL', 'https://www.cclerk.hctx.net/Applications/WebSearch/FRCL_R.aspx', { show: 0 });
+console.log((h.match(/<(input|select)[^>]*name="[^"]+"[^>]*>/g) ?? []).map((s) => s.match(/name="([^"]+)"/)[1] + (s.match(/type="([^"]+)"/)?.[1] ? ':' + s.match(/type="([^"]+)"/)[1] : '')).join(' '));
+console.log(h.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 2500));
+// TABS: work types and tenant finish-outs, Harris last 6 months
+const until = new Date(); const since = new Date(Date.now() - 180 * 864e5);
+const us = (d) => `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`;
+const form = new URLSearchParams({ draw: '1', start: '0', length: '300', 'order[0][column]': '9', 'order[0][dir]': 'desc', 'columns[9][data]': 'EstimatedCost', LocationCounty: '2101', RegistrationDateBegin: us(since), RegistrationDateEnd: us(until), DataVersionId: '900001' });
+const t = j(await hit('TABS Harris', 'https://www.tdlr.texas.gov/TABS/Search/SearchProjects', { method: 'POST', body: form.toString(), headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, show: 0 }));
+const by = {}; for (const r of t?.data ?? []) by[r.TypeOfWork] = (by[r.TypeOfWork] ?? 0) + 1; console.log(JSON.stringify(by));
+for (const r of (t?.data ?? []).filter((r) => r.TypeOfWork !== 9001 && r.TypeOfWork !== 9003).slice(0, 40)) console.log(r.TypeOfWork, r.EstimatedCost, r.ProjectNumber, r.ProjectName, '|', r.FacilityName);
+const fin = (t?.data ?? []).find((r) => /finish|tenant|interior|\bTI\b/i.test(r.ProjectName));
+if (fin) { const p = await hit('TABS page', `https://www.tdlr.texas.gov/TABS/Search/Project/${fin.ProjectNumber}`, { show: 0 }); console.log(p.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 3000)); }
