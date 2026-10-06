@@ -8,7 +8,7 @@
   --ink: #17191a;
   --secondary: #3a3a35;
   --muted: #6b6b63;
-  --faint: #8a867c;
+  --faint: #6f6b62;
   --hairline: rgba(23, 25, 26, 0.1);
   --divider: rgba(23, 25, 26, 0.07);
   --chip: #f0eee8;
@@ -19,7 +19,7 @@
   --on-tint: #26314a;
   --on-accent: #ffffff;
   --red: #b8442e;
-  --green: #2f7a4d;
+  --green: #276b42;
   --amber: #b8722e;
   --error-surface: #faede9;
   --error-ink: #5a2f25;
@@ -46,7 +46,7 @@
     --ink: #ecebe7;
     --secondary: #cdcac2;
     --muted: #a19e96;
-    --faint: #85827a;
+    --faint: #9a978e;
     --hairline: rgba(236, 235, 231, 0.12);
     --divider: rgba(236, 235, 231, 0.08);
     --chip: #262a2e;
@@ -78,7 +78,7 @@
   --ink: #ecebe7;
   --secondary: #cdcac2;
   --muted: #a19e96;
-  --faint: #85827a;
+  --faint: #9a978e;
   --hairline: rgba(236, 235, 231, 0.12);
   --divider: rgba(236, 235, 231, 0.08);
   --chip: #262a2e;
@@ -289,6 +289,12 @@ svg {
   color: var(--muted);
 }
 
+/* The job counts and refresh time describe the job list, so other tabs drop them. */
+body[data-section]:not([data-section='jobs']) .masthead .meta,
+body[data-section]:not([data-section='jobs']) .masthead .stats {
+  display: none;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -476,13 +482,13 @@ svg {
 }
 
 .chip.empty {
-  opacity: 0.55;
+  opacity: 0.8;
 }
 
 .chip-count {
   font-family: var(--mono);
   font-size: 11px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .filters {
@@ -622,6 +628,29 @@ button.link {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--hairline));
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
+}
+
+/* "Show more" under a long job list. */
+.list > .more {
+  justify-self: center;
+  margin-top: 6px;
+  padding: 10px 20px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.list > .more:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--hairline));
+}
+
+.more-count {
+  font-weight: 400;
+  color: var(--muted);
 }
 
 @keyframes rise {
@@ -2092,8 +2121,29 @@ th[aria-sort] .sort-button {
     padding-top: 24px;
   }
 
+  /* One compact row of counts, so the first jobs show sooner on a phone. */
   .stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .stat {
+    padding: 9px 8px;
+    border-radius: 10px;
+  }
+
+  .stat-value {
+    font-size: 19px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .masthead .lede {
+    font-size: 15px;
   }
 
   .filters {

@@ -52,6 +52,9 @@ let matcher = null;
 let saved = readSaved();
 /** The jobs on screen, in order, so the detail panel can step through them. */
 let shown = [];
+/** Cards drawn at once; "Show more" adds the next batch, and any filter change starts over. */
+const PAGE_SIZE = 30;
+let limit = PAGE_SIZE;
 
 async function load() {
   try {
@@ -230,6 +233,7 @@ function bind() {
 
 function update(change) {
   state = { ...state, ...change };
+  limit = PAGE_SIZE;
   history.replaceState(null, '', `${location.pathname}${writeQuery(state)}${location.hash}`);
   render();
 }
@@ -264,7 +268,8 @@ function render() {
         : 'Nothing matches those filters.'
     );
   } else {
-    $('list').replaceChildren(...shown.map((job, index) => card(job, now, index)));
+    $('list').replaceChildren(...shown.slice(0, limit).map((job, index) => card(job, now, index)));
+    drawMore(now);
   }
 
   // A ?job= link opens that posting, once the feed it lives in has arrived.
@@ -273,6 +278,26 @@ function render() {
     if (job) openPanel(job);
     else setJobParam('');
   }
+}
+
+/** The "Show more" button under the list, while some of the matching jobs are not drawn yet. */
+function drawMore(now) {
+  const rest = shown.length - limit;
+  if (rest <= 0) return;
+  const button = el('button', 'more', `Show ${Math.min(PAGE_SIZE, rest)} more`);
+  button.type = 'button';
+  button.append(el('span', 'more-count', ` of ${rest} left`));
+  button.addEventListener('click', () => {
+    const from = limit;
+    limit += PAGE_SIZE;
+    button.remove();
+    const added = shown.slice(from, limit).map((job, index) => card(job, now, index));
+    $('list').append(...added);
+    drawMore(now);
+    // Keyboard users carry on from the first new card.
+    added[0]?.querySelector('.open')?.focus({ preventScroll: true });
+  });
+  $('list').append(button);
 }
 
 function drawStats(jobs, now) {
@@ -523,7 +548,13 @@ function step(direction) {
   if (!panelJob) return;
   const index = shown.findIndex((j) => j.id === panelJob.id);
   const next = shown[index + direction];
-  if (index >= 0 && next) openPanel(next);
+  if (index >= 0 && next) {
+    if (index + direction >= limit) {
+      limit = Math.ceil((index + direction + 1) / PAGE_SIZE) * PAGE_SIZE;
+      render();
+    }
+    openPanel(next);
+  }
 }
 
 function paintPanelSave() {
