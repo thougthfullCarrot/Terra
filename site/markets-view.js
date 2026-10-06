@@ -90,6 +90,8 @@ function section() {
 async function show() {
   const active = section();
   const open = active === 'markets';
+  // style.css keeps the job counts in the masthead to the Jobs tab.
+  document.body.dataset.section = active;
   // news-view.js and events-view.js show their own sections; the others step aside for it.
   for (const name of ['jobs', 'markets', 'tracker']) $(`${name}-view`).hidden = name !== active;
   for (const name of ['jobs', 'markets', 'tracker', 'news', 'events']) {

@@ -26,6 +26,7 @@ import {
   storagePath
 } from './access.js';
 import { schoolFor } from './school.js';
+import { updatedLabel } from './feed.js';
 
 const $ = (id) => document.getElementById(id);
 /** Resume text kept for matching. A long resume is a few thousand characters; this leaves room without storing a novel. */
@@ -94,6 +95,28 @@ function signedOut() {
   $('plan-paid').hidden = !CONFIG.paymentLink;
   $('plan-price').textContent = CONFIG.priceLabel || 'Monthly';
   show('gate');
+  showTeaser();
+}
+
+/**
+ * The live counts site.yml publishes in stats.json (no postings, only how
+ * many), so a visitor sees there are real jobs behind the sign-in.
+ */
+async function showTeaser() {
+  let stats;
+  try {
+    const response = await fetch('stats.json', { cache: 'no-cache' });
+    if (!response.ok) return;
+    stats = await response.json();
+  } catch {
+    return;
+  }
+  if (user || !stats?.roles) return;
+  const firms = stats.firms === 1 ? '1 firm' : `${stats.firms} firms`;
+  const names = (stats.topFirms ?? []).slice(0, 3);
+  const including = names.length ? `, including ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]}` : '';
+  const updated = stats.generatedAt ? ` · ${updatedLabel(stats.generatedAt)}` : '';
+  $('meta').textContent = `${stats.roles} open ${stats.roles === 1 ? 'role' : 'roles'} at ${firms} right now${including}${updated}`;
 }
 
 async function signedIn(next) {

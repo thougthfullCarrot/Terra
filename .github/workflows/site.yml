@@ -334,6 +334,22 @@ jobs:
           SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run --silent sync:sheets
 
+      # Counts only (how many roles and firms, the three firms hiring most),
+      # so the sign-in page can show there are real jobs behind it. No
+      # posting leaves the members-only feed.
+      - name: Publish job counts for the sign-in page
+        if: steps.accounts.outputs.enabled == 'true'
+        run: |
+          if [ -f ../site/postings.json ]; then
+            jq -c '{
+              generatedAt,
+              roles: (.jobs | length),
+              firms: ([.jobs[].firm] | unique | length),
+              topFirms: ([.jobs[].firm] | group_by(.) | map({firm: .[0], n: length}) | sort_by(-.n) | .[:3] | map(.firm))
+            }' ../site/postings.json > ../site/stats.json
+            cat ../site/stats.json
+          fi
+
       # With accounts on, the feed is members-only: it must not also sit at a public URL.
       - name: Keep the feed out of the public site
         if: steps.accounts.outputs.enabled == 'true'
