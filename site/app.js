@@ -27,6 +27,7 @@ import { STAGES, importRows } from './tracker.js';
 import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedIds, trackerOn, untrack } from './tracker-view.js';
 import { startNews } from './news-view.js';
 import { startEvents } from './events-view.js';
+import { startProperty } from './property-view.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { firm: 'All firms', sector: 'All sectors' };
@@ -648,6 +649,7 @@ startTracker({
 });
 startNews();
 startEvents();
+startProperty();
 
 if (isConfigured(CONFIG)) {
   $('meta').textContent = '';

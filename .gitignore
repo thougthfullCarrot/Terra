@@ -26,3 +26,6 @@ site/market.json
 site/news.json
 site/events.json
 /appraisal.json
+
+# Property tab files, written by `npm run export:property` in site.yml
+site/property/

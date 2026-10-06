@@ -2989,3 +2989,186 @@ th[aria-sort] .sort-button {
 .sites-more {
   margin-top: 12px;
 }
+
+/* Property tab: owner lookup, lease radar, distress, drive time, deal of the week (property-view.js). */
+#p-body {
+  display: grid;
+  gap: 12px;
+}
+
+.owner-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.owner-field {
+  flex: 1 1 260px;
+}
+
+.owner-results {
+  display: grid;
+  gap: 12px;
+}
+
+.owner-card .group-title {
+  margin-bottom: 10px;
+}
+
+.owner-facts {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.owner-facts dt {
+  color: var(--muted);
+}
+
+.owner-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.owner-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.owner-list li {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 14px;
+}
+
+.owner-list li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.owner-pick {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.radar-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+
+.radar-item {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.radar-facts {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+.radar-line {
+  margin: 0;
+  font-size: 13px;
+}
+
+.radar-quote {
+  display: block;
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--secondary);
+}
+
+.drive-map {
+  height: 440px;
+}
+
+.drive-results .calc-results,
+.distress-tiles {
+  margin-top: 12px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.deal-title {
+  margin: 6px 0 8px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.deal-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.deal-title a:hover {
+  color: var(--accent);
+}
+
+.deal-steps {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0 12px;
+  padding-left: 22px;
+}
+
+.deal-steps li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.deal-steps p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--secondary);
+}
+
+.deal-step-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+@media (max-width: 640px) {
+  .owner-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 0;
+  }
+
+  .owner-facts dd {
+    margin-bottom: 8px;
+  }
+
+  .drive-map {
+    height: 340px;
+  }
+
+  .radar-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.deal-card .chips,
+.owner-card .dev-links,
+.radar-item .dev-links,
+.deal-card .dev-links {
+  padding-left: 0;
+  margin-left: 0;
+}

@@ -345,6 +345,7 @@
         <a href="#markets" id="tab-markets" class="tab">Market data</a>
         <a href="#news" id="tab-news" class="tab">News</a>
         <a href="#events" id="tab-events" class="tab">Events</a>
+        <a href="#property" id="tab-property" class="tab">Property</a>
       </nav>
 
       <div id="jobs-view">
@@ -448,6 +449,23 @@
         <div id="m-chart"></div>
         <div id="m-body"></div>
         <div id="m-sources" class="market-sources"></div>
+      </section>
+
+      <!-- Property tools (owner lookup, lease radar, distress, drive time, deal of the week): property-view.js. -->
+      <section id="property-view" hidden aria-labelledby="property-title">
+        <h2 id="property-title" class="visually-hidden">Property tools</h2>
+        <form class="controls" id="property-controls" onsubmit="return false">
+          <nav class="market-tools" id="p-tools" aria-label="Property tools"></nav>
+          <div class="filters market-filters">
+            <label>
+              <span class="eyebrow">MARKET</span>
+              <select id="p-city"></select>
+            </label>
+          </div>
+        </form>
+        <div class="summary"><p id="p-blurb" class="market-blurb"></p></div>
+        <div id="p-body"></div>
+        <div id="p-sources" class="market-sources"></div>
       </section>
 
       <!-- Commercial real estate headlines by city: news-view.js draws them from news.json. -->

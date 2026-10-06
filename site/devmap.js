@@ -8,11 +8,11 @@
 // map is shown, so the rest of the site never waits for it.
 import { cityProjects, markerRadius, projectDates } from './market.js';
 
-const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
+export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
 
 /** Where to center a metro with no pins. */
-const CENTERS = {
+export const CENTERS = {
   Dallas: [32.7767, -96.797],
   'Fort Worth': [32.7555, -97.3308],
   Houston: [29.7604, -95.3698],
@@ -30,7 +30,7 @@ let leaflet = null;
 let liveMap = null;
 let privateOnly = false;
 
-function loadLeaflet() {
+export function loadLeaflet() {
   leaflet ??= new Promise((resolve, reject) => {
     if (window.L) return resolve(window.L);
     const css = document.createElement('link');

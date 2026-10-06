@@ -137,7 +137,12 @@ function list(box, city) {
     name.append(el('span', 'site-address', site.address));
     const links = el('span', 'metro');
     links.append(`${site.city} · `);
-    if (site.lat != null) links.append(link('Map', `https://www.google.com/maps/search/?api=1&query=${site.lat},${site.lng}`), ' · ');
+    if (site.lat != null) {
+      // Opens the Property tab's drive-time rings on this site, in the same tab.
+      const drive = el('a', 'link', 'Drive time');
+      drive.href = `#property&tool=drive&city=${encodeURIComponent(site.city)}&lat=${site.lat}&lng=${site.lng}`;
+      links.append(link('Map', `https://www.google.com/maps/search/?api=1&query=${site.lat},${site.lng}`), ' · ', drive, ' · ');
+    }
     if (site.url) links.append(link('Appraisal record', site.url));
     else links.append(`Appraisal account ${site.id}`);
     name.append(links);

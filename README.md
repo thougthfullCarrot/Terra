@@ -96,6 +96,23 @@ population, income, rent and vacancy figures are left out. `BLS_API_KEY`
 (also free) is optional. Brokerage vacancy and asking-rent figures are licensed
 and not shown.
 
+**Property.** A third section has five tools built on free public records
+(`npm run export:property` writes `site/property/`, cached by `site.yml`):
+*Who owns this* searches the Harris, Dallas, Tarrant, Bexar and Travis
+appraisal districts by address or owner, then looks the owner up in the state
+franchise-tax list and shows its other parcels. *Lease radar* lists recent
+tenant build-outs of 10,000 sq ft or more from state accessibility filings
+(TDLR TABS); lease end dates in 10-K filings appear when the `SEC_USER_AGENT`
+Actions variable names a contact, e.g. `Terra you@example.com`, as the SEC
+requires. *Distress tracker* lists property-tax auctions (Linebarger) and
+Harris County's biggest delinquent commercial accounts. *Drive time* draws
+10/20/30-minute drive areas (public Valhalla server) and counts the people
+(Census ACS, needs `CENSUS_API_KEY`) and jobs (LODES) inside them. *Deal of
+the week* picks the largest priced Texas sale in the news and walks through
+cap rate and leverage; `backend/data/deal-of-week.json` overrides the pick.
+County lease records and foreclosure postings aren't public in a readable form,
+so they're not included.
+
 **Accounts (optional).** With Supabase and Stripe settings in the repository,
 the site requires sign-in: college (.edu) emails get it free, other emails
 subscribe through Stripe, and everyone gets a profile with a picture and resume
