@@ -272,7 +272,11 @@ export async function buildDealFile(options: DealOptions = {}): Promise<DealFile
         log(`News search: ${error instanceof Error ? error.message : error}`);
       }
     }
-    found = candidates(items);
+    // The search's date window is loose, so check each story's own date, and
+    // don't bring back a deal that was already a past week's pick.
+    const oldest = now.getTime() - (days + 2) * 86_400_000;
+    const pastUrls = new Set([previous?.deal, ...(previous?.past ?? [])].filter((d) => d && d.week !== week).map((d) => d!.url));
+    found = candidates(items.filter((i) => (!i.publishedAt || Date.parse(i.publishedAt) >= oldest) && !pastUrls.has(i.link)));
     if (found.length) break;
   }
   for (const c of found) log(`  ${c.price.toLocaleString('en-US').padStart(13)}  ${c.place}: ${c.title} (${c.source})`);

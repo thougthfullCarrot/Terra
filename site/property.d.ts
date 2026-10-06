@@ -41,7 +41,7 @@ export function inGeometry(lng: number, lat: number, geometry: Geometry): boolea
 export function sumInside(tracts: [number, number, number, number][], geometry: Geometry): { people: number; jobs: number; tracts: number };
 export function circle(lat: number, lng: number, miles: number, steps?: number): Geometry;
 export function readIsochrones(body: any): { minutes: number; geometry: Geometry }[];
-export function filterMoves<T extends { city: string; end: string | null; squareFeet: number | null }>(moves: T[], city?: string): T[];
+export function filterMoves<T extends { city: string; end: string | null; squareFeet: number | null }>(moves: T[], city?: string, today?: string): T[];
 export function filterSales<T extends { city: string; saleDate: string | null; value: number | null }>(sales: T[], options?: { city?: string; scheduledOnly?: boolean }): T[];
 export function money(value: number | null): string;
 export function count(value: number | null): string;

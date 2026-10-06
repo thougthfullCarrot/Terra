@@ -381,11 +381,17 @@ export function readIsochrones(body) {
 
 // ---------------------------------------------------------------- lists
 
-/** Lease radar rows for a market (or all), soonest move-in first, then biggest. */
-export function filterMoves(moves, city = '') {
+/**
+ * Lease radar rows for a market (or all): upcoming move-ins soonest first, then
+ * ones already finished, most recent first, then any without a date.
+ */
+export function filterMoves(moves, city = '', today = new Date().toISOString().slice(0, 10)) {
+  const rank = (m) => (!m.end ? 2 : m.end >= today ? 0 : 1);
   return (moves ?? [])
     .filter((m) => !city || m.city === city)
-    .sort((a, b) => (a.end ?? '9999').localeCompare(b.end ?? '9999') || (b.squareFeet ?? 0) - (a.squareFeet ?? 0));
+    .sort((a, b) => rank(a) - rank(b) ||
+      (rank(a) === 1 ? b.end.localeCompare(a.end) : (a.end ?? '').localeCompare(b.end ?? '')) ||
+      (b.squareFeet ?? 0) - (a.squareFeet ?? 0));
 }
 
 /** Tax sale rows for a market (or all), soonest auction first; listings with no date after. */

@@ -404,7 +404,7 @@ async function leasesView(body) {
 function moveCard(move) {
   const card = el('article', 'card radar-item');
   const top = el('p', 'news-meta');
-  top.append(el('span', '', move.end ? `Move-in about ${monthYear(move.end)}` : 'Move-in date not filed'), el('span', 'news-source', move.place ?? move.city));
+  top.append(el('span', '', move.end ? `${move.end < new Date().toISOString().slice(0, 10) ? 'Moved in' : 'Move-in'} about ${monthYear(move.end)}` : 'Move-in date not filed'), el('span', 'news-source', move.place ?? move.city));
   const title = el('h3', 'news-title', move.tenant);
   const facts = [move.squareFeet ? `${move.squareFeet.toLocaleString('en-US')} sq ft` : '', move.building, money(move.cost) + ' build-out'].filter(Boolean).join(' · ');
   card.append(top, title, el('p', 'radar-facts', facts));

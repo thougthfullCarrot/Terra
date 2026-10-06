@@ -249,3 +249,12 @@ describe('distress trimming', () => {
     expect(kept.map((s) => s.id)).toEqual(['a', 'c', 'd']);
   });
 });
+
+describe('lease radar order', () => {
+  it('puts upcoming move-ins first, then recent ones, then undated', async () => {
+    const { filterMoves } = await import('../../site/property.js');
+    const m = (id: string, end: string | null) => ({ id, city: 'Dallas', end, squareFeet: 1 });
+    const order = filterMoves([m('past-old', '2026-03-01'), m('none', null), m('soon', '2026-11-01'), m('later', '2027-02-01'), m('past-new', '2026-09-01')], '', '2026-10-06');
+    expect(order.map((x) => x.id)).toEqual(['soon', 'later', 'past-new', 'past-old', 'none']);
+  });
+});
