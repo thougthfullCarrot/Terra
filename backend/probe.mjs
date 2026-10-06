@@ -1,58 +1,62 @@
-// Temporary probe, round 2.
+// Temporary probe, round 3.
+const UA = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
 async function hit(label, url, { show = 600, headers = {}, method = 'GET', body } = {}) {
   try {
-    const r = await fetch(url, { method, body, headers: { 'user-agent': 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)', ...headers }, signal: AbortSignal.timeout(40000) });
+    const r = await fetch(url, { method, body, headers: { 'user-agent': UA, ...headers }, signal: AbortSignal.timeout(40000) });
     const text = await r.text();
     console.log(`\n### ${label} ${r.status} type=${r.headers.get('content-type')} len=${text.length}\n${text.slice(0, show).replace(/\s+/g, ' ')}`);
     return text;
   } catch (e) { console.log(`\n### ${label} FAIL ${e.message}`); return ''; }
 }
 const j = (t) => { try { return JSON.parse(t); } catch { return null; } };
+const strip = (h) => h.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
 async function fields(label, layer) {
   const d = j(await hit(label, `${layer}?f=json`, { show: 0 }));
-  console.log(d?.name, d?.editingInfo?.lastEditDate ? new Date(d.editingInfo.lastEditDate).toISOString() : '', (d?.fields ?? []).map((f) => f.name).join(','));
-  const c = j(await hit(label + ' count', `${layer}/query?f=json&where=1%3D1&returnCountOnly=true`, { show: 0 }));
-  console.log('count', c?.count);
-  const s = j(await hit(label + ' sample', `${layer}/query?f=json&where=1%3D1&outFields=*&returnGeometry=false&resultRecordCount=2`, { show: 0 }));
-  console.log(JSON.stringify(s?.features?.map((f) => f.attributes) ?? s).slice(0, 1500));
+  console.log(d?.name, (d?.fields ?? []).map((f) => f.name).join(','), d?.layers?.map((l) => `${l.id}:${l.name}`).join(' '));
+  if (!d?.fields) return;
+  const s = j(await hit(label + ' sample', `${layer}/query?f=json&where=1%3D1&outFields=*&returnGeometry=false&resultRecordCount=1`, { show: 0 }));
+  console.log(JSON.stringify(s?.features?.[0]?.attributes ?? s).slice(0, 1500));
 }
-for (const l of [
-  'https://services5.arcgis.com/GtNPpPrhcOMhYgh4/arcgis/rest/services/Tax_Delinquent_Parcels/FeatureServer/0',
-  'https://services2.arcgis.com/uXyoacYrZTPTKD3R/arcgis/rest/services/CCAD_Parcel_Feature_Set/FeatureServer/0',
-  'https://littleelmgis.newedgeservices.com/arcgis/rest/services/AMS/DCAD_Parcels/FeatureServer/0',
-  'https://services8.arcgis.com/8SOULwP9Vo43JzCT/arcgis/rest/services/Texas_Foreclosures___July_2025_WFL1/FeatureServer/0'
-]) await fields(l.split('/services/')[1].split('/')[0], l);
-// More Dallas candidates
-for (const q of ['Dallas Central Appraisal District', 'DCAD parcel owner', 'Dallas County Appraisal parcels 2025', 'El Paso Central Appraisal District parcels'])
-  { const d = j(await hit(`AGOL ${q}`, `https://www.arcgis.com/sharing/rest/search?f=json&num=10&q=${encodeURIComponent(q + ' type:"Feature Service"')}`, { show: 0 }));
-    for (const i of d?.results ?? []) console.log(`  ${i.title} | ${i.owner} | ${new Date(i.modified).toISOString().slice(0,10)} | ${i.url}`); }
-// EDGAR with a plain UA, no origin
-for (const ua of ['Terra CRE Research terra.cre.research@gmail.com', 'Mozilla/5.0 terra research'])
-  await hit(`EDGAR ua=${ua}`, `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent('"lease expires" "Houston, Texas"')}&forms=10-K`, { show: 300, headers: { 'user-agent': ua } });
-// LGBS per county
-for (const c of ['HARRIS COUNTY', 'DALLAS COUNTY', 'TARRANT COUNTY', 'BEXAR COUNTY', 'TRAVIS COUNTY', 'EL PASO COUNTY', 'COLLIN COUNTY', 'FORT BEND COUNTY', 'LUBBOCK COUNTY', 'COMAL COUNTY', 'GALVESTON COUNTY']) {
-  const d = j(await hit(`LGBS ${c}`, `https://taxsales.lgbs.com/api/property_sales/?limit=200&county=${encodeURIComponent(c)}`, { show: 0 }));
-  const by = {}; for (const r of d?.results ?? []) { const k = `${r.sale_type}|${r.status}|${(r.sale_date_only ?? '').slice(0, 7)}`; by[k] = (by[k] ?? 0) + 1; }
-  console.log(d?.count, JSON.stringify(by));
-  const dated = (d?.results ?? []).find((r) => r.sale_date_only);
-  if (dated) console.log(JSON.stringify(dated).slice(0, 900));
+await fields('Dallas_Co_Parcels root', 'https://services.arcgis.com/6dxqrE38upDMg1va/arcgis/rest/services/Dallas_Co_Parcels/FeatureServer');
+await fields('Dallas_Co_Parcels 0', 'https://services.arcgis.com/6dxqrE38upDMg1va/arcgis/rest/services/Dallas_Co_Parcels/FeatureServer/0');
+await fields('COD Parcels root', 'https://services2.arcgis.com/rwnOSbfKSwyTBcwN/arcgis/rest/services/Parcels/FeatureServer');
+await fields('COD Parcels 0', 'https://services2.arcgis.com/rwnOSbfKSwyTBcwN/arcgis/rest/services/Parcels/FeatureServer/0');
+await fields('CCAD root', 'https://services2.arcgis.com/uXyoacYrZTPTKD3R/arcgis/rest/services/CCAD_Parcel_Feature_Set/FeatureServer');
+await fields('CCAD 0', 'https://services2.arcgis.com/uXyoacYrZTPTKD3R/arcgis/rest/services/CCAD_Parcel_Feature_Set/FeatureServer/0');
+// EDGAR with the production UA and a recent window
+const q = encodeURIComponent('"lease expires" "Houston, Texas"');
+const e = j(await hit('EDGAR prod UA', `https://efts.sec.gov/LATEST/search-index?q=${q}&forms=10-K&dateRange=custom&startdt=2025-07-01&enddt=2026-10-01`, { show: 200 }));
+console.log('total', e?.hits?.total?.value);
+for (const h of (e?.hits?.hits ?? []).slice(0, 8)) console.log(h._id, JSON.stringify(h._source).slice(0, 400));
+const first = e?.hits?.hits?.[0];
+if (first) {
+  const [acc, file] = first._id.split(':');
+  const cik = String(Number(first._source.ciks[0]));
+  const url = `https://www.sec.gov/Archives/edgar/data/${cik}/${acc.replace(/-/g, '')}/${file}`;
+  const doc = strip(await hit('EDGAR doc', url, { show: 0 }));
+  const sentences = doc.split(/(?<=\.)\s+/).filter((s) => /lease/i.test(s) && /expir/i.test(s) && /Texas/i.test(s));
+  console.log(url, doc.length, sentences.slice(0, 6));
 }
-// Dallas County foreclosures page structure
+// Harris FRCL postback
+const page = await hit('Harris FRCL get', 'https://www.cclerk.hctx.net/Applications/WebSearch/FRCL_R.aspx', { show: 0 });
+const hidden = Object.fromEntries([...page.matchAll(/<input[^>]*type="hidden"[^>]*>/g)].map((m) => [m[0].match(/name="([^"]+)"/)?.[1], m[0].match(/value="([^"]*)"/)?.[1] ?? '']).filter(([k]) => k));
+console.log('radios', [...page.matchAll(/<input[^>]*rbtlDate[^>]*>/g)].map((m) => m[0]));
+console.log('months', [...page.matchAll(/<option[^>]*value="([^"]*)"[^>]*>([^<]*)</g)].map((m) => `${m[1]}=${m[2]}`).join(' '));
+for (const [kind, month] of [['SaleDate', '11'], ['FileDate', '9']]) {
+  const form = new URLSearchParams({ ...hidden, 'ctl00$ContentPlaceHolder1$rbtlDate': kind, 'ctl00$ContentPlaceHolder1$ddlYear': '2026', 'ctl00$ContentPlaceHolder1$ddlMonth': month, 'ctl00$ContentPlaceHolder1$btnSearch': 'Search' });
+  const res = await hit(`Harris FRCL post ${kind} ${month}`, 'https://www.cclerk.hctx.net/Applications/WebSearch/FRCL_R.aspx', { method: 'POST', body: form.toString(), headers: { 'content-type': 'application/x-www-form-urlencoded' }, show: 0 });
+  const text = strip(res);
+  const i = text.indexOf('Document ID');
+  console.log(text.slice(i, i + 1500));
+  console.log('rows', (res.match(/<tr/g) ?? []).length, 'FRCL links', (res.match(/FRCL[^"']*\.pdf|ViewECart|Doc_ID|DocID/gi) ?? []).length);
+}
+// Dallas foreclosure links
 const dal = await hit('Dallas FRCL', 'https://www.dallascounty.org/government/county-clerk/recording/foreclosures.php', { show: 0 });
-const i = dal.indexOf('foreclosure/'); console.log(dal.slice(Math.max(0, i - 3000), i + 1500).replace(/\s+/g, ' '));
-console.log('pdf count', (dal.match(/media\/foreclosure\/[^"]+\.pdf/g) ?? []).length, [...new Set((dal.match(/media\/foreclosure\/([^/]+)\//g) ?? []))]);
-// Travis tax office foreclosed
-const tr = await hit('Travis foreclosed', 'https://tax-office.traviscountytx.gov/properties/foreclosed', { show: 2000 });
-// Harris FRCL form fields
-const h = await hit('Harris FRCL', 'https://www.cclerk.hctx.net/Applications/WebSearch/FRCL_R.aspx', { show: 0 });
-console.log((h.match(/<(input|select)[^>]*name="[^"]+"[^>]*>/g) ?? []).map((s) => s.match(/name="([^"]+)"/)[1] + (s.match(/type="([^"]+)"/)?.[1] ? ':' + s.match(/type="([^"]+)"/)[1] : '')).join(' '));
-console.log(h.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 2500));
-// TABS: work types and tenant finish-outs, Harris last 6 months
-const until = new Date(); const since = new Date(Date.now() - 180 * 864e5);
-const us = (d) => `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`;
-const form = new URLSearchParams({ draw: '1', start: '0', length: '300', 'order[0][column]': '9', 'order[0][dir]': 'desc', 'columns[9][data]': 'EstimatedCost', LocationCounty: '2101', RegistrationDateBegin: us(since), RegistrationDateEnd: us(until), DataVersionId: '900001' });
-const t = j(await hit('TABS Harris', 'https://www.tdlr.texas.gov/TABS/Search/SearchProjects', { method: 'POST', body: form.toString(), headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, show: 0 }));
-const by = {}; for (const r of t?.data ?? []) by[r.TypeOfWork] = (by[r.TypeOfWork] ?? 0) + 1; console.log(JSON.stringify(by));
-for (const r of (t?.data ?? []).filter((r) => r.TypeOfWork !== 9001 && r.TypeOfWork !== 9003).slice(0, 40)) console.log(r.TypeOfWork, r.EstimatedCost, r.ProjectNumber, r.ProjectName, '|', r.FacilityName);
-const fin = (t?.data ?? []).find((r) => /finish|tenant|interior|\bTI\b/i.test(r.ProjectName));
-if (fin) { const p = await hit('TABS page', `https://www.tdlr.texas.gov/TABS/Search/Project/${fin.ProjectNumber}`, { show: 0 }); console.log(p.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 3000)); }
+const links = [...dal.matchAll(/href="([^"]*foreclosure[^"]*\.pdf)"/g)].map((m) => m[1]);
+console.log(links.length, links.slice(0, 5), links.slice(-5));
+const k = dal.indexOf('accordion'); console.log(strip(dal.slice(k, k + 6000)).slice(0, 1500));
+// Travis RSS
+await hit('Travis RSS', 'https://tax-office.traviscountytx.gov/properties/foreclosed?format=feed&type=rss', { show: 2500 });
+// TABS alteration page
+const p = await hit('TABS page', 'https://www.tdlr.texas.gov/TABS/Search/Project/TABS2026019161', { show: 0 });
+console.log(strip(p).slice(0, 3500));
