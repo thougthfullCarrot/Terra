@@ -200,7 +200,7 @@ export function parseAddress(text) {
   const number = words[0];
   if (!number || !/^\d+[A-Z]?$/.test(number)) return null;
   const rest = words.slice(1).filter((w, i) => !(i === 0 && DIRECTIONS.has(w)));
-  const street = rest.find((w) => !SUFFIXES.has(w)) ?? rest[0];
+  const street = rest.find((w) => !SUFFIXES.has(w) && w.length > 1) ?? rest[0];
   return street ? { number, street } : null;
 }
 
@@ -218,6 +218,13 @@ export function ownerWhere(source, { owner, mailLine } = {}) {
   if (owner) return `UPPER(${source.owner}) = '${sql(owner.toUpperCase())}'`;
   if (mailLine) return `UPPER(${source.mail}) = '${sql(mailLine.toUpperCase())}'`;
   return null;
+}
+
+/** Parcels whose owner name contains the words typed, for a search by name. */
+export function ownerLikeWhere(source, name) {
+  const words = String(name ?? '').toUpperCase().replace(/[^A-Z0-9&' ]+/g, ' ').split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) return null;
+  return words.map((w) => `UPPER(${source.owner}) LIKE '%${sql(w)}%'`).join(' AND ');
 }
 
 /** A layer query URL for the browser. */
@@ -255,9 +262,21 @@ export function entityName(owner) {
  * mailing address, state file number and standing.
  */
 export function franchiseUrl(name) {
-  const clean = entityName(name).replace(/[^A-Z0-9&' ]/g, ' ').replace(/\s+/g, ' ').trim();
-  const where = `upper(taxpayer_name) like '${sql(clean)}%'`;
-  return `https://data.texas.gov/resource/9cir-efmm.json?${new URLSearchParams({ $where: where, $limit: '5' })}`;
+  // Word by word, so "ACME PROPERTIES LLC" finds "ACME PROPERTIES, L.L.C."; the suffix is left off for the same reason.
+  const words = entityName(name)
+    .replace(/[^A-Z0-9&' ]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !ENTITY_SUFFIX.has(w));
+  const where = `upper(taxpayer_name) like '${sql(words.join('%'))}%'`;
+  return `https://data.texas.gov/resource/9cir-efmm.json?${new URLSearchParams({ $where: where, $limit: '10' })}`;
+}
+
+const ENTITY_SUFFIX = new Set(['LLC', 'L', 'C', 'LP', 'P', 'LLP', 'LTD', 'INC', 'CORP', 'CO', 'THE', 'A', 'TEXAS']);
+
+/** Two company names written the same way once punctuation and spacing are set aside. */
+export function sameEntity(a, b) {
+  const norm = (n) => String(n ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  return norm(a) === norm(b);
 }
 
 /** The Comptroller's own page for a taxpayer: officers, directors and registered agent (its public information report). */
@@ -423,3 +442,60 @@ function yyyymmdd(v) {
 function round(v, digits) {
   return Math.round(v * 10 ** digits) / 10 ** digits;
 }
+
+// ---------------------------------------------------------------- deal of the week
+
+/** The walk-through's loan: 60% of the price, 30-year amortization, priced at the 10-year Treasury plus this spread. */
+export const DEAL_LOAN = { down: 40, closing: 1.5, years: 30, spread: 2 };
+
+/**
+ * The numbers the deal page walks through. The cap rate is the deal's own
+ * when an override knows it, otherwise the assumed middle for its type
+ * (assumptions from deal.json). analyze is deal.js's analyzeDeal.
+ */
+export function dealSteps(deal, file, analyze) {
+  if (!deal) return null;
+  const band = file?.assumptions?.[deal.type] ?? null;
+  const cap = deal.capRate ?? band?.mid ?? null;
+  const noi = deal.noi ?? (cap != null ? (deal.price * cap) / 100 : null);
+  const treasury = file?.treasury?.value;
+  const rate = Number.isFinite(treasury) ? Math.round((treasury + DEAL_LOAN.spread) * 20) / 20 : 6.5;
+  const sqft = deal.squareFeet ?? (deal.pricePerSqft ? Math.round(deal.price / deal.pricePerSqft) : null);
+  const steps = {
+    price: deal.price,
+    perSqft: deal.pricePerSqft ?? (sqft ? deal.price / sqft : null),
+    perUnit: deal.units ? deal.price / deal.units : null,
+    squareFeet: sqft,
+    cap,
+    capKnown: deal.capRate != null || deal.noi != null,
+    band,
+    noi,
+    rate,
+    loan: null
+  };
+  if (noi == null) return steps;
+  const result = analyze({ price: deal.price, income: noi, vacancy: 0, expenses: 0, down: DEAL_LOAN.down, closing: DEAL_LOAN.closing, rate, years: DEAL_LOAN.years });
+  // The loan constant: what the debt costs a year per dollar borrowed. Below the cap rate, borrowing raises the buyer's return.
+  const constant = result.loan > 0 ? (result.debtService / result.loan) * 100 : null;
+  steps.loan = {
+    amount: result.loan,
+    debtService: result.debtService,
+    dscr: result.dscr,
+    cashFlow: result.cashFlow,
+    cashInvested: result.cashInvested,
+    cashOnCash: result.cashOnCash,
+    constant,
+    leverage: constant == null || cap == null ? null : cap > constant + 0.1 ? 'positive' : cap < constant - 0.1 ? 'negative' : 'neutral'
+  };
+  return steps;
+}
+
+export const DEAL_TYPE_LABELS = {
+  office: 'Office',
+  industrial: 'Industrial',
+  multifamily: 'Apartments',
+  retail: 'Retail',
+  hotel: 'Hotel',
+  land: 'Land',
+  other: 'Commercial property'
+};

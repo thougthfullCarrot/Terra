@@ -29,6 +29,11 @@
 # rows typed into the sheet's Events tab and backend/data/events-manual.json.
 # Public like the news, so it stays published with accounts on.
 #
+# Property tools (site/property/*.json): census tracts for the drive-time
+# rings, the lease radar (TDLR build-outs; SEC 10-Ks when the variable
+# SEC_USER_AGENT names a contact email), tax sales and the deal of the week.
+# All from public records, so they stay published with accounts on.
+#
 # Google Sheets (docs/sheets-setup.md): with the secret
 # GOOGLE_SERVICE_ACCOUNT_JSON and the variable TERRA_SHEET_ID, the firm list
 # is read from the sheet's Firms tab (the seed list when the sheet can't be
@@ -216,6 +221,36 @@ jobs:
           path: site/sites.json
           key: sites-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # The Property tab's lists (site/property/*.json): census tracts for the
+      # drive-time rings, the lease radar, tax sales and the deal of the week.
+      # Each file has its own refresh age (export-property.ts), so most runs
+      # publish the cached copies untouched.
+      - name: Restore the property files
+        uses: actions/cache/restore@v4
+        with:
+          path: site/property
+          key: property-none
+          restore-keys: property-
+
+      - name: Export the property files
+        id: property
+        # A property source outage must never hold back the job list.
+        continue-on-error: true
+        env:
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+          # Optional: "Name contact@email" turns on the 10-K half of the lease radar (SEC asks for a contact).
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+        run: |
+          set -o pipefail
+          npm run --silent export:property 2>&1 | tee /tmp/property.log
+
+      - name: Cache the property files
+        if: steps.property.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: site/property
+          key: property-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Summarize
         if: always()
         run: |
@@ -263,6 +298,18 @@ jobs:
             echo
             echo '```'
             cat /tmp/events.log 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## Property tools'
+            echo
+            for f in tracts leases distress deal; do
+              if [ -f "../site/property/$f.json" ]; then
+                echo "- $f.json: $(wc -c < "../site/property/$f.json") bytes, built $(jq -r '.generatedAt' "../site/property/$f.json")"
+              fi
+            done
+            echo
+            echo '```'
+            cat /tmp/property.log 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

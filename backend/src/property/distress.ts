@@ -124,10 +124,26 @@ export function readSale(row: LgbsRow, city: City, county: string): TaxSale | nu
     minimumBid: money(row.minimum_bid),
     cause: row.cause_nbr?.trim() || null,
     notes: notes ? notes.slice(0, 200) : null,
-    lat: typeof lat === 'number' ? lat : null,
-    lng: typeof lng === 'number' ? lng : null,
+    lat: typeof lat === 'number' ? Math.round(lat * 1e5) / 1e5 : null,
+    lng: typeof lng === 'number' ? Math.round(lng * 1e5) / 1e5 : null,
     url: link
   };
+}
+
+/** Listings without an auction date kept per market, the highest-valued first. */
+export const UNSCHEDULED_PER_CITY = 60;
+
+/**
+ * Every listing with an auction date, plus each market's most valuable ones
+ * still waiting for a date or struck off. The full lists run to thousands of
+ * small lots, which would make the page slow to load.
+ */
+export function trimSales(sales: TaxSale[], perCity = UNSCHEDULED_PER_CITY): TaxSale[] {
+  const scheduled = sales.filter((s) => s.saleDate);
+  const rest = new Map<City, TaxSale[]>();
+  for (const s of sales) if (!s.saleDate) (rest.get(s.city) ?? rest.set(s.city, []).get(s.city)!).push(s);
+  const top = [...rest.values()].flatMap((list) => list.sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, perCity));
+  return [...scheduled, ...top];
 }
 
 export interface DistressOptions extends FetchJsonOptions {
@@ -151,7 +167,8 @@ export async function fetchTaxSales(cities: readonly City[] = CITIES, options: D
           for (const row of body.results ?? []) {
             read++;
             const sale = readSale(row, city, county);
-            if (sale) {
+            // Galveston County is in two metros' lists; keep its listings under the first.
+            if (sale && !sales.some((s) => s.id === sale.id)) {
               sales.push(sale);
               kept++;
             }
@@ -165,7 +182,7 @@ export async function fetchTaxSales(cities: readonly City[] = CITIES, options: D
       if (read) log(`${county} County (${city}): ${kept} of ${read} listings kept.`);
     }
   }
-  return { sales, counties };
+  return { sales: trimSales(sales), counties };
 }
 
 // ---------------------------------------------------------------- Harris delinquent

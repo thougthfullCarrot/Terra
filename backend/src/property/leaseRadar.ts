@@ -75,12 +75,36 @@ export const MIN_SQFT = 10_000;
 /** Build-outs per metro kept, biggest first. */
 export const MOVES_PER_CITY = 40;
 
-const NOT_A_LEASE = /\b(ISD|school|elementary|university|college|hospital|church|baptist|city of|county|airport|lift station|drainage|paving|sewer|water|wastewater|TxDOT|CSJ|apartments?|residential|restroom|parking|roof|fa[cç]ade|elevator|HVAC|chiller|generator|lobby|amenity|common area|spec suite|demising|demo(lition)?)\b/i;
+const NOT_A_LEASE = /\b(remodel|refresh|repair|refrigeration|reconditioning|hotel|inn|suites|resort|walmart|target|sam'?s club|h-?e-?b|kroger|costco|cvs|walgreens|data ?cent(er|re)s?|DC\d*|DFW\d+|DA\d+|IAH\d+|SAT\d+|AUS\d+|MW|colo\w*|cyrusone|vantage|QTS|terminal|medical|clinic|UTMB|health|surgery|MD Anderson|memorial hermann|methodist|ymca|fitness|gym|storm|fire damage|stadium|arena|center court|toyota center|multifamily|ISD|school|elementary|university|college|hospital|church|baptist|city of|county|airport|lift station|drainage|paving|sewer|water|wastewater|TxDOT|CSJ|apartments?|residential|restroom|parking|roof|fa[cç]ade|elevator|HVAC|chiller|generator|lobby|amenity|common area|spec suite|demising|demo(lition)?)\b/i;
 const BUILD_OUT = /\b(tenant|build-?out|finish-?out|interior|fit-?out|TI|office|relocat\w*|suite|floors?|levels?)\b/i;
 
 /** Renovations that could be a company moving into leased space. */
 export function buildOutCandidates(rows: TabsRow[]): TabsRow[] {
   return rows.filter((r) => r.TypeOfWork === RENOVATION && r.EstimatedCost > 0 && !NOT_A_LEASE.test(`${r.ProjectName} ${r.FacilityName ?? ''}`));
+}
+
+/**
+ * One move per tenant and building: a company that files each floor
+ * separately ("6 Pines - Beusa - Level 4", "... Level 5") shows once, with the
+ * floors' square feet and costs added up and the latest move-in date.
+ */
+export function mergeMoves(moves: TenantMove[]): TenantMove[] {
+  const key = (m: TenantMove) =>
+    `${m.city}|${m.tenant.toUpperCase().replace(/[-–,:]?\s*(LEVELS?|FLOORS?|PHASE|PH|SUITE|STE|BUILDING|BLDG)\b.*$/i, '').replace(/[^A-Z0-9]+/g, ' ').trim()}|${/^\s*(\d+)/.exec(m.address ?? '')?.[1] ?? m.building ?? ''}`;
+  const out = new Map<string, TenantMove>();
+  for (const m of moves) {
+    const k = key(m);
+    const seen = out.get(k);
+    if (!seen) {
+      out.set(k, { ...m });
+      continue;
+    }
+    seen.squareFeet = (seen.squareFeet ?? 0) + (m.squareFeet ?? 0) || null;
+    seen.cost += m.cost;
+    if ((m.end ?? '') > (seen.end ?? '')) seen.end = m.end;
+    if ((m.start ?? '9999') < (seen.start ?? '9999')) seen.start = m.start;
+  }
+  return [...out.values()];
 }
 
 /** A project page that reads as a tenant build-out of real size: tenant-funded or described as one. */
@@ -181,8 +205,10 @@ export async function fetchTenantMoves(cities: readonly City[] = CITIES, options
       }
       moves.push(move);
     }
-    log(`${city}: ${moves.length} tenant build-outs from ${rows.size} renovations.`);
-    out.push(...moves);
+    const merged = mergeMoves(moves);
+    log(`${city}: ${merged.length} tenant moves (${moves.length} filings) from ${rows.size} renovations.`);
+    // Galveston County sits in two metros' lists; show each move once, under the first.
+    out.push(...merged.filter((m) => !out.some((o) => o.id === m.id)));
   }
   return out;
 }

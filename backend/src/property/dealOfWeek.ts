@@ -60,6 +60,8 @@ export interface Deal {
 
 export interface DealFile {
   generatedAt: string;
+  /** The cap rates the walk-through assumes per property type (ASSUMED_CAP_RATES). */
+  assumptions: typeof ASSUMED_CAP_RATES;
   /** The 10-year Treasury the loan step prices off (percent), and its date. */
   treasury: { value: number; date: string } | null;
   deal: Deal | null;
@@ -82,7 +84,9 @@ const PLACES: [string, City | null][] = [
 const PROPERTY_WORD =
   /^(office|offices|tower|towers|building|buildings|skyscraper|high-rise|campus|apartment|apartments|multifamily|complex|community|warehouse|warehouses|industrial|distribution|logistics|shopping|retail|center|centers|mall|hotel|land|acres|portfolio|property|properties|plaza|park|medical|data|self-storage|storage)\b/i;
 const SALE = /\b(sells?|sold|buys?|bought|acquires?|acquired|acquisition|purchases?|purchased|pays|paid|snags?|lands|trades?|traded|closes on|scoops up|picks up)\b/i;
-const NOT_A_SALE = /\b(loans?|refinanc\w*|on the market|listed|for sale|lists|foreclos\w*|hit on|lawsuit|expansion|plans?|to build|break ground|groundbreaking|proposed|stake)\b/i;
+const NOT_A_SALE = /\b(loans?|refinanc\w*|on the market|listed|for sale|lists|foreclos\w*|hit on|lawsuit|expansion|plans?|to build|break ground|groundbreaking|proposed|stake|mansions?|homes?|houses?|RIA|wealth|bank|firm|startup|company|business)\b/i;
+/** The headline has to name a kind of commercial property somewhere, or it isn't a property sale. */
+const CRE_WORD = /\b(office|tower|skyscraper|high-rise|campus|apartments?|multifamily|multi-family|complex|warehouses?|industrial|distribution|logistics|shopping|retail|mall|hotel|land|acres|portfolio|plaza|building|property|properties|center|data center|self-storage)\b/i;
 
 /** "$300 Million", "$155M", "$1.2 billion" → dollars. */
 export function readPrice(title: string): number | null {
@@ -158,14 +162,15 @@ export function candidates(items: RssItem[]): Candidate[] {
   const out = new Map<string, Candidate>();
   for (const item of items) {
     const title = cleanTitle(item.title, item.source).replace(/^News \| /, '');
-    if (!SALE.test(title) || NOT_A_SALE.test(title)) continue;
+    if (!SALE.test(title) || NOT_A_SALE.test(title) || !CRE_WORD.test(title)) continue;
     const price = readPrice(title);
     const where = texasPlace(title);
     if (!price || !where || price < 1e6) continue;
     const key = `${where.place}|${price}`;
     if (!out.has(key)) out.set(key, { title, url: item.link, source: item.source, publishedAt: item.publishedAt, place: where.place, city: where.city, price });
   }
-  return [...out.values()].sort((a, b) => b.price - a.price);
+  // A named Texas market first; "Texas" alone is a weaker match.
+  return [...out.values()].sort((a, b) => Number(a.city === null) - Number(b.city === null) || b.price - a.price);
 }
 
 /** Monday of the week, as YYYY-MM-DD. */
@@ -280,6 +285,7 @@ export async function buildDealFile(options: DealOptions = {}): Promise<DealFile
     .slice(0, 12);
   return {
     generatedAt: now.toISOString(),
+    assumptions: ASSUMED_CAP_RATES,
     treasury,
     deal,
     past,
