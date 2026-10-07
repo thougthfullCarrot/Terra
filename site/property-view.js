@@ -37,6 +37,12 @@ import {
   readPropertyHash,
   sameEntity,
   sourcesFor,
+  OWNER_SOURCES,
+  geocodeUrl,
+  readGeocode,
+  identifyUrl,
+  pickStatewide,
+  isFullAddress,
   sumInside,
   writePropertyHash
 } from './property.js';
@@ -137,7 +143,7 @@ function ownerView(body) {
   const box = el('span', 'calc-input');
   const input = el('input');
   input.type = 'search';
-  input.placeholder = 'e.g. 700 Louisiana St, or Hines';
+  input.placeholder = state.city ? 'e.g. 700 Louisiana St, or Hines' : 'e.g. 700 Louisiana St, Houston, TX 77002';
   input.value = state.q;
   input.autocomplete = 'off';
   box.append(input);
@@ -145,6 +151,14 @@ function ownerView(body) {
   const button = el('button', 'primary', 'Look up');
   button.type = 'submit';
   form.append(label, button);
+  if (!state.city)
+    form.append(
+      el(
+        'p',
+        'calc-note owner-hint',
+        'All markets searches every Texas county. Type the whole address with the street, city and ZIP (like 700 Louisiana St, Houston, TX 77002). Searching by owner name covers Harris, Dallas, Tarrant, Bexar and Travis counties.'
+      )
+    );
   const results = el('div', 'owner-results');
   results.setAttribute('aria-live', 'polite');
   form.addEventListener('submit', (e) => {
@@ -159,7 +173,7 @@ function ownerView(body) {
   else if (state.q) search(state.q, results);
   $('p-sources').replaceChildren(
     note(
-      'Owners and values come from the county appraisal districts: Harris (City of Houston map), Dallas (a public copy of the district roll), Tarrant, Bexar and Travis. Other counties are not covered yet. The state record is the Comptroller\'s franchise tax list on data.texas.gov. The Comptroller\'s page lists officers and the registered agent for free; the Secretary of State charges $1 a search, so Terra doesn\'t use it.'
+      'Owners and values come from the county appraisal districts: Harris (City of Houston map), Dallas (a public copy of the district roll), Tarrant, Bexar and Travis. With All markets picked, an address anywhere in Texas is looked up on the state's parcel map (Texas Geographic Information Office, StratMap), which collects every county appraisal district's roll; the address is placed with OpenStreetMap's free geocoder. The state record is the Comptroller\'s franchise tax list on data.texas.gov. The Comptroller\'s page lists officers and the registered agent for free; the Secretary of State charges $1 a search, so Terra doesn\'t use it.'
     )
   );
 }
@@ -172,9 +186,40 @@ async function queryLayer(source, where, count = 25) {
   return (body.features ?? []).map((f) => ({ ...source.read(f.attributes ?? {}), source }));
 }
 
+/** Every Texas county: the address becomes a point, and the state parcel map says what sits there. */
+async function statewideSearch(q) {
+  const geo = await fetch(geocodeUrl(q), { headers: { accept: 'application/json' } });
+  if (!geo.ok) throw new Error(`address lookup returned ${geo.status}`);
+  const point = readGeocode(await geo.json());
+  if (!point) return [];
+  const response = await fetch(identifyUrl(point));
+  if (!response.ok) throw new Error(`state parcel map returned ${response.status}`);
+  const body = await response.json();
+  if (body.error) throw new Error(body.error.message ?? 'state parcel map error');
+  return pickStatewide(body, q);
+}
+
 async function search(q, results) {
   results.replaceChildren(el('div', 'state', 'Searching the appraisal rolls…'));
   const byAddress = Boolean(parseAddress(q));
+  if (!state.city && byAddress) {
+    let nodes;
+    if (!isFullAddress(q)) {
+      nodes = [el('div', 'state', 'For All markets, type the whole address with the city and ZIP, like 700 Louisiana St, Houston, TX 77002. Or pick a market above to search by street only.')];
+    } else {
+      try {
+        const found = await statewideSearch(q);
+        if (!found.length) nodes = [el('div', 'state', `No parcel found at "${q}". Check the street number, city and ZIP, or pick the market above.`)];
+        else if (found.length === 1 || found[0].address.toUpperCase().startsWith(`${parseAddress(q).number} `)) nodes = await parcelDetail(found[0]);
+        else nodes = [el('p', 'market-asof', `${found.length} parcels near that address. Pick one.`), parcelTable(found, results)];
+      } catch {
+        nodes = [el('div', 'state', "The state parcel map didn't answer; try again in a minute, or pick a market above.")];
+      }
+    }
+    ownerResults = { q, nodes };
+    if (results.isConnected) results.replaceChildren(...nodes);
+    return;
+  }
   const found = [];
   const failed = [];
   for (const source of sourcesFor(state.city)) {
@@ -319,6 +364,18 @@ async function entityCard(owner) {
 
 async function portfolioCard(parcel) {
   const card = el('section', 'card owner-card');
+  if (parcel.source.statewide) {
+    // The state map can't be searched by owner; the county's own map can, where Terra has it.
+    const county = OWNER_SOURCES.find((s) => s.county === parcel.source.county);
+    if (!county) {
+      card.append(
+        el('h3', 'group-title', `What else this owner holds in ${parcel.source.county} County`),
+        el('p', 'muted', `Terra can't search ${parcel.source.county} County by owner yet. The county appraisal district's own site can.`)
+      );
+      return card;
+    }
+    parcel = { ...parcel, source: county };
+  }
   card.append(el('h3', 'group-title', `What else this owner holds in ${parcel.source.county} County`));
   const seen = new Map();
   for (const where of [ownerWhere(parcel.source, { owner: parcel.owner }), ownerWhere(parcel.source, { mailLine: parcel.mailLine })]) {
