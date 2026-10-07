@@ -233,6 +233,101 @@ export function parcelQueryUrl(source, where, count = 25) {
   return `${source.layer}/query?${params}`;
 }
 
+// ---------------------------------------------------------------- every Texas county
+
+/**
+ * The state's parcel map (Texas Geographic Information Office, StratMap Land
+ * Parcels): every appraisal district's roll in one schema, free and open to
+ * the browser. It can't be searched by text, only asked what parcel sits at a
+ * point, so an address is first turned into a point (OpenStreetMap's free
+ * geocoder) and then looked up there.
+ */
+export const STATEWIDE_PARCELS = 'https://feature.geographic.texas.gov/arcgis/rest/services/Parcels/stratmap_land_parcels_48_most_recent/MapServer';
+
+/** The free OpenStreetMap geocoder, for a full Texas street address. */
+export function geocodeUrl(address) {
+  const params = new URLSearchParams({ q: address, format: 'jsonv2', countrycodes: 'us', limit: '3', addressdetails: '1' });
+  return `https://nominatim.openstreetmap.org/search?${params}`;
+}
+
+/** The point inside Texas from a geocoder answer, or null. */
+export function readGeocode(body) {
+  for (const hit of body ?? []) {
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && (hit.address?.state ?? 'Texas') === 'Texas') return { lat, lng };
+  }
+  return null;
+}
+
+/** Parcels within about 40 m of a point. */
+export function identifyUrl({ lat, lng }) {
+  const d = 0.002;
+  const params = new URLSearchParams({
+    f: 'json',
+    geometry: `${lng},${lat}`,
+    geometryType: 'esriGeometryPoint',
+    sr: '4326',
+    layers: 'all',
+    tolerance: '8',
+    mapExtent: `${lng - d},${lat - d},${lng + d},${lat + d}`,
+    imageDisplay: '800,800,96',
+    returnGeometry: 'false'
+  });
+  return `${STATEWIDE_PARCELS}/identify?${params}`;
+}
+
+const nul = (v) => (str(v) === 'Null' ? '' : str(v));
+
+/** A statewide record in the same shape as a county one; its source names the county. */
+export function readStatewide(a) {
+  const county = titleWords(nul(a.COUNTY));
+  const acquired = nul(a.DATE_ACQ);
+  return {
+    account: nul(a.PROP_ID),
+    address: nul(a.SITUS_ADDR)
+      .replace(/\s+,/g, ',')
+      .replace(/,(\s*,)+/g, ',')
+      .replace(/\s*0{5,}$/, '')
+      .replace(/,\s*TX$/, '')
+      .replace(/(\d{5})-?\d{4}$/, '$1'),
+    owner: [...new Set([nul(a.OWNER_NAME), nul(a.NAME_CARE)].filter(Boolean))].join(' '),
+    mail: nul(a.MAIL_ADDR).replace(/(,\s*)+/g, ', ').replace(/(\d{5})-?\d{4}$/, '$1'),
+    mailLine: nul(a.MAIL_LINE1),
+    value: num(nul(a.MKT_VALUE)),
+    code: nul(a.STAT_LAND_USE),
+    use: nul(a.LOC_LAND_USE),
+    landSqft: nul(a.LEGAL_AREA) && !nul(a.LGL_AREA_UNIT).match(/SQ/i) ? acresToSqft(num(nul(a.LEGAL_AREA))) : num(nul(a.LEGAL_AREA)),
+    buildingSqft: null,
+    built: num(nul(a.YEAR_BUILT)),
+    acquired: /^\d{5}$/.test(acquired) ? new Date(Date.UTC(1899, 11, 30) + Number(acquired) * 86_400_000).toISOString().slice(0, 10) : yyyymmdd(acquired),
+    url: null,
+    source: { county, name: `${titleWords(nul(a.SOURCE)) || `${county} County appraisal district`} (state parcel map)`, statewide: true }
+  };
+}
+
+/**
+ * The parcels an identify answer holds, the one whose house number matches the
+ * address first (a geocoded point can land on the street or the next lot).
+ */
+export function pickStatewide(body, address) {
+  const parsed = parseAddress(address);
+  const parcels = (body?.results ?? []).map((r) => readStatewide(r.attributes ?? {})).filter((p) => p.owner || p.address);
+  const unique = [...new Map(parcels.map((p) => [`${p.source.county}|${p.account}`, p])).values()];
+  const score = (p) => (parsed && p.address.toUpperCase().startsWith(`${parsed.number} `) ? 0 : 1) + (parsed && p.address.toUpperCase().includes(parsed.street) ? 0 : 1);
+  return unique.sort((a, b) => score(a) - score(b));
+}
+
+/** Whether an address has a street, a city and a ZIP, which the statewide search needs. */
+export function isFullAddress(text) {
+  const t = String(text ?? '');
+  return Boolean(parseAddress(t)) && /,\s*[A-Za-z .'-]{2,}/.test(t) && /\b\d{5}(-\d{4})?\s*$/.test(t.trim());
+}
+
+function titleWords(s) {
+  return String(s ?? '').toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase());
+}
+
 /** Which districts to search for a market: its own first, then the rest. */
 export function sourcesFor(city) {
   const own = OWNER_SOURCES.filter((s) => s.cities.includes(city));

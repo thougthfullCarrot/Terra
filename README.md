@@ -99,7 +99,7 @@ and not shown.
 **Property.** A third section has five tools built on free public records
 (`npm run export:property` writes `site/property/`, cached by `site.yml`):
 *Who owns this* searches the Harris, Dallas, Tarrant, Bexar and Travis
-appraisal districts by address or owner, then looks the owner up in the state
+appraisal districts by address or owner (with All markets picked, any full Texas address, via the state's StratMap parcel map and the OpenStreetMap geocoder), then looks the owner up in the state
 franchise-tax list and shows its other parcels. *Lease radar* lists recent
 tenant build-outs of 10,000 sq ft or more from state accessibility filings
 (TDLR TABS); lease end dates in 10-K filings appear when the `SEC_USER_AGENT`

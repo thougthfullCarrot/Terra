@@ -272,3 +272,43 @@ describe('tax sale links', () => {
     expect(noLink[1]?.url).toContain(encodeURIComponent('3140 Helmet St, Irving, TX, 75060'));
   });
 });
+
+describe('statewide owner lookup', () => {
+  const attrs = { PROP_ID: '0011410000001', OWNER_NAME: 'MILAM HOUSTON REAL ESTATE HOLDING INC', NAME_CARE: 'Null', LEGAL_AREA: '1.4348', MKT_VALUE: '0', SITUS_ADDR: '919 MILAM ST , HOUSTON, TX 77002', MAIL_ADDR: '919 MILAM ST STE 120, , HOUSTON, TX 77002-5356', MAIL_LINE1: '919 MILAM ST STE 120', SOURCE: 'HARRIS APPRAISAL DISTRICT', DATE_ACQ: '46235', COUNTY: 'HARRIS', YEAR_BUILT: '1956', STAT_LAND_USE: 'Null', LGL_AREA_UNIT: 'Null' };
+
+  it('asks for the whole address', async () => {
+    const { isFullAddress } = await import('../../site/property.js');
+    expect(isFullAddress('919 Milam St, Houston, TX 77002')).toBe(true);
+    expect(isFullAddress('919 Milam St')).toBe(false);
+    expect(isFullAddress('919 Milam St, Houston TX')).toBe(false);
+  });
+
+  it('reads a state parcel map record', async () => {
+    const { readStatewide } = await import('../../site/property.js');
+    const p = readStatewide(attrs);
+    expect(p.address).toBe('919 MILAM ST, HOUSTON, TX 77002');
+    expect(p.owner).toBe('MILAM HOUSTON REAL ESTATE HOLDING INC');
+    expect(p.mail).toBe('919 MILAM ST STE 120, HOUSTON, TX 77002');
+    expect(p.value).toBeNull();
+    expect(p.acquired).toBe('2026-08-01');
+    expect(p.source).toMatchObject({ county: 'Harris', statewide: true });
+  });
+
+  it('puts the parcel with the matching house number first', async () => {
+    const { pickStatewide, readGeocode } = await import('../../site/property.js');
+    const next = { ...attrs, PROP_ID: '2', SITUS_ADDR: '901 MILAM ST, HOUSTON, TX 77002' };
+    const picked = pickStatewide({ results: [{ attributes: next }, { attributes: attrs }, { attributes: attrs }] }, '919 Milam St, Houston, TX 77002');
+    expect(picked.map((p) => p.account)).toEqual(['0011410000001', '2']);
+    expect(readGeocode([{ lat: '29.75', lon: '-95.36', address: { state: 'Texas' } }])).toEqual({ lat: 29.75, lng: -95.36 });
+    expect(readGeocode([{ lat: '35', lon: '-90', address: { state: 'Tennessee' } }])).toBeNull();
+  });
+});
+
+describe('statewide record cleanup', () => {
+  it('drops a blank city, a zero ZIP and a repeated owner name', async () => {
+    const { readStatewide } = await import('../../site/property.js');
+    const p = readStatewide({ SITUS_ADDR: '500 W TEXAS AV,, TX 000000', OWNER_NAME: 'TALL CITY TOWERS LLC', NAME_CARE: 'TALL CITY TOWERS LLC', COUNTY: 'MIDLAND' });
+    expect(p.address).toBe('500 W TEXAS AV');
+    expect(p.owner).toBe('TALL CITY TOWERS LLC');
+  });
+});
