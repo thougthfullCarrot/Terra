@@ -85,6 +85,14 @@ jobs:
       - name: Build the site's scripts
         run: npm run build:site
 
+      # A syntax error in any one script blanks the whole site, so a pull
+      # request that breaks one fails here instead of after merge.
+      - name: Check every site script parses
+        run: |
+          for f in ../site/*.js; do
+            node --check --input-type=module < "$f" || { echo "::error file=site/$(basename "$f")::syntax error"; exit 1; }
+          done
+
       - name: Export postings from the live boards
         # Optional. With these set, Adzuna search results join the board
         # postings; without them the site is built from the boards alone.
