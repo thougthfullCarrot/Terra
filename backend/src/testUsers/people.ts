@@ -1,5 +1,5 @@
 /**
- * Fifty made-up website accounts for exercising sign-in gating, profiles,
+ * A hundred made-up website accounts for exercising sign-in gating, profiles,
  * alerts, the application tracker and best-match ordering. Every address is on a reserved example domain, so no
  * mail can reach a real person, and each account is created with
  * app_metadata.terra_test_user = true so it can be found and removed later
@@ -936,5 +936,928 @@ Agribusiness, Texas A&M University-Kingsville, 2022.
 Experience: Land analyst for a Central Texas builder: lot pro forma, zoning and entitlements, GIS parcel maps, market research on absorption.
 Skills: pro forma, zoning, entitlements, GIS, market research, Excel.`,
     subscription: { status: 'active', periodEndDays: 22 }
+  },
+  // The second fifty (2026-10-07): more schools, names, cities and every access path again, for a 100-account run.
+  {
+    email: 'nikolai.pham@example.edu',
+    expected: 'college',
+    covers: '.edu student, investment profile, San Antonio, no resume',
+    name: 'Nikolai Pham',
+    school: 'University of Houston',
+    gradYear: 2027,
+    major: 'Urban Planning',
+    homeCity: 'San Antonio',
+    relocationOpen: false,
+    sectors: ['Investment', 'Asset Mgmt'],
+    avatar: [67, 225, 182],
+    resume: null,
+    subscription: null
+  },
+  {
+    email: 'noah.kowalski@example.edu',
+    expected: 'college',
+    covers: '.edu student, appraisal profile, El Paso',
+    name: 'Noah Kowalski',
+    school: 'Prairie View A&M University',
+    gradYear: 2029,
+    major: 'Finance',
+    homeCity: 'El Paso',
+    relocationOpen: false,
+    sectors: ['Appraisal', 'Capital Markets', 'Property Mgmt'],
+    avatar: [90, 83, 234],
+    resume: `Noah Kowalski, El Paso TX
+Finance, Prairie View A&M University, 2029.
+Experience: Appraisal trainee: gathered comparables and drafted 30 retail reports.
+Experience: Debt placement intern: sized loans and wrote 4 loan memos.
+Experience: Leasing assistant at a 6-unit community: rent rolls, renewals, resident calls.
+Skills: USPAP, comps, report writing, cost approach, income approach, debt sizing, DSCR, loan memos, Excel, market research, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: null
+  },
+  {
+    email: 'logan.benavides@example.edu',
+    expected: 'college',
+    covers: '.edu student, brokerage profile, New Braunfels',
+    name: 'Logan Benavides',
+    school: 'Southern Methodist University',
+    gradYear: 2027,
+    major: 'Management Information Systems',
+    homeCity: 'New Braunfels',
+    relocationOpen: false,
+    sectors: ['Brokerage'],
+    avatar: [179, 34, 35],
+    resume: `Logan Benavides, New Braunfels TX
+Management Information Systems, Southern Methodist University, 2027.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint.`,
+    subscription: null
+  },
+  {
+    email: 'hana.whitfield@example.edu',
+    expected: 'college',
+    covers: '.edu student, brokerage profile, Lubbock, no resume so no best-match badges',
+    name: 'Hana Whitfield',
+    school: 'Stephen F. Austin State University',
+    gradYear: 2028,
+    major: 'Accounting',
+    homeCity: 'Lubbock',
+    relocationOpen: false,
+    sectors: ['Brokerage', 'Asset Mgmt'],
+    avatar: [151, 216, 58],
+    resume: null,
+    subscription: null
+  },
+  {
+    email: 'ava.dubois@example.edu',
+    expected: 'college',
+    covers: '.edu student, capital markets profile, Lubbock, no resume',
+    name: 'Ava DuBois',
+    school: 'University of Texas at Austin',
+    gradYear: 2026,
+    major: 'Management Information Systems',
+    homeCity: 'Lubbock',
+    relocationOpen: false,
+    sectors: ['Capital Markets', 'Property Mgmt'],
+    avatar: [197, 88, 184],
+    resume: null,
+    subscription: null
+  },
+  {
+    email: 'mateo.castillo@example.edu',
+    expected: 'college',
+    covers: '.edu student who picked no sectors, New Braunfels',
+    name: 'Mateo Castillo',
+    school: 'Texas A&M University',
+    gradYear: 2027,
+    major: null,
+    homeCity: 'New Braunfels',
+    relocationOpen: false,
+    sectors: [],
+    avatar: [194, 151, 201],
+    resume: `Mateo Castillo, New Braunfels TX
+Undeclared, Texas A&M University, 2027.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint.`,
+    subscription: null
+  },
+  {
+    email: 'lucas.lindqvist@example.edu',
+    expected: 'college',
+    covers: '.edu student, brokerage profile, El Paso',
+    name: 'Lucas Lindqvist',
+    school: 'Lamar University',
+    gradYear: 2027,
+    major: 'Accounting',
+    homeCity: 'El Paso',
+    relocationOpen: true,
+    sectors: ['Brokerage', 'Development'],
+    avatar: [26, 145, 97],
+    resume: `Lucas Lindqvist, El Paso TX
+Accounting, Lamar University, 2027.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Experience: Development intern: tracked entitlements and permitting for 7 sites.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint, entitlements, zoning, pro forma, GIS, site selection.`,
+    subscription: null
+  },
+  {
+    email: 'priya.delgado@example.edu',
+    expected: 'college',
+    covers: '.edu student, development profile, College Station',
+    name: 'Priya Delgado',
+    school: 'Rice University',
+    gradYear: 2026,
+    major: 'Marketing',
+    homeCity: 'College Station',
+    relocationOpen: true,
+    sectors: ['Development', 'Property Mgmt'],
+    avatar: [212, 185, 213],
+    resume: `Priya Delgado, College Station TX
+Marketing, Rice University, 2026.
+Experience: Development intern: tracked entitlements and permitting for 4 sites.
+Experience: Leasing assistant at a 23-unit community: rent rolls, renewals, resident calls.
+Skills: entitlements, zoning, pro forma, GIS, site selection, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: null
+  },
+  {
+    email: 'isaac.acosta@example.edu',
+    expected: 'college',
+    covers: '.edu student, appraisal profile, no home city',
+    name: 'Isaac Acosta',
+    school: 'Rice University',
+    gradYear: 2028,
+    major: 'Geography',
+    homeCity: null,
+    relocationOpen: true,
+    sectors: ['Appraisal'],
+    avatar: null,
+    resume: `Isaac Acosta, Texas TX
+Geography, Rice University, 2028.
+Experience: Appraisal trainee: gathered comparables and drafted 39 retail reports.
+Skills: USPAP, comps, report writing, cost approach, income approach.`,
+    subscription: null
+  },
+  {
+    email: 'nora.novak@example.edu',
+    expected: 'college',
+    covers: '.edu student, homebuilder profile, Houston, one-line resume',
+    name: 'Nora Novak',
+    school: 'University of Texas Rio Grande Valley',
+    gradYear: 2027,
+    major: 'Architecture',
+    homeCity: 'Houston',
+    relocationOpen: true,
+    sectors: ['Homebuilder'],
+    avatar: [74, 98, 203],
+    resume: `Nora Novak. Excel.`,
+    subscription: null
+  },
+  {
+    email: 'jude.carrington@example.edu',
+    expected: 'college',
+    covers: '.edu student, asset mgmt profile, Dallas',
+    name: 'Jude Carrington',
+    school: 'St. Mary’s University',
+    gradYear: 2028,
+    major: 'Architecture',
+    homeCity: 'Dallas',
+    relocationOpen: false,
+    sectors: ['Asset Mgmt', 'Property Mgmt'],
+    avatar: [84, 190, 33],
+    resume: `Jude Carrington, Dallas TX
+Architecture, St. Mary’s University, 2028.
+Experience: Asset management intern: monthly variance reports for 5 office buildings.
+Experience: Leasing assistant at a 11-unit community: rent rolls, renewals, resident calls.
+Skills: variance reports, budgeting, Excel, NOI analysis, investor reporting, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: null
+  },
+  {
+    email: 'yusuf.saldana@example.edu',
+    expected: 'college',
+    covers: '.edu student, affordable housing profile, Austin',
+    name: 'Yusuf Saldaña',
+    school: 'Stephen F. Austin State University',
+    gradYear: 2028,
+    major: 'Accounting',
+    homeCity: 'Austin',
+    relocationOpen: false,
+    sectors: ['Affordable Housing', 'Capital Markets'],
+    avatar: [124, 156, 140],
+    resume: `Yusuf Saldaña, Austin TX
+Accounting, Stephen F. Austin State University, 2028.
+Experience: Housing finance intern: helped assemble 36 LIHTC applications.
+Experience: Debt placement intern: sized loans and wrote 28 loan memos.
+Skills: LIHTC, compliance, HUD, tax credit applications, Excel, debt sizing, DSCR, loan memos, market research.`,
+    subscription: null
+  },
+  {
+    email: 'owen.oyelaran@example.edu',
+    expected: 'college',
+    covers: '.edu student, property mgmt profile, College Station',
+    name: 'Owen Oyelaran',
+    school: 'Prairie View A&M University',
+    gradYear: 2031,
+    major: 'Management Information Systems',
+    homeCity: 'College Station',
+    relocationOpen: true,
+    sectors: ['Property Mgmt', 'Asset Mgmt'],
+    avatar: [143, 92, 193],
+    resume: `Owen Oyelaran, College Station TX
+Management Information Systems, Prairie View A&M University, 2031.
+Experience: Leasing assistant at a 34-unit community: rent rolls, renewals, resident calls.
+Experience: Asset management intern: monthly variance reports for 36 office buildings.
+Skills: Yardi, AppFolio, rent rolls, work orders, lease administration, variance reports, budgeting, Excel, NOI analysis, investor reporting.`,
+    subscription: null
+  },
+  {
+    email: 'wyatt.garza@example.edu',
+    expected: 'college',
+    covers: '.edu student, affordable housing profile, Dallas',
+    name: 'Wyatt Garza',
+    school: 'University of St. Thomas',
+    gradYear: 2027,
+    major: 'Political Science',
+    homeCity: 'Dallas',
+    relocationOpen: false,
+    sectors: ['Affordable Housing', 'Property Mgmt'],
+    avatar: [56, 31, 142],
+    resume: `Wyatt Garza, Dallas TX
+Political Science, University of St. Thomas, 2027.
+Experience: Housing finance intern: helped assemble 39 LIHTC applications.
+Experience: Leasing assistant at a 37-unit community: rent rolls, renewals, resident calls.
+Skills: LIHTC, compliance, HUD, tax credit applications, Excel, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: null
+  },
+  {
+    email: 'caleb.lozano@example.edu',
+    expected: 'college',
+    covers: '.edu student, asset mgmt profile, Fort Worth, very long resume',
+    name: 'Caleb Lozano',
+    school: 'Texas Christian University',
+    gradYear: 2029,
+    major: 'Political Science',
+    homeCity: 'Fort Worth',
+    relocationOpen: false,
+    sectors: ['Asset Mgmt', 'Capital Markets'],
+    avatar: [170, 230, 47],
+    resume: `Caleb Lozano, Fort Worth TX
+Political Science, Texas Christian University, 2029.
+Experience: Asset management intern: monthly variance reports for 15 office buildings.
+Experience: Debt placement intern: sized loans and wrote 20 loan memos.
+Skills: variance reports, budgeting, Excel, NOI analysis, investor reporting, debt sizing, DSCR, loan memos, market research.
+Leadership: Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, mentor.
+Leadership: Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, mentor.
+Leadership: Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, Real Estate Club officer, case competition finalist, mentor.`,
+    subscription: null
+  },
+  {
+    email: 'chloe.morales@example.edu',
+    expected: 'college',
+    covers: '.edu student, affordable housing profile, Fort Worth',
+    name: 'Chloe Morales',
+    school: 'Texas Christian University',
+    gradYear: 2027,
+    major: 'Political Science',
+    homeCity: 'Fort Worth',
+    relocationOpen: true,
+    sectors: ['Affordable Housing', 'Asset Mgmt', 'Appraisal'],
+    avatar: [171, 61, 123],
+    resume: `Chloe Morales, Fort Worth TX
+Political Science, Texas Christian University, 2027.
+Experience: Housing finance intern: helped assemble 5 LIHTC applications.
+Experience: Asset management intern: monthly variance reports for 34 office buildings.
+Experience: Appraisal trainee: gathered comparables and drafted 38 retail reports.
+Skills: LIHTC, compliance, HUD, tax credit applications, Excel, variance reports, budgeting, NOI analysis, investor reporting, USPAP, comps, report writing, cost approach, income approach.`,
+    subscription: null
+  },
+  {
+    email: 'julian.ellison@example.edu',
+    expected: 'college',
+    covers: '.edu student, investment profile, Fort Worth',
+    name: 'Julian Ellison',
+    school: 'Texas A&M University-Corpus Christi',
+    gradYear: 2028,
+    major: 'Business Administration',
+    homeCity: 'Fort Worth',
+    relocationOpen: false,
+    sectors: ['Investment', 'Capital Markets'],
+    avatar: [50, 204, 118],
+    resume: `Julian Ellison, Fort Worth TX
+Business Administration, Texas A&M University-Corpus Christi, 2028.
+Experience: Acquisitions intern: built pro forma models and underwrote 11 value-add deals.
+Experience: Debt placement intern: sized loans and wrote 40 loan memos.
+Skills: Argus, financial modeling, DCF, underwriting, CoStar, debt sizing, DSCR, loan memos, Excel, market research.`,
+    subscription: null
+  },
+  {
+    email: 'amara.bianchi@example.edu',
+    expected: 'college',
+    covers: '.edu student, investment profile, Dallas',
+    name: 'Amara Bianchi',
+    school: 'University of Texas at Austin',
+    gradYear: 2027,
+    major: 'Supply Chain Management',
+    homeCity: 'Dallas',
+    relocationOpen: true,
+    sectors: ['Investment', 'Capital Markets'],
+    avatar: [157, 100, 199],
+    resume: `Amara Bianchi, Dallas TX
+Supply Chain Management, University of Texas at Austin, 2027.
+Experience: Acquisitions intern: built pro forma models and underwrote 19 value-add deals.
+Experience: Debt placement intern: sized loans and wrote 24 loan memos.
+Skills: Argus, financial modeling, DCF, underwriting, CoStar, debt sizing, DSCR, loan memos, Excel, market research.`,
+    subscription: null
+  },
+  {
+    email: 'liam.okafor@example.edu',
+    expected: 'college',
+    covers: '.edu student, development profile, Dallas',
+    name: 'Liam Okafor',
+    school: 'St. Mary’s University',
+    gradYear: 2026,
+    major: 'Supply Chain Management',
+    homeCity: 'Dallas',
+    relocationOpen: true,
+    sectors: ['Development', 'Investment', 'Asset Mgmt'],
+    avatar: [31, 22, 122],
+    resume: `Liam Okafor, Dallas TX
+Supply Chain Management, St. Mary’s University, 2026.
+Experience: Development intern: tracked entitlements and permitting for 21 sites.
+Experience: Acquisitions intern: built pro forma models and underwrote 15 value-add deals.
+Experience: Asset management intern: monthly variance reports for 28 office buildings.
+Skills: entitlements, zoning, pro forma, GIS, site selection, Argus, financial modeling, DCF, underwriting, CoStar, variance reports, budgeting, Excel, NOI analysis, investor reporting.`,
+    subscription: null
+  },
+  {
+    email: 'anjali.quintanilla@example.edu',
+    expected: 'college',
+    covers: '.edu student, affordable housing profile, Houston',
+    name: 'Anjali Quintanilla',
+    school: 'Texas A&M University-Corpus Christi',
+    gradYear: 2028,
+    major: 'Accounting',
+    homeCity: 'Houston',
+    relocationOpen: true,
+    sectors: ['Affordable Housing'],
+    avatar: [98, 164, 209],
+    resume: `Anjali Quintanilla, Houston TX
+Accounting, Texas A&M University-Corpus Christi, 2028.
+Experience: Housing finance intern: helped assemble 26 LIHTC applications.
+Skills: LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: null
+  },
+  {
+    email: 'theo.oconnor@example.edu',
+    expected: 'college',
+    covers: '.edu student, brokerage profile, El Paso',
+    name: 'Theo O’Connor',
+    school: 'Abilene Christian University',
+    gradYear: 2028,
+    major: 'Real Estate',
+    homeCity: 'El Paso',
+    relocationOpen: true,
+    sectors: ['Brokerage', 'Investment', 'Property Mgmt'],
+    avatar: [40, 120, 196],
+    resume: `Theo O’Connor, El Paso TX
+Real Estate, Abilene Christian University, 2028.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Experience: Acquisitions intern: built pro forma models and underwrote 5 value-add deals.
+Experience: Leasing assistant at a 29-unit community: rent rolls, renewals, resident calls.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint, Argus, financial modeling, DCF, underwriting, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: null
+  },
+  {
+    email: 'rafael.trevino@example.edu',
+    expected: 'college',
+    covers: '.edu student, affordable housing profile, Houston',
+    name: 'Rafael Treviño',
+    school: 'Stephen F. Austin State University',
+    gradYear: 2026,
+    major: 'Architecture',
+    homeCity: 'Houston',
+    relocationOpen: true,
+    sectors: ['Affordable Housing'],
+    avatar: [204, 42, 110],
+    resume: `Rafael Treviño, Houston TX
+Architecture, Stephen F. Austin State University, 2026.
+Experience: Housing finance intern: helped assemble 8 LIHTC applications.
+Skills: LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: null
+  },
+  {
+    email: 'esperanza.brooks@example.edu',
+    expected: 'college',
+    covers: '.edu student, property mgmt profile, Fort Worth',
+    name: 'Esperanza Brooks',
+    school: 'Texas Tech University',
+    gradYear: 2028,
+    major: 'Management Information Systems',
+    homeCity: 'Fort Worth',
+    relocationOpen: false,
+    sectors: ['Property Mgmt', 'Affordable Housing'],
+    avatar: [70, 226, 237],
+    resume: `Esperanza Brooks, Fort Worth TX
+Management Information Systems, Texas Tech University, 2028.
+Experience: Leasing assistant at a 12-unit community: rent rolls, renewals, resident calls.
+Experience: Housing finance intern: helped assemble 10 LIHTC applications.
+Skills: Yardi, AppFolio, rent rolls, work orders, lease administration, LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: null
+  },
+  {
+    email: 'kenji.hernandez@example.edu',
+    expected: 'college',
+    covers: '.edu student, investment profile, New Braunfels',
+    name: 'Kenji Hernández',
+    school: 'Prairie View A&M University',
+    gradYear: 2029,
+    major: 'Civil Engineering',
+    homeCity: 'New Braunfels',
+    relocationOpen: false,
+    sectors: ['Investment', 'Brokerage'],
+    avatar: [20, 174, 139],
+    resume: `Kenji Hernández, New Braunfels TX
+Civil Engineering, Prairie View A&M University, 2029.
+Experience: Acquisitions intern: built pro forma models and underwrote 26 value-add deals.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Skills: Argus, financial modeling, DCF, underwriting, CoStar, lease analysis, prospecting, Salesforce, PowerPoint.`,
+    subscription: null
+  },
+  {
+    email: 'andres.nakamura@example.edu',
+    expected: 'college',
+    covers: '.edu student, property mgmt profile, Lubbock',
+    name: 'Andrés Nakamura',
+    school: 'Texas Tech University',
+    gradYear: 2026,
+    major: 'Data Science',
+    homeCity: 'Lubbock',
+    relocationOpen: true,
+    sectors: ['Property Mgmt', 'Affordable Housing'],
+    avatar: [109, 155, 130],
+    resume: `Andrés Nakamura, Lubbock TX
+Data Science, Texas Tech University, 2026.
+Experience: Leasing assistant at a 30-unit community: rent rolls, renewals, resident calls.
+Experience: Housing finance intern: helped assemble 8 LIHTC applications.
+Skills: Yardi, AppFolio, rent rolls, work orders, lease administration, LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: null
+  },
+  {
+    email: 'diego.gallagher@example.edu',
+    expected: 'college',
+    covers: '.edu student, development profile, Austin',
+    name: 'Diego Gallagher',
+    school: 'Baylor University',
+    gradYear: 2029,
+    major: 'Data Science',
+    homeCity: 'Austin',
+    relocationOpen: false,
+    sectors: ['Development'],
+    avatar: [231, 33, 212],
+    resume: `Diego Gallagher, Austin TX
+Data Science, Baylor University, 2029.
+Experience: Development intern: tracked entitlements and permitting for 29 sites.
+Skills: entitlements, zoning, pro forma, GIS, site selection.`,
+    subscription: null
+  },
+  {
+    email: 'skim@realestate.example.edu',
+    expected: 'college',
+    covers: '.edu subdomain with a department host',
+    name: 'Samuel Kim',
+    school: 'Angelo State University',
+    gradYear: 2027,
+    major: 'Real Estate',
+    homeCity: 'Austin',
+    relocationOpen: false,
+    sectors: ['Brokerage', 'Asset Mgmt'],
+    avatar: [28, 49, 188],
+    resume: `Samuel Kim, Austin TX
+Real Estate, Angelo State University, 2027.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Experience: Asset management intern: monthly variance reports for 22 office buildings.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint, variance reports, budgeting, Excel, NOI analysis, investor reporting.`,
+    subscription: null
+  },
+  {
+    email: 'PALOMA.IYER+terra@EXAMPLE.EDU',
+    expected: 'college',
+    covers: 'upper-case .EDU address with a plus tag',
+    name: 'Paloma Iyer',
+    school: 'Prairie View A&M University',
+    gradYear: 2026,
+    major: 'Business Administration',
+    homeCity: 'Dallas',
+    relocationOpen: false,
+    sectors: ['Investment'],
+    avatar: null,
+    resume: `Paloma Iyer, Dallas TX
+Business Administration, Prairie View A&M University, 2026.
+Experience: Acquisitions intern: built pro forma models and underwrote 17 value-add deals.
+Skills: Argus, financial modeling, DCF, underwriting, CoStar.`,
+    subscription: null
+  },
+  {
+    email: 'callum.trinh@example.com',
+    expected: 'subscriber',
+    covers: 'active subscription, brokerage profile',
+    name: 'Callum Trinh',
+    school: 'Texas Tech University',
+    gradYear: 2024,
+    major: 'Urban Planning',
+    homeCity: 'Lubbock',
+    relocationOpen: true,
+    sectors: ['Brokerage', 'Property Mgmt'],
+    avatar: [83, 77, 55],
+    resume: `Callum Trinh, Lubbock TX
+Urban Planning, Texas Tech University, 2024.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Experience: Leasing assistant at a 5-unit community: rent rolls, renewals, resident calls.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: { status: 'active', periodEndDays: 25 }
+  },
+  {
+    email: 'zainab.adeyemi@example.net',
+    expected: 'subscriber',
+    covers: 'active subscription, investment profile',
+    name: 'Zainab Adeyemi',
+    school: 'Lone Star College',
+    gradYear: 2022,
+    major: 'Real Estate',
+    homeCity: 'Galveston',
+    relocationOpen: true,
+    sectors: ['Investment', 'Appraisal'],
+    avatar: [139, 120, 195],
+    resume: `Zainab Adeyemi, Galveston TX
+Real Estate, Lone Star College, 2022.
+Experience: Acquisitions intern: built pro forma models and underwrote 18 value-add deals.
+Experience: Appraisal trainee: gathered comparables and drafted 8 retail reports.
+Skills: Argus, financial modeling, DCF, underwriting, CoStar, USPAP, comps, report writing, cost approach, income approach.`,
+    subscription: { status: 'active', periodEndDays: 14 }
+  },
+  {
+    email: 'kofi.fairchild@example.com',
+    expected: 'subscriber',
+    covers: 'active subscription, appraisal profile',
+    name: 'Kofi Fairchild',
+    school: 'Tarrant County College',
+    gradYear: 2022,
+    major: 'Supply Chain Management',
+    homeCity: 'College Station',
+    relocationOpen: false,
+    sectors: ['Appraisal', 'Capital Markets'],
+    avatar: [154, 94, 148],
+    resume: `Kofi Fairchild, College Station TX
+Supply Chain Management, Tarrant County College, 2022.
+Experience: Appraisal trainee: gathered comparables and drafted 20 retail reports.
+Experience: Debt placement intern: sized loans and wrote 27 loan memos.
+Skills: USPAP, comps, report writing, cost approach, income approach, debt sizing, DSCR, loan memos, Excel, market research.`,
+    subscription: { status: 'active', periodEndDays: 3 }
+  },
+  {
+    email: 'siobhan.sullivan@example.com',
+    expected: 'subscriber',
+    covers: 'active subscription, appraisal profile',
+    name: 'Siobhan Sullivan',
+    school: null,
+    gradYear: 2021,
+    major: 'Supply Chain Management',
+    homeCity: 'Fort Worth',
+    relocationOpen: false,
+    sectors: ['Appraisal', 'Brokerage', 'Property Mgmt'],
+    avatar: [197, 164, 65],
+    resume: `Siobhan Sullivan, Fort Worth TX
+Experience: Appraisal trainee: gathered comparables and drafted 36 retail reports.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Experience: Leasing assistant at a 11-unit community: rent rolls, renewals, resident calls.
+Skills: USPAP, comps, report writing, cost approach, income approach, CoStar, lease analysis, prospecting, Salesforce, PowerPoint, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: { status: 'active', periodEndDays: 30 }
+  },
+  {
+    email: 'mason.villarreal@example.com',
+    expected: 'subscriber',
+    covers: 'active subscription, homebuilder profile',
+    name: 'Mason Villarreal',
+    school: 'San Jacinto College',
+    gradYear: 2021,
+    major: 'Architecture',
+    homeCity: 'College Station',
+    relocationOpen: false,
+    sectors: ['Homebuilder'],
+    avatar: [102, 136, 195],
+    resume: `Mason Villarreal, College Station TX
+Architecture, San Jacinto College, 2021.
+Experience: Land intern at a homebuilder: lot pro formas and absorption research on 30 communities.
+Skills: lot pro forma, land acquisition, absorption studies, Procore.`,
+    subscription: { status: 'active', periodEndDays: 9 }
+  },
+  {
+    email: 'camila.mcallister@example.org',
+    expected: 'subscriber',
+    covers: 'active subscription, development profile',
+    name: 'Camila McAllister',
+    school: 'Lone Star College',
+    gradYear: 2023,
+    major: 'Business Administration',
+    homeCity: 'Galveston',
+    relocationOpen: false,
+    sectors: ['Development'],
+    avatar: [99, 145, 200],
+    resume: `Camila McAllister, Galveston TX
+Business Administration, Lone Star College, 2023.
+Experience: Development intern: tracked entitlements and permitting for 24 sites.
+Skills: entitlements, zoning, pro forma, GIS, site selection.`,
+    subscription: { status: 'active', periodEndDays: 21 }
+  },
+  {
+    email: 'elijah.montoya@example.com',
+    expected: 'subscriber',
+    covers: 'active subscription, development profile',
+    name: 'Elijah Montoya',
+    school: null,
+    gradYear: 2022,
+    major: 'Economics',
+    homeCity: 'San Antonio',
+    relocationOpen: true,
+    sectors: ['Development', 'Investment'],
+    avatar: [68, 52, 210],
+    resume: `Elijah Montoya, San Antonio TX
+Experience: Development intern: tracked entitlements and permitting for 28 sites.
+Experience: Acquisitions intern: built pro forma models and underwrote 35 value-add deals.
+Skills: entitlements, zoning, pro forma, GIS, site selection, Argus, financial modeling, DCF, underwriting, CoStar.`,
+    subscription: { status: 'active', periodEndDays: 12 }
+  },
+  {
+    email: 'valentina.chavez@example.org',
+    expected: 'subscriber',
+    covers: 'active subscription, brokerage profile',
+    name: 'Valentina Chávez',
+    school: 'Southern Methodist University',
+    gradYear: 2022,
+    major: 'Real Estate',
+    homeCity: 'El Paso',
+    relocationOpen: false,
+    sectors: ['Brokerage', 'Capital Markets', 'Appraisal'],
+    avatar: [200, 37, 87],
+    resume: `Valentina Chávez, El Paso TX
+Real Estate, Southern Methodist University, 2022.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Experience: Debt placement intern: sized loans and wrote 6 loan memos.
+Experience: Appraisal trainee: gathered comparables and drafted 33 retail reports.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint, debt sizing, DSCR, loan memos, Excel, market research, USPAP, comps, report writing, cost approach, income approach.`,
+    subscription: { status: 'active', periodEndDays: 27 }
+  },
+  {
+    email: 'olivia.ramirezsoto@example.com',
+    expected: 'subscriber',
+    covers: 'free trial, brokerage profile',
+    name: 'Olivia Ramírez-Soto',
+    school: 'San Jacinto College',
+    gradYear: 2026,
+    major: 'Management Information Systems',
+    homeCity: 'El Paso',
+    relocationOpen: true,
+    sectors: ['Brokerage'],
+    avatar: [172, 195, 199],
+    resume: `Olivia Ramírez-Soto, El Paso TX
+Management Information Systems, San Jacinto College, 2026.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint.`,
+    subscription: { status: 'trialing', periodEndDays: 6 }
+  },
+  {
+    email: 'leah.yoon@example.net',
+    expected: 'subscriber',
+    covers: 'free trial, appraisal profile',
+    name: 'Leah Yoon',
+    school: 'Dallas College',
+    gradYear: 2024,
+    major: 'Geography',
+    homeCity: 'San Antonio',
+    relocationOpen: false,
+    sectors: ['Appraisal', 'Affordable Housing'],
+    avatar: null,
+    resume: `Leah Yoon, San Antonio TX
+Geography, Dallas College, 2024.
+Experience: Appraisal trainee: gathered comparables and drafted 39 retail reports.
+Experience: Housing finance intern: helped assemble 39 LIHTC applications.
+Skills: USPAP, comps, report writing, cost approach, income approach, LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: { status: 'trialing', periodEndDays: 2 }
+  },
+  {
+    email: 'imani.sato@example.com',
+    expected: 'subscriber',
+    covers: 'free trial, homebuilder profile, no resume',
+    name: 'Imani Sato',
+    school: 'Texas Tech University',
+    gradYear: 2026,
+    major: 'Geography',
+    homeCity: 'Galveston',
+    relocationOpen: false,
+    sectors: ['Homebuilder', 'Appraisal', 'Capital Markets'],
+    avatar: [170, 108, 172],
+    resume: null,
+    subscription: { status: 'trialing', periodEndDays: 13 }
+  },
+  {
+    email: 'beau.haddad@example.net',
+    expected: 'subscriber',
+    covers: 'active subscription with no period end recorded, brokerage profile',
+    name: 'Beau Haddad',
+    school: 'San Jacinto College',
+    gradYear: 2021,
+    major: 'Geography',
+    homeCity: 'College Station',
+    relocationOpen: true,
+    sectors: ['Brokerage', 'Development'],
+    avatar: [138, 143, 179],
+    resume: `Beau Haddad, College Station TX
+Geography, San Jacinto College, 2021.
+Experience: Brokerage intern: pulled comps and prepared lease proposals for a tenant rep team.
+Experience: Development intern: tracked entitlements and permitting for 14 sites.
+Skills: CoStar, lease analysis, prospecting, Salesforce, PowerPoint, entitlements, zoning, pro forma, GIS, site selection.`,
+    subscription: { status: 'active', periodEndDays: null }
+  },
+  {
+    email: 'tariq.strickland@example.net',
+    expected: 'none',
+    covers: 'canceled last week: paywall',
+    name: 'Tariq Strickland',
+    school: 'Dallas College',
+    gradYear: 2025,
+    major: 'Real Estate',
+    homeCity: 'Galveston',
+    relocationOpen: false,
+    sectors: ['Property Mgmt', 'Affordable Housing'],
+    avatar: [154, 204, 67],
+    resume: `Tariq Strickland, Galveston TX
+Real Estate, Dallas College, 2025.
+Experience: Leasing assistant at a 37-unit community: rent rolls, renewals, resident calls.
+Experience: Housing finance intern: helped assemble 14 LIHTC applications.
+Skills: Yardi, AppFolio, rent rolls, work orders, lease administration, LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: { status: 'canceled', periodEndDays: -7 }
+  },
+  {
+    email: 'renee.zamora@example.com',
+    expected: 'none',
+    covers: 'past due after a failed card: paywall',
+    name: 'Renée Zamora',
+    school: 'Texas Christian University',
+    gradYear: 2025,
+    major: 'Urban Planning',
+    homeCity: 'El Paso',
+    relocationOpen: true,
+    sectors: ['Appraisal', 'Affordable Housing', 'Property Mgmt'],
+    avatar: [93, 138, 36],
+    resume: `Renée Zamora, El Paso TX
+Urban Planning, Texas Christian University, 2025.
+Experience: Appraisal trainee: gathered comparables and drafted 32 retail reports.
+Experience: Housing finance intern: helped assemble 17 LIHTC applications.
+Experience: Leasing assistant at a 9-unit community: rent rolls, renewals, resident calls.
+Skills: USPAP, comps, report writing, cost approach, income approach, LIHTC, compliance, HUD, tax credit applications, Excel, Yardi, AppFolio, rent rolls, work orders, lease administration.`,
+    subscription: { status: 'past_due', periodEndDays: 4 }
+  },
+  {
+    email: 'harper.huang@example.com',
+    expected: 'none',
+    covers: 'unpaid subscription: paywall',
+    name: 'Harper Huang',
+    school: 'University of Houston',
+    gradYear: 2026,
+    major: 'Economics',
+    homeCity: 'Galveston',
+    relocationOpen: true,
+    sectors: ['Capital Markets', 'Appraisal', 'Investment'],
+    avatar: null,
+    resume: `Harper Huang, Galveston TX
+Economics, University of Houston, 2026.
+Experience: Debt placement intern: sized loans and wrote 32 loan memos.
+Experience: Appraisal trainee: gathered comparables and drafted 25 retail reports.
+Experience: Acquisitions intern: built pro forma models and underwrote 5 value-add deals.
+Skills: debt sizing, DSCR, loan memos, Excel, market research, USPAP, comps, report writing, cost approach, income approach, Argus, financial modeling, DCF, underwriting, CoStar.`,
+    subscription: { status: 'unpaid', periodEndDays: 15 }
+  },
+  {
+    email: 'gabriel.mbeki@example.com',
+    expected: 'none',
+    covers: 'checkout never finished (incomplete): paywall',
+    name: 'Gabriel Mbeki',
+    school: 'Houston Community College',
+    gradYear: 2024,
+    major: 'Business Administration',
+    homeCity: 'New Braunfels',
+    relocationOpen: true,
+    sectors: ['Capital Markets', 'Affordable Housing'],
+    avatar: [60, 46, 230],
+    resume: `Gabriel Mbeki, New Braunfels TX
+Business Administration, Houston Community College, 2024.
+Experience: Debt placement intern: sized loans and wrote 4 loan memos.
+Experience: Housing finance intern: helped assemble 19 LIHTC applications.
+Skills: debt sizing, DSCR, loan memos, Excel, market research, LIHTC, compliance, HUD, tax credit applications.`,
+    subscription: { status: 'incomplete', periodEndDays: null }
+  },
+  {
+    email: 'mia.escobedo@example.org',
+    expected: 'none',
+    covers: 'trial ran out two days ago: paywall',
+    name: 'Mia Escobedo',
+    school: 'Tarrant County College',
+    gradYear: 2022,
+    major: 'Civil Engineering',
+    homeCity: 'Lubbock',
+    relocationOpen: true,
+    sectors: ['Affordable Housing'],
+    avatar: [184, 169, 126],
+    resume: `Mia Escobedo, Lubbock TX
+Civil Engineering, Tarrant County College, 2022.
+Experience: Housing finance intern: helped assemble 10 LIHTC applications.
+Skills: LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: { status: 'trialing', periodEndDays: -2 }
+  },
+  {
+    email: 'mei.rahman@example.org',
+    expected: 'none',
+    covers: 'active but the period ended yesterday: paywall',
+    name: 'Mei Rahman',
+    school: 'University of Houston',
+    gradYear: 2026,
+    major: 'Management Information Systems',
+    homeCity: 'College Station',
+    relocationOpen: false,
+    sectors: ['Development'],
+    avatar: [185, 141, 33],
+    resume: `Mei Rahman, College Station TX
+Management Information Systems, University of Houston, 2026.
+Experience: Development intern: tracked entitlements and permitting for 33 sites.
+Skills: entitlements, zoning, pro forma, GIS, site selection.`,
+    subscription: { status: 'active', periodEndDays: -1 }
+  },
+  {
+    email: 'lucia.whitaker@example.com',
+    expected: 'none',
+    covers: 'never subscribed, non-college: paywall',
+    name: 'Lucía Whitaker',
+    school: 'Dallas College',
+    gradYear: 2022,
+    major: 'Urban Planning',
+    homeCity: 'El Paso',
+    relocationOpen: false,
+    sectors: ['Homebuilder', 'Property Mgmt', 'Asset Mgmt'],
+    avatar: null,
+    resume: `Lucía Whitaker, El Paso TX
+Urban Planning, Dallas College, 2022.
+Experience: Land intern at a homebuilder: lot pro formas and absorption research on 37 communities.
+Experience: Leasing assistant at a 26-unit community: rent rolls, renewals, resident calls.
+Experience: Asset management intern: monthly variance reports for 23 office buildings.
+Skills: lot pro forma, land acquisition, absorption studies, Procore, Yardi, AppFolio, rent rolls, work orders, lease administration, variance reports, budgeting, Excel, NOI analysis, investor reporting.`,
+    subscription: null
+  },
+  {
+    email: 'dakota.abernathy@example.edu.au',
+    expected: 'none',
+    covers: 'look-alike ".edu.au" domain, no subscription',
+    name: 'Dakota Abernathy',
+    school: 'Tarrant County College',
+    gradYear: 2025,
+    major: 'Geography',
+    homeCity: 'College Station',
+    relocationOpen: true,
+    sectors: ['Affordable Housing'],
+    avatar: [83, 210, 100],
+    resume: `Dakota Abernathy, College Station TX
+Geography, Tarrant County College, 2025.
+Experience: Housing finance intern: helped assemble 14 LIHTC applications.
+Skills: LIHTC, compliance, HUD, tax credit applications, Excel.`,
+    subscription: null
+  },
+  {
+    email: 'ingrid.cardenas@edu-mail.example.com',
+    expected: 'none',
+    covers: 'look-alike "edu-mail" domain, no subscription',
+    name: 'Ingrid Cárdenas',
+    school: 'Dallas College',
+    gradYear: 2026,
+    major: null,
+    homeCity: 'Houston',
+    relocationOpen: false,
+    sectors: ['Development'],
+    avatar: [30, 20, 72],
+    resume: `Ingrid Cárdenas, Houston TX
+Undeclared, Dallas College, 2026.
+Experience: Development intern: tracked entitlements and permitting for 28 sites.
+Skills: entitlements, zoning, pro forma, GIS, site selection.`,
+    subscription: null
+  },
+  {
+    email: 'layla.patterson@example.org',
+    expected: 'none',
+    covers: 'never subscribed, no profile filled in, no resume',
+    name: 'Layla Patterson',
+    school: null,
+    gradYear: null,
+    major: null,
+    homeCity: null,
+    relocationOpen: false,
+    sectors: [],
+    avatar: null,
+    resume: null,
+    subscription: null
   }
 ];

@@ -139,29 +139,91 @@ export class SiteTester {
     return { context, page, errors };
   }
 
-  /** The signed-out page: sign-in form and the welcome section, no feed. */
+  /** The signed-out page, on a computer and a phone: the pitch deck, then the sign-in form and the welcome section, no feed. */
   async checkSignedOut(): Promise<BrowserResult[]> {
     const results: BrowserResult[] = [];
-    const check = (ok: boolean, label: string, detail?: string) => results.push({ ok, label, detail });
-    const { context, page, errors } = await this.open(null, false);
+    for (const mobile of [false, true]) results.push(...(await this.checkSignedOutOn(mobile)));
+    return results;
+  }
+
+  private async checkSignedOutOn(mobile: boolean): Promise<BrowserResult[]> {
+    const results: BrowserResult[] = [];
+    const tag = mobile ? 'phone: ' : '';
+    const check = (ok: boolean, label: string, detail?: string) => results.push({ ok, label: `${tag}signed out: ${label}`, detail });
+    const { context, page, errors } = await this.open(null, mobile);
     try {
       await page.goto(this.origin + '/');
+      await page.locator('#gate').waitFor({ state: 'attached', timeout: 20_000 });
+      await this.checkPitch(page, mobile, check);
       await page.locator('#gate').waitFor({ state: 'visible', timeout: 20_000 });
-      check(true, 'signed out: sign-in form shows');
-      check(await page.locator('#welcome').isVisible(), 'signed out: welcome section shows');
-      check(!(await page.locator('#feed').isVisible()), 'signed out: job list is hidden');
-      check((await page.locator('#list .card').count()) === 0, 'signed out: no job cards in the page');
+      check(true, 'sign-in form shows');
+      check(await page.locator('#welcome').isVisible(), 'welcome section shows');
+      check(!(await page.locator('#feed').isVisible()), 'job list is hidden');
+      check((await page.locator('#list .card').count()) === 0, 'no job cards in the page');
       await page.fill('#signin-email', 'not-an-email');
       await page.click('#signin-submit');
       const status = (await page.locator('#signin-status').textContent()) ?? '';
-      check(/Enter your email/.test(status), 'signed out: a bad email is caught before sending', status);
-      check(errors.length === 0, 'signed out: no script errors', errors.join(' | '));
+      check(/Enter your email/.test(status), 'a bad email is caught before sending', status);
+      await page.reload();
+      await page.locator('#gate').waitFor({ state: 'visible', timeout: 20_000 });
+      await page.waitForTimeout(500);
+      check(!(await page.locator('#pitch').isVisible()), 'the tour does not come back on a reload in the same visit');
+      await page.click('#pitch-open');
+      check(await page.locator('#pitch').isVisible(), '"Take the tour" reopens the tour');
+      await page.keyboard.press('Escape');
+      check(!(await page.locator('#pitch').isVisible()), 'Escape closes the tour');
+      check(errors.length === 0, 'no script errors', errors.join(' | '));
     } catch (error) {
-      check(false, 'signed out: page loads', String(error));
+      check(false, 'page loads', String(error).split('\n')[0]);
     } finally {
       await context.close();
     }
     return results;
+  }
+
+  /** The pitch deck a signed-out visitor sees first (site/pitch.js). */
+  private async checkPitch(page: Page, mobile: boolean, check: (ok: boolean, label: string, detail?: string) => void): Promise<void> {
+    const pitch = page.locator('#pitch');
+    try {
+      await pitch.waitFor({ state: 'visible', timeout: 20_000 });
+      check(true, 'the tour opens on arrival');
+    } catch {
+      check(false, 'the tour opens on arrival');
+      return;
+    }
+    const count = page.locator('#pitch-count');
+    const slides = await page.locator('#pitch .pitch-slide').count();
+    check(slides === 9, 'the tour has nine slides', `${slides}`);
+    check((await count.textContent()) === `1 / ${slides}`, 'the tour starts on slide 1', (await count.textContent()) ?? '');
+    const overflow = await page.evaluate<number>(
+      `Math.max(...[...document.querySelectorAll('#pitch .pitch-nav, #pitch .pitch-slide.current')].map((n) => n.scrollWidth - n.clientWidth))`
+    );
+    check(overflow <= 1, 'the tour fits the screen width', `${overflow}px too wide`);
+    await page.click('#pitch-next');
+    await page.keyboard.press('ArrowRight');
+    check((await count.textContent()) === `3 / ${slides}`, 'Next and the arrow key move forward', (await count.textContent()) ?? '');
+    await page.keyboard.press('ArrowLeft');
+    check((await count.textContent()) === `2 / ${slides}`, 'the left arrow moves back', (await count.textContent()) ?? '');
+    if (mobile) {
+      const box = await page.locator('#pitch-track').boundingBox();
+      if (box) {
+        const y = box.y + box.height / 2;
+        const cdp = await page.context().newCDPSession(page);
+        const touch = (type: string, x: number) =>
+          cdp.send('Input.dispatchTouchEvent', { type: type as 'touchStart', touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+        await touch('touchStart', box.x + box.width * 0.8);
+        for (const f of [0.65, 0.5, 0.35, 0.2]) await touch('touchMove', box.x + box.width * f);
+        await touch('touchEnd', 0);
+        await page.waitForTimeout(300);
+        check((await count.textContent()) === `3 / ${slides}`, 'swiping left moves forward', (await count.textContent()) ?? '');
+      }
+    }
+    await page.keyboard.press('End');
+    check(await page.locator('#pitch-start').isVisible(), 'the last slide has the sign-up button');
+    await page.click('#pitch-start');
+    check(!(await pitch.isVisible()), 'the sign-up button closes the tour');
+    const focused = await page.evaluate<string>('document.activeElement?.id ?? ""');
+    check(focused === 'signin-email', 'the sign-up button lands in the email box', focused);
   }
 
   async checkPerson(
@@ -189,6 +251,7 @@ export class SiteTester {
         return results;
       }
       check(await page.locator('#account-button').isVisible(), 'Profile button shows');
+      check(!(await page.locator('#pitch').isVisible()), 'the signed-out tour stays closed');
 
       if (member) {
         await this.checkFeed(page, person, expect, check);
@@ -229,8 +292,14 @@ export class SiteTester {
   ): Promise<void> {
     if (!expect.jobs) return;
     await page.locator('#list .card').first().waitFor({ timeout: 20_000 });
+    // The list draws 30 cards at a time (PAGE_SIZE in site/app.js); "Show more" adds the rest.
+    const first = await page.locator('#list .card').count();
+    check(first === Math.min(expect.jobs, 30), 'the list starts with up to 30 jobs', `${first} cards for ${expect.jobs} jobs`);
+    for (let i = 0; i < 20 && (await page.locator('#list .more').count()); i++) {
+      await page.locator('#list .more').click();
+    }
     const cards = await page.locator('#list .card').count();
-    check(cards === expect.jobs, 'every job in the feed is listed', `${cards} cards for ${expect.jobs} jobs`);
+    check(cards === expect.jobs, 'every job in the feed is listed after "Show more"', `${cards} cards for ${expect.jobs} jobs`);
     const count = (await page.locator('#count').textContent()) ?? '';
     check(count.startsWith(`${expect.jobs} `), 'role count matches the list', count);
 
@@ -254,7 +323,10 @@ export class SiteTester {
       const firms = await page.locator('#list .card .firm').allTextContents();
       check(firms.every((text) => text.endsWith(`· ${person.homeCity}`)) || firms.length === 0, `city filter shows only ${person.homeCity} jobs`);
       await page.click('#clear');
-      check((await page.locator('#list .card').count()) === cards, 'clearing filters brings every job back');
+      // Clearing starts the list over at 30 cards, so compare the role count as well.
+      const after = await page.locator('#list .card').count();
+      const total = (await page.locator('#count').textContent()) ?? '';
+      check(after === Math.min(cards, 30) && total.startsWith(`${expect.jobs} `), 'clearing filters brings every job back', `${after} cards, ${total}`);
     }
 
     // Search: a word from the first card's title should keep it.
@@ -325,16 +397,27 @@ export class SiteTester {
     const card = page.locator('#list .card').first();
     if (!(await card.count())) return;
     const role = ((await card.locator('.role').textContent()) ?? '').trim();
+    // An earlier run that stopped part way can leave this job saved; start from unsaved either way.
+    const pressed = `document.querySelector('#list .card .save')?.getAttribute('aria-pressed')`;
+    if ((await page.evaluate<string | null>(pressed)) === 'true') {
+      await card.locator('.save').click();
+      await page.waitForFunction(`${pressed} === 'false'`, null, { timeout: 10_000 });
+    }
     await card.locator('.save').click();
-    await page.waitForFunction(`document.querySelector('#list .card .save')?.getAttribute('aria-pressed') === 'true'`, null, { timeout: 10_000 });
-    check(true, 'bookmarking a job saves it to the tracker');
+    try {
+      await page.waitForFunction(`${pressed} === 'true'`, null, { timeout: 10_000 });
+      check(true, 'bookmarking a job saves it to the tracker');
+    } catch {
+      check(false, 'bookmarking a job saves it to the tracker', `button still reads ${await page.evaluate<string | null>(pressed)}`);
+      return;
+    }
     await page.click('#tab-tracker');
     await page.locator('#tracker-view').waitFor({ state: 'visible', timeout: 5_000 });
     const body = (await page.locator('#t-body').textContent()) ?? '';
     check(body.includes(role), 'the saved job shows on the Tracker tab');
     await page.click('#tab-jobs');
     await page.locator('#list .card').first().locator('.save').click();
-    await page.waitForFunction(`document.querySelector('#list .card .save')?.getAttribute('aria-pressed') === 'false'`, null, { timeout: 10_000 });
+    await page.waitForFunction(`${pressed} === 'false'`, null, { timeout: 10_000 });
     check(true, 'bookmarking it again removes it');
   }
 
