@@ -403,6 +403,29 @@ export function filterSales(sales, { city = '', scheduledOnly = false } = {}) {
 
 // ---------------------------------------------------------------- formatting
 
+/**
+ * Where a tax-sale row links. The listing's own deep links (auction-site item
+ * pages, county sale-list files) expire or move after each sale and then 404,
+ * so the row links the auction site's home page, where the listing can be
+ * searched by address or case number, plus a map of the property.
+ */
+export function saleLinks(sale) {
+  let site = 'https://taxsales.lgbs.com/';
+  try {
+    const u = new URL(sale.url ?? '');
+    if (/^https?:$/.test(u.protocol)) site = `${u.origin}/`;
+  } catch {
+    /* no usable listing link: the tax-sale firm's own search */
+  }
+  const where = sale.lat != null && sale.lng != null
+    ? `${sale.lat},${sale.lng}`
+    : [sale.address, sale.place, 'TX', sale.zip].filter(Boolean).join(', ');
+  return [
+    { label: 'Auction site', url: site },
+    { label: 'Map', url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where)}` }
+  ];
+}
+
 export function money(value) {
   if (value == null || !Number.isFinite(value)) return '—';
   const abs = Math.abs(value);
