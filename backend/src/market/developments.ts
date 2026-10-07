@@ -1,6 +1,7 @@
 import { fetchBuffer, fetchJson, fetchText, type FetchJsonOptions } from '../lib/http.js';
 import { unzip, xmlText } from '../lib/xlsx.js';
 import type { City } from '../types.js';
+import { fetchSanAntonioPermits } from './cityPermits.js';
 import { developerLink } from './developers.js';
 
 /**
@@ -177,8 +178,12 @@ export interface Development {
   /** The developer's website, or a search for it when not listed (see developerLink). */
   developerUrl: string;
   developerDirect: boolean;
-  /** The project's public TDLR page. */
+  /** The project's public TDLR page, or the city permit dataset. */
   url: string;
+  /** Where the project came from: the state's TABS register (the default) or a city's building permits. */
+  source?: 'tabs' | 'city';
+  /** The permit's primary contact (often the architect or permit expediter), for city permits. */
+  contact?: string | null;
 }
 
 export interface DevelopmentsResult {
@@ -186,8 +191,17 @@ export interface DevelopmentsResult {
   projects: Development[];
 }
 
-/** How many projects each metro's map shows: the biggest by cost. */
-export const PER_CITY = 80;
+/**
+ * How far back to read filings. Big projects take two years or more to build,
+ * so a one-year window dropped buildings still going up (Rod saw them missing
+ * in San Antonio); finished ones fall out by status or end date.
+ */
+export const LOOKBACK_DAYS = 730;
+/** A project whose estimated end passed this long ago is most likely finished, just not closed out. */
+const FINISHED_DAYS = 120;
+
+/** How many TABS projects each metro's map shows: the biggest by cost. */
+export const PER_CITY = 120;
 /** Filings above this are typos (a $20 billion school), not projects. */
 const MAX_COST = 5e9;
 
@@ -215,12 +229,15 @@ const MAX_SCHOOL_COST = 4e8;
 const SCHOOL = /\bISD\b|independent school|elementary|middle school|high school/i;
 
 /** New buildings and additions still under way, without highway segments or typo costs. */
-export function currentDevelopments(rows: TabsRow[]): TabsRow[] {
+export function currentDevelopments(rows: TabsRow[], now = new Date()): TabsRow[] {
+  const finished = new Date(now.getTime() - FINISHED_DAYS * 86_400_000).toISOString().slice(0, 10);
   return rows.filter((r) => {
     const names = `${r.ProjectName} ${r.FacilityName ?? ''}`;
+    const end = isoDate(r.EstimatedEndDate);
     return (
       WORK[r.TypeOfWork] &&
       !DONE.has(r.ProjectStatus) &&
+      !(end && end < finished) &&
       r.EstimatedCost > 0 &&
       r.EstimatedCost < (SCHOOL.test(names) ? MAX_SCHOOL_COST : MAX_COST) &&
       // TxDOT files each highway segment by its control-section-job number.
@@ -389,9 +406,9 @@ export interface FetchDevelopmentsOptions extends FetchJsonOptions {
   log?: (line: string) => void;
 }
 
-/** Search one county, newest year, biggest first. */
+/** Search one county, last two years, biggest first. */
 export async function searchCounty(county: string, now: Date, options: FetchJsonOptions = {}): Promise<TabsRow[]> {
-  const since = new Date(now.getTime() - 365 * 86_400_000);
+  const since = new Date(now.getTime() - LOOKBACK_DAYS * 86_400_000);
   const data = await fetchJson<{ data?: TabsRow[] }>(TABS_SEARCH_URL, {
     timeoutMs: 120_000,
     ...options,
@@ -405,7 +422,7 @@ export async function searchCounty(county: string, now: Date, options: FetchJson
 export async function searchMetro(city: City, now: Date, options: FetchJsonOptions = {}): Promise<TabsRow[]> {
   const seen = new Map<string, TabsRow>();
   for (const county of METRO_COUNTIES[city] ?? []) {
-    for (const row of currentDevelopments(await searchCounty(county, now, options))) {
+    for (const row of currentDevelopments(await searchCounty(county, now, options), now)) {
       if (!seen.has(row.ProjectNumber)) seen.set(row.ProjectNumber, row);
     }
   }
@@ -492,6 +509,17 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       });
     }
     log(`${city} metro: ${rows.length} projects`);
+  }
+
+  // San Antonio publishes its building permits, which catch what TABS misses.
+  if (cities.includes('San Antonio')) {
+    try {
+      const permits = await fetchSanAntonioPermits(now, projects, http);
+      projects.push(...permits);
+      log(`San Antonio city permits: ${permits.length} more projects`);
+    } catch (error) {
+      log(`San Antonio city permits: not read (${error instanceof Error ? error.message : String(error)})`);
+    }
   }
 
   // Whatever the geocoder could not place goes at its ZIP code's center.

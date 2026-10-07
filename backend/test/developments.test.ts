@@ -109,6 +109,12 @@ describe('which filings count as current developments', () => {
     expect(currentDevelopments(rows).map((r) => r.ProjectNumber)).toEqual(['TABS2026021473', 'add']);
   });
 
+  it('drops projects whose estimated end is well past, even if never closed out', () => {
+    const now = new Date('2026-10-07T00:00:00Z');
+    const rows = [row({ ProjectNumber: 'late', EstimatedEndDate: '2026-02-01T00:00:00' }), row({ ProjectNumber: 'soon', EstimatedEndDate: '2026-08-01T00:00:00' }), row({ ProjectNumber: 'none', EstimatedEndDate: null })];
+    expect(currentDevelopments(rows, now).map((r) => r.ProjectNumber)).toEqual(['soon', 'none']);
+  });
+
   it('searches one county for the last year, biggest first', () => {
     const form = searchForm('Galveston', new Date('2025-10-05T00:00:00Z'), new Date('2026-10-05T00:00:00Z'));
     expect(form).toMatchObject({
