@@ -18,7 +18,8 @@ import type { City } from '../types.js';
  * Not covered: Houston has no zoning at all (its planning commission rules on
  * plats and variances instead). Fort Worth's Legistar stopped publishing in
  * June 2026 and its new agenda site sits behind a firewall that turns away
- * automated readers, and Lubbock's agenda system has no public feed.
+ * automated readers, Lubbock's agenda system has no public feed, and Grand
+ * Prairie's Legistar answers every agenda query with an error.
  */
 
 export interface ZoningCase {
@@ -301,7 +302,8 @@ export function primeGovCases(meeting: PrimeGovMeeting, html: string, url: strin
       place: PRIMEGOV.place,
       file,
       title,
-      kind: /^PA/i.test(file) ? 'Plan amendment' : zoningKind(title),
+      // A rezoning that cites its companion plan amendment is still a rezoning.
+      kind: /^PA/i.test(file) ? 'Plan amendment' : zoningKind(title.replace(/\(associated plan amendment[^)]*\)/gi, '')),
       uses: zoningUses(title),
       body: meeting.title.trim(),
       date: day(meeting.dateTime),

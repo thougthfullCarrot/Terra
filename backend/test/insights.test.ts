@@ -250,6 +250,12 @@ describe('zoning alerts', () => {
     expect(cases[1]!.title).not.toMatch(/email/);
   });
 
+  it('keeps a long last San Antonio item and calls a rezoning with a companion plan amendment a rezoning', () => {
+    const html = `<p>ZONING CASE Z-2026-10700079 (Council District 2): A request for a change in zoning from "C-2" to "MF-25" ${'located at 100 Main Street. '.repeat(40)} (Associated Plan Amendment PA-2026-11600049)</p>`;
+    const cases = primeGovCases({ id: 6, title: 'Zoning Commission Meeting', dateTime: '2026-10-06T13:00:00', documentList: [] }, html, 'https://example');
+    expect(cases.map((c) => [c.file, c.kind])).toEqual([['Z-2026-10700079', 'Rezoning']]);
+  });
+
   it('splits upcoming from recent for the page', () => {
     const base: Omit<ZoningCase, 'id' | 'date'> = { market: 'Dallas', place: 'Dallas', file: null, title: '', kind: 'Rezoning', uses: [], body: '', url: '' };
     const zoning: ZoningResult = { asOf: '', covered: [], failed: [], cases: [
