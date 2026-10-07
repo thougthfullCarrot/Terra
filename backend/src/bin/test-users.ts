@@ -1,5 +1,5 @@
 /**
- * Create, check or remove the website's fifty test accounts (src/testUsers/people.ts).
+ * Create, check or remove the website's hundred test accounts (src/testUsers/people.ts).
  *
  *   npm run test-users -- seed     # create or refresh them, then check
  *   npm run test-users -- check    # sign in as each and report what they see
@@ -230,7 +230,7 @@ interface PersonReport {
 /**
  * Sign in as a user the way the site's code form would, without sending the
  * email. Supabase limits token checks per IP (30 every 5 minutes on the free
- * plan), so fifty accounts in a row wait out the limit rather than fail.
+ * plan), so a hundred accounts in a row wait out the limit rather than fail.
  */
 async function signIn(env: Env, admin: SupabaseClient, email: string): Promise<SupabaseClient> {
   for (let attempt = 0; ; attempt++) {

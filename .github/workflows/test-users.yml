@@ -1,4 +1,4 @@
-# Creates, checks or removes the website's fifty test accounts
+# Creates, checks or removes the website's hundred test accounts
 # (backend/src/testUsers/people.ts) and reports what each one can see: access,
 # profile, files, alerts, tracker and best-match ordering. The check also opens
 # the real website as each account in headless Chromium and clicks through it
@@ -19,7 +19,7 @@ on:
         default: check
   # The branch that introduced the accounts seeds them when the script changes.
   push:
-    branches: [claude/project-thread-sq7qyk, claude/project-thread-n8y2vh]
+    branches: [claude/project-thread-sq7qyk, claude/project-thread-n8y2vh, claude/project-thread-gyxtws]
     paths: ['backend/src/bin/test-users.ts', 'backend/src/testUsers/**', 'backend/src/site/browserMatch.ts', 'site/**', '.github/workflows/test-users.yml']
 
 concurrency:
@@ -32,7 +32,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: backend

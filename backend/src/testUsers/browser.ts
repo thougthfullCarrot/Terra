@@ -139,29 +139,91 @@ export class SiteTester {
     return { context, page, errors };
   }
 
-  /** The signed-out page: sign-in form and the welcome section, no feed. */
+  /** The signed-out page, on a computer and a phone: the pitch deck, then the sign-in form and the welcome section, no feed. */
   async checkSignedOut(): Promise<BrowserResult[]> {
     const results: BrowserResult[] = [];
-    const check = (ok: boolean, label: string, detail?: string) => results.push({ ok, label, detail });
-    const { context, page, errors } = await this.open(null, false);
+    for (const mobile of [false, true]) results.push(...(await this.checkSignedOutOn(mobile)));
+    return results;
+  }
+
+  private async checkSignedOutOn(mobile: boolean): Promise<BrowserResult[]> {
+    const results: BrowserResult[] = [];
+    const tag = mobile ? 'phone: ' : '';
+    const check = (ok: boolean, label: string, detail?: string) => results.push({ ok, label: `${tag}signed out: ${label}`, detail });
+    const { context, page, errors } = await this.open(null, mobile);
     try {
       await page.goto(this.origin + '/');
+      await page.locator('#gate').waitFor({ state: 'attached', timeout: 20_000 });
+      await this.checkPitch(page, mobile, check);
       await page.locator('#gate').waitFor({ state: 'visible', timeout: 20_000 });
-      check(true, 'signed out: sign-in form shows');
-      check(await page.locator('#welcome').isVisible(), 'signed out: welcome section shows');
-      check(!(await page.locator('#feed').isVisible()), 'signed out: job list is hidden');
-      check((await page.locator('#list .card').count()) === 0, 'signed out: no job cards in the page');
+      check(true, 'sign-in form shows');
+      check(await page.locator('#welcome').isVisible(), 'welcome section shows');
+      check(!(await page.locator('#feed').isVisible()), 'job list is hidden');
+      check((await page.locator('#list .card').count()) === 0, 'no job cards in the page');
       await page.fill('#signin-email', 'not-an-email');
       await page.click('#signin-submit');
       const status = (await page.locator('#signin-status').textContent()) ?? '';
-      check(/Enter your email/.test(status), 'signed out: a bad email is caught before sending', status);
-      check(errors.length === 0, 'signed out: no script errors', errors.join(' | '));
+      check(/Enter your email/.test(status), 'a bad email is caught before sending', status);
+      await page.reload();
+      await page.locator('#gate').waitFor({ state: 'visible', timeout: 20_000 });
+      await page.waitForTimeout(500);
+      check(!(await page.locator('#pitch').isVisible()), 'the tour does not come back on a reload in the same visit');
+      await page.click('#pitch-open');
+      check(await page.locator('#pitch').isVisible(), '"Take the tour" reopens the tour');
+      await page.keyboard.press('Escape');
+      check(!(await page.locator('#pitch').isVisible()), 'Escape closes the tour');
+      check(errors.length === 0, 'no script errors', errors.join(' | '));
     } catch (error) {
-      check(false, 'signed out: page loads', String(error));
+      check(false, 'page loads', String(error).split('\n')[0]);
     } finally {
       await context.close();
     }
     return results;
+  }
+
+  /** The pitch deck a signed-out visitor sees first (site/pitch.js). */
+  private async checkPitch(page: Page, mobile: boolean, check: (ok: boolean, label: string, detail?: string) => void): Promise<void> {
+    const pitch = page.locator('#pitch');
+    try {
+      await pitch.waitFor({ state: 'visible', timeout: 20_000 });
+      check(true, 'the tour opens on arrival');
+    } catch {
+      check(false, 'the tour opens on arrival');
+      return;
+    }
+    const count = page.locator('#pitch-count');
+    const slides = await page.locator('#pitch .pitch-slide').count();
+    check(slides === 9, 'the tour has nine slides', `${slides}`);
+    check((await count.textContent()) === `1 / ${slides}`, 'the tour starts on slide 1', (await count.textContent()) ?? '');
+    const overflow = await page.evaluate<number>(
+      `Math.max(...[...document.querySelectorAll('#pitch .pitch-nav, #pitch .pitch-slide.current')].map((n) => n.scrollWidth - n.clientWidth))`
+    );
+    check(overflow <= 1, 'the tour fits the screen width', `${overflow}px too wide`);
+    await page.click('#pitch-next');
+    await page.keyboard.press('ArrowRight');
+    check((await count.textContent()) === `3 / ${slides}`, 'Next and the arrow key move forward', (await count.textContent()) ?? '');
+    await page.keyboard.press('ArrowLeft');
+    check((await count.textContent()) === `2 / ${slides}`, 'the left arrow moves back', (await count.textContent()) ?? '');
+    if (mobile) {
+      const box = await page.locator('#pitch-track').boundingBox();
+      if (box) {
+        const y = box.y + box.height / 2;
+        const cdp = await page.context().newCDPSession(page);
+        const touch = (type: string, x: number) =>
+          cdp.send('Input.dispatchTouchEvent', { type: type as 'touchStart', touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+        await touch('touchStart', box.x + box.width * 0.8);
+        for (const f of [0.65, 0.5, 0.35, 0.2]) await touch('touchMove', box.x + box.width * f);
+        await touch('touchEnd', 0);
+        await page.waitForTimeout(300);
+        check((await count.textContent()) === `3 / ${slides}`, 'swiping left moves forward', (await count.textContent()) ?? '');
+      }
+    }
+    await page.keyboard.press('End');
+    check(await page.locator('#pitch-start').isVisible(), 'the last slide has the sign-up button');
+    await page.click('#pitch-start');
+    check(!(await pitch.isVisible()), 'the sign-up button closes the tour');
+    const focused = await page.evaluate<string>('document.activeElement?.id ?? ""');
+    check(focused === 'signin-email', 'the sign-up button lands in the email box', focused);
   }
 
   async checkPerson(
@@ -189,6 +251,7 @@ export class SiteTester {
         return results;
       }
       check(await page.locator('#account-button').isVisible(), 'Profile button shows');
+      check(!(await page.locator('#pitch').isVisible()), 'the signed-out tour stays closed');
 
       if (member) {
         await this.checkFeed(page, person, expect, check);
