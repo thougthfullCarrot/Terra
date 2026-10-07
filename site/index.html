@@ -87,6 +87,7 @@
           </label>
           <button type="submit" class="primary" id="signin-submit">Email me a sign-in code</button>
         </form>
+        <button type="button" class="link tour-link" id="pitch-open">New here? Take the 1-minute tour</button>
         <form id="verify" class="signin" novalidate hidden>
           <label>
             <span class="eyebrow">6-DIGIT CODE</span>
@@ -598,6 +599,222 @@
         </p>
       </div>
     </dialog>
+
+    <!-- The pitch deck: a swipeable tour for signed-out visitors (pitch.js). Opens once per visit, or with ?tour. -->
+    <div id="pitch" class="pitch" role="dialog" aria-modal="true" aria-roledescription="carousel" aria-label="What Terra does" hidden>
+      <div class="pitch-frame">
+        <div class="pitch-top">
+          <span class="brand">
+            <span class="brand-mark" aria-hidden="true">T</span>
+            <span class="brand-name">Terra</span>
+          </span>
+          <p class="pitch-count" id="pitch-count" aria-live="polite"></p>
+          <button type="button" class="link pitch-skip" id="pitch-skip">Skip the tour</button>
+        </div>
+        <div class="pitch-bar" aria-hidden="true"><span id="pitch-progress"></span></div>
+
+        <div class="pitch-track" id="pitch-track">
+          <section class="pitch-slide cover" aria-roledescription="slide" aria-label="1 of 9: Terra">
+            <div class="pitch-copy">
+              <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
+              <h2>Break into Texas commercial real estate.</h2>
+              <p class="pitch-lede">
+                The internships and 0-2 year roles in one place, plus the market know-how to stand out in the interview.
+              </p>
+              <p class="pitch-live" id="pitch-live" hidden></p>
+            </div>
+            <div class="pitch-art" aria-hidden="true">
+              <svg class="skyline" viewBox="0 0 320 220">
+                <path class="sun" d="M232 70a34 34 0 1 1 0 .1z" />
+                <rect class="b1" x="20" y="120" width="40" height="90" rx="3" />
+                <rect class="b2" x="66" y="70" width="46" height="140" rx="3" />
+                <path class="b3" d="M118 210V48l24-22 24 22v162z" />
+                <rect class="b1" x="172" y="96" width="38" height="114" rx="3" />
+                <rect class="b2" x="216" y="130" width="50" height="80" rx="3" />
+                <rect class="b3" x="272" y="110" width="30" height="100" rx="3" />
+                <g class="win">
+                  <rect x="76" y="84" width="8" height="8" /><rect x="94" y="84" width="8" height="8" />
+                  <rect x="76" y="104" width="8" height="8" /><rect x="94" y="104" width="8" height="8" />
+                  <rect x="76" y="124" width="8" height="8" /><rect x="94" y="124" width="8" height="8" />
+                  <rect x="132" y="64" width="8" height="8" /><rect x="146" y="64" width="8" height="8" />
+                  <rect x="132" y="84" width="8" height="8" /><rect x="146" y="84" width="8" height="8" />
+                  <rect x="132" y="104" width="8" height="8" /><rect x="146" y="104" width="8" height="8" />
+                  <rect x="182" y="110" width="7" height="7" /><rect x="194" y="110" width="7" height="7" />
+                  <rect x="182" y="128" width="7" height="7" /><rect x="194" y="128" width="7" height="7" />
+                </g>
+                <path class="ground" d="M8 210h304" />
+              </svg>
+            </div>
+          </section>
+
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="2 of 9: The problem">
+            <div class="pitch-copy">
+              <p class="eyebrow">THE PROBLEM</p>
+              <h2>Entry-level CRE jobs are hard to find.</h2>
+              <ul class="pitch-points">
+                <li><strong>Scattered.</strong> Each firm posts on its own career board, from Greenhouse to Workday.</li>
+                <li><strong>Buried.</strong> Big job sites mix them in with roles asking for 5+ years.</li>
+                <li><strong>Unprepared.</strong> Students rarely know the market they are interviewing for.</li>
+              </ul>
+            </div>
+            <div class="pitch-art" aria-hidden="true">
+              <div class="funnel">
+                <span>Greenhouse</span><span>Workday</span><span>iCIMS</span><span>Lever</span><span>Ashby</span
+                ><span>SmartRecruiters</span><span>Adzuna</span>
+                <svg viewBox="0 0 24 24" class="funnel-arrow"><path d="M12 4v15M6 13l6 6 6-6" /></svg>
+                <b class="brand-mark">T</b>
+              </div>
+            </div>
+          </section>
+
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="3 of 9: Jobs">
+            <div class="pitch-copy">
+              <p class="eyebrow">JOBS</p>
+              <h2>Every role asks for 0-2 years.</h2>
+              <ul class="pitch-points">
+                <li>Read straight from firm career boards every two hours.</li>
+                <li>Eleven Texas markets, from Dallas and Houston to Lubbock and Midland.</li>
+                <li>Add your resume and your best matches rise to the top.</li>
+                <li>Apply buttons go straight to the firm.</li>
+              </ul>
+            </div>
+            <div class="pitch-art" aria-hidden="true">
+              <div class="mock-stack">
+                <div class="mock-job best">
+                  <span class="mock-badge">BEST MATCH · 94%</span>
+                  <b>Acquisitions Analyst Intern</b><small>Austin · Internship · $25/hr</small>
+                </div>
+                <div class="mock-job"><b>Leasing Associate</b><small>Dallas · Full time</small></div>
+                <div class="mock-job"><b>Property Management Coordinator</b><small>Houston · Full time</small></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="4 of 9: Alerts and tracker">
+            <div class="pitch-copy">
+              <p class="eyebrow">ALERTS + TRACKER</p>
+              <h2>Never miss a role, never lose track.</h2>
+              <ul class="pitch-points">
+                <li><strong>Daily alerts.</strong> Each morning, the new jobs that fit your resume and cities land in your inbox.</li>
+                <li><strong>Application tracker.</strong> Move jobs from Saved to Applied to Interviewing, keep notes, and get a nudge to follow up.</li>
+              </ul>
+            </div>
+            <div class="pitch-art" aria-hidden="true">
+              <div class="mock-mail"><b>3 new matches today</b><small>Analyst Intern · Leasing Associate · Asset Mgmt</small></div>
+              <div class="mock-board">
+                <div><h4>Saved</h4><i></i><i></i><i></i></div>
+                <div><h4>Applied</h4><i></i><i></i></div>
+                <div><h4>Interviewing</h4><i class="hot"></i></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="5 of 9: Market data">
+            <div class="pitch-copy">
+              <p class="eyebrow">MARKET DATA</p>
+              <h2>Walk into the interview knowing the market.</h2>
+              <ul class="pitch-points">
+                <li>Rents, vacancy, jobs and population for every city, from BLS and the Census.</li>
+                <li><strong>Salary check.</strong> What CRE employers actually pay, from public filings.</li>
+                <li><strong>Hiring vs. building.</strong> Firms posting jobs lined up against what they are building.</li>
+                <li>A deal calculator and city comparisons for practice.</li>
+              </ul>
+            </div>
+            <div class="pitch-art" aria-hidden="true">
+              <svg class="bars" viewBox="0 0 300 200">
+                <path class="axis" d="M30 170h260" />
+                <rect x="44" y="70" width="30" height="100" rx="3" /><rect x="90" y="50" width="30" height="120" rx="3" />
+                <rect x="136" y="90" width="30" height="80" rx="3" /><rect class="hi" x="182" y="30" width="30" height="140" rx="3" />
+                <rect x="228" y="100" width="30" height="70" rx="3" />
+                <text x="59" y="188">DAL</text><text x="105" y="188">HOU</text><text x="151" y="188">SAT</text>
+                <text x="197" y="188">AUS</text><text x="243" y="188">ELP</text>
+              </svg>
+              <div class="mock-pill">Example · Analyst I · Dallas · <b>$68k median</b></div>
+            </div>
+          </section>
+
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="6 of 9: Development">
+            <div class="pitch-copy">
+              <p class="eyebrow">DEVELOPMENT</p>
+              <h2>See what is getting built, and who is building it.</h2>
+              <ul class="pitch-points">
+                <li><strong>Development maps.</strong> Projects across Texas on a map, with the owner, architect and stage.</li>
+                <li><strong>Zoning alerts.</strong> Rezonings and special use permits pulled from city council agendas.</li>
+              </ul>
+            </div>
+            <div class="pitch-art" aria-hidden="true">
+              <div class="mock-map">
+                <span class="pin" style="left: 22%; top: 30%"></span><span class="pin" style="left: 48%; top: 52%"></span>
+                <span class="pin big" style="left: 66%; top: 26%"></span><span class="pin" style="left: 34%; top: 70%"></span>
+                <span class="pin" style="left: 78%; top: 62%"></span>
+                <p class="mock-tag">Rezoning · 14 acres · Mixed use</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="7 of 9: Property tools">
+            <div class="pitch-copy">
+              <p class="eyebrow">PROPERTY TOOLS</p>
+              <h2>Do the homework a first-year analyst does.</h2>
+              <p class="pitch-lede">Public records turned into five quick tools, so you can talk deals with confidence.</p>
+            </div>
+            <div class="pitch-art">
+              <ul class="tool-grid">
+                <li><b>Who owns this?</b><small>Look up a parcel and its owner.</small></li>
+                <li><b>Lease radar</b><small>Tenants building out new space.</small></li>
+                <li><b>Distress</b><small>Tax sales and delinquent accounts.</small></li>
+                <li><b>Drive time</b><small>Who lives within a 10, 20 or 30 minute drive.</small></li>
+                <li class="wide"><b>Deal of the week</b><small>One real Texas deal, broken down.</small></li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="8 of 9: News and events">
+            <div class="pitch-copy">
+              <p class="eyebrow">NEWS + EVENTS</p>
+              <h2>Stay in the conversation.</h2>
+              <ul class="pitch-points">
+                <li><strong>News.</strong> Commercial real estate headlines for your city, so you have something to talk about.</li>
+                <li><strong>Events.</strong> Networking events near you, where the people hiring actually are.</li>
+              </ul>
+            </div>
+            <div class="pitch-art" aria-hidden="true">
+              <ul class="mock-news">
+                <li><span>HOUSTON</span>Industrial park breaks ground on the east side</li>
+                <li><span>AUSTIN</span>Office tower lands a new anchor tenant</li>
+              </ul>
+              <div class="mock-events">
+                <p><b>OCT<br />16</b>Young professionals mixer · Dallas</p>
+                <p><b>OCT<br />23</b>Student CRE night · San Antonio</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="pitch-slide final" aria-roledescription="slide" aria-label="9 of 9: Get started">
+            <div class="pitch-copy">
+              <p class="eyebrow">PRICING</p>
+              <h2>Free for students.</h2>
+              <div class="pitch-plans">
+                <p><b>Students</b><span class="price">Free</span><small>Any college email ending in .edu. Everything included.</small></p>
+                <p id="pitch-paid" hidden><b>Everyone else</b><span class="price" id="pitch-price">Monthly</span><small>Same access with any email. Cancel anytime.</small></p>
+              </div>
+              <div class="pitch-ctas">
+                <button type="button" class="primary" id="pitch-start">Sign up free</button>
+                <button type="button" class="link" id="pitch-explore">Explore the site first</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="pitch-nav">
+          <button type="button" class="icon-button" id="pitch-prev" aria-label="Previous slide">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+          </button>
+          <div class="pitch-dots" id="pitch-dots" role="tablist" aria-label="Slides"></div>
+          <button type="button" class="primary pitch-next" id="pitch-next">Next</button>
+        </div>
+      </div>
+    </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </body>
