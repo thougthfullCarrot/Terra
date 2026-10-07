@@ -30,7 +30,7 @@ export interface EventSource {
   key: string;
   organizer: string;
   city: City;
-  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist';
+  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist' | 'sitemap';
   /** Site root, no trailing slash. */
   base: string;
   /** The listing page (default base + /events). */
@@ -41,6 +41,10 @@ export interface EventSource {
   exclude?: RegExp;
   /** Keep only titles matching RELEVANT (chamber hubs list ribbon cuttings, yoga, etc. next to networking events). */
   relevantOnly?: boolean;
+  /** sitemap: path prefix of event pages in the sitemap (page is the sitemap). */
+  sitemapPath?: string;
+  /** Place each event in the market its address names (a group meeting in more than one city); source.city otherwise. */
+  cityFromVenue?: boolean;
   /** localist: the search words (a university calendar lists every event on campus). */
   keyword?: string;
 }
@@ -69,12 +73,22 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'league-city-chamber', organizer: 'League City Chamber', city: 'Galveston', kind: 'growthzone', base: 'https://business.leaguecitychamber.com', relevantOnly: true },
   { key: 'lubbock-chamber', organizer: 'Lubbock Chamber', city: 'Lubbock', kind: 'growthzone', base: 'https://business.lubbockchamber.com', relevantOnly: true },
   { key: 'midland-chamber', organizer: 'Midland Chamber', city: 'Midland', kind: 'growthzone', base: 'https://business.midlandtxchamber.com', relevantOnly: true },
+  // Young professionals and women in CRE: YCRAN (San Antonio and Austin, Wix) and CREW chapters (Next.js pages with
+  // startDate microdata); event pages come from each site's sitemap.
+  { key: 'ycran', organizer: 'YCRAN', city: 'San Antonio', kind: 'sitemap', base: 'https://www.ycran.org', page: 'https://www.ycran.org/event-pages-sitemap.xml', sitemapPath: '/event-details/', cityFromVenue: true },
+  ...['Houston', 'Dallas', 'Austin', 'San Antonio', 'Fort Worth'].map((city) => crew(city as City)),
   // University calendars (Localist's public API), searched for real estate: student CRE clubs, career and industry talks.
   { key: 'unt', organizer: 'UNT', city: 'Dallas', kind: 'localist', base: 'https://calendar.unt.edu', keyword: 'real estate' },
   { key: 'utd', organizer: 'UT Dallas', city: 'Dallas', kind: 'localist', base: 'https://calendar.utdallas.edu', keyword: 'real estate' },
   { key: 'uta', organizer: 'UT Arlington', city: 'Fort Worth', kind: 'localist', base: 'https://events.uta.edu', keyword: 'real estate' },
   { key: 'ut-austin', organizer: 'UT Austin', city: 'Austin', kind: 'localist', base: 'https://calendar.utexas.edu', keyword: 'real estate' }
 ];
+
+/** A CREW Network chapter site: <city>.crewnetwork.org. */
+function crew(city: City): EventSource {
+  const slug = city.toLowerCase().replace(/\s+/g, '-');
+  return { key: `crew-${slug}`, organizer: `CREW ${city}`, city, kind: 'sitemap', base: `https://${slug}.crewnetwork.org`, page: `https://${slug}.crewnetwork.org/sitemap.xml`, sitemapPath: '/events/' };
+}
 
 /** The source label of events typed into the Google Sheet. */
 export const MANUAL_SOURCE = 'Added by hand';
@@ -418,6 +432,50 @@ export function icalLink(html: string, page: string): string | null {
   }
 }
 
+// ---- Sitemaps ----
+
+/**
+ * Event page urls from a sitemap, newest first: pages under a year folder (/events/2026/...) from this year on, else
+ * pages modified in the last 200 days (a Wix sitemap keeps every past event).
+ */
+export function sitemapEventUrls(xml: string, base: string, path: string, now: Date, limit = 30): string[] {
+  const year = now.getUTCFullYear();
+  const cutoff = now.getTime() - 200 * 86_400_000;
+  const out: Array<{ url: string; mod: number }> = [];
+  for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>(?:\s*<lastmod>\s*([^<\s]+)\s*<\/lastmod>)?/gi)) {
+    let url: URL;
+    try {
+      url = new URL(/^https?:/i.test(m[1]!) ? decodeXml(m[1]!) : `https://${decodeXml(m[1]!)}`);
+    } catch {
+      continue;
+    }
+    if (url.origin !== new URL(base).origin || !url.pathname.startsWith(path)) continue;
+    const yearDir = /\/((?:19|20)\d{2})\//.exec(url.pathname.slice(path.length - 1))?.[1];
+    const mod = m[2] ? Date.parse(m[2]) : NaN;
+    if (yearDir ? Number(yearDir) < year : !(mod >= cutoff)) continue;
+    out.push({ url: url.href, mod: Number.isFinite(mod) ? mod : 0 });
+  }
+  return out.sort((a, b) => b.mod - a.mod).slice(0, limit).map((e) => e.url);
+}
+
+/** Title, start and venue from schema.org microdata (CREW: <time itemProp="startDate" dateTime="...">). */
+export function parseMicrodataEvent(html: string): { title: string; start: string; venue: string | null } | null {
+  const dt = /itemprop="startDate"[^>]*datetime="([^"]+)"/i.exec(html)?.[1] ?? /datetime="([^"]+)"[^>]*itemprop="startDate"/i.exec(html)?.[1];
+  const start = dt ? normalizeDate(dt.replace(/\.\d+(?=[+-]\d{2}:?\d{2}$|Z$)/, '')) : null;
+  const title = decodeText(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i.exec(html)?.[1] ?? /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1] ?? '');
+  if (!start || !title) return null;
+  // The meta row after the date: time, then the venue name.
+  const items = [...html.matchAll(/class="event--meta-item"[^>]*>([\s\S]*?)<\/span>(?=<span|<\/div)/gi)].map((m) => decodeText(m[1] ?? ''));
+  const venue = items.find((t) => t && !/\d{1,2}:\d{2}|\bTBD\b|^\w{3} \d{1,2}, \d{4}$/i.test(t)) ?? null;
+  return { title, start, venue };
+}
+
+/** The market an address names, if any (longest names first, so "Fort Worth" wins over a street named Worth). */
+export function cityIn(text: string): City | null {
+  for (const city of [...CITIES].sort((a, b) => b.length - a.length)) if (new RegExp(`\\b${city}\\b`, 'i').test(text)) return city;
+  return null;
+}
+
 /** Housekeeping entries ("BOMA CLOSED - Labor Day", office-closure holidays), not real events. */
 export function isClosure(title: string): boolean {
   return /^\s*(?:[\w&.' ]+\s+)?closed(?:\s*[\u2013\u2014:]|\s*-(?!\w))/i.test(title) || /\boffices?\s+(?:will\s+be\s+)?closed\b/i.test(title);
@@ -493,6 +551,32 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
     const events = parseLocalist((await fetcher.json(localistUrl(source))) as { events?: Array<{ event?: LocalistEvent }> }, source);
     log(`${source.organizer}: ${events.length} events matching "${source.keyword ?? 'real estate'}".`);
     return events;
+  }
+
+  if (source.kind === 'sitemap') {
+    const urls = sitemapEventUrls(await fetcher.text(source.page ?? `${source.base}/sitemap.xml`), source.base, source.sitemapPath ?? '/events/', now);
+    log(`${source.organizer}: reading ${urls.length} event pages from the sitemap.`);
+    const out: TerraEvent[] = [];
+    for (const url of urls) {
+      try {
+        const html = await fetcher.text(url);
+        const ld = parseJsonLdEvents(html, source, url)[0];
+        const md = ld ? null : parseMicrodataEvent(html);
+        const e: TerraEvent | null = ld
+          ? { ...ld, url, id: `${source.key}-${url}` }
+          : md
+            ? { id: `${source.key}-${url}`, url, end: null, city: source.city, organizer: source.organizer, cost: null, ...md }
+            : null;
+        if (!e) continue;
+        // YCRAN's JSON-LD names the address ("10127 Morocco St, San Antonio, TX"), the venue only its place name.
+        const ldText = [...html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1] ?? '').find((t) => /"Event"/.test(t)) ?? '';
+        const where = source.cityFromVenue ? cityIn(`${e.venue ?? ''} ${/"address"\s*:\s*"([^"]+)"/.exec(ldText)?.[1] ?? ''} ${e.title}`) : null;
+        out.push(where ? { ...e, city: where } : e);
+      } catch (error) {
+        log(`${url}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return out;
   }
 
   if (source.kind === 'pages') {
@@ -633,7 +717,7 @@ export async function buildEventsFile(
   for (const source of sources) {
     // Matched by organizer and city, so one organizer can list events in several markets.
     const before = previous?.sources.find((s) => s.organizer === source.organizer && s.city === source.city);
-    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && e.city === source.city && e.source !== MANUAL_SOURCE);
+    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && (source.cityFromVenue || e.city === source.city) && e.source !== MANUAL_SOURCE);
     try {
       const events = upcoming(await fetchSource(source, now, fetcher, log), now);
       log(`${source.organizer}: ${events.length} upcoming events.`);

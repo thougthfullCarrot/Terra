@@ -14,7 +14,10 @@ import {
   dedupe,
   sameEvent,
   slugTitle,
+  cityIn,
   icalLink,
+  parseMicrodataEvent,
+  sitemapEventUrls,
   parseLocalist,
   tribeUrl,
   upcoming,
@@ -381,5 +384,40 @@ describe('auto-filled sources for every market', () => {
     const file = await buildEventsFile(now, null, { sources: [source], fetcher, log: () => {}, manual });
     const events = file.cities.find((c) => c.city === 'San Antonio')!.events;
     expect(events.map((e) => [e.url, e.source])).toEqual([['https://example.org/breakfast', 'Added by hand']]);
+  });
+});
+
+describe('YCRAN and CREW (sitemap sources)', () => {
+  const ycran = EVENT_SOURCES.find((s) => s.key === 'ycran')!;
+  const crewHouston = EVENT_SOURCES.find((s) => s.key === 'crew-houston')!;
+
+  it('picks this year\'s event pages, or recently changed ones when urls carry no year', () => {
+    const crewXml = '<urlset><url><loc>houston.crewnetwork.org/events/2026/coffee-with-crew</loc><lastmod>2026-10-07T23:14:30.568Z</lastmod></url><url><loc>houston.crewnetwork.org/events/2025/holiday-party</loc></url><url><loc>houston.crewnetwork.org/about</loc></url></urlset>';
+    expect(sitemapEventUrls(crewXml, 'https://houston.crewnetwork.org', '/events/', now)).toEqual(['https://houston.crewnetwork.org/events/2026/coffee-with-crew']);
+    const wixXml = '<urlset><url><loc>https://www.ycran.org/event-details/a-night-at-camp</loc><lastmod>2024-07-17</lastmod></url><url><loc>https://www.ycran.org/event-details/anatomy-of-a-deal-1</loc><lastmod>2026-09-11</lastmod></url><url><loc>https://www.ycran.org/event-details/austin-mixer</loc><lastmod>2026-10-01</lastmod></url></urlset>';
+    expect(sitemapEventUrls(wixXml, 'https://www.ycran.org', '/event-details/', now)).toEqual(['https://www.ycran.org/event-details/austin-mixer', 'https://www.ycran.org/event-details/anatomy-of-a-deal-1']);
+  });
+
+  it('reads CREW event pages from their startDate microdata', () => {
+    const html = '<title>Coffee CREW Houston</title><meta property="og:title" content="The Business of Relationships " data-next-head=""/><h1 class="mb-3">The Business of Relationships</h1><div class="event--meta mb-3"><span class="event--meta-item"><time itemProp="startDate" dateTime="2026-10-22T16:00:00.000-05:00">Oct 22, 2026</time></span><span class="sr-only">from</span><span class="event--meta-item">4:00 PM<!-- --> <span class="sr-only">to</span> - <!-- -->6:00 PM<!-- --> <!-- -->CDT</span><span class="event--meta-item">Camden Property Trust</span><span>2800 Post Oak Boulevard</span></div>';
+    expect(parseMicrodataEvent(html)).toEqual({ title: 'The Business of Relationships', start: '2026-10-22T16:00:00-05:00', venue: 'Camden Property Trust' });
+    expect(parseMicrodataEvent('<h1>No date</h1>')).toBeNull();
+  });
+
+  it('places YCRAN events in the market their address names', async () => {
+    const ld = (name: string, address: string, start: string) => `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'Event', name, startDate: start, location: { '@type': 'Place', name: 'Venue', address } })}</script>`;
+    const files: Record<string, string> = {
+      'https://www.ycran.org/event-pages-sitemap.xml': '<urlset><url><loc>https://www.ycran.org/event-details/austin-mixer</loc><lastmod>2026-10-01</lastmod></url><url><loc>https://www.ycran.org/event-details/anatomy</loc><lastmod>2026-09-30</lastmod></url></urlset>',
+      'https://www.ycran.org/event-details/austin-mixer': ld('Austin Mixer', '1017 Springdale Rd, Austin, TX 78702, USA', '2026-10-15T17:30:00-05:00'),
+      'https://www.ycran.org/event-details/anatomy': ld('Anatomy of A Deal', '10127 Morocco St #195, San Antonio, TX 78216, USA', '2026-10-16T16:00:00-05:00')
+    };
+    const fetcher: Fetcher = { json: async () => ({}), text: async (url) => files[url] ?? Promise.reject(new Error('404')) };
+    const events = await fetchSource(ycran, now, fetcher, () => {});
+    expect(events.map((e) => [e.title, e.city, e.url])).toEqual([
+      ['Austin Mixer', 'Austin', 'https://www.ycran.org/event-details/austin-mixer'],
+      ['Anatomy of A Deal', 'San Antonio', 'https://www.ycran.org/event-details/anatomy']
+    ]);
+    expect(cityIn('Camp 1604, Fort Worth Ave')).toBe('Fort Worth');
+    expect(crewHouston.page).toBe('https://houston.crewnetwork.org/sitemap.xml');
   });
 });
