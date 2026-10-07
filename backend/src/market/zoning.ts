@@ -285,11 +285,16 @@ export function primeGovCases(meeting: PrimeGovMeeting, html: string, url: strin
   const text = stripHtml(html);
   const out = new Map<string, ZoningCase>();
   // Headings are upper case; "Zoning Case Z-…" in mixed case is a plan amendment pointing at its companion case.
-  const pattern = /((?:ZONING|PLAN AMENDMENT)\s+CASE\s+(?:NUMBER\s+|#\s*)?((?:Z|PA)-?\d{4}-?\d+(?:\s*\([A-Z ]+\))?))([\s\S]{0,700}?)(?=(?:ZONING|PLAN AMENDMENT)\s+CASE|\n\s*\n\s*\d+\.|$)/g;
-  for (const match of text.matchAll(pattern)) {
+  const heading = /((?:ZONING|PLAN AMENDMENT)\s+CASE\s+(?:NUMBER\s+|#\s*)?((?:Z|PA)-?\d{4}-?\d+(?:\s*\([A-Z ]+\))?))/g;
+  const matches = [...text.matchAll(heading)];
+  for (const [i, match] of matches.entries()) {
     const file = match[2]!.replace(/\s+/g, ' ').trim();
     if (out.has(file)) continue;
-    const title = tidy(`${match[1]} ${match[3]}`);
+    // The item runs to the next case heading or the next numbered item, whichever comes first.
+    const start = match.index! + match[0].length;
+    const end = Math.min(matches[i + 1]?.index ?? text.length, start + 700);
+    const rest = text.slice(start, end).split(/\n\s*\n\s*\d+\./)[0]!;
+    const title = tidy(`${match[1]} ${rest}`);
     out.set(file, {
       id: `primegov:sanantonio:${meeting.id}:${file}`,
       market: PRIMEGOV.market,
