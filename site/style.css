@@ -3679,7 +3679,7 @@ body.pitch-open {
   border: 2px solid var(--accent);
 }
 
-.bars {
+svg.bars {
   width: 100%;
   height: auto;
   max-height: 260px;
@@ -3690,20 +3690,20 @@ body.pitch-open {
   stroke: none;
 }
 
-.bars rect {
+svg.bars rect {
   fill: var(--accent-tint);
 }
 
-.bars rect.hi {
+svg.bars rect.hi {
   fill: var(--accent);
 }
 
-.bars .axis {
+svg.bars .axis {
   stroke: var(--hairline);
   stroke-width: 2;
 }
 
-.bars text {
+svg.bars text {
   font-family: var(--mono);
   font-size: 11px;
   text-anchor: middle;
