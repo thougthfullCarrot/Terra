@@ -320,7 +320,7 @@ describe('event fixes', () => {
 
 describe('auto-filled San Antonio sources', () => {
   const ccim = EVENT_SOURCES.find((s) => s.key === 'ccim-sa')!;
-  const eventbrite = EVENT_SOURCES.find((s) => s.key === 'eventbrite-sa-cre')!;
+  const eventbrite = EVENT_SOURCES.find((s) => s.key === 'eventbrite-san-antonio-cre')!;
   const sa = (title: string, start: string, url: string, source?: string): TerraEvent => ({ id: url, title, url, start, end: null, city: 'San Antonio', organizer: 'x', venue: null, cost: null, ...(source ? { source } : {}) });
 
   it('reads StarChapter meetings from their vCalendar files', async () => {
@@ -328,7 +328,8 @@ describe('auto-filled San Antonio sources', () => {
     expect(starChapterIds(home)).toEqual(['94', '93']);
     const vcs = (title: string, start: string) => ['BEGIN:VCALENDAR', 'VERSION:1.0', 'BEGIN:VEVENT', `SUMMARY:${title}`, `DTSTART:${start}`, 'LOCATION:Security Service Event Center', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
     const files: Record<string, string> = {
-      'https://ccimsa.com/': home,
+      'https://ccimsa.starchapter.com/meetinginfo.php': '<p>No upcoming meetings.</p>',
+      'https://ccimsa.starchapter.com/': home,
       'https://ccimsa.starchapter.com/vcs/meeting94.vcs': vcs('CCIM CI-102 Course', '20261012T133000Z'),
       'https://ccimsa.starchapter.com/vcs/meeting93.vcs': vcs('San Antonio/ South Texas CCIM Symposium', '20261021T164500Z')
     };
@@ -354,6 +355,16 @@ describe('auto-filled San Antonio sources', () => {
     const fetcher: Fetcher = { json: async () => ({}), text: async () => page };
     const events = await fetchSource(eventbrite, now, fetcher, () => {});
     expect(events.map((e) => e.title)).toEqual(['CRE Networking Happy Hour', 'Commercial Real Estate Breakfast']);
+  });
+
+  it('searches Eventbrite in every market, each limited to its own area', () => {
+    const searched = EVENT_SOURCES.filter((s) => s.organizer === 'Eventbrite');
+    expect(new Set(searched.map((s) => s.city)).size).toBe(11);
+    const fw = searched.find((s) => s.key === 'eventbrite-fort-worth-cre')!;
+    expect(fw.page).toBe('https://www.eventbrite.com/d/tx--fort-worth/commercial-real-estate/');
+    expect(fw.near!.test('Arlington, TX')).toBe(true);
+    expect(fw.near!.test('Houston, TX')).toBe(false);
+    expect(new Set(EVENT_SOURCES.map((s) => s.key)).size).toBe(EVENT_SOURCES.length);
   });
 
   it('treats the same event from two listings as one, keeping the first', () => {

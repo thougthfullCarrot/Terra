@@ -53,8 +53,46 @@ export const RELEVANT =
 export const SEMINAR =
   /wealth|passive income|financial freedom|flip|wholesal|masterclass|bootcamp|boot camp|seminar|webinar|workshop|course|class\b|crypto|tax lien|no money|beginner|mentorship|millionaire|get rich|creative financing|airbnb|short[- ]term rental|online|virtual|zoom/i;
 
-/** Places in the San Antonio area, for open event sites. */
-export const SA_AREA = /san antonio|boerne|new braunfels|schertz|converse|helotes|live oak|universal city|selma|seguin|cibolo|leon valley|alamo heights/i;
+/** Each market's city and its suburbs, matched against an open site's event location (they list nearby cities and online events too). */
+export const CITY_AREAS: Record<City, RegExp> = {
+  Dallas: /dallas|plano|frisco|irving|richardson|addison|garland|mckinney|allen|carrollton|las colinas|grapevine|coppell|lewisville|the colony|rockwall|mesquite/i,
+  'Fort Worth': /fort worth|arlington|grapevine|southlake|keller|north richland hills|hurst|euless|bedford|colleyville|mansfield|burleson|weatherford|haltom/i,
+  Houston: /houston|katy|sugar land|the woodlands|spring\b|pearland|cypress|humble|kingwood|pasadena|bellaire|missouri city|stafford|tomball|conroe/i,
+  Austin: /austin|round rock|cedar park|georgetown|pflugerville|leander|lakeway|bee cave|kyle|buda|san marcos|dripping springs/i,
+  'San Antonio': /san antonio|boerne|schertz|converse|helotes|live oak|universal city|selma|cibolo|leon valley|alamo heights/i,
+  'El Paso': /el paso|horizon city|socorro|santa teresa|sunland park/i,
+  'New Braunfels': /new braunfels|seguin|canyon lake|garden ridge|schertz|cibolo|san marcos/i,
+  'College Station': /college station|bryan\b/i,
+  Galveston: /galveston|league city|texas city|kemah|friendswood|webster|clear lake|dickinson/i,
+  Lubbock: /lubbock|wolfforth/i,
+  Midland: /midland|odessa/i
+};
+
+/** Two Eventbrite searches for a market (schema.org JSON-LD on the results page; robots.txt allows /d/): only
+ * networking and real estate titles held in the market, minus the get-rich seminars that crowd these results. */
+export function eventbrite(city: City): EventSource[] {
+  const slug = `tx--${city.toLowerCase().replace(/\s+/g, '-')}`;
+  const key = city.toLowerCase().replace(/\s+/g, '-');
+  return [
+    ['cre', 'commercial-real-estate'],
+    ['network', 'real-estate-networking']
+  ].map(([k, q]) => ({
+    key: `eventbrite-${key}-${k}`,
+    organizer: 'Eventbrite',
+    city,
+    kind: 'jsonld' as const,
+    base: 'https://www.eventbrite.com',
+    page: `https://www.eventbrite.com/d/${slug}/${q}/`,
+    relevantOnly: true,
+    exclude: SEMINAR,
+    near: CITY_AREAS[city]
+  }));
+}
+
+/** A StarChapter chapter site at <sub>.starchapter.com. */
+export function starChapter(key: string, organizer: string, city: City, sub: string): EventSource[] {
+  return [{ key, organizer, city, kind: 'starchapter', base: `https://${sub}.starchapter.com` }];
+}
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
@@ -64,13 +102,20 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'trec-dallas', organizer: 'The Real Estate Council', city: 'Dallas', kind: 'jsonld', base: 'https://recouncil.com', page: 'https://recouncil.com/calendar/', exclude: /committee|advisory board|board meeting|check-in call|consulting services meeting|core committee/i },
   { key: 'nawic-sa', organizer: 'NAWIC San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://www.nawicsatx.org', page: 'https://www.nawicsatx.org/events', detailPath: '/events-1/' },
   { key: 'aia-sa', organizer: 'AIA San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://aiasa.org', page: 'https://aiasa.org/events/', detailPath: '/events/' },
-  // StarChapter sites: event ids from the home page, each with a vCalendar file.
-  { key: 'ccim-sa', organizer: 'CCIM San Antonio', city: 'San Antonio', kind: 'starchapter', base: 'https://ccimsa.starchapter.com', page: 'https://ccimsa.com/' },
-  { key: 'smps-sa', organizer: 'SMPS San Antonio', city: 'San Antonio', kind: 'starchapter', base: 'https://sanantoniosmps.starchapter.com' },
-  // Eventbrite city search (schema.org JSON-LD on the results page; robots.txt allows /d/). Only
-  // networking and real estate titles, minus the get-rich seminars that crowd these results.
-  { key: 'eventbrite-sa-cre', organizer: 'Eventbrite', city: 'San Antonio', kind: 'jsonld', base: 'https://www.eventbrite.com', page: 'https://www.eventbrite.com/d/tx--san-antonio/commercial-real-estate/', relevantOnly: true, exclude: SEMINAR, near: SA_AREA },
-  { key: 'eventbrite-sa-network', organizer: 'Eventbrite', city: 'San Antonio', kind: 'jsonld', base: 'https://www.eventbrite.com', page: 'https://www.eventbrite.com/d/tx--san-antonio/real-estate-networking/', relevantOnly: true, exclude: SEMINAR, near: SA_AREA },
+  // StarChapter sites (CCIM, SMPS, IREM, IFMA chapters): meeting ids from the upcoming list, each with a vCalendar file.
+  ...starChapter('ccim-sa', 'CCIM San Antonio', 'San Antonio', 'ccimsa'),
+  ...starChapter('smps-sa', 'SMPS San Antonio', 'San Antonio', 'sanantoniosmps'),
+  ...starChapter('ccim-ntx', 'North Texas CCIM', 'Dallas', 'ntccim'),
+  ...starChapter('smps-ntx', 'SMPS North Texas', 'Dallas', 'smpsntx'),
+  ...starChapter('irem-dallas', 'IREM Dallas', 'Dallas', 'iremdallas'),
+  ...starChapter('smps-houston', 'SMPS Houston', 'Houston', 'smpshouston'),
+  ...starChapter('irem-houston', 'IREM Houston', 'Houston', 'iremhouston'),
+  ...starChapter('ifma-houston', 'IFMA Houston', 'Houston', 'ifmahouston'),
+  ...starChapter('ccim-ctx', 'CCIM Central Texas', 'Austin', 'ccimtexas'),
+  ...starChapter('smps-austin', 'SMPS Austin', 'Austin', 'smpsaustin'),
+  ...starChapter('ccim-elpaso', 'El Paso CCIM', 'El Paso', 'elpasoccim'),
+  // Eventbrite city searches for every market (see eventbrite()).
+  ...CITIES.flatMap((city) => eventbrite(city)),
   // Chamber calendars (GrowthZone): only networking, real estate and economic events (see RELEVANT).
   { key: 'metro-sa', organizer: 'Metro SA Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://members.metrosa.com', page: 'https://members.metrosa.com/events/calendar', relevantOnly: true },
   { key: 'sotx-partnership', organizer: 'South Texas Business Partnership', city: 'San Antonio', kind: 'growthzone', base: 'https://business.southtexaspartnership.org', relevantOnly: true },
@@ -455,7 +500,10 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
   }
 
   if (source.kind === 'starchapter') {
-    const ids = starChapterIds(await fetcher.text(source.page ?? `${source.base}/`)).slice(0, 20);
+    // The upcoming meetings list; the home page's list when that one is empty.
+    let ids = starChapterIds(await fetcher.text(source.page ?? `${source.base}/meetinginfo.php`));
+    if (!ids.length) ids = starChapterIds(await fetcher.text(`${source.base}/`));
+    ids = ids.slice(0, 20);
     log(`${source.organizer}: reading ${ids.length} meetings.`);
     const out: TerraEvent[] = [];
     for (const id of ids) {
@@ -603,8 +651,9 @@ export async function buildEventsFile(
   const all: TerraEvent[] = [];
   const meta: EventsFile['sources'] = [];
   for (const source of sources) {
-    const before = previous?.sources.find((s) => s.organizer === source.organizer);
-    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && e.source !== MANUAL_SOURCE);
+    // Matched by organizer and city: Eventbrite is one organizer across every market.
+    const before = previous?.sources.find((s) => s.organizer === source.organizer && s.city === source.city);
+    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && e.city === source.city && e.source !== MANUAL_SOURCE);
     try {
       const events = upcoming(await fetchSource(source, now, fetcher, log), now);
       log(`${source.organizer}: ${events.length} upcoming events.`);
