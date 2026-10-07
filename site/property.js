@@ -285,8 +285,13 @@ export function readStatewide(a) {
   const acquired = nul(a.DATE_ACQ);
   return {
     account: nul(a.PROP_ID),
-    address: nul(a.SITUS_ADDR).replace(/\s+,/g, ',').replace(/(\d{5})-?\d{4}$/, '$1'),
-    owner: [nul(a.OWNER_NAME), nul(a.NAME_CARE)].filter(Boolean).join(' '),
+    address: nul(a.SITUS_ADDR)
+      .replace(/\s+,/g, ',')
+      .replace(/,(\s*,)+/g, ',')
+      .replace(/\s*0{5,}$/, '')
+      .replace(/,\s*TX$/, '')
+      .replace(/(\d{5})-?\d{4}$/, '$1'),
+    owner: [...new Set([nul(a.OWNER_NAME), nul(a.NAME_CARE)].filter(Boolean))].join(' '),
     mail: nul(a.MAIL_ADDR).replace(/(,\s*)+/g, ', ').replace(/(\d{5})-?\d{4}$/, '$1'),
     mailLine: nul(a.MAIL_LINE1),
     value: num(nul(a.MKT_VALUE)),

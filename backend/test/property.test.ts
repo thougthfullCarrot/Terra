@@ -303,3 +303,12 @@ describe('statewide owner lookup', () => {
     expect(readGeocode([{ lat: '35', lon: '-90', address: { state: 'Tennessee' } }])).toBeNull();
   });
 });
+
+describe('statewide record cleanup', () => {
+  it('drops a blank city, a zero ZIP and a repeated owner name', async () => {
+    const { readStatewide } = await import('../../site/property.js');
+    const p = readStatewide({ SITUS_ADDR: '500 W TEXAS AV,, TX 000000', OWNER_NAME: 'TALL CITY TOWERS LLC', NAME_CARE: 'TALL CITY TOWERS LLC', COUNTY: 'MIDLAND' });
+    expect(p.address).toBe('500 W TEXAS AV');
+    expect(p.owner).toBe('TALL CITY TOWERS LLC');
+  });
+});
