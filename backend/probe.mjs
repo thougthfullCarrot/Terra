@@ -9,7 +9,11 @@ async function check(url) {
   } catch (e) { return 'ERR ' + e.message; }
 }
 for (const c of counties) {
-  const body = await (await fetch(`https://taxsales.lgbs.com/api/property_sales/?county=${encodeURIComponent(c)}&limit=40&offset=0`, { headers: ua })).json();
+  let body = {};
+  for (let i = 0; i < 3; i++) {
+    try { body = await (await fetch(`https://taxsales.lgbs.com/api/property_sales/?county=${encodeURIComponent(c)}&limit=40&offset=0`, { headers: ua })).json(); break; }
+    catch (e) { console.log('api error', c, e.cause?.code ?? e.message); await new Promise((r) => setTimeout(r, 3000)); }
+  }
   const rows = body.results ?? [];
   console.log(`\n== ${c}: ${rows.length}`);
   if (rows[0]) console.log(JSON.stringify(Object.fromEntries(Object.entries(rows[0]).filter(([k]) => k !== 'geometry'))).slice(0, 1500));

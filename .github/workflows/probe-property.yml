@@ -9,5 +9,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: node probe.mjs
+      - run: node probe.mjs || true
         working-directory: backend
+      - run: curl -sS -o /dev/null -w "curl api %{http_code} %{ssl_verify_result}\n" "https://taxsales.lgbs.com/api/property_sales/?county=DALLAS%20COUNTY&limit=1" || true
