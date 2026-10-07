@@ -14,7 +14,8 @@ import {
   dedupe,
   sameEvent,
   slugTitle,
-  starChapterIds,
+  icalLink,
+  parseLocalist,
   tribeUrl,
   upcoming,
   type EventsFile,
@@ -189,7 +190,9 @@ describe('buildEventsFile', () => {
         throw new Error('HTTP 503');
       }
     };
-    const file = await buildEventsFile(now, previous, { fetcher, log: () => {} });
+    // University calendars answer JSON too; this fake only speaks The Events Calendar's.
+    const sources = EVENT_SOURCES.filter((s) => s.kind !== 'localist');
+    const file = await buildEventsFile(now, previous, { sources, fetcher, log: () => {} });
     expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels', 'College Station', 'Galveston', 'Lubbock', 'Midland']);
     expect(file.cities.find((c) => c.city === 'Houston')!.events).toHaveLength(2);
     expect(file.cities.find((c) => c.city === 'Dallas')!.events.map((e) => e.start)).toEqual(['2026-10-20T16:00:00Z']);
@@ -318,53 +321,46 @@ describe('event fixes', () => {
   });
 });
 
-describe('auto-filled San Antonio sources', () => {
-  const ccim = EVENT_SOURCES.find((s) => s.key === 'ccim-sa')!;
-  const eventbrite = EVENT_SOURCES.find((s) => s.key === 'eventbrite-san-antonio-cre')!;
+describe('auto-filled sources for every market', () => {
+  const unt = EVENT_SOURCES.find((s) => s.key === 'unt')!;
+  const aia = EVENT_SOURCES.find((s) => s.key === 'aia-sa')!;
+  const trec = EVENT_SOURCES.find((s) => s.key === 'trec-dallas')!;
   const sa = (title: string, start: string, url: string, source?: string): TerraEvent => ({ id: url, title, url, start, end: null, city: 'San Antonio', organizer: 'x', venue: null, cost: null, ...(source ? { source } : {}) });
 
-  it('reads StarChapter meetings from their vCalendar files', async () => {
-    const home = '<a href="https://ccimsa.com/meetinginfo.php?id=94&ts=1790355837">CI-102</a> <a href="meetinginfo.php?id=93&ts=1">Symposium</a> <a href="meetinginfo.php?id=93">again</a>';
-    expect(starChapterIds(home)).toEqual(['94', '93']);
-    const vcs = (title: string, start: string) => ['BEGIN:VCALENDAR', 'VERSION:1.0', 'BEGIN:VEVENT', `SUMMARY:${title}`, `DTSTART:${start}`, 'LOCATION:Security Service Event Center', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  it('lists a calendar for every market', () => {
+    const cities = new Set(EVENT_SOURCES.map((s) => s.city));
+    expect(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels', 'College Station', 'Galveston', 'Lubbock', 'Midland'].filter((c) => !cities.has(c as TerraEvent['city']))).toEqual([]);
+    expect(new Set(EVENT_SOURCES.map((s) => s.key)).size).toBe(EVENT_SOURCES.length);
+  });
+
+  it('reads university events from the Localist API', async () => {
+    const body = {
+      events: [
+        { event: { id: 5412, title: 'Tonti Properties x North Texas Real Estate Collective', localist_url: 'https://calendar.unt.edu/event/tonti-properties', location_name: 'University Union', ticket_cost: '', event_instances: [{ event_instance: { start: '2026-10-14T17:30:00-05:00', end: '2026-10-14T19:00:00-05:00' } }] } },
+        { event: { id: 5413, title: 'No date', localist_url: 'https://calendar.unt.edu/event/x', event_instances: [] } }
+      ]
+    };
+    let asked = '';
+    const fetcher: Fetcher = { json: async (url) => ((asked = url), body), text: async () => '' };
+    const events = await fetchSource(unt, now, fetcher, () => {});
+    expect(asked).toBe('https://calendar.unt.edu/api/2/events?days=120&pp=100&keyword=real+estate');
+    expect(events).toEqual([
+      { id: 'unt-5412', title: 'Tonti Properties x North Texas Real Estate Collective', url: 'https://calendar.unt.edu/event/tonti-properties', start: '2026-10-14T17:30:00-05:00', end: '2026-10-14T19:00:00-05:00', city: 'Dallas', organizer: 'UNT', venue: 'University Union', cost: null }
+    ]);
+    expect(parseLocalist(null, unt)).toEqual([]);
+  });
+
+  it("falls back to an event page's own iCal export", async () => {
+    const page = '<script type="application/ld+json">{"@type":"Event","name":"Bad\nJSON"}</script><a class="mec" href="https://aiasa.org/?method=ical&#038;id=63704">+ iCal / Outlook export</a>';
+    expect(icalLink(page, 'https://aiasa.org/events/x/')).toBe('https://aiasa.org/?method=ical&id=63704');
     const files: Record<string, string> = {
-      'https://ccimsa.starchapter.com/meetinginfo.php': '<p>No upcoming meetings.</p>',
-      'https://ccimsa.starchapter.com/': home,
-      'https://ccimsa.starchapter.com/vcs/meeting94.vcs': vcs('CCIM CI-102 Course', '20261012T133000Z'),
-      'https://ccimsa.starchapter.com/vcs/meeting93.vcs': vcs('San Antonio/ South Texas CCIM Symposium', '20261021T164500Z')
+      'https://aiasa.org/events/': '<a href="/events/aia-centro-joint-luncheon/">Luncheon</a>',
+      'https://aiasa.org/events/aia-centro-joint-luncheon/': page,
+      'https://aiasa.org/?method=ical&id=63704': ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:AIA Centro Joint Luncheon', 'DTSTART:20261020T160000Z', 'LOCATION:Centre Club', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n')
     };
     const fetcher: Fetcher = { json: async () => ({}), text: async (url) => files[url] ?? Promise.reject(new Error('404')) };
-    const events = await fetchSource(ccim, now, fetcher, () => {});
-    expect(events.map((e) => [e.id, e.title, e.start, e.url])).toEqual([
-      ['ccim-sa-94', 'CCIM CI-102 Course', '2026-10-12T13:30:00Z', 'https://ccimsa.starchapter.com/meetinginfo.php?id=94'],
-      ['ccim-sa-93', 'San Antonio/ South Texas CCIM Symposium', '2026-10-21T16:45:00Z', 'https://ccimsa.starchapter.com/meetinginfo.php?id=93']
-    ]);
-  });
-
-  it('keeps local networking events from an Eventbrite search, not seminars or other cities', async () => {
-    const item = (name: string, locality: string, url: string) => ({ '@type': 'ListItem', item: { '@type': 'Event', name, url, startDate: '2026-10-15T17:30:00-05:00', location: { '@type': 'Place', name: 'Venue', address: { addressLocality: locality } } } });
-    const page = `<script type="application/ld+json">${JSON.stringify({
-      '@type': 'ItemList',
-      itemListElement: [
-        item('CRE Networking Happy Hour', 'San Antonio', 'https://www.eventbrite.com/e/cre-happy-hour-1'),
-        item('Real Estate Investing Wealth Seminar: Networking', 'San Antonio', 'https://www.eventbrite.com/e/wealth-2'),
-        item('Commercial Real Estate Mixer', 'Austin', 'https://www.eventbrite.com/e/austin-3'),
-        item('Commercial Real Estate Breakfast', 'Boerne', 'https://www.eventbrite.com/e/boerne-4')
-      ]
-    })}</script>`;
-    const fetcher: Fetcher = { json: async () => ({}), text: async () => page };
-    const events = await fetchSource(eventbrite, now, fetcher, () => {});
-    expect(events.map((e) => e.title)).toEqual(['CRE Networking Happy Hour', 'Commercial Real Estate Breakfast']);
-  });
-
-  it('searches Eventbrite in every market, each limited to its own area', () => {
-    const searched = EVENT_SOURCES.filter((s) => s.organizer === 'Eventbrite');
-    expect(new Set(searched.map((s) => s.city)).size).toBe(11);
-    const fw = searched.find((s) => s.key === 'eventbrite-fort-worth-cre')!;
-    expect(fw.page).toBe('https://www.eventbrite.com/d/tx--fort-worth/commercial-real-estate/');
-    expect(fw.near!.test('Arlington, TX')).toBe(true);
-    expect(fw.near!.test('Houston, TX')).toBe(false);
-    expect(new Set(EVENT_SOURCES.map((s) => s.key)).size).toBe(EVENT_SOURCES.length);
+    const events = await fetchSource(aia, now, fetcher, () => {});
+    expect(events.map((e) => [e.title, e.start, e.url, e.venue])).toEqual([['AIA Centro Joint Luncheon', '2026-10-20T16:00:00Z', 'https://aiasa.org/events/aia-centro-joint-luncheon/', 'Centre Club']]);
   });
 
   it('treats the same event from two listings as one, keeping the first', () => {
@@ -378,10 +374,11 @@ describe('auto-filled San Antonio sources', () => {
   });
 
   it('keeps the hand-entered copy when a calendar lists the same event', async () => {
-    const page = `<script type="application/ld+json">${JSON.stringify({ '@type': 'Event', name: 'CRE Networking Breakfast', url: 'https://www.eventbrite.com/e/x-9', startDate: '2026-10-15T07:30:00-05:00', location: { name: 'Pearl', address: 'San Antonio, TX' } })}</script>`;
+    const page = `<script type="application/ld+json">${JSON.stringify({ '@type': 'ItemList', itemListElement: [{ '@type': 'ListItem', item: { '@type': 'Event', name: 'CRE Networking Breakfast', url: 'https://calendar.example.org/e/9', startDate: '2026-10-15T07:30:00-05:00', location: { name: 'Pearl' } } }] })}</script>`;
+    const source = { ...trec, key: 'cal', organizer: 'Calendar', city: 'San Antonio' as const, exclude: undefined };
     const fetcher: Fetcher = { json: async () => ({}), text: async () => page };
     const manual = [sa('CRE Networking Breakfast', '2026-10-15T07:30:00-05:00', 'https://example.org/breakfast')];
-    const file = await buildEventsFile(now, null, { sources: [eventbrite], fetcher, log: () => {}, manual });
+    const file = await buildEventsFile(now, null, { sources: [source], fetcher, log: () => {}, manual });
     const events = file.cities.find((c) => c.city === 'San Antonio')!.events;
     expect(events.map((e) => [e.url, e.source])).toEqual([['https://example.org/breakfast', 'Added by hand']]);
   });

@@ -30,7 +30,7 @@ export interface EventSource {
   key: string;
   organizer: string;
   city: City;
-  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'starchapter';
+  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist';
   /** Site root, no trailing slash. */
   base: string;
   /** The listing page (default base + /events). */
@@ -41,58 +41,13 @@ export interface EventSource {
   exclude?: RegExp;
   /** Keep only titles matching RELEVANT (chamber hubs list ribbon cuttings, yoga, etc. next to networking events). */
   relevantOnly?: boolean;
-  /** jsonld: keep only events whose location mentions one of these places (open sites list nearby cities and online events). */
-  near?: RegExp;
+  /** localist: the search words (a university calendar lists every event on campus). */
+  keyword?: string;
 }
 
 /** Business networking and real estate words; used for sources with relevantOnly. */
 export const RELEVANT =
   /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership/i;
-
-/** Investing seminars and courses that real estate searches on open event sites turn up. */
-export const SEMINAR =
-  /wealth|passive income|financial freedom|flip|wholesal|masterclass|bootcamp|boot camp|seminar|webinar|workshop|course|class\b|crypto|tax lien|no money|beginner|mentorship|millionaire|get rich|creative financing|airbnb|short[- ]term rental|online|virtual|zoom/i;
-
-/** Each market's city and its suburbs, matched against an open site's event location (they list nearby cities and online events too). */
-export const CITY_AREAS: Record<City, RegExp> = {
-  Dallas: /dallas|plano|frisco|irving|richardson|addison|garland|mckinney|allen|carrollton|las colinas|grapevine|coppell|lewisville|the colony|rockwall|mesquite/i,
-  'Fort Worth': /fort worth|arlington|grapevine|southlake|keller|north richland hills|hurst|euless|bedford|colleyville|mansfield|burleson|weatherford|haltom/i,
-  Houston: /houston|katy|sugar land|the woodlands|spring\b|pearland|cypress|humble|kingwood|pasadena|bellaire|missouri city|stafford|tomball|conroe/i,
-  Austin: /austin|round rock|cedar park|georgetown|pflugerville|leander|lakeway|bee cave|kyle|buda|san marcos|dripping springs/i,
-  'San Antonio': /san antonio|boerne|schertz|converse|helotes|live oak|universal city|selma|cibolo|leon valley|alamo heights/i,
-  'El Paso': /el paso|horizon city|socorro|santa teresa|sunland park/i,
-  'New Braunfels': /new braunfels|seguin|canyon lake|garden ridge|schertz|cibolo|san marcos/i,
-  'College Station': /college station|bryan\b/i,
-  Galveston: /galveston|league city|texas city|kemah|friendswood|webster|clear lake|dickinson/i,
-  Lubbock: /lubbock|wolfforth/i,
-  Midland: /midland|odessa/i
-};
-
-/** Two Eventbrite searches for a market (schema.org JSON-LD on the results page; robots.txt allows /d/): only
- * networking and real estate titles held in the market, minus the get-rich seminars that crowd these results. */
-export function eventbrite(city: City): EventSource[] {
-  const slug = `tx--${city.toLowerCase().replace(/\s+/g, '-')}`;
-  const key = city.toLowerCase().replace(/\s+/g, '-');
-  return [
-    ['cre', 'commercial-real-estate'],
-    ['network', 'real-estate-networking']
-  ].map(([k, q]) => ({
-    key: `eventbrite-${key}-${k}`,
-    organizer: 'Eventbrite',
-    city,
-    kind: 'jsonld' as const,
-    base: 'https://www.eventbrite.com',
-    page: `https://www.eventbrite.com/d/${slug}/${q}/`,
-    relevantOnly: true,
-    exclude: SEMINAR,
-    near: CITY_AREAS[city]
-  }));
-}
-
-/** A StarChapter chapter site at <sub>.starchapter.com. */
-export function starChapter(key: string, organizer: string, city: City, sub: string): EventSource[] {
-  return [{ key, organizer, city, kind: 'starchapter', base: `https://${sub}.starchapter.com` }];
-}
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
@@ -102,26 +57,23 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'trec-dallas', organizer: 'The Real Estate Council', city: 'Dallas', kind: 'jsonld', base: 'https://recouncil.com', page: 'https://recouncil.com/calendar/', exclude: /committee|advisory board|board meeting|check-in call|consulting services meeting|core committee/i },
   { key: 'nawic-sa', organizer: 'NAWIC San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://www.nawicsatx.org', page: 'https://www.nawicsatx.org/events', detailPath: '/events-1/' },
   { key: 'aia-sa', organizer: 'AIA San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://aiasa.org', page: 'https://aiasa.org/events/', detailPath: '/events/' },
-  // StarChapter sites (CCIM, SMPS, IREM, IFMA chapters): meeting ids from the upcoming list, each with a vCalendar file.
-  ...starChapter('ccim-sa', 'CCIM San Antonio', 'San Antonio', 'ccimsa'),
-  ...starChapter('smps-sa', 'SMPS San Antonio', 'San Antonio', 'sanantoniosmps'),
-  ...starChapter('ccim-ntx', 'North Texas CCIM', 'Dallas', 'ntccim'),
-  ...starChapter('smps-ntx', 'SMPS North Texas', 'Dallas', 'smpsntx'),
-  ...starChapter('irem-dallas', 'IREM Dallas', 'Dallas', 'iremdallas'),
-  ...starChapter('smps-houston', 'SMPS Houston', 'Houston', 'smpshouston'),
-  ...starChapter('irem-houston', 'IREM Houston', 'Houston', 'iremhouston'),
-  ...starChapter('ifma-houston', 'IFMA Houston', 'Houston', 'ifmahouston'),
-  ...starChapter('ccim-ctx', 'CCIM Central Texas', 'Austin', 'ccimtexas'),
-  ...starChapter('smps-austin', 'SMPS Austin', 'Austin', 'smpsaustin'),
-  ...starChapter('ccim-elpaso', 'El Paso CCIM', 'El Paso', 'elpasoccim'),
-  // Eventbrite city searches for every market (see eventbrite()).
-  ...CITIES.flatMap((city) => eventbrite(city)),
   // Chamber calendars (GrowthZone): only networking, real estate and economic events (see RELEVANT).
   { key: 'metro-sa', organizer: 'Metro SA Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://members.metrosa.com', page: 'https://members.metrosa.com/events/calendar', relevantOnly: true },
   { key: 'sotx-partnership', organizer: 'South Texas Business Partnership', city: 'San Antonio', kind: 'growthzone', base: 'https://business.southtexaspartnership.org', relevantOnly: true },
   { key: 'boerne-chamber', organizer: 'Boerne Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://business.boerne.org', page: 'https://business.boerne.org/events/calendar', relevantOnly: true },
   { key: 'nb-chamber', organizer: 'New Braunfels Chamber', city: 'New Braunfels', kind: 'growthzone', base: 'https://newbraunfelschamber.growthzoneapp.com', relevantOnly: true },
-  { key: 'elpaso-chamber', organizer: 'El Paso Chamber', city: 'El Paso', kind: 'growthzone', base: 'https://members.elpaso.org', relevantOnly: true }
+  { key: 'elpaso-chamber', organizer: 'El Paso Chamber', city: 'El Paso', kind: 'growthzone', base: 'https://members.elpaso.org', relevantOnly: true },
+  { key: 'fw-chamber', organizer: 'Fort Worth Chamber', city: 'Fort Worth', kind: 'growthzone', base: 'https://business.fortworthchamber.com', relevantOnly: true },
+  { key: 'woodlands-chamber', organizer: 'The Woodlands Area Chamber', city: 'Houston', kind: 'growthzone', base: 'https://business.woodlandschamber.org', relevantOnly: true },
+  { key: 'bcs-chamber', organizer: 'Bryan-College Station Chamber', city: 'College Station', kind: 'growthzone', base: 'https://business.bcschamber.org', relevantOnly: true },
+  { key: 'league-city-chamber', organizer: 'League City Chamber', city: 'Galveston', kind: 'growthzone', base: 'https://business.leaguecitychamber.com', relevantOnly: true },
+  { key: 'lubbock-chamber', organizer: 'Lubbock Chamber', city: 'Lubbock', kind: 'growthzone', base: 'https://business.lubbockchamber.com', relevantOnly: true },
+  { key: 'midland-chamber', organizer: 'Midland Chamber', city: 'Midland', kind: 'growthzone', base: 'https://business.midlandtxchamber.com', relevantOnly: true },
+  // University calendars (Localist's public API), searched for real estate: student CRE clubs, career and industry talks.
+  { key: 'unt', organizer: 'UNT', city: 'Dallas', kind: 'localist', base: 'https://calendar.unt.edu', keyword: 'real estate' },
+  { key: 'utd', organizer: 'UT Dallas', city: 'Dallas', kind: 'localist', base: 'https://calendar.utdallas.edu', keyword: 'real estate' },
+  { key: 'uta', organizer: 'UT Arlington', city: 'Fort Worth', kind: 'localist', base: 'https://events.uta.edu', keyword: 'real estate' },
+  { key: 'ut-austin', organizer: 'UT Austin', city: 'Austin', kind: 'localist', base: 'https://calendar.utexas.edu', keyword: 'real estate' }
 ];
 
 /** The source label of events typed into the Google Sheet. */
@@ -329,7 +281,7 @@ function ldNodes(data: unknown): LdEvent[] {
   if (Array.isArray(data)) return data.flatMap(ldNodes);
   if (!data || typeof data !== 'object') return [];
   const n = data as LdEvent;
-  // Search pages (Eventbrite) wrap their events in an ItemList of ListItems.
+  // Search and listing pages can wrap their events in an ItemList of ListItems.
   return [n, ...(n['@graph'] ? ldNodes(n['@graph']) : []), ...(n.itemListElement ? ldNodes(n.itemListElement) : []), ...(n.item ? ldNodes(n.item) : [])];
 }
 
@@ -357,7 +309,6 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
       }
       if (!title || !start || !url) continue;
       const loc = Array.isArray(n.location) ? n.location[0] : n.location;
-      if (source.near && !source.near.test(JSON.stringify(loc ?? ''))) continue;
       const venue = typeof loc === 'string' ? loc : loc?.name;
       out.push({
         id: `${source.key}-${url}`,
@@ -417,15 +368,54 @@ export function detailLinks(html: string, page: string, detailPath: string): str
   return [...out];
 }
 
-// ---- StarChapter ----
+// ---- Localist (university calendars) ----
 
-/** Meeting ids linked from a StarChapter page (meetinginfo.php?id=93&ts=...), in page order. */
-export function starChapterIds(html: string): string[] {
-  return [...new Set([...html.matchAll(/meetinginfo\.php\?id=(\d+)/gi)].map((m) => m[1]!))];
+export function localistUrl(source: EventSource): string {
+  return `${source.base}/api/2/events?${new URLSearchParams({ days: String(WINDOW_DAYS), pp: '100', keyword: source.keyword ?? 'real estate' })}`;
 }
 
-export function starChapterUrls(base: string, id: string): { vcs: string; page: string } {
-  return { vcs: `${base}/vcs/meeting${id}.vcs`, page: `${base}/meetinginfo.php?id=${id}` };
+interface LocalistEvent {
+  id?: number;
+  title?: string;
+  localist_url?: string;
+  location_name?: string;
+  ticket_cost?: string;
+  event_instances?: Array<{ event_instance?: { start?: string; end?: string | null } }>;
+}
+
+/** One event per listing, at its first instance (the API returns instances from today on). */
+export function parseLocalist(body: { events?: Array<{ event?: LocalistEvent }> } | null, source: EventSource): TerraEvent[] {
+  const out: TerraEvent[] = [];
+  for (const { event: e } of body?.events ?? []) {
+    const url = httpUrl(e?.localist_url);
+    const title = decodeText(e?.title ?? '');
+    const at = e?.event_instances?.[0]?.event_instance;
+    const start = at?.start ? normalizeDate(at.start) : null;
+    if (!e || !url || !title || !start) continue;
+    out.push({
+      id: `${source.key}-${e.id ?? url}`,
+      title,
+      url,
+      start,
+      end: at?.end ? normalizeDate(at.end) : null,
+      city: source.city,
+      organizer: source.organizer,
+      venue: decodeText(e.location_name ?? '') || null,
+      cost: decodeText(e.ticket_cost ?? '') || null
+    });
+  }
+  return out;
+}
+
+/** A page's own iCal export link (Modern Events Calendar: ?method=ical&id=123). */
+export function icalLink(html: string, page: string): string | null {
+  const href = /href="([^"]*[?&](?:amp;|#038;)?method=ical(?:&|&amp;|&#038;)id=\d+)"/i.exec(html)?.[1];
+  if (!href) return null;
+  try {
+    return new URL(decodeXml(href.replace(/&#038;/g, '&')), page).href;
+  } catch {
+    return null;
+  }
 }
 
 /** Housekeeping entries ("BOMA CLOSED - Labor Day", office-closure holidays), not real events. */
@@ -499,23 +489,10 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
     return events;
   }
 
-  if (source.kind === 'starchapter') {
-    // The upcoming meetings list; the home page's list when that one is empty.
-    let ids = starChapterIds(await fetcher.text(source.page ?? `${source.base}/meetinginfo.php`));
-    if (!ids.length) ids = starChapterIds(await fetcher.text(`${source.base}/`));
-    ids = ids.slice(0, 20);
-    log(`${source.organizer}: reading ${ids.length} meetings.`);
-    const out: TerraEvent[] = [];
-    for (const id of ids) {
-      const { vcs, page } = starChapterUrls(source.base, id);
-      try {
-        // One event per file; the id is the meeting, so a re-read keeps the same key.
-        for (const e of parseIcs(await fetcher.text(vcs), source, page)) out.push({ ...e, id: `${source.key}-${id}`, url: page });
-      } catch (error) {
-        log(`${vcs}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    return out;
+  if (source.kind === 'localist') {
+    const events = parseLocalist((await fetcher.json(localistUrl(source))) as { events?: Array<{ event?: LocalistEvent }> }, source);
+    log(`${source.organizer}: ${events.length} events matching "${source.keyword ?? 'real estate'}".`);
+    return events;
   }
 
   if (source.kind === 'pages') {
@@ -528,8 +505,11 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
         const html = await fetcher.text(link);
         const ld = parseJsonLdEvents(html, source, link)[0];
         const novi = ld ? null : parseNoviDetail(html);
+        const ical = ld || novi ? null : icalLink(html, link);
         if (ld) out.push({ ...ld, url: link, id: `${source.key}-${link}` });
         else if (novi) out.push({ id: `${source.key}-${link}`, url: link, end: null, city: source.city, organizer: source.organizer, venue: null, cost: null, ...novi });
+        // No readable JSON-LD (AIA San Antonio's has raw line breaks): the page's own iCal export.
+        else if (ical) for (const e of parseIcs(await fetcher.text(ical), source, link).slice(0, 1)) out.push({ ...e, url: link, id: `${source.key}-${link}` });
       } catch (error) {
         log(`${link}: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -651,7 +631,7 @@ export async function buildEventsFile(
   const all: TerraEvent[] = [];
   const meta: EventsFile['sources'] = [];
   for (const source of sources) {
-    // Matched by organizer and city: Eventbrite is one organizer across every market.
+    // Matched by organizer and city, so one organizer can list events in several markets.
     const before = previous?.sources.find((s) => s.organizer === source.organizer && s.city === source.city);
     const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && e.city === source.city && e.source !== MANUAL_SOURCE);
     try {
