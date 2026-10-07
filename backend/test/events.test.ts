@@ -11,7 +11,10 @@ import {
   parseGrowthZoneDetail,
   parseIcs,
   parseTribe,
+  dedupe,
+  sameEvent,
   slugTitle,
+  starChapterIds,
   tribeUrl,
   upcoming,
   type EventsFile,
@@ -312,5 +315,63 @@ describe('event fixes', () => {
     const events = await fetchSource(boma, now, fetcher, () => {});
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ title: 'Foundation Gala', start: '2026-10-24T18:00:00-05:00' });
+  });
+});
+
+describe('auto-filled San Antonio sources', () => {
+  const ccim = EVENT_SOURCES.find((s) => s.key === 'ccim-sa')!;
+  const eventbrite = EVENT_SOURCES.find((s) => s.key === 'eventbrite-sa-cre')!;
+  const sa = (title: string, start: string, url: string, source?: string): TerraEvent => ({ id: url, title, url, start, end: null, city: 'San Antonio', organizer: 'x', venue: null, cost: null, ...(source ? { source } : {}) });
+
+  it('reads StarChapter meetings from their vCalendar files', async () => {
+    const home = '<a href="https://ccimsa.com/meetinginfo.php?id=94&ts=1790355837">CI-102</a> <a href="meetinginfo.php?id=93&ts=1">Symposium</a> <a href="meetinginfo.php?id=93">again</a>';
+    expect(starChapterIds(home)).toEqual(['94', '93']);
+    const vcs = (title: string, start: string) => ['BEGIN:VCALENDAR', 'VERSION:1.0', 'BEGIN:VEVENT', `SUMMARY:${title}`, `DTSTART:${start}`, 'LOCATION:Security Service Event Center', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const files: Record<string, string> = {
+      'https://ccimsa.com/': home,
+      'https://ccimsa.starchapter.com/vcs/meeting94.vcs': vcs('CCIM CI-102 Course', '20261012T133000Z'),
+      'https://ccimsa.starchapter.com/vcs/meeting93.vcs': vcs('San Antonio/ South Texas CCIM Symposium', '20261021T164500Z')
+    };
+    const fetcher: Fetcher = { json: async () => ({}), text: async (url) => files[url] ?? Promise.reject(new Error('404')) };
+    const events = await fetchSource(ccim, now, fetcher, () => {});
+    expect(events.map((e) => [e.id, e.title, e.start, e.url])).toEqual([
+      ['ccim-sa-94', 'CCIM CI-102 Course', '2026-10-12T13:30:00Z', 'https://ccimsa.starchapter.com/meetinginfo.php?id=94'],
+      ['ccim-sa-93', 'San Antonio/ South Texas CCIM Symposium', '2026-10-21T16:45:00Z', 'https://ccimsa.starchapter.com/meetinginfo.php?id=93']
+    ]);
+  });
+
+  it('keeps local networking events from an Eventbrite search, not seminars or other cities', async () => {
+    const item = (name: string, locality: string, url: string) => ({ '@type': 'ListItem', item: { '@type': 'Event', name, url, startDate: '2026-10-15T17:30:00-05:00', location: { '@type': 'Place', name: 'Venue', address: { addressLocality: locality } } } });
+    const page = `<script type="application/ld+json">${JSON.stringify({
+      '@type': 'ItemList',
+      itemListElement: [
+        item('CRE Networking Happy Hour', 'San Antonio', 'https://www.eventbrite.com/e/cre-happy-hour-1'),
+        item('Real Estate Investing Wealth Seminar: Networking', 'San Antonio', 'https://www.eventbrite.com/e/wealth-2'),
+        item('Commercial Real Estate Mixer', 'Austin', 'https://www.eventbrite.com/e/austin-3'),
+        item('Commercial Real Estate Breakfast', 'Boerne', 'https://www.eventbrite.com/e/boerne-4')
+      ]
+    })}</script>`;
+    const fetcher: Fetcher = { json: async () => ({}), text: async () => page };
+    const events = await fetchSource(eventbrite, now, fetcher, () => {});
+    expect(events.map((e) => e.title)).toEqual(['CRE Networking Happy Hour', 'Commercial Real Estate Breakfast']);
+  });
+
+  it('treats the same event from two listings as one, keeping the first', () => {
+    const hand = sa('Tech Breakfast Club', '2026-10-01T08:00:00-05:00', 'https://members.metrosa.com/events/details/a-1', 'Added by hand');
+    const feed = sa('2026 Tech Breakfast Club - Oct', '2026-10-01T08:00:00-05:00', 'https://members.metrosa.com/events/Details/b-2');
+    expect(sameEvent(hand, feed)).toBe(true);
+    expect(sameEvent(hand, { ...feed, start: '2026-10-02T08:00:00-05:00' })).toBe(false);
+    expect(sameEvent(sa('October General Meeting', '2026-10-07', 'u1'), sa('October Board Meeting', '2026-10-07', 'u2'))).toBe(false);
+    expect(sameEvent(sa('CCIM Symposium', '2026-10-21', 'u1'), sa('San Antonio/ South Texas CCIM Symposium', '2026-10-21', 'u2'))).toBe(true);
+    expect(dedupe([hand, feed]).map((e) => e.source)).toEqual(['Added by hand']);
+  });
+
+  it('keeps the hand-entered copy when a calendar lists the same event', async () => {
+    const page = `<script type="application/ld+json">${JSON.stringify({ '@type': 'Event', name: 'CRE Networking Breakfast', url: 'https://www.eventbrite.com/e/x-9', startDate: '2026-10-15T07:30:00-05:00', location: { name: 'Pearl', address: 'San Antonio, TX' } })}</script>`;
+    const fetcher: Fetcher = { json: async () => ({}), text: async () => page };
+    const manual = [sa('CRE Networking Breakfast', '2026-10-15T07:30:00-05:00', 'https://example.org/breakfast')];
+    const file = await buildEventsFile(now, null, { sources: [eventbrite], fetcher, log: () => {}, manual });
+    const events = file.cities.find((c) => c.city === 'San Antonio')!.events;
+    expect(events.map((e) => [e.url, e.source])).toEqual([['https://example.org/breakfast', 'Added by hand']]);
   });
 });

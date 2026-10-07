@@ -7,7 +7,8 @@ import { CITIES, type City } from '../types.js';
  * chapter calendars that publish machine-readable listings and whose
  * robots.txt allows it. Only title, date, venue, cost and link are kept; each
  * event opens on the organizer's site. Sites that refuse automated requests
- * (ULI and IREM chapters answer 403) are left out on purpose.
+ * (ULI and IREM chapters answer 403) are left out on purpose, and a source that
+ * starts refusing is skipped for that run (its earlier events are kept).
  */
 
 export interface TerraEvent {
@@ -29,7 +30,7 @@ export interface EventSource {
   key: string;
   organizer: string;
   city: City;
-  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages';
+  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'starchapter';
   /** Site root, no trailing slash. */
   base: string;
   /** The listing page (default base + /events). */
@@ -40,11 +41,20 @@ export interface EventSource {
   exclude?: RegExp;
   /** Keep only titles matching RELEVANT (chamber hubs list ribbon cuttings, yoga, etc. next to networking events). */
   relevantOnly?: boolean;
+  /** jsonld: keep only events whose location mentions one of these places (open sites list nearby cities and online events). */
+  near?: RegExp;
 }
 
 /** Business networking and real estate words; used for sources with relevantOnly. */
 export const RELEVANT =
   /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership/i;
+
+/** Investing seminars and courses that real estate searches on open event sites turn up. */
+export const SEMINAR =
+  /wealth|passive income|financial freedom|flip|wholesal|masterclass|bootcamp|boot camp|seminar|webinar|workshop|course|class\b|crypto|tax lien|no money|beginner|mentorship|millionaire|get rich|creative financing|airbnb|short[- ]term rental|online|virtual|zoom/i;
+
+/** Places in the San Antonio area, for open event sites. */
+export const SA_AREA = /san antonio|boerne|new braunfels|schertz|converse|helotes|live oak|universal city|selma|seguin|cibolo|leon valley|alamo heights/i;
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
@@ -53,6 +63,14 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'boma-houston', organizer: 'Houston BOMA', city: 'Houston', kind: 'pages', base: 'https://www.houstonboma.org', page: 'https://www.houstonboma.org/events/', detailPath: '/events/' },
   { key: 'trec-dallas', organizer: 'The Real Estate Council', city: 'Dallas', kind: 'jsonld', base: 'https://recouncil.com', page: 'https://recouncil.com/calendar/', exclude: /committee|advisory board|board meeting|check-in call|consulting services meeting|core committee/i },
   { key: 'nawic-sa', organizer: 'NAWIC San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://www.nawicsatx.org', page: 'https://www.nawicsatx.org/events', detailPath: '/events-1/' },
+  { key: 'aia-sa', organizer: 'AIA San Antonio', city: 'San Antonio', kind: 'pages', base: 'https://aiasa.org', page: 'https://aiasa.org/events/', detailPath: '/events/' },
+  // StarChapter sites: event ids from the home page, each with a vCalendar file.
+  { key: 'ccim-sa', organizer: 'CCIM San Antonio', city: 'San Antonio', kind: 'starchapter', base: 'https://ccimsa.starchapter.com', page: 'https://ccimsa.com/' },
+  { key: 'smps-sa', organizer: 'SMPS San Antonio', city: 'San Antonio', kind: 'starchapter', base: 'https://sanantoniosmps.starchapter.com' },
+  // Eventbrite city search (schema.org JSON-LD on the results page; robots.txt allows /d/). Only
+  // networking and real estate titles, minus the get-rich seminars that crowd these results.
+  { key: 'eventbrite-sa-cre', organizer: 'Eventbrite', city: 'San Antonio', kind: 'jsonld', base: 'https://www.eventbrite.com', page: 'https://www.eventbrite.com/d/tx--san-antonio/commercial-real-estate/', relevantOnly: true, exclude: SEMINAR, near: SA_AREA },
+  { key: 'eventbrite-sa-network', organizer: 'Eventbrite', city: 'San Antonio', kind: 'jsonld', base: 'https://www.eventbrite.com', page: 'https://www.eventbrite.com/d/tx--san-antonio/real-estate-networking/', relevantOnly: true, exclude: SEMINAR, near: SA_AREA },
   // Chamber calendars (GrowthZone): only networking, real estate and economic events (see RELEVANT).
   { key: 'metro-sa', organizer: 'Metro SA Chamber', city: 'San Antonio', kind: 'growthzone', base: 'https://members.metrosa.com', page: 'https://members.metrosa.com/events/calendar', relevantOnly: true },
   { key: 'sotx-partnership', organizer: 'South Texas Business Partnership', city: 'San Antonio', kind: 'growthzone', base: 'https://business.southtexaspartnership.org', relevantOnly: true },
@@ -163,7 +181,8 @@ function icsText(value: string): string {
   return value.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').replace(/\s+/g, ' ').trim();
 }
 
-export function parseIcs(text: string, source: EventSource): TerraEvent[] {
+/** Events in an iCal (or vCalendar 1.0) file; fallbackUrl stands in when an event has no URL line. */
+export function parseIcs(text: string, source: EventSource, fallbackUrl?: string): TerraEvent[] {
   if (!/BEGIN:VCALENDAR/.test(text)) return [];
   const unfolded = text.replace(/\r?\n[ \t]/g, '');
   const out: TerraEvent[] = [];
@@ -173,7 +192,7 @@ export function parseIcs(text: string, source: EventSource): TerraEvent[] {
       return m ? (m[1] ?? '').trim() : '';
     };
     const title = icsText(field('SUMMARY'));
-    const url = httpUrl(field('URL'));
+    const url = httpUrl(field('URL')) ?? httpUrl(fallbackUrl);
     const start = icsDate(field('DTSTART'));
     if (!title || !url || !start) continue;
     out.push({
@@ -251,6 +270,8 @@ function normalizeDate(value: string): string | null {
 interface LdEvent {
   '@type'?: string | string[];
   '@graph'?: unknown[];
+  itemListElement?: unknown[];
+  item?: unknown;
   name?: string;
   url?: string;
   startDate?: string;
@@ -263,7 +284,8 @@ function ldNodes(data: unknown): LdEvent[] {
   if (Array.isArray(data)) return data.flatMap(ldNodes);
   if (!data || typeof data !== 'object') return [];
   const n = data as LdEvent;
-  return [n, ...(n['@graph'] ? ldNodes(n['@graph']) : [])];
+  // Search pages (Eventbrite) wrap their events in an ItemList of ListItems.
+  return [n, ...(n['@graph'] ? ldNodes(n['@graph']) : []), ...(n.itemListElement ? ldNodes(n.itemListElement) : []), ...(n.item ? ldNodes(n.item) : [])];
 }
 
 /** Every schema.org Event in a page's JSON-LD blocks. */
@@ -290,6 +312,7 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
       }
       if (!title || !start || !url) continue;
       const loc = Array.isArray(n.location) ? n.location[0] : n.location;
+      if (source.near && !source.near.test(JSON.stringify(loc ?? ''))) continue;
       const venue = typeof loc === 'string' ? loc : loc?.name;
       out.push({
         id: `${source.key}-${url}`,
@@ -347,6 +370,17 @@ export function detailLinks(html: string, page: string, detailPath: string): str
     out.add(`${url.origin}${url.pathname}`);
   }
   return [...out];
+}
+
+// ---- StarChapter ----
+
+/** Meeting ids linked from a StarChapter page (meetinginfo.php?id=93&ts=...), in page order. */
+export function starChapterIds(html: string): string[] {
+  return [...new Set([...html.matchAll(/meetinginfo\.php\?id=(\d+)/gi)].map((m) => m[1]!))];
+}
+
+export function starChapterUrls(base: string, id: string): { vcs: string; page: string } {
+  return { vcs: `${base}/vcs/meeting${id}.vcs`, page: `${base}/meetinginfo.php?id=${id}` };
 }
 
 /** Housekeeping entries ("BOMA CLOSED - Labor Day", office-closure holidays), not real events. */
@@ -418,6 +452,22 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
     const events = parseJsonLdEvents(await fetcher.text(page), source, page);
     log(`${source.organizer}: ${events.length} events from ${page}`);
     return events;
+  }
+
+  if (source.kind === 'starchapter') {
+    const ids = starChapterIds(await fetcher.text(source.page ?? `${source.base}/`)).slice(0, 20);
+    log(`${source.organizer}: reading ${ids.length} meetings.`);
+    const out: TerraEvent[] = [];
+    for (const id of ids) {
+      const { vcs, page } = starChapterUrls(source.base, id);
+      try {
+        // One event per file; the id is the meeting, so a re-read keeps the same key.
+        for (const e of parseIcs(await fetcher.text(vcs), source, page)) out.push({ ...e, id: `${source.key}-${id}`, url: page });
+      } catch (error) {
+        log(`${vcs}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return out;
   }
 
   if (source.kind === 'pages') {
@@ -502,6 +552,35 @@ export function upcoming(events: TerraEvent[], now: Date, days = WINDOW_DAYS): T
   return [...byUrl.values()].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
+const FILLER = new Set(['the', 'a', 'an', 'and', 'of', 'at', 'in', 'on', 'for', 'with', 'to', 'by', 'sa', 'san', 'antonio', 'event', 'events', 'annual', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec', 'january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october', 'november', 'december']);
+
+/** The words that name an event: lowercase, no years, months, ordinals or filler. */
+export function titleWords(title: string): Set<string> {
+  return new Set(
+    title
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w && !FILLER.has(w) && !/^\d{4}$/.test(w) && !/^\d+(st|nd|rd|th)$/.test(w))
+  );
+}
+
+/** Two listings of one event: same city and day, and nearly all the shorter title's words in the other. */
+export function sameEvent(a: TerraEvent, b: TerraEvent): boolean {
+  if (a.city !== b.city || a.start.slice(0, 10) !== b.start.slice(0, 10)) return false;
+  const [x, y] = [titleWords(a.title), titleWords(b.title)].sort((p, q) => p.size - q.size) as [Set<string>, Set<string>];
+  if (!x.size) return false;
+  const shared = [...x].filter((w) => y.has(w)).length;
+  return shared / x.size >= 0.75 && shared >= Math.min(2, x.size);
+}
+
+/** Drop repeats of one event listed by several sources (or by hand and a calendar): the first listing wins. */
+export function dedupe(events: TerraEvent[]): TerraEvent[] {
+  const out: TerraEvent[] = [];
+  for (const e of events) if (!out.some((kept) => sameEvent(kept, e))) out.push(e);
+  return out;
+}
+
 export interface EventsFile {
   generatedAt: string;
   sources: Array<{ organizer: string; city: City | null; url: string; fetchedAt: string; count: number }>;
@@ -543,7 +622,8 @@ export async function buildEventsFile(
   if (hand.length) {
     meta.push({ organizer: MANUAL_SOURCE, city: null, url: '', fetchedAt: now.toISOString(), count: hand.length });
   }
-  const sorted = upcoming([...all, ...hand], now);
+  // Hand-entered rows first, so they win over a calendar's copy of the same event.
+  const sorted = dedupe(upcoming([...hand, ...all], now));
   return {
     generatedAt: now.toISOString(),
     sources: meta,

@@ -26,8 +26,9 @@
 # accounts on.
 #
 # Events (site/events.json): real estate networking events per city from
-# chapter and chamber calendars (src/events/events.ts EVENT_SOURCES), plus
+# chapter, chamber and Eventbrite calendars (src/events/events.ts EVENT_SOURCES), plus
 # rows typed into the sheet's Events tab and backend/data/events-manual.json.
+# Repeats of one event across sources are merged, the hand-typed copy winning.
 # Public like the news, so it stays published with accounts on.
 #
 # Property tools (site/property/*.json): census tracts for the drive-time
