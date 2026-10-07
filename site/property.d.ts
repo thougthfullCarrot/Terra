@@ -46,3 +46,4 @@ export function filterSales<T extends { city: string; saleDate: string | null; v
 export function money(value: number | null): string;
 export function count(value: number | null): string;
 export function dealSteps(deal: any, file: any, analyze: (deal: any) => any): any;
+export function saleLinks(sale: { url: string | null; lat: number | null; lng: number | null; address: string; place: string | null; zip: string | null }): { label: string; url: string }[];

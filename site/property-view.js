@@ -20,6 +20,7 @@ import {
   entityName,
   FALLBACK_MPH,
   filterMoves,
+  saleLinks,
   filterSales,
   franchiseUrl,
   isEntity,
@@ -481,8 +482,7 @@ function salesTable(sales) {
     name.append(el('span', 'site-address', sale.address));
     const meta = el('span', 'metro');
     meta.append([sale.place, `${sale.county} County`].filter(Boolean).join(' · '));
-    if (sale.url) meta.append(' · ', link('Listing', sale.url));
-    if (sale.lat != null) meta.append(' · ', link('Map', `https://www.google.com/maps/search/?api=1&query=${sale.lat},${sale.lng}`));
+    for (const l of saleLinks(sale)) meta.append(' · ', link(l.label, l.url));
     name.append(meta);
     const when = el('td', '', sale.saleDate ? longDate(sale.saleDate) : '—');
     when.append(el('span', 'metric-meta', sale.status));
