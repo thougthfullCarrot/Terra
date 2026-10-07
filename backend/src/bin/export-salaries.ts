@@ -34,7 +34,11 @@ async function main(): Promise<void> {
     isFirm: (employer) => firms.some((firm) => namesMatch(firm, employer)),
     log: (line) => console.log(line)
   });
-  for (const market of file.markets) console.log(`${market.city}: ${market.filings} filings from ${market.employers} employers`);
+  for (const market of file.markets) {
+    console.log(`${market.city}: ${market.filings} filings from ${market.employers} employers`);
+    for (const f of market.families) console.log(`  ${f.family}: ${f.filings} filings, median $${f.median.toLocaleString('en-US')}${f.entryMedian ? `, entry level $${f.entryMedian.toLocaleString('en-US')} (${f.entryFilings})` : ''}`);
+    for (const row of market.rows.slice(0, 8)) console.log(`  ${row.employer} | ${row.title} | ${row.filings} | $${row.median.toLocaleString('en-US')} | level ${row.level ?? '?'}`);
+  }
   await writeFile(out, `${JSON.stringify(file)}\n`);
   console.log(`Wrote ${out} (${file.period}).`);
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `filings=${file.markets.reduce((n, m) => n + m.filings, 0)}\n`);

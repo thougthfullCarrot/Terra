@@ -97,6 +97,8 @@ export function titleFamily(title: string): Family {
 
 /** One certified filing kept from the files. */
 export interface WageFiling {
+  /** The department's case number, to drop a case that appears in two files. */
+  caseNumber: string;
   employer: string;
   title: string;
   market: City;
@@ -111,6 +113,7 @@ export interface WageFiling {
 
 /** Column names in the record layout (FY2020 onward). */
 const COLUMNS = [
+  'CASE_NUMBER',
   'CASE_STATUS',
   'DECISION_DATE',
   'JOB_TITLE',
@@ -164,7 +167,7 @@ export async function readFilings(
       const header = cells.map((c) => c.trim().toUpperCase());
       if (!header.includes('EMPLOYER_NAME')) continue;
       index = Object.fromEntries(COLUMNS.map((name) => [name, header.indexOf(name)])) as Index;
-      const missing = COLUMNS.filter((name) => index![name] < 0 && name !== 'PW_WAGE_LEVEL' && name !== 'NAICS_CODE');
+      const missing = COLUMNS.filter((name) => index![name] < 0 && name !== 'PW_WAGE_LEVEL' && name !== 'NAICS_CODE' && name !== 'CASE_NUMBER');
       if (missing.length) throw new Error(`LCA file is missing columns: ${missing.join(', ')}`);
       continue;
     }
@@ -183,7 +186,7 @@ export async function readFilings(
     const decided = isoDate(get('DECISION_DATE')) ?? '';
     if (since && decided && decided < since) continue;
     const level = /^(I|II|III|IV)$/i.exec(get('PW_WAGE_LEVEL').trim())?.[1]?.toUpperCase() as WageFiling['level'] | undefined;
-    filings.push({ employer: title(employer), title: title(job), market, place: title(get('WORKSITE_CITY')), wage, level: level ?? null, decided });
+    filings.push({ caseNumber: get('CASE_NUMBER').trim(), employer: title(employer), title: title(job), market, place: title(get('WORKSITE_CITY')), wage, level: level ?? null, decided });
   }
   return { filings, read };
 }
@@ -315,17 +318,28 @@ export function disclosureFiles(html: string, base = DISCLOSURE_PAGE): Disclosur
   return [...out.values()].sort((a, b) => b.year - a.year || b.quarter - a.quarter);
 }
 
-/**
- * The files that cover the last twelve months: the newest one (each is
- * cumulative for its fiscal year), plus last year's full-year file when the
- * newest is not a fourth quarter.
- */
+/** How many of the newest workbooks to read; a case filed in one quarter can reappear in the next, so cases are matched by number. */
+export const FILES_TO_READ = 4;
+/** Filings older than this are dropped: pay moves, and two years is enough for every market to have some. */
+export const WINDOW_DAYS = 730;
+
 export function filesToRead(files: DisclosureFile[]): DisclosureFile[] {
-  const newest = files[0];
-  if (!newest) return [];
-  if (newest.quarter === 4) return [newest];
-  const previous = files.find((f) => f.year === newest.year - 1 && f.quarter === 4);
-  return previous ? [newest, previous] : [newest];
+  return files.slice(0, FILES_TO_READ);
+}
+
+/** One filing per case number, the latest decision winning; filings without a number are kept as they are. */
+export function dedupe(filings: WageFiling[]): WageFiling[] {
+  const byCase = new Map<string, WageFiling>();
+  const loose: WageFiling[] = [];
+  for (const f of filings) {
+    if (!f.caseNumber) {
+      loose.push(f);
+      continue;
+    }
+    const seen = byCase.get(f.caseNumber);
+    if (!seen || f.decided > seen.decided) byCase.set(f.caseNumber, f);
+  }
+  return [...byCase.values(), ...loose];
 }
 
 export interface FetchSalariesOptions extends FetchJsonOptions {
@@ -340,7 +354,7 @@ export async function fetchSalaries(options: FetchSalariesOptions = {}): Promise
   const page = await fetchText(DISCLOSURE_PAGE, http);
   const files = filesToRead(disclosureFiles(page));
   if (!files.length) throw new Error('No LCA disclosure files linked from the performance page');
-  const since = new Date(now.getTime() - 365 * 86_400_000).toISOString().slice(0, 10);
+  const since = new Date(now.getTime() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
   const filings: WageFiling[] = [];
   const names: string[] = [];
   for (const file of files) {
@@ -350,14 +364,7 @@ export async function fetchSalaries(options: FetchSalariesOptions = {}): Promise
     filings.push(...result.filings);
     names.push(`FY${file.year} Q${file.quarter}`);
   }
-  // A case can appear in both files (amended); keep each employer, title, place, wage and date once.
-  const seen = new Set<string>();
-  const unique = filings.filter((f) => {
-    const key = [f.employer, f.title, f.place, f.wage, f.decided].join('|').toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const unique = dedupe(filings);
   const dates = unique.map((f) => f.decided).filter(Boolean).sort();
   const month = (iso?: string) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
   return {
