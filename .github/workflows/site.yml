@@ -66,7 +66,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Room for the development maps' first fill (about 400 project pages a build).
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: backend

@@ -9,6 +9,7 @@ import {
   parseZcta,
   projectDetails,
   searchForm,
+  shareBudget,
   METRO_COUNTIES,
   TABS_COUNTY_IDS,
   parseCityOptions,
@@ -107,6 +108,12 @@ describe('which filings count as current developments', () => {
       row({ ProjectNumber: 'school', ProjectName: 'Richardson ISD - Liberty Middle School', EstimatedCost: 1_060_000_000 })
     ];
     expect(currentDevelopments(rows).map((r) => r.ProjectNumber)).toEqual(['TABS2026021473', 'add']);
+  });
+
+  it('shares the page budget, giving what small metros leave to the big ones', () => {
+    const need = new Map([['Houston', 400], ['Lubbock', 20], ['Austin', 300]] as const);
+    expect(shareBudget(new Map(need), 300)).toEqual(new Map([['Lubbock', 20], ['Austin', 140], ['Houston', 140]]));
+    expect(shareBudget(new Map(need), 1000)).toEqual(new Map([['Lubbock', 20], ['Austin', 300], ['Houston', 400]]));
   });
 
   it('drops projects whose estimated end is well past, even if never closed out', () => {

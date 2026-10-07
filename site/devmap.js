@@ -1,8 +1,9 @@
 // devmap.js — the development map on the market data section: each city's
 // metro area's biggest current projects (the whole region by county, so
-// Houston includes Galveston, Sugar Land and The Woodlands) from the state's TABS register, plus San
-// Antonio's own building permits, as pins on an OpenStreetMap map, with a list beside it. Each project
-// links to its developer's website and its state filing or the city's permit data.
+// Houston includes Galveston, Sugar Land and The Woodlands) from the state's TABS register, plus the
+// building permits of the cities that publish them (San Antonio, Austin, Fort Worth, Arlington), as pins
+// on an OpenStreetMap map, with a list beside it. Each project links to its developer's website and its
+// state filing or city permit.
 //
 // Leaflet (site/vendor, copied from npm by build:site) loads the first time a
 // map is shown, so the rest of the site never waits for it.
@@ -24,6 +25,13 @@ export const CENTERS = {
   Galveston: [29.3013, -94.7977],
   Lubbock: [33.5779, -101.8552],
   Midland: [31.9973, -102.0779]
+};
+
+/** Markets whose cities' own building permits fill in the map (backend/src/market/cityPermits.ts). */
+const PERMIT_CITIES = {
+  'San Antonio': 'City of San Antonio',
+  Austin: 'City of Austin',
+  'Fort Worth': 'Fort Worth and Arlington'
 };
 
 let leaflet = null;
@@ -71,7 +79,7 @@ export function developmentMap({ data, cities, city, onCity }) {
     el(
       'p',
       'group-blurb',
-      `The biggest new buildings and additions under way in the ${city} metro${city === 'San Antonio' ? ', from state filings and the city of San Antonio\'s building permits' : ' from state filings over the last two years'}. Click a pin or a project for the details and a link to the developer.`
+      `New buildings and additions under way in the ${city} metro, from state filings over the last two years${PERMIT_CITIES[city] ? ` and ${PERMIT_CITIES[city]} building permits` : ''}. Click a pin or a project for the details and a link to the developer.`
     )
   );
   box.append(head);
@@ -117,9 +125,9 @@ export function developmentMap({ data, cities, city, onCity }) {
     const near = placed.filter((p) => p.approximate).length;
     const parts = [`${placed.length} of ${projects.length} projects are on the map`];
     if (near) parts.push(`${near} with a dashed outline sit at the center of their ZIP code because their new address is not on the Census street map yet`);
-    const sources = projects.some((p) => p.source === 'city') ? 'state TABS filings and City of San Antonio building permits' : 'state TABS filings';
+    const sources = projects.some((p) => p.source === 'city') ? `state TABS filings and ${PERMIT_CITIES[city] ?? 'city'} building permits` : 'state TABS filings';
     note.textContent = projects.length
-      ? `${parts.join('; ')}. From ${sources}${updated ? `, updated ${updated}` : ''}. Costs are the owner's estimate. Single-family homes, and small projects outside a city that publishes its permits, are not included.`
+      ? `${parts.join('; ')}. From ${sources}${updated ? `, updated ${updated}` : ''}. Costs are the owner's estimate. Single-family homes are not included${PERMIT_CITIES[city] ? '' : ", and this metro's cities do not publish their permits, so smaller projects may be missing"}.`
       : 'No projects to show yet.';
     drawList(list, projects);
     drawMap(mapNode, list, projects, city).catch((error) => {
@@ -237,7 +245,7 @@ function links(project) {
   const row = el('span', 'dev-links');
   const site = link(project.developerUrl, project.developerDirect ? "Developer's site ↗" : "Find the developer's site ↗");
   if (!project.developerDirect && project.owner) site.title = `Opens the top web result for ${project.owner}`;
-  row.append(site, link(project.url, project.source === 'city' ? 'City permit data ↗' : 'State filing ↗'));
+  row.append(site, link(project.url, project.source === 'city' ? 'City permit ↗' : 'State filing ↗'));
   return row;
 }
 

@@ -1,7 +1,7 @@
 import { fetchBuffer, fetchJson, fetchText, type FetchJsonOptions } from '../lib/http.js';
 import { unzip, xmlText } from '../lib/xlsx.js';
 import type { City } from '../types.js';
-import { fetchSanAntonioPermits } from './cityPermits.js';
+import { fetchCityPermitProjects } from './cityPermits.js';
 import { developerLink } from './developers.js';
 
 /**
@@ -200,8 +200,27 @@ export const LOOKBACK_DAYS = 730;
 /** A project whose estimated end passed this long ago is most likely finished, just not closed out. */
 const FINISHED_DAYS = 120;
 
-/** How many TABS projects each metro's map shows: the biggest by cost. */
-export const PER_CITY = 120;
+/**
+ * How many TABS projects each metro's map shows: the biggest by cost. Harris
+ * County alone files about 4,000 a year, so the big metros get the most.
+ */
+export const METRO_CAP: Partial<Record<City, number>> = {
+  Houston: 400,
+  Dallas: 400,
+  'Fort Worth': 300,
+  Austin: 300,
+  'San Antonio': 300
+};
+export const DEFAULT_CAP = 150;
+export const capFor = (city: City) => METRO_CAP[city] ?? DEFAULT_CAP;
+/** Rows read per county search, biggest first: enough to fill the cap after filtering. */
+const SEARCH_LENGTH = 1000;
+/**
+ * New project pages read per build. A page and a geocode take about a second,
+ * so 400 is about seven minutes and a first build fills the maps over a few days; later builds read only new
+ * filings.
+ */
+export const MAX_NEW_PAGES = 400;
 /** Filings above this are typos (a $20 billion school), not projects. */
 const MAX_COST = 5e9;
 
@@ -412,7 +431,7 @@ export async function searchCounty(county: string, now: Date, options: FetchJson
   const data = await fetchJson<{ data?: TabsRow[] }>(TABS_SEARCH_URL, {
     timeoutMs: 120_000,
     ...options,
-    form: searchForm(county, since, now),
+    form: searchForm(county, since, now, SEARCH_LENGTH),
     headers: { 'x-requested-with': 'XMLHttpRequest', referer: `${TABS}/Search/` }
   });
   return data.data ?? [];
@@ -426,7 +445,24 @@ export async function searchMetro(city: City, now: Date, options: FetchJsonOptio
       if (!seen.has(row.ProjectNumber)) seen.set(row.ProjectNumber, row);
     }
   }
-  return [...seen.values()].sort((a, b) => b.EstimatedCost - a.EstimatedCost).slice(0, PER_CITY);
+  return [...seen.values()].sort((a, b) => b.EstimatedCost - a.EstimatedCost).slice(0, capFor(city));
+}
+
+/**
+ * Split `budget` page reads across metros by need: each gets an equal share,
+ * and what a metro does not need goes to the others.
+ */
+export function shareBudget(need: Map<City, number>, budget: number): Map<City, number> {
+  const out = new Map<City, number>();
+  let left = budget;
+  const order = [...need].sort((a, b) => a[1] - b[1]);
+  order.forEach(([city, wants], i) => {
+    const share = Math.floor(left / (order.length - i));
+    const take = Math.min(wants, share);
+    out.set(city, take);
+    left -= take;
+  });
+  return out;
 }
 
 /** TABS city id → name, from the search form's city list. */
@@ -457,12 +493,23 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     .then(parseCityOptions)
     .catch(() => new Map<number, string>());
 
+  // Search every metro first, so the page budget can be shared fairly.
+  const searched: [City, TabsRow[]][] = [];
   for (const city of cities) {
     if (!METRO_COUNTIES[city]) {
       log(`${city}: no TABS counties yet; skipped.`);
       continue;
     }
-    const rows = await searchMetro(city, now, http);
+    searched.push([city, await searchMetro(city, now, http)]);
+  }
+  const allowance = shareBudget(
+    new Map(searched.map(([city, rows]) => [city, rows.filter((r) => !known.has(r.ProjectNumber)).length])),
+    MAX_NEW_PAGES
+  );
+
+  for (const [city, rows] of searched) {
+    let left = allowance.get(city) ?? 0;
+    let waiting = 0;
     for (const row of rows) {
       const old = known.get(row.ProjectNumber);
       let details: ProjectDetails;
@@ -472,6 +519,11 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       if (old) {
         details = old;
       } else {
+        if (left <= 0) {
+          waiting++;
+          continue;
+        }
+        left--;
         if (pages++) await pause(pauseMs);
         details = projectDetails(parseProjectPage(await fetchText(tabsProjectUrl(row.ProjectNumber), { timeoutMs: 60_000, ...http })));
         const address = geocodable(details.address);
@@ -508,19 +560,11 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
         url: tabsPermalink(row.ProjectNumber)
       });
     }
-    log(`${city} metro: ${rows.length} projects`);
+    log(`${city} metro: ${rows.length - waiting} projects${waiting ? `; ${waiting} more wait for a later build` : ''}`);
   }
 
-  // San Antonio publishes its building permits, which catch what TABS misses.
-  if (cities.includes('San Antonio')) {
-    try {
-      const permits = await fetchSanAntonioPermits(now, projects, http);
-      projects.push(...permits);
-      log(`San Antonio city permits: ${permits.length} more projects`);
-    } catch (error) {
-      log(`San Antonio city permits: not read (${error instanceof Error ? error.message : String(error)})`);
-    }
-  }
+  // Cities that publish their building permits catch what TABS misses.
+  projects.push(...(await fetchCityPermitProjects(cities, now, projects, { ...http, log })));
 
   // Whatever the geocoder could not place goes at its ZIP code's center.
   const missing = projects.filter((p) => p.lat == null && zipOf(p.address));
