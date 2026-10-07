@@ -323,7 +323,10 @@ export class SiteTester {
       const firms = await page.locator('#list .card .firm').allTextContents();
       check(firms.every((text) => text.endsWith(`· ${person.homeCity}`)) || firms.length === 0, `city filter shows only ${person.homeCity} jobs`);
       await page.click('#clear');
-      check((await page.locator('#list .card').count()) === cards, 'clearing filters brings every job back');
+      // Clearing starts the list over at 30 cards, so compare the role count as well.
+      const after = await page.locator('#list .card').count();
+      const total = (await page.locator('#count').textContent()) ?? '';
+      check(after === Math.min(cards, 30) && total.startsWith(`${expect.jobs} `), 'clearing filters brings every job back', `${after} cards, ${total}`);
     }
 
     // Search: a word from the first card's title should keep it.
