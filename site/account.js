@@ -27,6 +27,7 @@ import {
 } from './access.js';
 import { schoolFor } from './school.js';
 import { updatedLabel } from './feed.js';
+import { closePitch, showPitchOnce } from './pitch.js';
 
 const $ = (id) => document.getElementById(id);
 /** Resume text kept for matching. A long resume is a few thousand characters; this leaves room without storing a novel. */
@@ -96,6 +97,7 @@ function signedOut() {
   $('plan-price').textContent = CONFIG.priceLabel || 'Monthly';
   show('gate');
   showTeaser();
+  showPitchOnce();
 }
 
 /**
@@ -121,6 +123,7 @@ async function showTeaser() {
 
 async function signedIn(next) {
   user = next;
+  closePitch();
   access = await accessLevel();
   await loadProfile();
 

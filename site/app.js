@@ -29,6 +29,7 @@ import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedId
 import { startNews } from './news-view.js';
 import { startEvents } from './events-view.js';
 import { startProperty } from './property-view.js';
+import { startPitch } from './pitch.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { firm: 'All firms', sector: 'All sectors' };
@@ -653,6 +654,7 @@ startTracker({
 startNews();
 startEvents();
 startProperty();
+startPitch();
 
 if (isConfigured(CONFIG)) {
   $('meta').textContent = '';
