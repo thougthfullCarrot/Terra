@@ -9,7 +9,7 @@ import type { City } from '../types.js';
  *
  * Three agenda systems publish their agendas as free, keyless JSON:
  *
- *   Legistar (Granicus)  Dallas, Plano, McKinney, Mesquite, Grand Prairie, Mansfield,
+ *   Legistar (Granicus)  Dallas, Plano, McKinney, Mesquite, Mansfield,
  *                        Austin, Round Rock, Pflugerville, San Marcos, El Paso,
  *                        New Braunfels, Boerne, League City
  *   CivicClerk           College Station, Midland, Galveston
@@ -42,7 +42,7 @@ export interface ZoningCase {
 export type ZoningKind = 'Rezoning' | 'Planned development' | 'Special use permit' | 'Plan amendment' | 'Variance';
 
 /** Agenda wording that marks a zoning request about a property (not a code text change). */
-const ZONING = /\b(re-?zon\w*|zoning (case|change|district|request)|change (of|in) zoning|zoned\b|planned development|\bPDD?\b|specific use permit|special use permit|conditional use permit|\bSUP\b|\bCUP\b|future land use|comprehensive plan amendment|plan amendment)/i;
+const ZONING = /\b(re-?zon\w*|zoning (case|change|district|request)|change (of|in) zoning|zoned\b|planned development|\bPDD?\b|specific use permit|special use permit|conditional use permit|\bSUP\b|\bCUP\b|comprehensive plan amendment|plan amendment)/i;
 /** Housekeeping items: minutes, code text amendments, appointments. */
 const NOT_A_CASE =
   /\b(minutes|text amendment|amend(ing)? (chapter|section|article)|appoint|nominat|briefing on|work ?session|election|budget|re-?plat|plat|fence|carport|special exception|certificate of occupancy|right-of-way|abandonment|consultation with the city attorney)\b/i;
@@ -113,7 +113,6 @@ export const LEGISTAR: LegistarClient[] = [
   { client: 'plano', place: 'Plano', market: 'Dallas' },
   { client: 'mckinney', place: 'McKinney', market: 'Dallas' },
   { client: 'mesquite', place: 'Mesquite', market: 'Dallas' },
-  { client: 'grandprairie', place: 'Grand Prairie', market: 'Dallas' },
   { client: 'mansfield', place: 'Mansfield', market: 'Fort Worth' },
   { client: 'austintexas', place: 'Austin', market: 'Austin' },
   { client: 'roundrock', place: 'Round Rock', market: 'Austin' },
@@ -128,7 +127,7 @@ export const LEGISTAR: LegistarClient[] = [
 /** The boards that hear zoning cases. */
 const ZONING_BODY = /\b(plan|planning|zoning|council)\b/i;
 /** Boards of adjustment hear fences and setbacks on single houses; landmark boards hear paint colors. */
-const NOT_ZONING_BODY = /\b(adjustment|landmark|historic|appeals)\b/i;
+const NOT_ZONING_BODY = /\b(adjustment|landmark|historic|appeals|steering|workshop)\b/i;
 
 interface LegistarEvent {
   EventId: number;

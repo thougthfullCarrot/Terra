@@ -155,8 +155,7 @@ export function payView(snapshot, city) {
 export const ZONING_GAPS = [
   ['Houston', 'has no zoning'],
   ['Fort Worth', "agendas moved to a site that blocks automated readers"],
-  ['Lubbock', 'has no public agenda feed'],
-  ['Midland', 'posts agendas as PDFs only']
+  ['Lubbock', 'has no public agenda feed']
 ];
 
 export function zoningCases(zoning, city, { when = 'upcoming', kind = '', today = new Date().toISOString().slice(0, 10) } = {}) {
