@@ -15,6 +15,8 @@ import type { ApartmentListResult } from './apartmentList.js';
 import type { AppraisalFile, PropertyClass } from './appraisal.js';
 import type { MonthlyReading } from './csv.js';
 import type { DevelopmentsResult } from './developments.js';
+import type { SalaryFile } from './salaries.js';
+import type { ZoningResult } from './zoning.js';
 import type { RateReading } from './fred.js';
 import type { Metro } from './metros.js';
 import { metroZoneCount } from './opportunityZones.js';
@@ -107,6 +109,10 @@ export interface MarketSnapshot {
   developments?: DevelopmentsResult;
   /** Brokerage vacancy and asking rents, and links to their free quarterly reports. */
   research?: Research;
+  /** Pay on H-1B filings at commercial real estate employers, per market (salaries.yml). */
+  salaries?: SalaryFile;
+  /** Rezoning requests and special use permits on city agendas. */
+  zoning?: ZoningResult;
 }
 
 /** Appraisal district figures per property type, keyed cad{Type}{Figure}. */
@@ -877,6 +883,8 @@ export function fillFromPrevious(next: MarketSnapshot, previous: MarketSnapshot 
     rates: next.rates ?? previous.rates,
     counties: next.counties ?? previous.counties,
     developments: next.developments ?? previous.developments,
+    salaries: next.salaries ?? previous.salaries,
+    zoning: next.zoning ?? previous.zoning,
     markets: next.markets.map((market) => {
       const old = previous.markets.find((m) => m.city === market.city);
       if (!old) return market;

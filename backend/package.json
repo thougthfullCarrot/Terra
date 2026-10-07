@@ -21,6 +21,7 @@
     "export:news": "tsx src/bin/export-news.ts",
     "export:events": "tsx src/bin/export-events.ts",
     "export:appraisal": "tsx src/bin/export-appraisal.ts",
+    "export:salaries": "tsx src/bin/export-salaries.ts",
     "export:sites": "tsx src/bin/export-sites.ts",
     "export:property": "tsx src/bin/export-property.ts",
     "build:site": "tsx src/bin/build-site.ts",

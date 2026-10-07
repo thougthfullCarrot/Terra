@@ -19,6 +19,7 @@ import {
 import { developmentMap, disposeMap } from './devmap.js';
 import { calculatorView, compareView, leasesView, reportsView } from './market-tools.js';
 import { sitesView } from './sites-view.js';
+import { growthView, payView, zoningView } from './insights-view.js';
 import { readNewsHash } from './news.js';
 import { readEventsHash } from './events.js';
 import { readPropertyHash } from './property.js';
@@ -55,6 +56,9 @@ export function startMarkets() {
   if (bound) return;
   bound = true;
   window.addEventListener('hashchange', show);
+  window.addEventListener('terra-jobs', () => {
+    if (snapshot && state?.tool === 'growth' && readMarketHash(location.hash, null).open) render();
+  });
   $('m-city').addEventListener('change', (e) => update({ city: e.target.value }));
   $('m-focus').addEventListener('change', (e) => {
     const group = snapshot.groups.find((g) => g.key === e.target.value);
@@ -152,9 +156,9 @@ function render() {
   $('m-order-label').hidden = Boolean(state.city) || Boolean(tool);
   // The comparison picks its own cities; the calculator brings its own inputs; the topic means nothing to the broker views.
   $('m-city-label').hidden = tool === 'compare';
-  $('m-focus-label').hidden = ['leases', 'reports', 'sites'].includes(tool);
+  $('m-focus-label').hidden = ['leases', 'reports', 'sites', ...INSIGHTS].includes(tool);
   $('m-filters').hidden = tool === 'calc';
-  for (const name of ['', 'compare', 'calc', 'leases', 'sites', 'reports']) {
+  for (const name of ['', 'compare', 'calc', 'leases', 'sites', 'reports', ...INSIGHTS]) {
     const link = $(`m-tool-${name || 'data'}`);
     link.href = writeMarketHash({ ...state, tool: name, compare: name === 'compare' ? state.compare : [] });
     if (tool === name) link.setAttribute('aria-current', 'page');
@@ -168,7 +172,7 @@ function render() {
     $('m-chart').replaceChildren();
     $('m-body').replaceChildren(toolView(tool));
     // The broker and parcel tools carry their own source notes.
-    $('m-sources').replaceChildren(...(['leases', 'reports', 'sites'].includes(tool) ? [] : [sources()]));
+    $('m-sources').replaceChildren(...(['leases', 'reports', 'sites', ...INSIGHTS].includes(tool) ? [] : [sources()]));
     return;
   }
 
@@ -180,12 +184,18 @@ function render() {
   $('m-sources').replaceChildren(sources());
 }
 
+/** Tools that carry their own source notes and need no topic (insights-view.js). */
+const INSIGHTS = ['pay', 'zoning', 'growth'];
+
 const TOOL_BLURBS = {
   compare: 'Rents, permits, job growth and taxes for the cities you pick, side by side.',
   calc: "Run the numbers on a property with today's rates and a Texas city's property tax.",
   leases: 'Office, industrial and retail vacancy and asking rents from brokerages\' free quarterly reports.',
   sites: 'Land and buildings from county appraisal rolls, with zoning from the city: filter by use, size and appraised value per square foot.',
-  reports: 'The latest free quarterly market reports from the big brokerages, by city.'
+  reports: 'The latest free quarterly market reports from the big brokerages, by city.',
+  pay: 'What commercial real estate firms actually offer, by job title and city, from Labor Department wage filings.',
+  zoning: 'Rezoning requests and special use permits on city agendas: the earliest public sign of a new project.',
+  growth: "Firms posting jobs lined up against the projects they are building, and the developers who will likely hire next."
 };
 
 function toolView(tool) {
@@ -193,6 +203,9 @@ function toolView(tool) {
   if (tool === 'compare') return compareView(snapshot, state, update);
   if (tool === 'leases') return leasesView(snapshot, state.city);
   if (tool === 'reports') return reportsView(snapshot, state.city);
+  if (tool === 'pay') return payView(snapshot, state.city);
+  if (tool === 'zoning') return zoningView(snapshot, state.city);
+  if (tool === 'growth') return growthView(snapshot, state.city);
   return sitesView(snapshot, state.city);
 }
 

@@ -3172,3 +3172,146 @@ th[aria-sort] .sort-button {
   padding-left: 0;
   margin-left: 0;
 }
+
+/* Salary check, zoning alerts, hiring vs. building (insights-view.js) */
+.pay-controls,
+.zoning-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 4px 0 10px;
+}
+.pay-search {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 9px 12px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+.pay-search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.pay-count {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pay-table td.num,
+.pay-rows td.num {
+  white-space: nowrap;
+}
+.pay-level {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.zoning-list,
+.growth-list,
+.growth-projects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.zoning-item {
+  padding: 14px 16px;
+  margin: 0 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+.zoning-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+.zoning-date {
+  font-weight: 600;
+  color: var(--ink);
+}
+.zoning-place {
+  color: var(--muted);
+  font-size: 13px;
+}
+.zoning-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.zoning-tags .badge {
+  margin-top: 6px;
+}
+.zoning-use {
+  background: var(--chip);
+  color: var(--secondary);
+}
+.zoning-file {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.zoning-title {
+  margin: 8px 0 6px;
+  color: var(--secondary);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.growth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.growth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+}
+.growth-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+.growth-head .badge {
+  margin: 0;
+}
+.growth-firm {
+  font-weight: 600;
+  color: var(--ink);
+}
+.growth-projects li,
+.growth-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px solid var(--divider);
+}
+.growth-list li {
+  padding: 10px 0;
+}
+.growth-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.growth-chips .chip {
+  text-decoration: none;
+}
+.dev-pop-hiring {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.zoning-item .dev-links,
+.growth-list .dev-links {
+  margin-left: 0;
+}

@@ -23,6 +23,7 @@ import {
   writeQuery
 } from './feed.js';
 import { setMarketLoader, startMarkets } from './markets-view.js';
+import { setGrowthJobs } from './growth.js';
 import { STAGES, importRows } from './tracker.js';
 import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedIds, trackerOn, untrack } from './tracker-view.js';
 import { startNews } from './news-view.js';
@@ -71,6 +72,7 @@ async function load() {
 
 function showFeed(next) {
   snapshot = next;
+  setGrowthJobs(snapshot.jobs);
   applyScores();
   fillFilters(snapshot.jobs);
   $('adzuna-credit').hidden = !snapshot.jobs.some((job) => job.via === 'Adzuna');
@@ -81,6 +83,7 @@ function showFeed(next) {
 
 function hideFeed(message) {
   snapshot = null;
+  setGrowthJobs([]);
   setTracker(null);
   setMarketLoader(null);
   $('meta').textContent = message ?? '';

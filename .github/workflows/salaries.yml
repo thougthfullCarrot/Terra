@@ -1,0 +1,70 @@
+# Summarizes the Labor Department's H-1B wage filings (LCA disclosure data)
+# for the salary check on the market data page: what commercial real estate
+# employers offer, by job title, in each Texas market.
+#
+# The newest workbook is about 250 MB and the department adds a quarter at a
+# time, so this runs on its own once a week rather than in every site build.
+# It keeps only the per-market summary (salaries.json, a few hundred KB) and
+# saves it to the Actions cache, where site.yml picks up the newest.
+name: Salary filings
+
+on:
+  schedule:
+    - cron: '10 10 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [claude/new-session-6xvm0u]
+    paths: ['backend/src/market/salaries.ts', 'backend/src/bin/export-salaries.ts', 'backend/src/lib/xlsx.ts', '.github/workflows/salaries.yml']
+
+concurrency:
+  group: salaries-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Summarize the filings
+        id: export
+        env:
+          # The sheet XML is read as a stream, but the workbook itself is held in memory.
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          set -o pipefail
+          npm run --silent export:salaries 2>&1 | tee /tmp/salaries.log
+
+      - name: Save the summary
+        if: steps.export.outcome == 'success' && steps.export.outputs.filings != '0'
+        uses: actions/cache/save@v4
+        with:
+          path: salaries.json
+          key: salaries-${{ github.run_id }}
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo '## Salary filings'
+            echo '```'
+            cat /tmp/salaries.log 2>/dev/null || true
+            echo '```'
+            if [ -f ../salaries.json ]; then
+              echo "- Size: $(wc -c < ../salaries.json) bytes"
+              echo '```json'
+              jq -c '.markets[] | {city, filings, employers, families}' ../salaries.json | head -20
+              jq -c '.markets[0].rows[:15][]' ../salaries.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
