@@ -492,15 +492,17 @@ function rates() {
 }
 
 /**
- * The development map: one city's on its own page, or any city's with a
- * switcher on the all-markets development view. Nothing until a build has
+ * The development map, with a switcher for every city that has projects: on
+ * a city's own page and on the all-markets development view. Nothing until a build has
  * read the state's project register.
  */
 function devMap(city) {
   const data = snapshot.developments;
   if (!data?.projects?.length) return '';
   const cities = snapshot.markets.map((m) => m.city).filter((c) => data.projects.some((p) => p.city === c));
-  if (city) return cities.includes(city) ? developmentMap({ data, cities: [city], city }) : '';
+  // On a city's page the switcher moves to that city's page, so changing
+  // areas never means backing out to All markets first.
+  if (city) return cities.includes(city) ? developmentMap({ data, cities, city, onCity: (next) => update({ city: next }) }) : '';
   if (!cities.includes(mapCity)) mapCity = cities[0];
   return developmentMap({
     data,
