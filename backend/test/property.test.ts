@@ -260,16 +260,14 @@ describe('lease radar order', () => {
 });
 
 describe('tax sale links', () => {
-  it('links the auction site home page and a map instead of the expiring listing page', async () => {
+  it('links only a map, never the auction site', async () => {
     const { saleLinks } = await import('../../site/property.js');
     const base = { address: '3140 Helmet St', place: 'Irving', zip: '75060', lat: 32.81218, lng: -96.9886 };
-    expect(saleLinks({ ...base, url: 'https://dallas.texas.sheriffsaleauctions.com/index.cfm?RDR=C1000335276' }).map((l) => l.url)).toEqual([
-      'https://dallas.texas.sheriffsaleauctions.com/',
-      'https://www.google.com/maps/search/?api=1&query=32.81218%2C-96.9886'
+    expect(saleLinks({ ...base, url: 'https://dallas.texas.sheriffsaleauctions.com/index.cfm?RDR=C1000335276' })).toEqual([
+      { label: 'Map', url: 'https://www.google.com/maps/search/?api=1&query=32.81218%2C-96.9886' }
     ]);
-    const noLink = saleLinks({ ...base, url: null, lat: null, lng: null });
-    expect(noLink[0]?.url).toBe('https://taxsales.lgbs.com/');
-    expect(noLink[1]?.url).toContain(encodeURIComponent('3140 Helmet St, Irving, TX, 75060'));
+    const noPoint = saleLinks({ ...base, url: null, lat: null, lng: null });
+    expect(noPoint[0]?.url).toContain(encodeURIComponent('3140 Helmet St, Irving, TX, 75060'));
   });
 });
 
