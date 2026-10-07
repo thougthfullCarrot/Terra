@@ -173,7 +173,7 @@ function ownerView(body) {
   else if (state.q) search(state.q, results);
   $('p-sources').replaceChildren(
     note(
-      'Owners and values come from the county appraisal districts: Harris (City of Houston map), Dallas (a public copy of the district roll), Tarrant, Bexar and Travis. With All markets picked, an address anywhere in Texas is looked up on the state's parcel map (Texas Geographic Information Office, StratMap), which collects every county appraisal district's roll; the address is placed with OpenStreetMap's free geocoder. The state record is the Comptroller\'s franchise tax list on data.texas.gov. The Comptroller\'s page lists officers and the registered agent for free; the Secretary of State charges $1 a search, so Terra doesn\'t use it.'
+      'Owners and values come from the county appraisal districts: Harris (City of Houston map), Dallas (a public copy of the district roll), Tarrant, Bexar and Travis. With All markets picked, an address anywhere in Texas is looked up on the state\'s parcel map (Texas Geographic Information Office, StratMap), which collects every county appraisal district\'s roll; the address is placed with OpenStreetMap\'s free geocoder. The state record is the Comptroller\'s franchise tax list on data.texas.gov. The Comptroller\'s page lists officers and the registered agent for free; the Secretary of State charges $1 a search, so Terra doesn\'t use it.'
     )
   );
 }
