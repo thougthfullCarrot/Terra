@@ -131,6 +131,7 @@ async function signedIn(next) {
     clearCheckoutFlag();
     show('feed');
     await loadFeed();
+    promptForProfile();
     return;
   }
 
@@ -290,6 +291,13 @@ function bindProfile() {
   $('alert-kind-options').replaceChildren(...ALERT_KINDS.map((kind) => checkChip('alertKinds', kind)));
 
   $('account-button').addEventListener('click', openProfile);
+  $('pp-go').addEventListener('click', () => {
+    $('profile-prompt').close();
+    openProfile();
+  });
+  $('pp-later').addEventListener('click', () => $('profile-prompt').close());
+  // Any way out (either button, or Escape) counts as answered.
+  $('profile-prompt').addEventListener('close', dismissPrompt);
   $('profile-close').addEventListener('click', closeProfile);
   form.addEventListener('submit', saveProfile);
   $('avatar-file').addEventListener('change', (event) => uploadAvatar(event.target));
@@ -315,6 +323,40 @@ function checkChip(name, value) {
 
 function checked(form, name) {
   return [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((box) => box.value);
+}
+
+// A new account (no name, school or resume yet) is asked once to fill in its
+// profile. Answering it either way is remembered on this device; saving a
+// name, school or resume ends it everywhere.
+const PROMPT_KEY = 'terra.profilePromptDismissed';
+
+function profileIsEmpty() {
+  return !profile?.name && !profile?.school && !profile?.resume_path;
+}
+
+function promptDismissed() {
+  try {
+    return (localStorage.getItem(PROMPT_KEY) ?? '').split(',').includes(user.id);
+  } catch {
+    return false;
+  }
+}
+
+function dismissPrompt() {
+  try {
+    const ids = (localStorage.getItem(PROMPT_KEY) ?? '').split(',').filter(Boolean);
+    localStorage.setItem(PROMPT_KEY, [...new Set([...ids, user.id])].join(','));
+  } catch {
+    // Private windows can refuse storage; the prompt just comes back next visit.
+  }
+}
+
+function promptForProfile() {
+  const dialog = $('profile-prompt');
+  if (!user || !profileIsEmpty() || promptDismissed() || dialog.open) return;
+  // A posting opened from a ?job= link keeps the screen.
+  if ($('job-panel').open) return;
+  dialog.showModal();
 }
 
 function openProfile() {

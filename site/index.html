@@ -600,6 +600,16 @@
       </div>
     </dialog>
 
+    <!-- First sign-in: points a new account at its profile (account.js). -->
+    <dialog id="profile-prompt" class="profile-prompt" aria-labelledby="pp-title" aria-describedby="pp-text">
+      <h2 id="pp-title">Let's make your profile</h2>
+      <p id="pp-text">Add your school, class year, city and resume, and Terra will score every job against them and send alerts that fit.</p>
+      <div class="pp-actions">
+        <button type="button" class="primary" id="pp-go">Make my profile</button>
+        <button type="button" class="link" id="pp-later">Maybe later</button>
+      </div>
+    </dialog>
+
     <!-- The pitch deck: a swipeable tour for signed-out visitors (pitch.js). Opens once per visit, or with ?tour. -->
     <div id="pitch" class="pitch" role="dialog" aria-modal="true" aria-roledescription="carousel" aria-label="What Terra does" hidden>
       <div class="pitch-frame">
