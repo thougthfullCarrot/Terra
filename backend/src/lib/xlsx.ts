@@ -96,3 +96,130 @@ export function readFirstSheet(data: Buffer): string[][] {
   if (!sheet) throw new Error('Workbook has no worksheet');
   return sheetRows(files.get(sheet)!.toString('utf8'), strings);
 }
+
+/* ------------------------------------------------------------ Streaming */
+
+/**
+ * The Labor Department's LCA workbooks are 100 MB zipped and over a gigabyte
+ * of sheet XML, too big for one string. These read an entry as a stream and
+ * hand over one shared string or one row at a time.
+ */
+
+interface ZipEntry {
+  method: number;
+  start: number;
+  size: number;
+}
+
+/** Where each entry's bytes sit in the archive, without inflating anything. Handles zip64 sizes and offsets. */
+export function zipEntries(data: Buffer): Map<string, ZipEntry> {
+  const out = new Map<string, ZipEntry>();
+  let end = -1;
+  for (let i = data.length - 22; i >= Math.max(0, data.length - 65_557); i--) {
+    if (data.readUInt32LE(i) === 0x06054b50) {
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) throw new Error('Not a zip file');
+  let count = data.readUInt16LE(end + 10);
+  let at = data.readUInt32LE(end + 16);
+  // Zip64: the real count and directory offset live in the zip64 end record.
+  if ((count === 0xffff || at === 0xffffffff) && end >= 20 && data.readUInt32LE(end - 20) === 0x07064b50) {
+    const record = Number(data.readBigUInt64LE(end - 20 + 8));
+    count = Number(data.readBigUInt64LE(record + 32));
+    at = Number(data.readBigUInt64LE(record + 48));
+  }
+  for (let n = 0; n < count; n++) {
+    if (data.readUInt32LE(at) !== 0x02014b50) throw new Error('Corrupt zip directory');
+    const method = data.readUInt16LE(at + 10);
+    let size = data.readUInt32LE(at + 20);
+    const plainSize = data.readUInt32LE(at + 24);
+    const nameLength = data.readUInt16LE(at + 28);
+    const extraLength = data.readUInt16LE(at + 30);
+    const commentLength = data.readUInt16LE(at + 32);
+    let local = data.readUInt32LE(at + 42);
+    const name = data.toString('utf8', at + 46, at + 46 + nameLength);
+    // Zip64 extra field: the 64-bit values appear in order for each 32-bit field set to 0xFFFFFFFF.
+    let extra = at + 46 + nameLength;
+    const extraEnd = extra + extraLength;
+    while (extra + 4 <= extraEnd) {
+      const id = data.readUInt16LE(extra);
+      const length = data.readUInt16LE(extra + 2);
+      if (id === 0x0001) {
+        let field = extra + 4;
+        if (plainSize === 0xffffffff) field += 8;
+        if (size === 0xffffffff) {
+          size = Number(data.readBigUInt64LE(field));
+          field += 8;
+        }
+        if (local === 0xffffffff) local = Number(data.readBigUInt64LE(field));
+      }
+      extra += 4 + length;
+    }
+    at = extraEnd + commentLength;
+    const start = local + 30 + data.readUInt16LE(local + 26) + data.readUInt16LE(local + 28);
+    out.set(name, { method, start, size });
+  }
+  return out;
+}
+
+/** An entry's text, chunk by chunk. */
+async function* entryText(data: Buffer, entry: ZipEntry): AsyncGenerator<string> {
+  const raw = data.subarray(entry.start, entry.start + entry.size);
+  if (entry.method === 0) {
+    yield raw.toString('utf8');
+    return;
+  }
+  const { createInflateRaw } = await import('node:zlib');
+  const { Readable } = await import('node:stream');
+  const { StringDecoder } = await import('node:string_decoder');
+  const decoder = new StringDecoder('utf8');
+  const inflate = Readable.from([raw]).pipe(createInflateRaw());
+  for await (const chunk of inflate) yield decoder.write(chunk as Buffer);
+  const rest = decoder.end();
+  if (rest) yield rest;
+}
+
+/** Each complete <tag>…</tag> element in an entry, in order. */
+async function* elements(data: Buffer, entry: ZipEntry, tag: string): AsyncGenerator<string> {
+  const open = new RegExp(`<${tag}[\\s>]`, 'g');
+  const close = `</${tag}>`;
+  let buffer = '';
+  for await (const chunk of entryText(data, entry)) {
+    buffer += chunk;
+    let from = 0;
+    for (;;) {
+      open.lastIndex = from;
+      const start = open.exec(buffer);
+      if (!start) break;
+      // A self-closing element (<row r="9"/>) has no body.
+      const gt = buffer.indexOf('>', start.index);
+      if (gt < 0) break;
+      if (buffer[gt - 1] === '/') {
+        yield buffer.slice(start.index, gt + 1);
+        from = gt + 1;
+        continue;
+      }
+      const stop = buffer.indexOf(close, gt);
+      if (stop < 0) break;
+      yield buffer.slice(start.index, stop + close.length);
+      from = stop + close.length;
+    }
+    buffer = buffer.slice(from);
+  }
+}
+
+/** The first worksheet's rows, one at a time, read without holding the sheet in memory. */
+export async function* streamFirstSheet(data: Buffer): AsyncGenerator<string[]> {
+  const entries = zipEntries(data);
+  const strings: string[] = [];
+  const shared = entries.get('xl/sharedStrings.xml');
+  if (shared) for await (const si of elements(data, shared, 'si')) strings.push(runs(si));
+  const name = [...entries.keys()].filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
+  if (!name) throw new Error('Workbook has no worksheet');
+  for await (const row of elements(data, entries.get(name)!, 'row')) {
+    const [cells] = sheetRows(row, strings);
+    yield cells ?? [];
+  }
+}
