@@ -42,12 +42,16 @@ import { fetchRealtor } from '../market/realtor.js';
 import { fetchFhfa } from '../market/fhfa.js';
 import { fetchHudFmr } from '../market/hudFmr.js';
 import { fetchResearch, keepResearch } from '../market/research.js';
+import type { SalaryFile } from '../market/salaries.js';
+import { fetchZoning, keepZoning } from '../market/zoning.js';
 import { blsSeriesFor, buildMarketSnapshot, filledCount, fillFromPrevious, type MarketSnapshot } from '../market/snapshot.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = resolve(here, '../../../site/market.json');
 /** Written by export-appraisal (appraisal.yml), outside site/ so it is never published on its own. */
 const DEFAULT_APPRAISAL = resolve(here, '../../../appraisal.json');
+/** Written by export-salaries (salaries.yml), likewise. */
+const DEFAULT_SALARIES = resolve(here, '../../../salaries.json');
 
 function flag(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -157,6 +161,17 @@ async function main(): Promise<void> {
     fetchResearch({ cities, log: (line) => console.log(`Broker research: ${line}`) })
   );
 
+  const zoning = await attempt('Zoning agendas', () => fetchZoning({ now, log: (line) => console.log(`Zoning: ${line}`) }));
+
+  const salaries = await readFile(resolve(flag('--salaries') ?? DEFAULT_SALARIES), 'utf8')
+    .then((text) => JSON.parse(text) as SalaryFile)
+    .catch(() => null);
+  console.log(
+    salaries
+      ? `Salary filings: ${salaries.markets.map((m) => `${m.city} ${m.filings}`).join(', ')} (${salaries.period}, summarized ${salaries.generatedAt.slice(0, 10)}).`
+      : 'Salary filings: no summary file yet (salaries.yml writes it).'
+  );
+
   const appraisal = await readFile(resolve(flag('--appraisal') ?? DEFAULT_APPRAISAL), 'utf8')
     .then((text) => JSON.parse(text) as AppraisalFile)
     .catch(() => null);
@@ -188,6 +203,9 @@ async function main(): Promise<void> {
   if (developments?.projects.length) snapshot.developments = developments;
   const keptResearch = research ? keepResearch(research, previous?.research) : previous?.research;
   if (keptResearch) snapshot.research = keptResearch;
+  if (salaries) snapshot.salaries = salaries;
+  const keptZoning = zoning ? keepZoning(zoning, previous?.zoning) : previous?.zoning;
+  if (keptZoning) snapshot.zoning = keptZoning;
 
   for (const market of snapshot.markets) {
     const missing = Object.entries(market.values)

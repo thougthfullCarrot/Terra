@@ -8,6 +8,7 @@
 // Leaflet (site/vendor, copied from npm by build:site) loads the first time a
 // map is shown, so the rest of the site never waits for it.
 import { cityProjects, markerRadius, projectDates } from './market.js';
+import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 
 export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
@@ -236,6 +237,18 @@ function popup(project) {
     people.append(el('dt', '', label), el('dd', '', value));
   }
   if (people.children.length) box.append(people);
+  // A firm on this project with open jobs in the feed (growth.js matches the names).
+  const hiring = hiringOn(project, growthJobs());
+  if (hiring.length) {
+    const line = el('p', 'dev-pop-hiring', 'Hiring now: ');
+    hiring.forEach(({ firm, count }, i) => {
+      if (i) line.append(', ');
+      const a = el('a', 'link', `${firm} (${count} ${count === 1 ? 'job' : 'jobs'})`);
+      a.href = firmJobsHref(firm, location.pathname);
+      line.append(a);
+    });
+    box.append(line);
+  }
   if (project.scope) box.append(el('p', 'dev-pop-scope', project.scope));
   box.append(links(project));
   return box;

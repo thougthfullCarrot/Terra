@@ -44,7 +44,8 @@ export type ZoningKind = 'Rezoning' | 'Planned development' | 'Special use permi
 /** Agenda wording that marks a zoning request about a property (not a code text change). */
 const ZONING = /\b(re-?zon\w*|zoning (case|change|district|request)|change (of|in) zoning|zoned\b|planned development|\bPDD?\b|specific use permit|special use permit|conditional use permit|\bSUP\b|\bCUP\b|future land use|comprehensive plan amendment|plan amendment)/i;
 /** Housekeeping items: minutes, code text amendments, appointments. */
-const NOT_A_CASE = /\b(minutes|text amendment|amend(ing)? (chapter|section|article)|appoint|nominat|briefing on|work ?session|election|budget)\b/i;
+const NOT_A_CASE =
+  /\b(minutes|text amendment|amend(ing)? (chapter|section|article)|appoint|nominat|briefing on|work ?session|election|budget|re-?plat|plat|fence|carport|special exception|certificate of occupancy|right-of-way|abandonment|consultation with the city attorney)\b/i;
 
 export function isZoningItem(title: string): boolean {
   return ZONING.test(title) && !NOT_A_CASE.test(title);
@@ -59,7 +60,7 @@ export function zoningKind(title: string): ZoningKind {
 }
 
 const USES: [string, RegExp][] = [
-  ['Multifamily', /\b(multi-?family|apartments?|MF-?\d|townhom\w*|residential mixed|dwelling units)\b/i],
+  ['Multifamily', /\b(multi-?family|apartments?|MF-?\d+|townhom\w*|residential mixed|dwelling units)\b/i],
   ['Industrial', /\b(industrial|warehouse|distribution|logistics|manufactur\w*|light industrial|\bI-?[12]\b|\bLI\b|\bIR\b|\bIM\b|data cent\w*)\b/i],
   ['Retail', /\b(retail|commercial|shopping|restaurant|\bCR\b|\bGR\b|\bC-?[1-3]\b|\bCS\b|\bCO\b|gas station|convenience)\b/i],
   ['Office', /\boffice\b|\bO-?[12]\b|\bLO\b|\bGO\b/i],
@@ -72,10 +73,15 @@ export function zoningUses(title: string): string[] {
   return USES.filter(([, pattern]) => pattern.test(title)).map(([name]) => name);
 }
 
-/** "Z245-123", "C14-2026-0042", "PLN26-0001": a case number at the start or in parentheses. */
+/**
+ * The case number in an item: "Z245-123", "C14-2026-0042", "PZRZ26-00015", "26P-041". District codes
+ * ("MF-33") and highways ("IH-35") look alike but carry fewer digits.
+ */
 export function caseNumber(text: string): string | null {
-  const match = /\b([A-Z]{1,4}\d{0,3}-\d{2,4}(?:-\d{2,5})?[A-Z]?)\b/.exec(text);
-  return match?.[1] ?? null;
+  for (const match of String(text).matchAll(/\b(\d{0,4}[A-Z]{1,5}\d{0,4}-\d{2,5}(?:-\d{2,5})?(?:\.\d{2})?[A-Z]?)\b/g)) {
+    if ((match[1]!.match(/\d/g) ?? []).length >= 4) return match[1]!;
+  }
+  return null;
 }
 
 /** Agenda text squeezed to one readable line. */
@@ -120,7 +126,9 @@ export const LEGISTAR: LegistarClient[] = [
 ];
 
 /** The boards that hear zoning cases. */
-const ZONING_BODY = /\b(plan|planning|zoning|council|adjustment|landmark|historic)\b/i;
+const ZONING_BODY = /\b(plan|planning|zoning|council)\b/i;
+/** Boards of adjustment hear fences and setbacks on single houses; landmark boards hear paint colors. */
+const NOT_ZONING_BODY = /\b(adjustment|landmark|historic|appeals)\b/i;
 
 interface LegistarEvent {
   EventId: number;
@@ -142,7 +150,8 @@ export function legistarCases(source: LegistarClient, event: LegistarEvent, item
   for (const item of items) {
     const text = [item.EventItemMatterName, item.EventItemTitle].filter(Boolean).join(': ');
     const typed = /zoning|planned development|specific use|conditional use/i.test(item.EventItemMatterType ?? '');
-    if (!text || !(typed ? !NOT_A_CASE.test(text) : isZoningItem(text))) continue;
+    // Items without a file are section headings ("ZONING CASES - CONSENT") and boilerplate.
+    if (!text || !item.EventItemMatterFile || !(typed ? !NOT_A_CASE.test(text) : isZoningItem(text))) continue;
     out.push({
       id: `legistar:${source.client}:${item.EventItemId}`,
       market: source.market,
@@ -164,7 +173,7 @@ async function readLegistar(source: LegistarClient, from: string, to: string, ht
   const filter = `EventDate ge datetime'${from}' and EventDate le datetime'${to}'`;
   const events = await fetchJson<LegistarEvent[]>(`${base}/events?$filter=${encodeURIComponent(filter)}&$orderby=EventDate`, http);
   const out: ZoningCase[] = [];
-  for (const event of events.filter((e) => ZONING_BODY.test(e.EventBodyName))) {
+  for (const event of events.filter((e) => ZONING_BODY.test(e.EventBodyName) && !NOT_ZONING_BODY.test(e.EventBodyName))) {
     const items = await fetchJson<LegistarItem[]>(`${base}/events/${event.EventId}/eventitems?AgendaNote=1`, http).catch(() => []);
     out.push(...legistarCases(source, event, items));
   }
@@ -233,7 +242,7 @@ async function readCivicClerk(source: CivicClerkTenant, from: string, to: string
   const filter = `startDateTime gt ${from}T00:00:00Z and startDateTime lt ${to}T23:59:59Z`;
   const events = await fetchJson<{ value: CivicClerkEvent[] }>(`${base}/Events?$filter=${encodeURIComponent(filter)}&$orderby=startDateTime&$top=200`, http);
   const out: ZoningCase[] = [];
-  for (const event of events.value.filter((e) => e.agendaId && ZONING_BODY.test(`${e.eventName} ${e.categoryName ?? ''}`))) {
+  for (const event of events.value.filter((e) => e.agendaId && ZONING_BODY.test(`${e.eventName} ${e.categoryName ?? ''}`) && !NOT_ZONING_BODY.test(e.eventName))) {
     const meeting = await fetchJson<{ items?: CivicClerkItem[] }>(`${base}/Meetings/${event.agendaId}`, http).catch(() => null);
     out.push(...civicClerkCases(source, event, meeting?.items ?? []));
   }
@@ -262,7 +271,10 @@ export function stripHtml(html: string): string {
     .replace(/&#39;|&rsquo;|&lsquo;/g, "'")
     .replace(/&ldquo;|&rdquo;/g, '"')
     .replace(/&ndash;|&mdash;/g, '-')
-    .replace(/&[a-z]+;/g, ' ');
+    .replace(/&#(\d+);/g, (_, code: string) => (Number(code) === 160 ? ' ' : String.fromCodePoint(Number(code))))
+    .replace(/&[a-z]+;/g, ' ')
+    // Cloudflare hides email addresses on the page; the placeholder says nothing.
+    .replace(/\[email\s*protected\]/gi, '');
 }
 
 /**
@@ -273,7 +285,8 @@ export function stripHtml(html: string): string {
 export function primeGovCases(meeting: PrimeGovMeeting, html: string, url: string): ZoningCase[] {
   const text = stripHtml(html);
   const out = new Map<string, ZoningCase>();
-  const pattern = /((?:ZONING|PLAN AMENDMENT)\s+CASE\s+(?:NUMBER\s+|#\s*)?((?:Z|PA)-?\d{4}-?[\dA-Z]+(?:\s*\w{1,4})?))([\s\S]{0,700}?)(?=(?:ZONING|PLAN AMENDMENT)\s+CASE|\n\s*\n\s*\d+\.|$)/gi;
+  // Headings are upper case; "Zoning Case Z-…" in mixed case is a plan amendment pointing at its companion case.
+  const pattern = /((?:ZONING|PLAN AMENDMENT)\s+CASE\s+(?:NUMBER\s+|#\s*)?((?:Z|PA)-?\d{4}-?\d+(?:\s*\([A-Z ]+\))?))([\s\S]{0,700}?)(?=(?:ZONING|PLAN AMENDMENT)\s+CASE|\n\s*\n\s*\d+\.|$)/g;
   for (const match of text.matchAll(pattern)) {
     const file = match[2]!.replace(/\s+/g, ' ').trim();
     if (out.has(file)) continue;

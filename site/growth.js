@@ -185,6 +185,8 @@ export function firmJobsHref(firm, path = '') {
 let current = [];
 export function setGrowthJobs(jobs) {
   current = Array.isArray(jobs) ? jobs : [];
+  // The feed and the market data load side by side; a view drawn before the jobs arrived redraws.
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('terra-jobs'));
 }
 export function growthJobs() {
   return current;
