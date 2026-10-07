@@ -292,8 +292,14 @@ export class SiteTester {
   ): Promise<void> {
     if (!expect.jobs) return;
     await page.locator('#list .card').first().waitFor({ timeout: 20_000 });
+    // The list draws 30 cards at a time (PAGE_SIZE in site/app.js); "Show more" adds the rest.
+    const first = await page.locator('#list .card').count();
+    check(first === Math.min(expect.jobs, 30), 'the list starts with up to 30 jobs', `${first} cards for ${expect.jobs} jobs`);
+    for (let i = 0; i < 20 && (await page.locator('#list .more').count()); i++) {
+      await page.locator('#list .more').click();
+    }
     const cards = await page.locator('#list .card').count();
-    check(cards === expect.jobs, 'every job in the feed is listed', `${cards} cards for ${expect.jobs} jobs`);
+    check(cards === expect.jobs, 'every job in the feed is listed after "Show more"', `${cards} cards for ${expect.jobs} jobs`);
     const count = (await page.locator('#count').textContent()) ?? '';
     check(count.startsWith(`${expect.jobs} `), 'role count matches the list', count);
 
@@ -388,16 +394,27 @@ export class SiteTester {
     const card = page.locator('#list .card').first();
     if (!(await card.count())) return;
     const role = ((await card.locator('.role').textContent()) ?? '').trim();
+    // An earlier run that stopped part way can leave this job saved; start from unsaved either way.
+    const pressed = `document.querySelector('#list .card .save')?.getAttribute('aria-pressed')`;
+    if ((await page.evaluate<string | null>(pressed)) === 'true') {
+      await card.locator('.save').click();
+      await page.waitForFunction(`${pressed} === 'false'`, null, { timeout: 10_000 });
+    }
     await card.locator('.save').click();
-    await page.waitForFunction(`document.querySelector('#list .card .save')?.getAttribute('aria-pressed') === 'true'`, null, { timeout: 10_000 });
-    check(true, 'bookmarking a job saves it to the tracker');
+    try {
+      await page.waitForFunction(`${pressed} === 'true'`, null, { timeout: 10_000 });
+      check(true, 'bookmarking a job saves it to the tracker');
+    } catch {
+      check(false, 'bookmarking a job saves it to the tracker', `button still reads ${await page.evaluate<string | null>(pressed)}`);
+      return;
+    }
     await page.click('#tab-tracker');
     await page.locator('#tracker-view').waitFor({ state: 'visible', timeout: 5_000 });
     const body = (await page.locator('#t-body').textContent()) ?? '';
     check(body.includes(role), 'the saved job shows on the Tracker tab');
     await page.click('#tab-jobs');
     await page.locator('#list .card').first().locator('.save').click();
-    await page.waitForFunction(`document.querySelector('#list .card .save')?.getAttribute('aria-pressed') === 'false'`, null, { timeout: 10_000 });
+    await page.waitForFunction(`${pressed} === 'false'`, null, { timeout: 10_000 });
     check(true, 'bookmarking it again removes it');
   }
 
