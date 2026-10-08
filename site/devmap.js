@@ -151,7 +151,7 @@ async function drawMap(node, list, projects, city) {
   if (!node.isConnected) return;
   disposeMap();
   markers.clear();
-  const map = L.map(node, { scrollWheelZoom: false });
+  const map = L.map(node, { scrollWheelZoom: true });
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener noreferrer">Leaflet</a>');
   liveMap = map;
   L.tileLayer(TILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map);
