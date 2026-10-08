@@ -143,6 +143,75 @@ const KEYWORDS: Record<Sector, string[]> = {
     'community development financial',
     'cdfi',
     'tdhca'
+  ],
+  // Banks and debt funds making real estate loans. Placing debt for a client
+  // (a broker's seat) stays in Capital Markets.
+  Lending: [
+    'commercial lending',
+    'commercial lender',
+    'real estate lending',
+    'cre lending',
+    'construction lending',
+    'construction loan',
+    'commercial loan',
+    'loan officer',
+    'loan analyst',
+    'loan underwriter',
+    'loan closer',
+    'loan administration',
+    'loan administrator',
+    'credit analyst',
+    'credit underwriting',
+    'loan servicing',
+    'debt fund'
+  ],
+  // Bare 'title' would be every job's title; these are the trade's own words.
+  'Title & Escrow': [
+    'escrow',
+    'escrow officer',
+    'escrow assistant',
+    'title examiner',
+    'title officer',
+    'title insurance',
+    'title company',
+    'title agent',
+    'title processor',
+    'title production',
+    'commercial title',
+    'title commitment',
+    'title plant',
+    'abstractor',
+    'closing coordinator',
+    'closing agent'
+  ],
+  'Property Tax': [
+    'property tax',
+    'property taxes',
+    'ad valorem',
+    'tax consultant',
+    'tax protest',
+    'tax appeal',
+    'tax appeals',
+    'appraisal district',
+    'real estate tax',
+    'cost segregation'
+  ],
+  'Finance & Accounting': [
+    'accountant',
+    'accounting',
+    'property accountant',
+    'real estate accountant',
+    'fund accountant',
+    'fund accounting',
+    'staff accountant',
+    'accounts payable',
+    'accounts receivable',
+    'financial analyst',
+    'fp&a',
+    'cam reconciliation',
+    'cam reconciliations',
+    'general ledger',
+    'month-end close'
   ]
 };
 

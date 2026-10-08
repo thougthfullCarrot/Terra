@@ -48,7 +48,11 @@ export const PROFILE_SECTORS = [
   'Appraisal',
   'Capital Markets',
   'Homebuilder',
-  'Affordable Housing'
+  'Affordable Housing',
+  'Lending',
+  'Title & Escrow',
+  'Property Tax',
+  'Finance & Accounting'
 ];
 
 /**

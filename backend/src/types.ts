@@ -23,7 +23,11 @@ export const SECTORS = [
   'Appraisal',
   'Capital Markets',
   'Homebuilder',
-  'Affordable Housing'
+  'Affordable Housing',
+  'Lending',
+  'Title & Escrow',
+  'Property Tax',
+  'Finance & Accounting'
 ] as const;
 export type Sector = (typeof SECTORS)[number];
 

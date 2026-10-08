@@ -28,16 +28,23 @@ export const PAGE_SIZE = 50;
  *
  * Kept deliberately few: the site rebuilds every two hours, which is twelve
  * passes a day, and Adzuna's free tier allows only a few hundred calls a day
- * and a few thousand a month. `maxRequests` caps the whole pass.
+ * and a few thousand a month. `maxRequests` caps the whole pass: one page a
+ * query (two for the broadest), eight calls, the same as before lending,
+ * title and escrow, and property tax searches were added.
  */
 export const DEFAULT_QUERIES: AdzunaQuery[] = [
-  { what_phrase: 'commercial real estate' },
+  { what_phrase: 'commercial real estate', pages: 2 },
   { what: 'real estate', what_or: 'intern internship analyst associate trainee coordinator' },
   { what_or: 'acquisitions underwriting appraiser leasing asset', what_and: 'real estate' },
-  { what_or: 'LIHTC affordable housing tax credit' , what_and: 'housing' }
+  { what_or: 'LIHTC affordable housing tax credit' , what_and: 'housing' },
+  { what_or: 'lending loan credit', what_and: 'commercial real estate' },
+  { what_or: 'escrow title', what_and: 'commercial' },
+  { what_or: 'property tax ad valorem', what_and: 'consultant' }
 ];
 
 export interface AdzunaQuery {
+  /** Pages to read for this query; `maxPages` when unset. */
+  pages?: number;
   what?: string;
   what_and?: string;
   what_or?: string;
@@ -97,7 +104,7 @@ export function adzunaUrl(
     'content-type': 'application/json'
   });
   for (const [key, value] of Object.entries(query)) {
-    if (value) params.set(key, value);
+    if (value && key !== 'pages') params.set(key, String(value));
   }
   return `${BASE}/${page}?${params}`;
 }
@@ -107,14 +114,14 @@ export async function fetchAdzuna(
   credentials: AdzunaCredentials,
   options: AdzunaOptions = {}
 ): Promise<RawJob[]> {
-  const { queries = DEFAULT_QUERIES, maxRequests = 8, maxPages = 2, maxDaysOld = 30, ...http } = options;
+  const { queries = DEFAULT_QUERIES, maxRequests = 8, maxPages = 1, maxDaysOld = 30, ...http } = options;
 
   const seen = new Set<string>();
   const jobs: RawJob[] = [];
   let requests = 0;
 
   for (const query of queries) {
-    for (let page = 1; page <= maxPages; page++) {
+    for (let page = 1; page <= (query.pages ?? maxPages); page++) {
       if (requests >= maxRequests) return jobs;
       requests++;
 
@@ -173,14 +180,17 @@ export function parseAdzuna(payload: AdzunaResponse): RawJob[] {
  * car leases and talent acquisition.
  */
 const REAL_ESTATE =
-  /\b(real estate|cre|reits?|multifamily|commercial property|property management|property manager|apprais(?:er|al)|home ?build(?:er|ers|ing)|affordable housing|lihtc|housing tax credit|housing authority|public housing)\b/i;
+  /\b(real estate|cre|commercial (?:lending|lender|loans?|mortgage|title|escrow)|title (?:insurance|company|examiner|officer)|escrow officer|property tax(?:es)?|ad valorem|reits?|multifamily|commercial property|property management|property manager|apprais(?:er|al)|home ?build(?:er|ers|ing)|affordable housing|lihtc|housing tax credit|housing authority|public housing)\b/i;
 
 /** Residential sales jobs share the vocabulary but are not what Terra covers. */
 const RESIDENTIAL =
   /\b(realtor|real estate (?:sales )?agent|real estate salesperson|home ?buyers?|loan officer|mortgage)\b/i;
 
+/** A commercial loan officer or mortgage banker is a CRE lending seat, not a home loan one. */
+const COMMERCIAL = /\b(commercial|real estate (?:lending|loans?)|multifamily|income property|construction (?:lending|loans?))\b/i;
+
 export function isRealEstate(title: string, description: string): boolean {
-  if (RESIDENTIAL.test(title)) return false;
+  if (RESIDENTIAL.test(title) && !COMMERCIAL.test(title)) return false;
   return REAL_ESTATE.test(`${title}\n${description}`);
 }
 

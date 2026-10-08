@@ -82,6 +82,7 @@ describe('fetchAdzuna', () => {
     const jobs = await fetchAdzuna(credentials, {
       queries: [{ what: 'a' }, { what: 'b' }, { what: 'c' }],
       maxRequests: 3,
+      maxPages: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch
     });
 
