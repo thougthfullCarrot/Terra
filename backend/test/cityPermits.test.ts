@@ -138,12 +138,17 @@ describe('Austin, Fort Worth and Arlington permits', () => {
       group: '13107658',
       address: '6915 Bridge Point Pkwy, Austin, TX 78730',
       lat: 30.35,
-      contact: 'Harvey-Cleary Builders',
+      contact: null,
+      contractor: 'Harvey-Cleary Builders',
       url: 'https://abc.austintexas.gov/web/permit/x'
     });
     expect(austinPermit({ ...base, status_current: 'Final' })).toBeNull();
+    expect(austinPermit({ ...base, contractor_trade: 'General Contractor' })!.contractor).toBe('Harvey-Cleary Builders');
+    expect(austinPermit({ ...base, contractor_trade: 'Electrical Contractor' })).toMatchObject({ contractor: null, contact: 'Harvey-Cleary Builders' });
     const garage = austinPermit({ ...base, permit_number: '2025-154179 BP', permit_location: '6915 BRIDGE POINT PKWY BLDG 10 UNIT GAR' })!;
-    expect(permitProjects([a, garage], NOW)).toHaveLength(1);
+    const projects = permitProjects([a, garage], NOW);
+    expect(projects).toHaveLength(1);
+    expect(projects[0]!.contractor).toBe('Harvey-Cleary Builders');
   });
 
   it('reads Fort Worth and Arlington permits onto the Fort Worth map', () => {

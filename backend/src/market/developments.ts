@@ -184,6 +184,8 @@ export interface Development {
   source?: 'tabs' | 'city';
   /** The permit's primary contact (often the architect or permit expediter), for city permits. */
   contact?: string | null;
+  /** The general contractor named on the city permit, where the city publishes it. */
+  contractor?: string | null;
 }
 
 export interface DevelopmentsResult {

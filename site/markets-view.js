@@ -502,12 +502,13 @@ function devMap(city) {
   const cities = snapshot.markets.map((m) => m.city).filter((c) => data.projects.some((p) => p.city === c));
   // On a city's page the switcher moves to that city's page, so changing
   // areas never means backing out to All markets first.
-  if (city) return cities.includes(city) ? developmentMap({ data, cities, city, onCity: (next) => update({ city: next }) }) : '';
+  if (city) return cities.includes(city) ? developmentMap({ data, cities, city, bids: snapshot.bids, onCity: (next) => update({ city: next }) }) : '';
   if (!cities.includes(mapCity)) mapCity = cities[0];
   return developmentMap({
     data,
     cities,
     city: mapCity,
+    bids: snapshot.bids,
     onCity: (next) => {
       mapCity = next;
       render();

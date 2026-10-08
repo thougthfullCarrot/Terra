@@ -92,6 +92,7 @@ export const ROLES = [
   ['owner', 'Owner'],
   ['tenant', 'Tenant'],
   ['designFirm', 'Architect'],
+  ['contractor', 'Contractor'],
   ['contact', 'Permit contact']
 ];
 
