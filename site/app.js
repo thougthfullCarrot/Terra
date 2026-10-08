@@ -227,7 +227,7 @@ function bind() {
     if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target;
     if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
-    if ($('jobs-view').hidden || $('job-panel').open) return;
+    if ($('jobs-view').hidden || isModal()) return;
     event.preventDefault();
     $('q').focus();
     $('q').select();
@@ -283,6 +283,34 @@ function render() {
     if (job) openPanel(job);
     else setJobParam('');
   }
+  fillSplit();
+}
+
+/**
+ * On wide screens the posting sits beside the list, so it always shows one:
+ * the open one while it's still in the list, otherwise the first.
+ */
+function fillSplit() {
+  const panel = $('job-panel');
+  if (!WIDE.matches || isModal()) return;
+  if (panelJob && shown.some((j) => j.id === panelJob.id)) {
+    markSelected();
+  } else if (shown.length) {
+    if (state.job) setJobParam('');
+    openPanel(shown[0], { auto: true });
+  } else if (panel.open) {
+    panel.close();
+  }
+}
+
+function isModal() {
+  return $('job-panel').matches(':modal');
+}
+
+/** The card whose posting is showing beside the list. */
+function markSelected() {
+  const id = $('job-panel').open && !isModal() ? panelJob?.id : null;
+  for (const node of $('list').querySelectorAll('.card')) node.classList.toggle('selected', node.dataset.id === id);
 }
 
 /** The "Show more" button under the list, while some of the matching jobs are not drawn yet. */
@@ -448,6 +476,8 @@ function readSaved() {
    --------------------------------------------------------------------------- */
 
 let panelJob = null;
+// Wide enough for the list and the posting side by side.
+const WIDE = matchMedia('(min-width: 1024px)');
 
 function bindPanel() {
   const panel = $('job-panel');
@@ -486,16 +516,29 @@ function bindPanel() {
     if (event.key === 'ArrowRight') step(1);
   });
   panel.addEventListener('close', () => {
+    // Already reopened (switching between the side panel and the sheet).
+    if (panel.open) return;
     const id = panelJob?.id;
     panelJob = null;
     document.body.classList.remove('sheet-open');
     if (state.job) setJobParam('');
     // Back to the card it came from, for keyboard users.
     if (id) $('list').querySelector(`[data-id="${CSS.escape(id)}"] .open`)?.focus({ preventScroll: true });
+    markSelected();
+  });
+  // Crossing the breakpoint swaps the side panel for the sheet, or back.
+  WIDE.addEventListener('change', () => {
+    if (panel.open) panel.close();
+    render();
   });
 }
 
-function openPanel(job) {
+/** auto: shown beside the list without being asked for, so the link stays as it is. */
+function openPanel(job, { auto = false } = {}) {
+  const panel = $('job-panel');
+  // Beside the list on wide screens; a sheet on phones, or when the list isn't showing (the tracker).
+  const modal = !WIDE.matches || $('jobs-view').hidden;
+  if (panel.open && isModal() !== modal) panel.close();
   panelJob = job;
   const now = new Date();
   $('jp-monogram').textContent = initials(job.firm);
@@ -533,14 +576,24 @@ function openPanel(job) {
   $('jp-prev').disabled = index <= 0;
   $('jp-next').disabled = index < 0 || index >= shown.length - 1;
 
-  const panel = $('job-panel');
   panel.querySelector('.sheet-body').scrollTop = 0;
   if (!panel.open) {
-    panel.showModal();
-    document.body.classList.add('sheet-open');
+    if (modal) {
+      panel.showModal();
+      document.body.classList.add('sheet-open');
+    } else {
+      // show() moves focus into the panel; beside the list it should stay where the visitor is.
+      const active = document.activeElement;
+      const y = scrollY;
+      panel.show();
+      if (active instanceof HTMLElement) active.focus({ preventScroll: true });
+      else panel.blur();
+      scrollTo({ top: y });
+    }
   }
-  $('jp-close').focus({ preventScroll: true });
-  if (state.job !== job.id) setJobParam(job.id);
+  if (modal) $('jp-close').focus({ preventScroll: true });
+  markSelected();
+  if (!auto && state.job !== job.id) setJobParam(job.id);
 }
 
 /** The open posting goes in the link without redrawing the list behind it. */
@@ -578,7 +631,7 @@ let toastTimer;
 function toast(text) {
   const node = $('toast');
   // An open modal sits in the top layer, above anything outside it.
-  const host = $('job-panel').open ? $('job-panel') : document.body;
+  const host = isModal() ? $('job-panel') : document.body;
   if (node.parentElement !== host) host.append(node);
   node.textContent = text;
   node.hidden = false;

@@ -395,11 +395,67 @@
         </div>
       </div>
 
-      <section id="list" class="list" aria-label="Job postings">
-        <div class="skeleton" aria-hidden="true"></div>
-        <div class="skeleton" aria-hidden="true"></div>
-        <div class="skeleton" aria-hidden="true"></div>
-      </section>
+      <div class="split">
+        <section id="list" class="list" aria-label="Job postings">
+          <div class="skeleton" aria-hidden="true"></div>
+          <div class="skeleton" aria-hidden="true"></div>
+          <div class="skeleton" aria-hidden="true"></div>
+        </section>
+        <!-- One posting in full: beside the list on wide screens, a sheet on phones. Opened from a card or a ?job= link. -->
+        <dialog id="job-panel" class="panel-sheet" aria-labelledby="jp-role">
+          <div class="sheet-bar">
+            <div class="sheet-nav">
+              <button type="button" class="icon-button" id="jp-prev" aria-label="Previous job" title="Previous (←)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+              </button>
+              <span id="jp-position" class="sheet-position"></span>
+              <button type="button" class="icon-button" id="jp-next" aria-label="Next job" title="Next (→)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+              </button>
+            </div>
+            <button type="button" class="icon-button" id="jp-close" aria-label="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+            </button>
+          </div>
+          <div class="sheet-body">
+            <div class="sheet-head">
+              <span class="monogram large" id="jp-monogram" aria-hidden="true"></span>
+              <div>
+                <h2 id="jp-role"></h2>
+                <p class="firm" id="jp-firm"></p>
+              </div>
+            </div>
+            <p class="match-badge" id="jp-badge" hidden></p>
+            <ul class="chips" id="jp-chips"></ul>
+            <p class="dates" id="jp-dates"></p>
+            <div class="sheet-actions">
+              <a class="primary" id="jp-apply" target="_blank" rel="noopener noreferrer">Apply on the firm's site</a>
+              <button type="button" class="secondary" id="jp-save" aria-pressed="false">Save</button>
+              <label class="stage-pick" id="jp-stage-wrap" hidden>
+                <span class="visually-hidden">Where this application stands</span>
+                <select id="jp-stage"></select>
+              </label>
+              <button type="button" class="secondary" id="jp-share">Copy link</button>
+            </div>
+            <section id="jp-why-wrap" hidden>
+              <h3 class="sheet-h">Why it fits you</h3>
+              <ul class="why" id="jp-why"></ul>
+            </section>
+            <section id="jp-desc-wrap">
+              <h3 class="sheet-h">About the role</h3>
+              <p class="desc" id="jp-desc"></p>
+            </section>
+            <section id="jp-reqs-wrap">
+              <h3 class="sheet-h">What they ask for</h3>
+              <ul class="reqs" id="jp-reqs"></ul>
+            </section>
+            <p class="hint" id="jp-via" hidden>
+              Listed through <a href="https://www.adzuna.com" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>; the
+              apply link opens on Adzuna.
+            </p>
+          </div>
+        </dialog>
+      </div>
       </div>
 
       <!-- The member's applications by stage: tracker-view.js draws it from tracked_jobs. -->
@@ -545,60 +601,6 @@
       </article>
     </template>
 
-    <!-- One posting in full: opened from a card, or from a ?job= link. -->
-    <dialog id="job-panel" class="panel-sheet" aria-labelledby="jp-role">
-      <div class="sheet-bar">
-        <div class="sheet-nav">
-          <button type="button" class="icon-button" id="jp-prev" aria-label="Previous job" title="Previous (←)">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
-          </button>
-          <span id="jp-position" class="sheet-position"></span>
-          <button type="button" class="icon-button" id="jp-next" aria-label="Next job" title="Next (→)">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
-          </button>
-        </div>
-        <button type="button" class="icon-button" id="jp-close" aria-label="Close">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
-        </button>
-      </div>
-      <div class="sheet-body">
-        <div class="sheet-head">
-          <span class="monogram large" id="jp-monogram" aria-hidden="true"></span>
-          <div>
-            <h2 id="jp-role"></h2>
-            <p class="firm" id="jp-firm"></p>
-          </div>
-        </div>
-        <p class="match-badge" id="jp-badge" hidden></p>
-        <ul class="chips" id="jp-chips"></ul>
-        <p class="dates" id="jp-dates"></p>
-        <div class="sheet-actions">
-          <a class="primary" id="jp-apply" target="_blank" rel="noopener noreferrer">Apply on the firm's site</a>
-          <button type="button" class="secondary" id="jp-save" aria-pressed="false">Save</button>
-          <label class="stage-pick" id="jp-stage-wrap" hidden>
-            <span class="visually-hidden">Where this application stands</span>
-            <select id="jp-stage"></select>
-          </label>
-          <button type="button" class="secondary" id="jp-share">Copy link</button>
-        </div>
-        <section id="jp-why-wrap" hidden>
-          <h3 class="sheet-h">Why it fits you</h3>
-          <ul class="why" id="jp-why"></ul>
-        </section>
-        <section id="jp-desc-wrap">
-          <h3 class="sheet-h">About the role</h3>
-          <p class="desc" id="jp-desc"></p>
-        </section>
-        <section id="jp-reqs-wrap">
-          <h3 class="sheet-h">What they ask for</h3>
-          <ul class="reqs" id="jp-reqs"></ul>
-        </section>
-        <p class="hint" id="jp-via" hidden>
-          Listed through <a href="https://www.adzuna.com" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>; the
-          apply link opens on Adzuna.
-        </p>
-      </div>
-    </dialog>
 
     <!-- First sign-in: points a new account at its profile (account.js). -->
     <dialog id="profile-prompt" class="profile-prompt" aria-labelledby="pp-title" aria-describedby="pp-text">
