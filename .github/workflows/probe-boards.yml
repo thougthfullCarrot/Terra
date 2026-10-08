@@ -1,0 +1,21 @@
+# Temporary: tries other board addresses for paused firms. Removed before merge.
+name: Probe boards
+on:
+  pull_request:
+    paths: ['backend/scratch-probe/**', '.github/workflows/probe-boards.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx tsx scratch-probe/boards.ts
