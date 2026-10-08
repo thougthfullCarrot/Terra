@@ -220,6 +220,14 @@ async function fetchPage(
   const response = await fetchJson<WorkdayListResponse>(listUrl(tenant), {
     ...options,
     method: 'POST',
+    // Some tenants (Huntington) answer 500 unless the request looks like it
+    // came from their own careers page.
+    headers: {
+      'accept-language': 'en-US',
+      origin: `https://${tenant.host}`,
+      referer: `https://${tenant.host}/${tenant.site}`,
+      ...options.headers
+    },
     body: { appliedFacets: {}, limit: PAGE_SIZE, offset, searchText: '' }
   });
 
