@@ -18,4 +18,7 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
-      - run: npx tsx scratch-probe/boards.ts
+      - run: npx tsx scratch-probe/sheet-huntington.ts
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          TERRA_SHEET_ID: ${{ vars.TERRA_SHEET_ID }}
