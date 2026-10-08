@@ -8,6 +8,7 @@ import { CONFIG } from './config.js';
 import { isConfigured } from './access.js';
 import {
   FILTERS,
+  daysBetween,
   deadlineLabel,
   facet,
   filterJobs,
@@ -24,8 +25,8 @@ import {
 } from './feed.js';
 import { setMarketLoader, startMarkets } from './markets-view.js';
 import { setGrowthJobs } from './growth.js';
-import { STAGES, importRows } from './tracker.js';
-import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedIds, trackerOn, untrack } from './tracker-view.js';
+import { STAGES, followUpLabel, importRows } from './tracker.js';
+import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedIds, trackedRows, trackerOn, untrack } from './tracker-view.js';
 import { startNews } from './news-view.js';
 import { startEvents } from './events-view.js';
 import { startProperty } from './property-view.js';
@@ -91,6 +92,7 @@ function hideFeed(message) {
   $('list').replaceChildren();
   $('count').textContent = '';
   $('stats').hidden = true;
+  $('today').hidden = true;
   if ($('job-panel').open) $('job-panel').close();
 }
 
@@ -130,6 +132,7 @@ function trackerChanged() {
   }
   if (panelJob) paintPanelSave();
   if (state.saved) render();
+  else drawToday(snapshot.jobs, new Date());
 }
 
 /** Called by account.js whenever the signed-in user's profile changes. */
@@ -236,7 +239,8 @@ function bind() {
   bindPanel();
 }
 
-function update(change) {
+function update(change, chosenSort = false) {
+  if (chosenSort) sortChosen = true;
   state = { ...state, ...change };
   limit = PAGE_SIZE;
   history.replaceState(null, '', `${location.pathname}${writeQuery(state)}${location.hash}`);
@@ -251,7 +255,7 @@ function render() {
 
   const failed = boards?.failed ? ` · ${boards.failed} of ${boards.polled} boards didn't answer` : '';
   $('meta').textContent = `${updatedLabel(generatedAt, now)}${failed}`;
-  drawStats(jobs, now);
+  drawToday(jobs, now);
   drawChips();
 
   shown = sortJobs(filterJobs(jobs, { ...state, savedIds: saved }), state.sort);
@@ -333,25 +337,65 @@ function drawMore(now) {
   $('list').append(button);
 }
 
-function drawStats(jobs, now) {
-  const stats = $('stats');
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/** Days from today to a YYYY-MM-DD deadline, or null without a readable one. */
+function daysLeft(deadline, now) {
+  if (!deadline) return null;
+  const date = new Date(`${deadline}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : daysBetween(now, date);
+}
+
+/**
+ * The "today" strip over the search: open roles, roles posted in the last
+ * day, strong resume matches, roles closing within a week and tracker
+ * follow-ups due. A tile shows only when the data behind it exists; each one
+ * is a shortcut to the jobs it counts.
+ */
+function drawToday(jobs, now) {
+  const box = $('today');
+  const tiles = [];
   const firms = new Set(jobs.map((j) => j.firm)).size;
   const cities = new Set(jobs.map((j) => j.city)).size;
-  const fresh = jobs.filter((j) => isNew(j.postedAt, now)).length;
-  const items = [
-    [jobs.length, jobs.length === 1 ? 'open role' : 'open roles'],
-    [fresh, 'new in 2 days'],
-    [firms, firms === 1 ? 'firm hiring' : 'firms hiring'],
-    [cities, cities === 1 ? 'city' : 'cities']
-  ];
-  stats.replaceChildren(
-    ...items.map(([value, label]) => {
-      const box = el('div', 'stat');
-      box.append(el('dt', 'stat-label', label), el('dd', 'stat-value', String(value)));
-      return box;
-    })
+  tiles.push(
+    tile(jobs.length, jobs.length === 1 ? 'open role' : 'open roles', `${firms} ${firms === 1 ? 'firm' : 'firms'} · ${cities} ${cities === 1 ? 'city' : 'cities'}`, () =>
+      update({ q: '', city: '', firm: '', kind: '', sector: '', saved: false })
+    )
   );
-  stats.hidden = false;
+  const dated = jobs.filter((j) => j.postedAt && Number.isFinite(new Date(j.postedAt).getTime()));
+  if (dated.length) {
+    const fresh = dated.filter((j) => now.getTime() - new Date(j.postedAt).getTime() <= DAY_MS).length;
+    const recent = jobs.filter((j) => isNew(j.postedAt, now)).length;
+    tiles.push(tile(fresh, 'new since yesterday', `${recent} in the last 2 days`, () => update({ sort: 'newest' }, true)));
+  }
+  if (scores.size) {
+    const strong = jobs.filter((j) => (scores.get(j.id)?.score ?? 0) >= GOOD_MATCH).length;
+    tiles.push(tile(strong, strong === 1 ? 'strong match' : 'strong matches', `${GOOD_MATCH}% fit or better`, () => update({ sort: 'match' }, true)));
+  }
+  const closing = jobs
+    .map((job) => ({ job, days: daysLeft(job.deadline, now) }))
+    .filter(({ days }) => days != null && days >= 0 && days <= 7)
+    .sort((a, b) => a.days - b.days);
+  if (jobs.some((j) => j.deadline)) {
+    const first = closing[0];
+    const note = first ? `${first.job.firm} · ${SHORT_DATE.format(new Date(`${first.job.deadline}T00:00:00Z`))}` : 'Nothing due this week';
+    tiles.push(tile(closing.length, 'closing in 7 days', note, () => update({ sort: 'deadline' }, true), closing.length > 0));
+  }
+  if (trackerOn()) {
+    const due = trackedRows().filter((row) => followUpLabel(row.follow_up, now)?.due).length;
+    tiles.push(tile(due, due === 1 ? 'follow-up due' : 'follow-ups due', 'Open tracker', () => (location.hash = 'tracker'), due > 0));
+  }
+  box.replaceChildren(...tiles);
+  box.hidden = false;
+
+  function tile(value, label, note, go, hot = false) {
+    const button = el('button', 'card today-stat');
+    button.type = 'button';
+    button.append(el('b', `num${hot ? ' hot' : ''}`, String(value)), el('small', '', label), el('em', '', note));
+    button.addEventListener('click', go);
+    return button;
+  }
 }
 
 function drawSavedToggle() {
@@ -554,11 +598,14 @@ function openPanel(job, { auto = false } = {}) {
   datesNode.append(el('span', '', dates[0]));
   if (deadline) datesNode.append(el('span', `deadline${deadline.urgent ? ' urgent' : ''}`, deadline.text));
 
+  drawFacts(job, now);
   const match = scores.get(job.id);
   $('jp-badge').hidden = !match;
   if (match) $('jp-badge').textContent = match.strong ? `Best match · ${match.note}` : `${match.score}% match`;
   $('jp-why').replaceChildren(...(match?.lines ?? []).map((line) => el('li', '', line)));
-  $('jp-why-wrap').hidden = !match?.lines.length;
+  drawFit(job, match);
+  $('jp-why-wrap').hidden = !match;
+  drawSimilar(job);
 
   $('jp-desc').textContent = job.desc || 'The firm did not include a description. The apply link has the full posting.';
   $('jp-reqs').replaceChildren(...(job.reqs ?? []).map((req) => el('li', '', req)));
@@ -594,6 +641,83 @@ function openPanel(job, { auto = false } = {}) {
   if (modal) $('jp-close').focus({ preventScroll: true });
   markSelected();
   if (!auto && state.job !== job.id) setJobParam(job.id);
+}
+
+/** Pay, type, sector and closing date as tiles; the closing tile turns red inside a week. */
+function drawFacts(job, now) {
+  const days = daysLeft(job.deadline, now);
+  const closes = days == null ? 'Not listed' : days < 0 ? `Closed ${SHORT_DATE.format(new Date(`${job.deadline}T00:00:00Z`))}` : SHORT_DATE.format(new Date(`${job.deadline}T00:00:00Z`));
+  const facts = [
+    ['Pay', job.pay || 'Not listed'],
+    ['Type', job.kind || 'Not listed'],
+    ['Sector', job.sector || 'Not listed'],
+    ['Closes', closes, days != null && days <= 7]
+  ];
+  $('jp-facts').replaceChildren(
+    ...facts.map(([label, value, warn]) => {
+      const box = el('div', `fact${warn ? ' warn' : ''}`);
+      box.append(el('dt', '', label), el('dd', '', value));
+      return box;
+    })
+  );
+}
+
+/**
+ * The match ring and, when match.js can name them, the skills the posting
+ * asks for split into what the resume has and what it lacks.
+ */
+function drawFit(job, match) {
+  const fit = $('jp-fit');
+  const list = $('jp-skills');
+  list.replaceChildren();
+  fit.hidden = !match;
+  if (!match) return;
+  const ring = el('span', 'ring');
+  ring.style.setProperty('--p', String(match.score));
+  ring.append(el('span', '', `${match.score}%`));
+  const verdict = match.strong ? 'Best match.' : match.score >= GOOD_MATCH ? 'Strong fit.' : match.score >= WEAK_MATCH ? 'Partial fit.' : 'Weak fit.';
+  const text = el('p');
+  text.append(el('b', '', verdict), ` ${match.note}`);
+  fit.replaceChildren(ring, text);
+
+  const required = job.match?.required ?? [];
+  if (!required.length || !profile?.resumeText || typeof matcher?.resumeSkillKeys !== 'function') return;
+  const have = new Set(matcher.resumeSkillKeys(profile.resumeText));
+  const label = (key) => matcher.skillLabel(key);
+  for (const key of required.filter((k) => have.has(k))) {
+    const li = el('li', 'check yes');
+    li.append(el('i', '', '✓'), el('span', '', `${label(key)} is on your resume.`));
+    list.append(li);
+  }
+  for (const key of required.filter((k) => !have.has(k))) {
+    const li = el('li', 'check no');
+    const span = el('span');
+    span.append(el('b', '', label(key)), " is asked for but isn't on your resume.");
+    li.append(el('i', '', '!'), span);
+    list.append(li);
+  }
+}
+
+/** Up to four other open roles in the same sector or city, closest first. */
+function drawSimilar(job) {
+  const pool = (snapshot?.jobs ?? [])
+    .filter((j) => j.id !== job.id && (j.sector === job.sector || j.city === job.city))
+    .map((j) => ({ j, rank: (j.sector === job.sector ? 2 : 0) + (j.city === job.city ? 1 : 0) + (j.kind === job.kind ? 0.5 : 0) }))
+    .sort((a, b) => b.rank - a.rank || (scores.get(b.j.id)?.score ?? 0) - (scores.get(a.j.id)?.score ?? 0) || String(b.j.postedAt).localeCompare(String(a.j.postedAt)))
+    .slice(0, 4)
+    .map(({ j }) => j);
+  $('jp-similar-wrap').hidden = !pool.length;
+  $('jp-similar').replaceChildren(
+    ...pool.map((other) => {
+      const button = el('button', 'similar-item');
+      button.type = 'button';
+      const text = el('span', 'similar-text');
+      text.append(el('b', '', other.role), el('small', '', `${other.firm} · ${other.city}`));
+      button.append(el('span', 'monogram', initials(other.firm)), text);
+      button.addEventListener('click', () => openPanel(other));
+      return button;
+    })
+  );
 }
 
 /** The open posting goes in the link without redrawing the list behind it. */

@@ -44,6 +44,13 @@ export interface SiteMatch {
   strong: boolean;
 }
 
+export { skillLabel };
+
+/** Vocabulary keys (as in job.match.required) found in a resume, for have/missing lists and skill gaps. */
+export function resumeSkillKeys(text: string | null): string[] {
+  return detectSkills(text ?? '');
+}
+
 /** Skills from the matcher's vocabulary found in a resume, for the profile page. */
 export function resumeSkills(text: string | null): string[] {
   return detectSkills(text ?? '').map(skillLabel);

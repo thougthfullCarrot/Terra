@@ -29,3 +29,7 @@ export function filterEvents(file: EventsFile | null, filter?: { city?: string }
 export function eventCounts(file: EventsFile | null, now?: Date): Map<string, number>;
 export function groupByMonth(events: SiteEvent[]): Array<{ month: string; events: SiteEvent[] }>;
 export function eventDate(iso: string): string;
+export function dateParts(iso: string): { month: string; day: string; weekday: string; ymd: string } | null;
+export function eventIcs(event: SiteEvent, now?: Date): string;
+export function googleCalendarUrl(event: SiteEvent): string;
+export function monthGrid(month: string, events: SiteEvent[]): Array<{ day: number; ymd: string; has: boolean } | null>;
