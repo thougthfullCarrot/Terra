@@ -57,6 +57,11 @@ export interface RawJob {
    * though 'analyst' and 'acquisition' read as Investment.
    */
   sector?: Sector;
+  /**
+   * From a firm that hires far beyond real estate (a bank, a title insurer):
+   * keep the job only when its title names real estate work.
+   */
+  creOnly?: boolean;
 }
 
 /** A row of `postings`. */

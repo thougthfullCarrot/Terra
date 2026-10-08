@@ -39,7 +39,8 @@ export class SupabaseStore implements Store {
       atsHost: (row.ats_host as string | null) ?? null,
       active: row.active as boolean,
       slugVerified: row.slug_verified as boolean,
-      sector: (row.sector as Sector | null | undefined) ?? null
+      sector: (row.sector as Sector | null | undefined) ?? null,
+      creOnly: row.cre_only === true
     }));
   }
 

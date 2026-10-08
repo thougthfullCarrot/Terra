@@ -62,7 +62,8 @@ export function parseFirmSeed(sql: string): FirmRow[] {
         // Columns the migration leaves out fall back to the schema defaults.
         active: row.has('active') ? row.get('active') === true : true,
         slugVerified: row.get('slug_verified') === true,
-        sector: sectorOf(row.get('sector'))
+        sector: sectorOf(row.get('sector')),
+        creOnly: row.get('cre_only') === true
       });
     }
   }

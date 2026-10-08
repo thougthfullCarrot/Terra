@@ -176,9 +176,9 @@ describe('the Firms tab', () => {
       ['Perry Homes', 'Homebuilder']
     ]);
     expect(google.tabs.get(FIRMS_TAB)).toEqual([
-      ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector'],
-      ['Lincoln Property Company', 'greenhouse', 'lincoln', '', 'yes', 'OK', ''],
-      ['Perry Homes', 'workable', 'perryhomes', '', 'yes', '', 'Homebuilder']
+      ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector', 'Real estate only'],
+      ['Lincoln Property Company', 'greenhouse', 'lincoln', '', 'yes', 'OK', '', ''],
+      ['Perry Homes', 'workable', 'perryhomes', '', 'yes', '', 'Homebuilder', '']
     ]);
 
     // The owner deletes the builder; the next build leaves it deleted.
@@ -186,6 +186,29 @@ describe('the Firms tab', () => {
     const again = await loadFirms(google.client, withBuilder, { write: true });
     expect(again.firms.map((firm) => firm.name)).toEqual(['Lincoln Property Company']);
     expect(google.tabs.get(FIRMS_TAB)).toHaveLength(2);
+  });
+
+  it('adds the Real estate only column and the banks and title companies once', async () => {
+    const withBank: FirmRow[] = [
+      ...seed,
+      { id: 9, name: 'Stewart', ats: 'workday', atsSlug: 'Careers', atsHost: 'stewart.wd1.myworkdayjobs.com', active: true, slugVerified: false, sector: 'Title & Escrow', creOnly: true }
+    ];
+    const google = fakeGoogle({
+      [FIRMS_TAB]: [
+        ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector'],
+        ['Lincoln Property Company', 'greenhouse', 'lincoln', '', 'yes', 'OK', '']
+      ]
+    });
+    const result = await loadFirms(google.client, withBank, { write: true });
+    expect(result.firms.map((firm) => [firm.name, firm.sector, firm.creOnly])).toEqual([
+      ['Lincoln Property Company', null, false],
+      ['Stewart', 'Title & Escrow', true]
+    ]);
+    expect(google.tabs.get(FIRMS_TAB)![2]).toEqual(['Stewart', 'workday', 'Careers', 'stewart.wd1.myworkdayjobs.com', 'yes', '', 'Title & Escrow', 'yes']);
+
+    google.tabs.get(FIRMS_TAB)!.pop();
+    const again = await loadFirms(google.client, withBank, { write: true });
+    expect(again.firms.map((firm) => firm.name)).toEqual(['Lincoln Property Company']);
   });
 
   it('reads a typed sector, and pins the seed\'s on a read-only build of an old tab', async () => {

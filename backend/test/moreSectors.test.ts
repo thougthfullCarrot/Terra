@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifySector } from '../src/collector/sector.js';
+import { forFirm, normalize } from '../src/collector/normalize.js';
 import { adzunaUrl, DEFAULT_QUERIES, fetchAdzuna, isRealEstate } from '../src/collector/sources/adzuna.js';
 
 describe('the rest of a deal: lending, title, tax, accounting', () => {
@@ -39,5 +40,13 @@ describe('the rest of a deal: lending, title, tax, accounting', () => {
     }) as typeof fetch;
     await fetchAdzuna({ appId: 'a', appKey: 'b' }, { fetchImpl });
     expect(calls).toBe(8);
+  });
+
+  it('keeps only real estate seats from a bank or title insurer', () => {
+    const job = (title: string) => ({ title, firm: 'Big Bank', location: 'Dallas, TX', description: 'Entry level.', applyUrl: 'https://x', ats: 'workday' as const });
+    const [teller, analyst] = forFirm({ sector: null, creOnly: true }, [job('Treasury Analyst'), job('Commercial Real Estate Credit Analyst')]);
+    expect(normalize(teller!)).toEqual({ ok: false, reason: 'off-topic' });
+    expect(normalize(analyst!)).toMatchObject({ ok: true, posting: { sector: 'Lending' } });
+    expect(normalize(job('Treasury Analyst'))).toMatchObject({ ok: true });
   });
 });
