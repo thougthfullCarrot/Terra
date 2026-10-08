@@ -23,7 +23,7 @@ export const DEAL_LOAN: { down: number; closing: number; years: number; spread: 
 export const DEAL_TYPE_LABELS: Record<string, string>;
 export function readPropertyHash(hash: string): { open: boolean; tool: string; city: string; q: string; lat: number | null; lng: number | null };
 export function writePropertyHash(state: { tool?: string; city?: string; q?: string; lat?: number | null; lng?: number | null }): string;
-export function parseAddress(text: string): { number: string; street: string; dir?: string } | null;
+export function parseAddress(text: string): { number: string; street: string; dir?: string; words?: string[] } | null;
 export function addressPlace(text: string): string;
 export function rankAddresses<T extends { address?: string }>(parcels: T[], address: string, city?: string): T[];
 export function addressWhere(source: OwnerSource, address: string): string | null;

@@ -188,29 +188,39 @@ const STREET_WORDS = {
 const DIRECTIONS = new Set(['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW']);
 const SUFFIXES = new Set(['ST', 'AVE', 'BLVD', 'DR', 'RD', 'LN', 'PKWY', 'FWY', 'HWY', 'CT', 'PL', 'CIR', 'TRL', 'EXPY', 'WAY']);
 
-/**
- * "1000 N Main Street, Houston TX 77002" → { number: '1000', street: 'MAIN', dir: 'N' }:
- * the house number, the street's first distinctive word and the direction
- * before it, if any. Every district's address field has these in the same
- * order whatever else it adds. null when there is no house number.
- */
-export function parseAddress(text) {
-  const words = String(text ?? '')
+/** Upper-case words with street words shortened (STREET → ST) and ordinals bare (2ND → 2), so typed and recorded addresses compare. */
+function addressTokens(text) {
+  return String(text ?? '')
     .toUpperCase()
-    .split(',')[0]
     .replace(/[^A-Z0-9 ]+/g, ' ')
     .split(/\s+/)
     .filter(Boolean)
-    .map((w) => STREET_WORDS[w] ?? w);
+    .map((w) => STREET_WORDS[w] ?? w.replace(/^(\d+)(ST|ND|RD|TH)$/, '$1'));
+}
+
+/**
+ * "1000 N Main Street, Houston TX 77002" → { number: '1000', street: 'MAIN', dir: 'N', words: ['MAIN'] }:
+ * the house number, the street's first distinctive word, every name word
+ * before the suffix ("Overton Ridge"), and the direction before it, if any.
+ * Every district's address field has these in the same order whatever else
+ * it adds. null when there is no house number.
+ */
+export function parseAddress(text) {
+  const words = addressTokens(String(text ?? '').split(',')[0]);
   const number = words[0];
   if (!number || !/^\d+[A-Z]?$/.test(number)) return null;
   // A direction leads only when a real street name follows it ("100 West Ave" is West Avenue).
   const dir = DIRECTIONS.has(words[1]) && words.slice(2).some((w) => !SUFFIXES.has(w)) ? words[1] : null;
   const rest = words.slice(dir ? 2 : 1);
   // "St Marys" and "Saint Marys" are written both ways, so the word after a leading ST is the one to look for.
-  const street = rest.find((w) => !SUFFIXES.has(w) && w !== 'SAINT' && w.length > 1) ?? rest[0];
+  const named = (w) => !SUFFIXES.has(w) && w !== 'SAINT' && (w.length > 1 || /^\d+$/.test(w));
+  const street = rest.find(named) ?? rest[0];
   if (!street) return null;
-  return dir ? { number, street, dir } : { number, street };
+  const start = rest.indexOf(street);
+  const end = rest.findIndex((w, i) => i > start && SUFFIXES.has(w));
+  const words2 = rest.slice(start, end === -1 ? undefined : end).filter(named);
+  const out = dir ? { number, street, dir } : { number, street };
+  return words2.length > 1 ? { ...out, words: words2 } : out;
 }
 
 /** The city (or ZIP) typed after the street, upper case, or ''. "700 Louisiana St, Houston, TX 77002" → "HOUSTON". */
@@ -235,13 +245,18 @@ export function addressWhere(source, address) {
   return `UPPER(${source.address}) LIKE '${sql(parsed.number)} %${sql(parsed.street)}%'`;
 }
 
-/** Whether a parcel's address starts with the house number and has the street word whole. */
+/**
+ * Whether a parcel's address is the one typed: the house number first, the
+ * direction (when both have one) the same, and every street name word whole,
+ * so 1601 Belmont isn't 1601 Elm and 301 S 2nd isn't 301 W 2nd.
+ */
 export function sameStreet(parcel, address) {
   const parsed = parseAddress(address);
   if (!parsed) return false;
-  const a = ` ${String(parcel?.address ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ')} `;
-  const street = parsed.street === 'MARYS' ? / (ST|SAINT) MARYS /.test(a) || a.includes(' MARYS ') : a.includes(` ${parsed.street} `);
-  return a.startsWith(` ${parsed.number} `) && street;
+  const tokens = addressTokens(parcel?.address);
+  if (tokens[0] !== parsed.number) return false;
+  if (parsed.dir && DIRECTIONS.has(tokens[1]) && tokens[1] !== parsed.dir) return false;
+  return (parsed.words ?? [parsed.street]).every((w) => tokens.includes(w));
 }
 
 /**

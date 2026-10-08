@@ -261,6 +261,8 @@ async function lookup(q) {
   });
   if (first) return { found: first, failed, near: false };
   const [ownFound, near] = await Promise.all([county, statewide]);
+  // With a market picked, what the state map has at that spot beats the same number on some other town's street.
+  if (state.city && near.length && !ownFound.length) return { found: near, failed: [...new Set(failed)], near: true };
   const rest = await queryMany(OWNER_SOURCES.filter((s) => !own.includes(s)), (s) => addressWhere(s, q), 50);
   failed.push(...rest.failed);
   const found = rankAddresses([...ownFound, ...rest.found.filter((p) => sameStreet(p, q))], q, state.city);

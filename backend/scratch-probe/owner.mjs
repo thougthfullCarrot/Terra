@@ -36,6 +36,7 @@ async function lookup(q, city) {
   const first = await new Promise((resolve) => { let left = 2; for (const [how, p] of [['county', county], ['state', state]]) p.then((l) => (exact(l) ? resolve({ how, rows: l }) : --left === 0 && resolve(null))); });
   if (first) return first;
   const [ownFound, near] = await Promise.all([county, state]);
+  if (city && near.length && !ownFound.length) return { how: 'NEAR', rows: near };
   const rest = (await Promise.all(P.OWNER_SOURCES.filter((s) => !own.includes(s)).map((s) => layer(s, P.addressWhere(s, q), 50)))).flatMap((r) => r.rows);
   const found = P.rankAddresses([...ownFound, ...rest.filter((p) => P.sameStreet(p, q))], q, city);
   if (!found.length && near.length) return { how: 'NEAR', rows: near };
