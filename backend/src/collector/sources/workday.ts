@@ -148,7 +148,15 @@ export async function fetchWorkday(
   const listings: WorkdayListing[] = [];
   let total: number | undefined;
   for (let page = 0; page < maxPages; page++) {
-    const batch = await fetchPage(tenant, page * PAGE_SIZE, options);
+    let batch;
+    try {
+      batch = await fetchPage(tenant, page * PAGE_SIZE, options);
+    } catch (error) {
+      // Some tenants answer the first pages and then fail deep in the list
+      // (Huntington's 500s past a few hundred postings); keep what was read.
+      if (page === 0) throw error;
+      break;
+    }
     // Workday reports the total on the first page only; later pages carry 0.
     if (page === 0) total = batch.total;
     listings.push(...batch.jobPostings);

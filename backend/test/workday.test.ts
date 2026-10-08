@@ -133,6 +133,25 @@ describe('parsePostedOn', () => {
 });
 
 describe('fetchWorkday', () => {
+  it('keeps the pages it read when a later page fails, but not when the first does', async () => {
+    const listing = { title: 'Analyst', locationsText: 'Houston, TX', externalPath: '/job/a' };
+    let pages = 0;
+    const fetchImpl = (async (url: string | URL) => {
+      if (String(url).endsWith('/jobs')) {
+        pages++;
+        if (pages > 1) return new Response('boom', { status: 500 });
+        return new Response(JSON.stringify({ total: 700, jobPostings: Array.from({ length: 20 }, () => ({ ...listing, title: 'Senior Director' })) }), { status: 200 });
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+    const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
+    await fetchWorkday('Bank', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', { fetchImpl, retries: 0, baseDelayMs: 1, maxPages: 5, stats });
+    expect(stats.listed).toBe(20);
+
+    const down = (async () => new Response('boom', { status: 500 })) as typeof fetch;
+    await expect(fetchWorkday('Bank', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', { fetchImpl: down, retries: 0, baseDelayMs: 1 })).rejects.toThrow();
+  });
+
   it('posts the paging body the API expects', async () => {
     const { fetchImpl, calls } = fakeWorkday([]);
     await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', { fetchImpl });
