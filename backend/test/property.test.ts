@@ -60,6 +60,8 @@ describe('who owns this', () => {
     expect(sameStreet({ address: '301 W 2 ST, TX 78701' }, '301 W 2nd St')).toBe(true);
     expect(sameStreet({ address: '4800 OVERTON PLZ' }, '4800 Overton Ridge Blvd')).toBe(false);
     expect(sameStreet({ address: '1000 MAIN ST' }, '1000 Main Street Suite 200')).toBe(true);
+    expect(sameStreet({ address: '500 W 55 1/2 ST 78751' }, '500 W 2nd St')).toBe(false);
+    expect(sameStreet({ address: '2800 POST OAK BLVD, HOUSTON' }, '2800 Post Oak Blvd')).toBe(true);
   });
 
   it('ranks the parcel at the typed number, direction and city first', async () => {

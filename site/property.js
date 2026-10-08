@@ -255,8 +255,15 @@ export function sameStreet(parcel, address) {
   if (!parsed) return false;
   const tokens = addressTokens(parcel?.address);
   if (tokens[0] !== parsed.number) return false;
-  if (parsed.dir && DIRECTIONS.has(tokens[1]) && tokens[1] !== parsed.dir) return false;
-  return (parsed.words ?? [parsed.street]).every((w) => tokens.includes(w));
+  let i = 1;
+  if (DIRECTIONS.has(tokens[i]) && tokens[i + 1]) {
+    if (parsed.dir && tokens[i] !== parsed.dir) return false;
+    i++;
+  }
+  if (tokens[i] === 'ST' || tokens[i] === 'SAINT') i++;
+  // The street name comes right after the number, so 500 W 55 1/2 St isn't 500 W 2nd St.
+  const words = parsed.words ?? [parsed.street];
+  return words.every((w, k) => tokens[i + k] === w);
 }
 
 /**
