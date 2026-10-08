@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { countyMarkets, fetchBids, pickBids, TXDOT_PROJECTS_PAGE, txdotBid, type Bid, type TxdotProjectRow } from '../src/market/bids.js';
+import { countyMarkets, fetchBids, pickBids, TXDOT_PROJECTS_PAGE, txdotBid, txdotBids, type Bid, type TxdotProjectRow } from '../src/market/bids.js';
 import { rolesOn } from '../../site/growth.js';
 
 const NOW = new Date('2026-10-08T16:00:00Z');
-const markets = countyMarkets(['Fort Worth', 'Dallas', 'Austin']);
+const markets = countyMarkets(['Fort Worth', 'Dallas', 'Austin', 'Houston', 'Galveston']);
 
 // Shapes from TxDOT's Project Information dataset (data.texas.gov drau-zphx), October 2026.
 const row: TxdotProjectRow = {
@@ -18,13 +18,15 @@ const row: TxdotProjectRow = {
 
 describe('TxDOT bids', () => {
   it('maps counties to their market', () => {
-    expect(markets.get('tarrant')).toBe('Fort Worth');
-    expect(markets.get('travis')).toBe('Austin');
-    expect(markets.get('harris')).toBeUndefined();
+    expect(markets.get('tarrant')).toEqual(['Fort Worth']);
+    expect(markets.get('galveston')).toEqual(['Houston', 'Galveston']);
+    expect(markets.get('bexar')).toBeUndefined();
+    expect(txdotBids({ ...row, county: 'Galveston' }, markets, NOW).map((b) => b.city)).toEqual(['Houston', 'Galveston']);
+    expect(txdotBids({ ...row, county: 'Bexar' }, markets, NOW)).toEqual([]);
   });
 
   it('reads an open bid with its agency, due time and CSJ', () => {
-    expect(txdotBid(row, markets, NOW)).toEqual({
+    expect(txdotBid(row, 'Fort Worth', NOW)).toEqual({
       city: 'Fort Worth',
       title: 'IH 35W PM 2611-1',
       agency: 'TxDOT Fort Worth District',
@@ -33,15 +35,15 @@ describe('TxDOT bids', () => {
       csj: '6482-46-001',
       url: TXDOT_PROJECTS_PAGE
     });
-    expect(txdotBid({ ...row, local_agency_name: 'City of Arlington' }, markets, NOW)!.agency).toBe('City of Arlington');
-    expect(txdotBid({ ...row, local_agency_name: 'NA' }, markets, NOW)!.agency).toBe('TxDOT Fort Worth District');
+    expect(txdotBid({ ...row, local_agency_name: 'City of Arlington' }, 'Fort Worth', NOW)!.agency).toBe('City of Arlington');
+    expect(txdotBid({ ...row, local_agency_name: 'NA' }, 'Fort Worth', NOW)!.agency).toBe('TxDOT Fort Worth District');
   });
 
   it('drops closed bids, other counties and material-only orders', () => {
-    expect(txdotBid({ ...row, bid_received_until_date_and: '2026-09-22T10:00:00.000' }, markets, NOW)).toBeNull();
-    expect(txdotBid({ ...row, county: 'De Witt' }, markets, NOW)).toBeNull();
-    expect(txdotBid({ ...row, project_sub_type_description: 'Material Only' }, markets, NOW)).toBeNull();
-    expect(txdotBid({ ...row, bid_received_until_date_and: undefined }, markets, NOW)).toBeNull();
+    expect(txdotBid({ ...row, bid_received_until_date_and: '2026-09-22T10:00:00.000' }, 'Fort Worth', NOW)).toBeNull();
+    expect(txdotBids({ ...row, county: 'De Witt' }, markets, NOW)[0] ?? null).toBeNull();
+    expect(txdotBid({ ...row, project_sub_type_description: 'Material Only' }, 'Fort Worth', NOW)).toBeNull();
+    expect(txdotBid({ ...row, bid_received_until_date_and: undefined }, 'Fort Worth', NOW)).toBeNull();
   });
 
   it('keeps each market\'s soonest bids once', () => {
@@ -54,7 +56,7 @@ describe('TxDOT bids', () => {
     let asked = '';
     const fetchImpl = (async (url: string) => {
       asked = url;
-      return new Response(JSON.stringify([row, { ...row, county: 'Harris' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify([row, { ...row, county: 'Bexar' }]), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as unknown as typeof fetch;
     const result = await fetchBids(['Fort Worth'], { now: NOW, fetchImpl });
     expect(decodeURIComponent(asked)).toContain("bid_received_until_date_and >= '2026-10-07T16:00:00'");

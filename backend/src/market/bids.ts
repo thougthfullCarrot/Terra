@@ -8,9 +8,9 @@ import { METRO_COUNTIES } from './developments.js';
  *
  * The one free source that works for an automated reader: TxDOT's "Project
  * Information" dataset on the state's open data portal (data.texas.gov,
- * Socrata, no key, refreshed hourly). It lists every highway and building
- * contract TxDOT and the local agencies it lets for are taking bids on, with
- * the county and the time bids close.
+ * Socrata, no key, refreshed hourly). It lists every
+ * highway, bridge and maintenance contract that TxDOT and the local agencies
+ * it lets for are taking bids on, with the county and the time bids close.
  *
  * Checked and skipped as of October 2026: the Comptroller's Electronic State
  * Business Daily (txsmartbuy.gov/esbd) draws its list with JavaScript and its
@@ -58,18 +58,25 @@ export interface TxdotProjectRow {
 
 const countyKey = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
 
-/** County → market, from the development map's counties ("De Witt" matches "DeWitt"). */
-export function countyMarkets(cities: readonly City[]): Map<string, City> {
-  const out = new Map<string, City>();
-  for (const city of cities) for (const county of METRO_COUNTIES[city] ?? []) if (!out.has(countyKey(county))) out.set(countyKey(county), city);
+/**
+ * County → markets, from the development map's counties ("De Witt" matches
+ * "DeWitt"). Galveston County is on both the Houston and Galveston maps.
+ */
+export function countyMarkets(cities: readonly City[]): Map<string, City[]> {
+  const out = new Map<string, City[]>();
+  for (const city of cities) for (const county of METRO_COUNTIES[city] ?? []) out.set(countyKey(county), [...(out.get(countyKey(county)) ?? []), city]);
   return out;
 }
 
 /** "2026-11-03T13:00:00.000" → "2026-11-03T13:00". */
 const localTime = (value: string | undefined) => (value && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) ? value.slice(0, 16) : null);
 
-export function txdotBid(row: TxdotProjectRow, markets: Map<string, City>, now: Date): Bid | null {
-  const city = markets.get(countyKey(row.county ?? ''));
+/** A row as one bid per market whose counties include it; none when closed or not construction. */
+export function txdotBids(row: TxdotProjectRow, markets: Map<string, City[]>, now: Date): Bid[] {
+  return (markets.get(countyKey(row.county ?? '')) ?? []).map((city) => txdotBid(row, city, now)).filter((b): b is Bid => b !== null);
+}
+
+export function txdotBid(row: TxdotProjectRow, city: City, now: Date): Bid | null {
   const due = localTime(row.bid_received_until_date_and);
   // Supply orders ("Hot Mix - DeWitt Co. (Materials Only)") are not construction.
   if (!city || !due || /material/i.test(row.project_sub_type_description ?? '')) return null;
@@ -124,6 +131,6 @@ export async function fetchBids(cities: readonly City[], options: FetchJsonOptio
   const url = `${TXDOT_PROJECTS_URL}?$select=${FIELDS.join(',')}&$where=${encodeURIComponent(`bid_received_until_date_and >= '${since}'`)}&$order=bid_received_until_date_and&$limit=5000`;
   const rows = await fetchJson<TxdotProjectRow[]>(url, { timeoutMs: 60_000, ...http });
   const markets = countyMarkets(cities);
-  const bids = rows.map((row) => txdotBid(row, markets, now)).filter((b): b is Bid => b !== null);
+  const bids = rows.flatMap((row) => txdotBids(row, markets, now));
   return { asOf: now.toISOString(), source: TXDOT_PROJECTS_PAGE, bids: pickBids(bids) };
 }

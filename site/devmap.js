@@ -286,7 +286,7 @@ export function bidsSection(data, city) {
   title.id = 'dev-bids-title';
   box.append(
     title,
-    el('p', 'dev-note', `Construction contracts taking bids in the ${city} metro's counties, soonest to close first. From TxDOT's project list on the state's open data portal; search the dataset by the project's CSJ number for the plans and bid details.`)
+    el('p', 'dev-note', `Road, bridge and maintenance contracts taking bids in the ${city} metro's counties, soonest to close first. From TxDOT's project list on the state's open data portal; search the dataset by the project's CSJ number for the plans and bid details.`)
   );
   const list = el('ol', 'dev-bids-list');
   for (const bid of rows) {
