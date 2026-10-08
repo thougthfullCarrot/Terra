@@ -4064,3 +4064,249 @@ svg.bars text {
   align-items: center;
   gap: 16px;
 }
+
+/* ---------------------------------------------------------------------------
+   Polished layout (2026-10): a wider page, underlined section tabs, one search
+   strip, and on wide screens the posting beside the list instead of over it.
+   On phones the section tabs move to a bar at the bottom of the screen.
+   --------------------------------------------------------------------------- */
+
+.appbar-inner,
+.page {
+  max-width: 1240px;
+}
+
+.page {
+  padding: 28px 24px 64px;
+}
+
+/* Reading-width blocks stay narrow on the wider page. */
+#gate,
+#welcome,
+#paywall,
+#profile,
+.footer {
+  max-width: 920px;
+}
+
+.masthead h1 {
+  margin: 8px 0 6px;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.masthead .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+/* Section tabs: a plain row with an underline under the open one. */
+.tabs {
+  gap: 26px;
+  width: auto;
+  margin-top: 22px;
+  padding: 0 2px;
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.tab {
+  padding: 12px 0 11px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 0;
+}
+
+.tab[aria-current='page'] {
+  font-weight: 700;
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* The job search: search box and dropdowns in one strip, city and role chips under it. */
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 10px;
+}
+
+#controls .search {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+#controls .search input {
+  padding-block: 11px;
+}
+
+#controls .filters {
+  display: flex;
+  flex: 1 1 420px;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+#controls .filters label {
+  flex: 1 1 120px;
+  gap: 3px;
+}
+
+#controls .filters select {
+  padding-block: 10px;
+  background-color: var(--chip);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+#controls .chip-group {
+  order: 3;
+  flex: 1 1 100%;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+  margin: 0;
+  padding: 8px 4px 0;
+  border-top: 1px solid var(--divider);
+}
+
+#controls .chip-group + .chip-group {
+  padding-top: 4px;
+  border-top: 0;
+}
+
+.summary {
+  margin: 18px 2px 10px;
+}
+
+/* Cards: a touch quieter, so the match and deadline carry the emphasis. */
+.card {
+  padding: 16px;
+}
+
+.list > .card:hover {
+  transform: none;
+}
+
+.list > .card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), var(--shadow-md);
+}
+
+/* List beside the posting. The dialog is shown non-modally on wide screens. */
+.split {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.split > .list {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .panel-sheet[open]:not(:modal) {
+    position: sticky;
+    top: 76px;
+    flex: 1.25 1 0;
+    min-width: 0;
+    width: auto;
+    height: auto;
+    max-height: calc(100vh - 96px);
+    max-height: calc(100dvh - 96px);
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+    animation: none;
+  }
+
+  .panel-sheet:not(:modal) .sheet-body {
+    padding: 24px 28px 32px;
+  }
+
+  .panel-sheet:not(:modal) .sheet-head h2 {
+    font-size: 26px;
+    font-weight: 800;
+  }
+
+  .panel-sheet:not(:modal) .sheet-actions .primary {
+    flex: 1 1 200px;
+    text-align: center;
+  }
+}
+
+/* Phones: section tabs become a bar along the bottom of the screen. */
+@media (max-width: 640px) {
+  .page {
+    padding: 22px 16px calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    gap: 0;
+    margin: 0;
+    padding: 0 6px env(safe-area-inset-bottom, 0px);
+    background: var(--appbar);
+    backdrop-filter: saturate(1.4) blur(12px);
+    -webkit-backdrop-filter: saturate(1.4) blur(12px);
+    border-top: 1px solid var(--hairline);
+    border-bottom: 0;
+  }
+
+  .tab {
+    flex: 1 0 auto;
+    min-height: 56px;
+    padding: 0 12px;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .tab[aria-current='page'] {
+    color: var(--accent);
+    box-shadow: inset 0 3px 0 var(--accent);
+  }
+
+  #controls .filters label {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  #controls .filters select {
+    padding-inline: 10px 26px;
+    font-size: 13.5px;
+  }
+
+  #controls .chip-group {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  #controls .chip-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  #controls .chip-row .chip {
+    flex: none;
+  }
+
+  .toast {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+}
