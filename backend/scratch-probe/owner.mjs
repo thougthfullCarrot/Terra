@@ -28,17 +28,18 @@ async function statewide(q, city) {
   }
   return { how: 'state 0 parcels', rows: [] };
 }
-const exact = (p, q) => { const x = P.parseAddress(q); const a = ` ${String(p.address).toUpperCase().replace(/[^A-Z0-9]+/g, ' ')} `; return a.startsWith(` ${x.number} `) && a.includes(` ${x.street} `); };
 async function lookup(q, city) {
   const own = P.OWNER_SOURCES.filter((s) => s.cities.includes(city));
-  let ownFound = [];
-  for (const s of own) { const r = await layer(s, P.addressWhere(s, q), 25); ownFound.push(...r.rows); }
-  ownFound = P.rankAddresses(ownFound, q, city);
-  if (ownFound.length && exact(ownFound[0], q)) return { how: 'county', rows: ownFound };
-  if (city || P.isFullAddress(q)) { const r = await statewide(q, city); if (r.rows.length) return r; }
-  const rest = [];
-  for (const s of P.OWNER_SOURCES.filter((s) => !own.includes(s))) rest.push(...(await layer(s, P.addressWhere(s, q), 25)).rows);
-  return { how: 'other counties', rows: P.rankAddresses([...ownFound, ...rest], q, city) };
+  const county = Promise.all(own.map((s) => layer(s, P.addressWhere(s, q), 50))).then((rs) => P.rankAddresses(rs.flatMap((r) => r.rows).filter((p) => P.sameStreet(p, q)), q, city));
+  const state = city || P.isFullAddress(q) ? statewide(q, city).then((r) => r.rows) : Promise.resolve([]);
+  const exact = (l) => l.length && P.sameStreet(l[0], q);
+  const first = await new Promise((resolve) => { let left = 2; for (const [how, p] of [['county', county], ['state', state]]) p.then((l) => (exact(l) ? resolve({ how, rows: l }) : --left === 0 && resolve(null))); });
+  if (first) return first;
+  const [ownFound, near] = await Promise.all([county, state]);
+  const rest = (await Promise.all(P.OWNER_SOURCES.filter((s) => !own.includes(s)).map((s) => layer(s, P.addressWhere(s, q), 50)))).flatMap((r) => r.rows);
+  const found = P.rankAddresses([...ownFound, ...rest.filter((p) => P.sameStreet(p, q))], q, city);
+  if (!found.length && near.length) return { how: 'NEAR', rows: near };
+  return { how: 'other counties', rows: found };
 }
 const cases = [
   ['Houston', ['700 Louisiana St', '5 Houston Center', '1000 Main St', '811 Main', '2800 Post Oak Blvd']],
@@ -56,8 +57,8 @@ for (const [city, qs] of cases) {
   }
 }
 for (const q of ['Hines', 'Lincoln Property', 'Greystar', 'Trammell Crow', 'Crescent Real Estate', 'Brookfield']) {
-  const all = [];
-  for (const s of P.OWNER_SOURCES) all.push(...(await layer(s, P.ownerLikeWhere(s, q), 40)).rows);
+  let all = (await Promise.all(P.OWNER_SOURCES.map((s) => layer(s, P.ownerLikeWhere(s, q), 40)))).flatMap((r) => r.rows);
+  if (!all.length) all = (await Promise.all(P.OWNER_SOURCES.map((s) => layer(s, P.ownerLikeWhere(s, q, true), 40)))).flatMap((r) => r.rows);
   const ranked = P.rankOwners(all, q);
   console.log(`OWNER ${q} | ${ranked.length} rows: ${ranked.slice(0, 5).map((x) => `${x.owner} (${x.source.county})`).join(' ; ')}`);
 }

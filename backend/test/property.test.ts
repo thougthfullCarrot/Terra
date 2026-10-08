@@ -44,20 +44,18 @@ describe('who owns this', () => {
     expect(parseAddress('700 N St Marys St')).toEqual({ number: '700', street: 'MARYS', dir: 'N' });
     expect(parseAddress('100 West Ave')).toEqual({ number: '100', street: 'W' });
     expect(parseAddress('Hines')).toBeNull();
-    expect(addressWhere(houston, "100 O'Connor Dr")).toBe(
-      "(UPPER(SITE_ADDR_1) LIKE '100 CONNOR %' OR UPPER(SITE_ADDR_1) LIKE '100 CONNOR,%' OR UPPER(SITE_ADDR_1) LIKE '100 % CONNOR %' OR UPPER(SITE_ADDR_1) LIKE '100 % CONNOR' OR UPPER(SITE_ADDR_1) LIKE '100 % CONNOR,%')"
-    );
+    expect(addressWhere(houston, "100 O'Connor Dr")).toBe("UPPER(SITE_ADDR_1) LIKE '100 %CONNOR%'");
   });
 
-  it('matches the street as a whole word, the way each district pads it', () => {
-    const like = (pattern: string) => new RegExp(`^${pattern.replace(/%/g, '.*')}$`);
-    const patterns = [...addressWhere(houston, '1601 Elm St')!.matchAll(/LIKE '([^']+)'/g)].map((m) => like(m[1] ?? ''));
-    const hits = (a: string) => patterns.some((p) => p.test(a));
+  it('keeps the street as a whole word, the way each district pads it', async () => {
+    const { sameStreet } = await import('../../site/property.js');
+    const hits = (address: string) => sameStreet({ address }, '1601 Elm St');
     expect(hits('1601 ELM ST')).toBe(true);
     expect(hits('1601  ELM ST   ,DALLAS, TX 752012739')).toBe(true);
     expect(hits('1601 ELM,DALLAS')).toBe(true);
     expect(hits('1601 BELMONT ST, MESQUITE')).toBe(false);
     expect(hits('11601 ELM ST')).toBe(false);
+    expect(sameStreet({ address: '700 N SAINT MARYS ST' }, '700 N St Marys')).toBe(true);
   });
 
   it('ranks the parcel at the typed number, direction and city first', async () => {
@@ -73,6 +71,7 @@ describe('who owns this', () => {
   it('builds owner queries with quotes escaped', () => {
     expect(ownerWhere(houston, { owner: "O'Brien Holdings LLC" })).toBe("UPPER(OWNER_LIST) = 'O''BRIEN HOLDINGS LLC'");
     expect(ownerWhere(houston, { mailLine: '700 Louisiana St Ste 225' })).toBe("UPPER(MAIL_ADDR_1) = '700 LOUISIANA ST STE 225'");
+    expect(ownerLikeWhere(houston, 'Lincoln Property', true)).toBe("(UPPER(OWNER_LIST) LIKE 'LINCOLN%' OR UPPER(OWNER_LIST) LIKE '% LINCOLN%')");
     expect(ownerLikeWhere(houston, 'Hines REIT')).toBe(
       "(UPPER(OWNER_LIST) LIKE 'HINES%' OR UPPER(OWNER_LIST) LIKE '% HINES%') AND (UPPER(OWNER_LIST) LIKE 'REIT%' OR UPPER(OWNER_LIST) LIKE '% REIT%')"
     );
@@ -82,7 +81,7 @@ describe('who owns this', () => {
     const { ownerWords, rankOwners } = await import('../../site/property.js');
     expect(ownerWords('Lincoln Property Company')).toEqual(['LINCOLN']);
     expect(ownerWords('The Properties LLC')).toEqual(['THE', 'PROPERTIES', 'LLC']);
-    const rows = [{ owner: 'HINES TODD' }, { owner: 'HINESTROZA MARIA' }, { owner: 'HINES REIT 2100 ROSS LP' }];
+    const rows = [{ owner: 'HINES TODD' }, { owner: 'HINES HAL & JUNE FAMILY TRUST' }, { owner: 'HINESTROZA MARIA' }, { owner: 'HINES REIT 2100 ROSS LP' }];
     expect(rankOwners(rows, 'Hines')[0]?.owner).toBe('HINES REIT 2100 ROSS LP');
   });
 

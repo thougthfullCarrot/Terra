@@ -224,18 +224,24 @@ export function addressPlace(text) {
 const sql = (text) => String(text).replace(/'/g, "''");
 
 /**
- * The where clause for an address: the house number at the start and the
- * street word as a whole word after it, so 1601 Elm doesn't find 1601 Belmont.
- * Districts pad with spaces ("2100  ROSS AVE   ,DALLAS") or end the street
- * with a comma, which these shapes cover.
+ * The where clause for an address: the house number at the start, the street
+ * word after it. Kept to one plain pattern because some district servers take
+ * seconds per pattern; sameStreet() then drops 1601 Belmont from a search for
+ * 1601 Elm in the browser.
  */
 export function addressWhere(source, address) {
   const parsed = parseAddress(address);
   if (!parsed) return null;
-  const field = `UPPER(${source.address})`;
-  const n = sql(parsed.number);
-  const w = sql(parsed.street);
-  return `(${[`${n} ${w} %`, `${n} ${w},%`, `${n} % ${w} %`, `${n} % ${w}`, `${n} % ${w},%`].map((p) => `${field} LIKE '${p}'`).join(' OR ')})`;
+  return `UPPER(${source.address}) LIKE '${sql(parsed.number)} %${sql(parsed.street)}%'`;
+}
+
+/** Whether a parcel's address starts with the house number and has the street word whole. */
+export function sameStreet(parcel, address) {
+  const parsed = parseAddress(address);
+  if (!parsed) return false;
+  const a = ` ${String(parcel?.address ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ')} `;
+  const street = parsed.street === 'MARYS' ? / (ST|SAINT) MARYS /.test(a) || a.includes(' MARYS ') : a.includes(` ${parsed.street} `);
+  return a.startsWith(` ${parsed.number} `) && street;
 }
 
 /**
@@ -275,9 +281,13 @@ export function ownerWords(name) {
   return key.length ? key : words;
 }
 
-/** Parcels whose owner name has a word starting with each word typed (Hines finds HINES REIT, not WHINES). */
-export function ownerLikeWhere(source, name) {
-  const words = ownerWords(name);
+/**
+ * Parcels whose owner name has a word starting with each word typed (Hines
+ * finds HINES REIT, not WHINES). `loose` leaves out words like Property and
+ * Company, for a second try when the name as typed finds nothing.
+ */
+export function ownerLikeWhere(source, name, loose = false) {
+  const words = loose ? ownerWords(name) : String(name ?? '').toUpperCase().replace(/[^A-Z0-9&' ]+/g, ' ').split(/\s+/).filter((w) => w.length > 1);
   if (!words.length) return null;
   const field = `UPPER(${source.owner})`;
   return words.map((w) => `(${field} LIKE '${sql(w)}%' OR ${field} LIKE '% ${sql(w)}%')`).join(' AND ');
@@ -288,7 +298,9 @@ export function rankOwners(parcels, name) {
   const all = String(name ?? '').toUpperCase().replace(/[^A-Z0-9&' ]+/g, ' ').split(/\s+/).filter((w) => w.length > 1);
   const score = (p) => {
     const owner = ` ${String(p.owner ?? '').toUpperCase().replace(/[^A-Z0-9&']+/g, ' ')} `;
-    return (isEntity(p.owner) ? 0 : 4) + (owner.startsWith(` ${all[0]} `) ? 0 : 1) + all.filter((w) => !owner.includes(` ${w} `)).length;
+    // A family trust is a person's holding; LLCs, LPs and companies are what a firm owns through.
+    const kind = !isEntity(p.owner) ? 4 : /\b(TRUST|ESTATE OF|FAMILY|LIVING)\b/.test(owner) ? 2 : 0;
+    return kind + (owner.startsWith(` ${all[0]} `) ? 0 : 1) + all.filter((w) => !owner.includes(` ${w} `)).length;
   };
   return parcels.map((p, i) => [score(p), i, p]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map((x) => x[2]);
 }

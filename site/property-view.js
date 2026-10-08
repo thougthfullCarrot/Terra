@@ -46,6 +46,7 @@ import {
   geocodeText,
   rankAddresses,
   rankOwners,
+  sameStreet,
   sumInside,
   writePropertyHash
 } from './property.js';
@@ -211,56 +212,67 @@ async function statewideSearch(q, city) {
 }
 
 /** Several districts at once; the ones that didn't answer are named. */
-async function queryMany(sources, whereFor, count) {
+async function queryMany(all, whereFor, count) {
+  const sources = all.filter((source) => whereFor(source));
   const settled = await Promise.allSettled(sources.map((source) => queryLayer(source, whereFor(source), count)));
   const found = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   const failed = sources.filter((_, i) => settled[i].status === 'rejected').map((s) => s.county);
   return { found, failed };
 }
 
-/** True when the first parcel is plainly the one asked for: its house number and street lead its address. */
-function exact(parcel, q) {
-  const parsed = parseAddress(q);
-  const a = ` ${String(parcel.address ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ')} `;
-  return Boolean(parsed) && a.startsWith(` ${parsed.number} `) && a.includes(` ${parsed.street} `);
-}
-
 /**
- * An address: the market's own district first, then the state parcel map
- * (every county, and the parcels a district copy is missing), then the other
- * districts. A name: every district at once, companies first.
+ * An address: the market's own district and the state parcel map (every
+ * county, and the parcels a district copy is missing) at once, taking the
+ * first that has the parcel at that exact number and street; then the other
+ * districts. A name: every district at once, companies first, and if the name
+ * as typed finds nothing, again without words like Property or Company.
  */
 async function lookup(q) {
-  const failed = [];
   if (!parseAddress(q)) {
-    const sources = sourcesFor(state.city).filter((s) => ownerLikeWhere(s, q));
-    const r = await queryMany(sources, (s) => ownerLikeWhere(s, q), 40);
-    return { found: rankOwners(r.found, q), failed: r.failed };
+    const sources = sourcesFor(state.city);
+    let r = await queryMany(sources, (s) => ownerLikeWhere(s, q), 40);
+    if (!r.found.length) r = await queryMany(sources, (s) => ownerLikeWhere(s, q, true), 40);
+    return { found: rankOwners(r.found, q), failed: r.failed, near: false };
   }
+  const failed = [];
   const own = OWNER_SOURCES.filter((s) => s.cities.includes(state.city));
-  let ownFound = [];
-  if (own.length) {
-    const r = await queryMany(own, (s) => addressWhere(s, q), 25);
-    failed.push(...r.failed);
-    ownFound = rankAddresses(r.found, q, state.city);
-    if (ownFound.length && exact(ownFound[0], q)) return { found: ownFound, failed };
-  }
-  if (state.city || isFullAddress(q)) {
-    try {
-      const found = await statewideSearch(q, state.city);
-      if (found.length) return { found, failed };
-    } catch {
-      failed.push('The state parcel map');
-    }
-  }
-  const r = await queryMany(OWNER_SOURCES.filter((s) => !own.includes(s)), (s) => addressWhere(s, q), 25);
-  return { found: rankAddresses([...ownFound, ...r.found], q, state.city), failed: [...new Set([...failed, ...r.failed])] };
+  const county = own.length
+    ? queryMany(own, (s) => addressWhere(s, q), 50).then((r) => {
+        failed.push(...r.failed);
+        return rankAddresses(r.found.filter((p) => sameStreet(p, q)), q, state.city);
+      })
+    : Promise.resolve([]);
+  const statewide =
+    state.city || isFullAddress(q)
+      ? statewideSearch(q, state.city).catch(() => {
+          failed.push('The state parcel map');
+          return [];
+        })
+      : Promise.resolve([]);
+  const exact = (list) => (list.length && sameStreet(list[0], q) ? list : null);
+  // Whichever answers first with the parcel itself wins; the other is not waited for.
+  const first = await new Promise((resolve) => {
+    let left = 2;
+    for (const p of [county, statewide])
+      p.then((list) => {
+        if (exact(list)) resolve(list);
+        else if (--left === 0) resolve(null);
+      });
+  });
+  if (first) return { found: first, failed, near: false };
+  const [ownFound, near] = await Promise.all([county, statewide]);
+  const rest = await queryMany(OWNER_SOURCES.filter((s) => !own.includes(s)), (s) => addressWhere(s, q), 50);
+  failed.push(...rest.failed);
+  const found = rankAddresses([...ownFound, ...rest.found.filter((p) => sameStreet(p, q))], q, state.city);
+  // Nothing at that number on any roll: show what the state map has where the address is.
+  if (!found.length && near.length) return { found: near, failed: [...new Set(failed)], near: true };
+  return { found, failed: [...new Set(failed)], near: false };
 }
 
 async function search(q, results) {
   results.replaceChildren(el('div', 'state', 'Searching the appraisal rolls…'));
   const byAddress = Boolean(parseAddress(q));
-  const { found, failed } = await lookup(q);
+  const { found, failed, near } = await lookup(q);
   const nodes = [];
   if (!found.length) {
     const own = OWNER_SOURCES.filter((s) => s.cities.includes(state.city));
@@ -280,7 +292,12 @@ async function search(q, results) {
       box.append(a, i < sites.length - 1 ? ', ' : '.');
     });
     nodes.push(box);
-  } else if (found.length === 1 || (byAddress && exact(found[0], q) && !exact(found[1], q))) {
+  } else if (near) {
+    nodes.push(
+      el('p', 'market-asof', `No parcel is recorded at exactly "${q}". ${found.length === 1 ? 'This is the parcel' : 'These are the parcels'} where the map places that address; a building can sit on a parcel with another street address.`),
+      parcelTable(found, results)
+    );
+  } else if (found.length === 1 || (byAddress && !sameStreet(found[1], q))) {
     nodes.push(...(await parcelDetail(found[0])));
   } else {
     nodes.push(el('p', 'market-asof', `${found.length} parcels match, best first. Pick one.`), parcelTable(found, results));
