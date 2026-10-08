@@ -1,4 +1,5 @@
 import type { Posting, RawJob, Sector } from '../types.js';
+import type { FirmRow } from '../db/store.js';
 import { postingId } from './id.js';
 import { resolveCity } from './texas.js';
 import { classifyKind } from './seniority.js';
@@ -11,7 +12,8 @@ import { extractDeadline } from './deadline.js';
 export type RejectReason =
   | 'missing-fields'
   | 'not-texas'
-  | 'not-entry-level';
+  | 'not-entry-level'
+  | 'off-topic';
 
 export type NormalizeResult =
   | { ok: true; posting: Posting; sectorGuessed: boolean }
@@ -41,6 +43,8 @@ export function normalize(raw: RawJob, now = new Date()): NormalizeResult {
   const description = collapseBlank(raw.description ?? '');
   // An 'Analyst' title can still ask for three years; the description says so.
   if (!withinExperienceLimit(description)) return { ok: false, reason: 'not-entry-level' };
+  // A bank's teller or a title insurer's IT seat says nothing about real estate in its title.
+  if (raw.creOnly && classifySector(role).sector === null) return { ok: false, reason: 'off-topic' };
   const guess = raw.sector ? { sector: raw.sector } : classifySector(role, description);
 
   return {
@@ -62,6 +66,12 @@ export function normalize(raw: RawJob, now = new Date()): NormalizeResult {
       source: provenance(raw.ats)
     }
   };
+}
+
+/** A firm's pinned sector and real-estate-only rule, carried onto each of its jobs. */
+export function forFirm(firm: Pick<FirmRow, 'sector' | 'creOnly'>, jobs: RawJob[]): RawJob[] {
+  if (!firm.sector && !firm.creOnly) return jobs;
+  return jobs.map((job) => ({ ...job, ...(firm.sector ? { sector: firm.sector } : {}), ...(firm.creOnly ? { creOnly: true } : {}) }));
 }
 
 /**

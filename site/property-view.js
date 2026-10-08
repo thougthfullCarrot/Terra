@@ -43,6 +43,10 @@ import {
   identifyUrl,
   pickStatewide,
   isFullAddress,
+  geocodeText,
+  rankAddresses,
+  rankOwners,
+  sameStreet,
   sumInside,
   writePropertyHash
 } from './property.js';
@@ -156,7 +160,7 @@ function ownerView(body) {
       el(
         'p',
         'calc-note owner-hint',
-        'All markets searches every Texas county. Type the whole address with the street, city and ZIP (like 700 Louisiana St, Houston, TX 77002). Searching by owner name covers Harris, Dallas, Tarrant, Bexar and Travis counties.'
+        'All markets searches every Texas county. Type the address with its city (like 700 Louisiana St, Houston). Searching by owner name covers Harris, Dallas, Tarrant, Bexar and Travis counties.'
       )
     );
   const results = el('div', 'owner-results');
@@ -186,70 +190,121 @@ async function queryLayer(source, where, count = 25) {
   return (body.features ?? []).map((f) => ({ ...source.read(f.attributes ?? {}), source }));
 }
 
-/** Every Texas county: the address becomes a point, and the state parcel map says what sits there. */
-async function statewideSearch(q) {
-  const geo = await fetch(geocodeUrl(q), { headers: { accept: 'application/json' } });
+/**
+ * Every Texas county: the address becomes a point, and the state parcel map
+ * says what sits there. A point that lands in the street finds nothing, so a
+ * miss is asked again with a wider reach.
+ */
+async function statewideSearch(q, city) {
+  const geo = await fetch(geocodeUrl(geocodeText(q, city)), { headers: { accept: 'application/json' } });
   if (!geo.ok) throw new Error(`address lookup returned ${geo.status}`);
   const point = readGeocode(await geo.json());
   if (!point) return [];
-  const response = await fetch(identifyUrl(point));
-  if (!response.ok) throw new Error(`state parcel map returned ${response.status}`);
-  const body = await response.json();
-  if (body.error) throw new Error(body.error.message ?? 'state parcel map error');
-  return pickStatewide(body, q);
+  for (const tolerance of [8, 30]) {
+    const response = await fetch(identifyUrl(point, tolerance));
+    if (!response.ok) throw new Error(`state parcel map returned ${response.status}`);
+    const body = await response.json();
+    if (body.error) throw new Error(body.error.message ?? 'state parcel map error');
+    const found = pickStatewide(body, q);
+    if (found.length) return found;
+  }
+  return [];
+}
+
+/** Several districts at once; the ones that didn't answer are named. */
+async function queryMany(all, whereFor, count) {
+  const sources = all.filter((source) => whereFor(source));
+  const settled = await Promise.allSettled(sources.map((source) => queryLayer(source, whereFor(source), count)));
+  const found = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  const failed = sources.filter((_, i) => settled[i].status === 'rejected').map((s) => s.county);
+  return { found, failed };
+}
+
+/**
+ * An address: the market's own district and the state parcel map (every
+ * county, and the parcels a district copy is missing) at once, taking the
+ * first that has the parcel at that exact number and street; then the other
+ * districts. A name: every district at once, companies first, and if the name
+ * as typed finds nothing, again without words like Property or Company.
+ */
+async function lookup(q) {
+  if (!parseAddress(q)) {
+    const sources = sourcesFor(state.city);
+    let r = await queryMany(sources, (s) => ownerLikeWhere(s, q), 40);
+    if (!r.found.length) r = await queryMany(sources, (s) => ownerLikeWhere(s, q, true), 40);
+    return { found: rankOwners(r.found, q), failed: r.failed, near: false };
+  }
+  const failed = [];
+  const own = OWNER_SOURCES.filter((s) => s.cities.includes(state.city));
+  const county = own.length
+    ? queryMany(own, (s) => addressWhere(s, q), 50).then((r) => {
+        failed.push(...r.failed);
+        return rankAddresses(r.found.filter((p) => sameStreet(p, q)), q, state.city);
+      })
+    : Promise.resolve([]);
+  const statewide =
+    state.city || isFullAddress(q)
+      ? statewideSearch(q, state.city).catch(() => {
+          failed.push('The state parcel map');
+          return [];
+        })
+      : Promise.resolve([]);
+  const exact = (list) => (list.length && sameStreet(list[0], q) ? list : null);
+  // Whichever answers first with the parcel itself wins; the other is not waited for.
+  const first = await new Promise((resolve) => {
+    let left = 2;
+    for (const p of [county, statewide])
+      p.then((list) => {
+        if (exact(list)) resolve(list);
+        else if (--left === 0) resolve(null);
+      });
+  });
+  if (first) return { found: first, failed, near: false };
+  const [ownFound, near] = await Promise.all([county, statewide]);
+  // With a market picked, what the state map has at that spot beats the same number on some other town's street.
+  if (state.city && near.length && !ownFound.length) return { found: near, failed: [...new Set(failed)], near: true };
+  const rest = await queryMany(OWNER_SOURCES.filter((s) => !own.includes(s)), (s) => addressWhere(s, q), 50);
+  failed.push(...rest.failed);
+  const found = rankAddresses([...ownFound, ...rest.found.filter((p) => sameStreet(p, q))], q, state.city);
+  // Nothing at that number on any roll: show what the state map has where the address is.
+  if (!found.length && near.length) return { found: near, failed: [...new Set(failed)], near: true };
+  return { found, failed: [...new Set(failed)], near: false };
 }
 
 async function search(q, results) {
   results.replaceChildren(el('div', 'state', 'Searching the appraisal rolls…'));
   const byAddress = Boolean(parseAddress(q));
-  if (!state.city && byAddress) {
-    let nodes;
-    if (!isFullAddress(q)) {
-      nodes = [el('div', 'state', 'For All markets, type the whole address with the city and ZIP, like 700 Louisiana St, Houston, TX 77002. Or pick a market above to search by street only.')];
-    } else {
-      try {
-        const found = await statewideSearch(q);
-        if (!found.length) nodes = [el('div', 'state', `No parcel found at "${q}". Check the street number, city and ZIP, or pick the market above.`)];
-        else if (found.length === 1 || found[0].address.toUpperCase().startsWith(`${parseAddress(q).number} `)) nodes = await parcelDetail(found[0]);
-        else nodes = [el('p', 'market-asof', `${found.length} parcels near that address. Pick one.`), parcelTable(found, results)];
-      } catch {
-        nodes = [el('div', 'state', "The state parcel map didn't answer; try again in a minute, or pick a market above.")];
-      }
-    }
-    ownerResults = { q, nodes };
-    if (results.isConnected) results.replaceChildren(...nodes);
-    return;
-  }
-  const found = [];
-  const failed = [];
-  for (const source of sourcesFor(state.city)) {
-    const where = byAddress ? addressWhere(source, q) : ownerLikeWhere(source, q);
-    if (!where) continue;
-    try {
-      found.push(...(await queryLayer(source, where, byAddress ? 10 : 40)));
-    } catch {
-      failed.push(source.county);
-    }
-    // An address belongs to one county: stop at the first that has it.
-    if (byAddress && found.length) break;
-  }
+  const { found, failed, near } = await lookup(q);
   const nodes = [];
   if (!found.length) {
-    nodes.push(
-      el(
-        'div',
-        'state',
-        byAddress
-          ? `No parcel at "${q}" in the covered counties. Try the street number and name only (like 700 Louisiana), or pick the market above.`
-          : `No owner matching "${q}". Owner names are as the county records them, often with LLC or LP at the end.`
-      )
+    const own = OWNER_SOURCES.filter((s) => s.cities.includes(state.city));
+    const sites = (own.length ? own : OWNER_SOURCES).map((s) => [s.county, s.site]);
+    const box = el(
+      'div',
+      'state',
+      byAddress
+        ? `No parcel found at "${q}". Check the house number, add the city (like 700 Louisiana St, Houston), or search the district's own site: `
+        : `No owner matching "${q}". Counties record owners by their legal name, which is often a project LLC (a building owned by Greystar may be "GS Something LP"), so try the address instead, or search the district's own site: `
     );
-  } else if (found.length === 1) {
+    sites.forEach(([county, url], i) => {
+      const a = el('a', '', `${county}`);
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      box.append(a, i < sites.length - 1 ? ', ' : '.');
+    });
+    nodes.push(box);
+  } else if (near) {
+    nodes.push(
+      el('p', 'market-asof', `No parcel is recorded at exactly "${q}". ${found.length === 1 ? 'This is the parcel' : 'These are the parcels'} where the map places that address; a building can sit on a parcel with another street address.`),
+      parcelTable(found, results)
+    );
+  } else if (found.length === 1 || (byAddress && !sameStreet(found[1], q))) {
     nodes.push(...(await parcelDetail(found[0])));
   } else {
-    nodes.push(el('p', 'market-asof', `${found.length} parcels match. Pick one.`), parcelTable(found, results));
+    nodes.push(el('p', 'market-asof', `${found.length} parcels match, best first. Pick one.`), parcelTable(found, results));
   }
-  if (failed.length) nodes.push(el('p', 'calc-note', `${failed.join(', ')} County didn't answer; try again in a minute.`));
+  if (failed.length) nodes.push(el('p', 'calc-note', `${failed.map((c) => (c.startsWith('The ') ? c : `${c} County`)).join(', ')} didn't answer; try again in a minute.`));
   ownerResults = { q, nodes };
   if (results.isConnected) results.replaceChildren(...nodes);
 }

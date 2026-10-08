@@ -27,7 +27,7 @@ import { fetchIcims } from '../collector/sources/icims.js';
 import { fetchWorkable } from '../collector/sources/workable.js';
 import { fetchAshby } from '../collector/sources/ashby.js';
 import { fetchSmartRecruiters } from '../collector/sources/smartrecruiters.js';
-import { normalize, type RejectReason } from '../collector/normalize.js';
+import { forFirm, normalize, type RejectReason } from '../collector/normalize.js';
 
 
 type Verdict = 'OK' | 'EMPTY' | 'FAIL' | 'SKIP';
@@ -96,7 +96,8 @@ async function check(firm: FirmRow): Promise<Result> {
   const rejected: Record<RejectReason, number> = {
     'missing-fields': 0,
     'not-texas': 0,
-    'not-entry-level': 0
+    'not-entry-level': 0,
+    'off-topic': 0
   };
 
   // Workday's and iCIMS's fetchers filter before they fetch details, so their
@@ -104,7 +105,7 @@ async function check(firm: FirmRow): Promise<Result> {
   const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
 
   try {
-    const jobs = await fetchFor(firm, stats);
+    const jobs = forFirm(firm, await fetchFor(firm, stats));
 
     let kept = 0;
     for (const job of jobs) {

@@ -56,6 +56,7 @@ export function writePropertyHash(state) {
 export const OWNER_SOURCES = [
   {
     county: 'Harris',
+    site: 'https://hcad.org/property-search/',
     cities: ['Houston', 'Galveston'],
     name: 'Harris Central Appraisal District (City of Houston map)',
     layer: 'https://mycity2.houstontx.gov/gisweb02/rest/services/HoustonMap/Cadastral/MapServer/0',
@@ -80,6 +81,7 @@ export const OWNER_SOURCES = [
   },
   {
     county: 'Dallas',
+    site: 'https://www.dallascad.org/',
     cities: ['Dallas'],
     name: 'Dallas Central Appraisal District roll (public ArcGIS copy)',
     layer: 'https://services.arcgis.com/6dxqrE38upDMg1va/arcgis/rest/services/Dallas_Co_Parcels/FeatureServer/0',
@@ -104,6 +106,7 @@ export const OWNER_SOURCES = [
   },
   {
     county: 'Tarrant',
+    site: 'https://www.tad.org/',
     cities: ['Fort Worth'],
     name: 'Tarrant Appraisal District (City of Fort Worth map)',
     layer: 'https://services5.arcgis.com/3ddLCBXe1bRt7mzj/arcgis/rest/services/Parcels_Public_Vview/FeatureServer/0',
@@ -128,6 +131,7 @@ export const OWNER_SOURCES = [
   },
   {
     county: 'Bexar',
+    site: 'https://www.bcad.org/',
     cities: ['San Antonio', 'New Braunfels'],
     name: 'Bexar Appraisal District (San Antonio River Authority copy)',
     layer: 'https://gis.sara-tx.org/ags1/rest/services/FW_Bexar/BCAD_Parcels_PROD/FeatureServer/0',
@@ -152,6 +156,7 @@ export const OWNER_SOURCES = [
   },
   {
     county: 'Travis',
+    site: 'https://traviscad.org/',
     cities: ['Austin'],
     name: 'Travis Central Appraisal District (public ArcGIS copy)',
     layer: 'https://services1.arcgis.com/HGcSYZ5bvjRswoCb/arcgis/rest/services/TCAD_Parcels_Dec_2025/FeatureServer/0',
@@ -183,34 +188,102 @@ const STREET_WORDS = {
 const DIRECTIONS = new Set(['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW']);
 const SUFFIXES = new Set(['ST', 'AVE', 'BLVD', 'DR', 'RD', 'LN', 'PKWY', 'FWY', 'HWY', 'CT', 'PL', 'CIR', 'TRL', 'EXPY', 'WAY']);
 
-/**
- * "1000 Main Street, Houston TX 77002" → { number: '1000', street: 'MAIN' }:
- * the house number and the street's first distinctive word, which every
- * district's address field has in the same order whatever else it adds.
- * null when there is no house number.
- */
-export function parseAddress(text) {
-  const words = String(text ?? '')
+/** Upper-case words with street words shortened (STREET → ST) and ordinals bare (2ND → 2), so typed and recorded addresses compare. */
+function addressTokens(text) {
+  return String(text ?? '')
     .toUpperCase()
-    .split(',')[0]
     .replace(/[^A-Z0-9 ]+/g, ' ')
     .split(/\s+/)
     .filter(Boolean)
-    .map((w) => STREET_WORDS[w] ?? w);
+    .map((w) => STREET_WORDS[w] ?? w.replace(/^(\d+)(ST|ND|RD|TH)$/, '$1'));
+}
+
+/**
+ * "1000 N Main Street, Houston TX 77002" → { number: '1000', street: 'MAIN', dir: 'N', words: ['MAIN'] }:
+ * the house number, the street's first distinctive word, every name word
+ * before the suffix ("Overton Ridge"), and the direction before it, if any.
+ * Every district's address field has these in the same order whatever else
+ * it adds. null when there is no house number.
+ */
+export function parseAddress(text) {
+  const words = addressTokens(String(text ?? '').split(',')[0]);
   const number = words[0];
   if (!number || !/^\d+[A-Z]?$/.test(number)) return null;
-  const rest = words.slice(1).filter((w, i) => !(i === 0 && DIRECTIONS.has(w)));
-  const street = rest.find((w) => !SUFFIXES.has(w) && w.length > 1) ?? rest[0];
-  return street ? { number, street } : null;
+  // A direction leads only when a real street name follows it ("100 West Ave" is West Avenue).
+  const dir = DIRECTIONS.has(words[1]) && words.slice(2).some((w) => !SUFFIXES.has(w)) ? words[1] : null;
+  const rest = words.slice(dir ? 2 : 1);
+  // "St Marys" and "Saint Marys" are written both ways, so the word after a leading ST is the one to look for.
+  const named = (w) => !SUFFIXES.has(w) && w !== 'SAINT' && (w.length > 1 || /^\d+$/.test(w));
+  const street = rest.find(named) ?? rest[0];
+  if (!street) return null;
+  const start = rest.indexOf(street);
+  const end = rest.findIndex((w, i) => i > start && SUFFIXES.has(w));
+  const words2 = rest.slice(start, end === -1 ? undefined : end).filter(named);
+  const out = dir ? { number, street, dir } : { number, street };
+  return words2.length > 1 ? { ...out, words: words2 } : out;
+}
+
+/** The city (or ZIP) typed after the street, upper case, or ''. "700 Louisiana St, Houston, TX 77002" → "HOUSTON". */
+export function addressPlace(text) {
+  const parts = String(text ?? '').toUpperCase().split(',').slice(1).map((p) => p.replace(/\b(TX|TEXAS)\b/g, '').replace(/[^A-Z0-9 ]+/g, ' ').trim());
+  const city = parts.map((p) => p.replace(/\b\d{5}(\s?\d{4})?\b/g, '').trim()).find(Boolean);
+  if (city) return city;
+  return String(text ?? '').match(/\b(\d{5})(-\d{4})?\s*$/)?.[1] ?? '';
 }
 
 const sql = (text) => String(text).replace(/'/g, "''");
 
-/** The where clause for an address: the house number at the start, the street word after it. */
+/**
+ * The where clause for an address: the house number at the start, the street
+ * word after it. Kept to one plain pattern because some district servers take
+ * seconds per pattern; sameStreet() then drops 1601 Belmont from a search for
+ * 1601 Elm in the browser.
+ */
 export function addressWhere(source, address) {
   const parsed = parseAddress(address);
   if (!parsed) return null;
   return `UPPER(${source.address}) LIKE '${sql(parsed.number)} %${sql(parsed.street)}%'`;
+}
+
+/**
+ * Whether a parcel's address is the one typed: the house number first, the
+ * direction (when both have one) the same, and every street name word whole,
+ * so 1601 Belmont isn't 1601 Elm and 301 S 2nd isn't 301 W 2nd.
+ */
+export function sameStreet(parcel, address) {
+  const parsed = parseAddress(address);
+  if (!parsed) return false;
+  const tokens = addressTokens(parcel?.address);
+  if (tokens[0] !== parsed.number) return false;
+  let i = 1;
+  if (DIRECTIONS.has(tokens[i]) && tokens[i + 1]) {
+    if (parsed.dir && tokens[i] !== parsed.dir) return false;
+    i++;
+  }
+  if (tokens[i] === 'ST' || tokens[i] === 'SAINT') i++;
+  // The street name comes right after the number, so 500 W 55 1/2 St isn't 500 W 2nd St.
+  const words = parsed.words ?? [parsed.street];
+  return words.every((w, k) => tokens[i + k] === w);
+}
+
+/**
+ * Best match first: the house number at the very start, the typed direction,
+ * the typed city (or the market's) in the address, then the closest in length.
+ */
+export function rankAddresses(parcels, address, city = '') {
+  const parsed = parseAddress(address);
+  if (!parsed) return parcels;
+  const place = addressPlace(address) || String(city ?? '').toUpperCase();
+  const score = (p) => {
+    const a = ` ${String(p.address ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ')} `;
+    let s = 0;
+    if (!a.startsWith(` ${parsed.number} `)) s += 8;
+    if (!a.includes(` ${parsed.street} `)) s += 4;
+    if (parsed.dir && !a.includes(` ${parsed.number} ${parsed.dir} `)) s += 2;
+    if (place && !a.includes(` ${place} `)) s += 1;
+    return s;
+  };
+  return parcels.map((p, i) => [score(p), i, p]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map((x) => x[2]);
 }
 
 /** The where clause for every parcel an owner name (or a mailing address line) holds. */
@@ -220,11 +293,38 @@ export function ownerWhere(source, { owner, mailLine } = {}) {
   return null;
 }
 
-/** Parcels whose owner name contains the words typed, for a search by name. */
-export function ownerLikeWhere(source, name) {
+// Words a company's name may or may not carry on the roll ("Lincoln Property" is "LINCOLN PROPERTY CO" in one county, "LPC ..." in another).
+const NAME_FILLER = new Set(['THE', 'LLC', 'LP', 'LLP', 'LTD', 'INC', 'CO', 'CORP', 'COMPANY', 'CORPORATION', 'PROPERTY', 'PROPERTIES', 'GROUP', 'PARTNERS', 'REALTY', 'HOLDINGS', 'TRUST']);
+
+/** The words of an owner search that must match, upper case. */
+export function ownerWords(name) {
   const words = String(name ?? '').toUpperCase().replace(/[^A-Z0-9&' ]+/g, ' ').split(/\s+/).filter((w) => w.length > 1);
+  const key = words.filter((w) => !NAME_FILLER.has(w));
+  return key.length ? key : words;
+}
+
+/**
+ * Parcels whose owner name has a word starting with each word typed (Hines
+ * finds HINES REIT, not WHINES). `loose` leaves out words like Property and
+ * Company, for a second try when the name as typed finds nothing.
+ */
+export function ownerLikeWhere(source, name, loose = false) {
+  const words = loose ? ownerWords(name) : String(name ?? '').toUpperCase().replace(/[^A-Z0-9&' ]+/g, ' ').split(/\s+/).filter((w) => w.length > 1);
   if (!words.length) return null;
-  return words.map((w) => `UPPER(${source.owner}) LIKE '%${sql(w)}%'`).join(' AND ');
+  const field = `UPPER(${source.owner})`;
+  return words.map((w) => `(${field} LIKE '${sql(w)}%' OR ${field} LIKE '% ${sql(w)}%')`).join(' AND ');
+}
+
+/** Owner search results, companies before people, the ones carrying every typed word (fillers too) first. */
+export function rankOwners(parcels, name) {
+  const all = String(name ?? '').toUpperCase().replace(/[^A-Z0-9&' ]+/g, ' ').split(/\s+/).filter((w) => w.length > 1);
+  const score = (p) => {
+    const owner = ` ${String(p.owner ?? '').toUpperCase().replace(/[^A-Z0-9&']+/g, ' ')} `;
+    // A family trust is a person's holding; LLCs, LPs and companies are what a firm owns through.
+    const kind = !isEntity(p.owner) ? 4 : /\b(TRUST|ESTATE OF|FAMILY|LIVING)\b/.test(owner) ? 2 : 0;
+    return kind + (owner.startsWith(` ${all[0]} `) ? 0 : 1) + all.filter((w) => !owner.includes(` ${w} `)).length;
+  };
+  return parcels.map((p, i) => [score(p), i, p]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map((x) => x[2]);
 }
 
 /** A layer query URL for the browser. */
@@ -260,8 +360,8 @@ export function readGeocode(body) {
   return null;
 }
 
-/** Parcels within about 40 m of a point. */
-export function identifyUrl({ lat, lng }) {
+/** Parcels within about 40 m of a point (wider: the pixels to reach, about 5 m each). */
+export function identifyUrl({ lat, lng }, tolerance = 8) {
   const d = 0.002;
   const params = new URLSearchParams({
     f: 'json',
@@ -269,7 +369,7 @@ export function identifyUrl({ lat, lng }) {
     geometryType: 'esriGeometryPoint',
     sr: '4326',
     layers: 'all',
-    tolerance: '8',
+    tolerance: String(tolerance),
     mapExtent: `${lng - d},${lat - d},${lng + d},${lat + d}`,
     imageDisplay: '800,800,96',
     returnGeometry: 'false'
@@ -318,10 +418,20 @@ export function pickStatewide(body, address) {
   return unique.sort((a, b) => score(a) - score(b));
 }
 
-/** Whether an address has a street, a city and a ZIP, which the statewide search needs. */
+/**
+ * Whether an address says where it is (a city after a comma, TX or a ZIP), so
+ * the geocoder can place it anywhere in Texas: "700 Louisiana St, Houston" or
+ * "700 Louisiana St Houston TX" both do; "700 Louisiana St" alone doesn't.
+ */
 export function isFullAddress(text) {
-  const t = String(text ?? '');
-  return Boolean(parseAddress(t)) && /,\s*[A-Za-z .'-]{2,}/.test(t) && /\b\d{5}(-\d{4})?\s*$/.test(t.trim());
+  const t = String(text ?? '').trim();
+  return Boolean(parseAddress(t)) && (/,\s*[A-Za-z]{2,}/.test(t) || /\b(TX|Texas)\b\.?\s*(\d{5}(-\d{4})?)?$/i.test(t) || /\b\d{5}(-\d{4})?$/.test(t));
+}
+
+/** The address as the geocoder should see it: the market's city added when none was typed. */
+export function geocodeText(address, city) {
+  const t = String(address ?? '').trim();
+  return isFullAddress(t) || !city ? t : `${t}, ${city}, TX`;
 }
 
 function titleWords(s) {

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { FirmRow } from '../db/store.js';
 import { SECTORS, type Sector } from '../types.js';
@@ -9,7 +9,8 @@ const MIGRATIONS = resolve(dirname(fileURLToPath(import.meta.url)), '../../supab
 /** Every migration that inserts firms, in the order they apply. */
 export const SEED_PATHS = [
   resolve(MIGRATIONS, '0002_seed_firms.sql'),
-  resolve(MIGRATIONS, '0006_homebuilders.sql')
+  resolve(MIGRATIONS, '0006_homebuilders.sql'),
+  resolve(MIGRATIONS, '0014_more_firms.sql')
 ];
 
 /**
@@ -62,7 +63,8 @@ export function parseFirmSeed(sql: string): FirmRow[] {
         // Columns the migration leaves out fall back to the schema defaults.
         active: row.has('active') ? row.get('active') === true : true,
         slugVerified: row.get('slug_verified') === true,
-        sector: sectorOf(row.get('sector'))
+        sector: sectorOf(row.get('sector')),
+        creOnly: row.get('cre_only') === true
       });
     }
   }
@@ -72,8 +74,14 @@ export function parseFirmSeed(sql: string): FirmRow[] {
 
 /** Reads one migration, or several as one list with ids running on across files. */
 export async function loadFirmSeed(paths: string | string[] = SEED_PATHS): Promise<FirmRow[]> {
-  const files = await Promise.all((Array.isArray(paths) ? paths : [paths]).map((path) => readFile(path, 'utf8')));
-  return parseFirmSeed(files.join('\n'));
+  const list = Array.isArray(paths) ? paths : [paths];
+  const files = await Promise.all(list.map((path) => readFile(path, 'utf8')));
+  const firms: FirmRow[] = [];
+  files.forEach((sql, i) => {
+    const seeded = basename(list[i] ?? '');
+    for (const firm of parseFirmSeed(sql)) firms.push({ ...firm, id: firms.length + 1, seeded });
+  });
+  return firms;
 }
 
 function sectorOf(value: string | boolean | null | undefined): Sector | null {

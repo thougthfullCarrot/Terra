@@ -10,6 +10,10 @@ export interface FirmRow {
   slugVerified: boolean;
   /** Pins every posting from this firm to one sector; null leaves it to the keyword guess. */
   sector?: Sector | null;
+  /** The firm hires far beyond real estate: only jobs whose title names real estate work are kept. */
+  creOnly?: boolean;
+  /** The seed migration that added the firm, for the Sheet's one-time catch-up. */
+  seeded?: string;
 }
 
 export interface UpsertResult {

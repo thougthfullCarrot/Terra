@@ -46,7 +46,7 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
     firmsFailed: 0,
     fetched: 0,
     kept: 0,
-    rejected: { 'missing-fields': 0, 'not-texas': 0, 'not-entry-level': 0 },
+    rejected: { 'missing-fields': 0, 'not-texas': 0, 'not-entry-level': 0, 'off-topic': 0 },
     sectorGuessed: 0,
     inserted: 0,
     updated: 0,

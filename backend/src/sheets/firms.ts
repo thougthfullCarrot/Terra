@@ -20,7 +20,7 @@ export const FIRMS_TAB = 'Firms';
  * be reordered. "Sector" came later and goes last, so a tab read by position
  * still finds the first six where they always were.
  */
-export const FIRM_HEADERS = ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector'] as const;
+export const FIRM_HEADERS = ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector', 'Real estate only'] as const;
 
 const ATS = ['greenhouse', 'lever', 'workday', 'icims', 'workable', 'ashby', 'smartrecruiters'] as const;
 
@@ -38,8 +38,10 @@ export interface SheetFirmList {
   statusColumn: string;
   /** Whether the tab has a "Sector" column. Tabs made before it existed do not. */
   hasSector: boolean;
+  /** Whether the tab has a "Real estate only" column. Tabs made before it existed do not. */
+  hasCreOnly: boolean;
   /** 0-based column of each header, -1 where the tab lacks it. */
-  columns: Record<'name' | 'ats' | 'slug' | 'host' | 'active' | 'status' | 'sector', number>;
+  columns: Record<'name' | 'ats' | 'slug' | 'host' | 'active' | 'status' | 'sector' | 'creOnly', number>;
   /** Last non-blank row, 1-based; 1 when only the header is filled. */
   lastRow: number;
   /** False when the first row held none of the usual headers and columns were taken by position. */
@@ -49,7 +51,7 @@ export interface SheetFirmList {
 export function seedToRows(seed: FirmRow[]): Cell[][] {
   return [
     [...FIRM_HEADERS],
-    ...seed.map((firm) => [firm.name, firm.ats, firm.atsSlug, firm.atsHost ?? '', firm.active ? 'yes' : 'no', '', firm.sector ?? ''])
+    ...seed.map((firm) => [firm.name, firm.ats, firm.atsSlug, firm.atsHost ?? '', firm.active ? 'yes' : 'no', '', firm.sector ?? '', firm.creOnly ? 'yes' : ''])
   ];
 }
 
@@ -70,7 +72,8 @@ export function parseFirmTab(values: string[][]): SheetFirmList {
     host: column('Workday host', 3),
     active: column('Active', 4),
     status: column('Last check', 5),
-    sector: column('Sector', 6)
+    sector: column('Sector', 6),
+    creOnly: column('Real estate only', 7)
   };
   // Results go in "Last check", or the first column past the header when there is none.
   const statusIndex = at.status >= 0 ? at.status : Math.max(header.length, 5);
@@ -111,12 +114,13 @@ export function parseFirmTab(values: string[][]): SheetFirmList {
             // Blank means yes, so a new row only needs the first three columns.
             active: !/^(no|n|false|0|off)$/i.test(get(at.active)),
             slugVerified: false,
-            sector: sectorNamed(get(at.sector))
+            sector: sectorNamed(get(at.sector)),
+            creOnly: /^(yes|y|true|1|on)$/i.test(get(at.creOnly))
           }
     });
   });
 
-  return { firms, statusColumn: letter(statusIndex), hasSector: at.sector >= 0, columns: at, lastRow, byHeader };
+  return { firms, statusColumn: letter(statusIndex), hasSector: at.sector >= 0, hasCreOnly: at.creOnly >= 0, columns: at, lastRow, byHeader };
 }
 
 /** The sector a cell names, matched loosely ('homebuilder' is Homebuilder); null for blank or unknown. */
@@ -151,13 +155,22 @@ export async function loadFirms(
     const values = created ? [] : await client.read(tabRange(FIRMS_TAB)).catch(() => []);
     let sheet = parseFirmTab(values);
     let upgraded = '';
+    let current = values;
 
     if (sheet.firms.length && !sheet.hasSector && options.write && sheet.byHeader) {
-      const added = await addSectorColumn(client, values, sheet, seed);
-      sheet = parseFirmTab(added.values);
+      const added = await addSectorColumn(client, current, sheet, seed);
+      current = added.values;
+      sheet = parseFirmTab(current);
       upgraded = added.firms.length ? `; added ${added.firms.length} homebuilders (${added.firms.join(', ')})` : '';
     }
+    if (sheet.firms.length && sheet.hasSector && !sheet.hasCreOnly && options.write && sheet.byHeader) {
+      const added = await addCreOnlyColumn(client, current, sheet, seed);
+      current = added.values;
+      sheet = parseFirmTab(current);
+      upgraded += added.firms.length ? `; added ${added.firms.length} lenders, title, tax and other firms (${added.firms.join(', ')})` : '';
+    }
     if (!sheet.hasSector) pinSeedSectors(sheet, seed);
+    if (!sheet.hasCreOnly) pinSeedCreOnly(sheet, seed);
 
     if (!sheet.firms.length) {
       if (options.write) {
@@ -248,6 +261,78 @@ async function addSectorColumn(
   rows.forEach((cells, i) => (next[first - 1 + i] = cells.map((cell) => String(cell ?? ''))));
 
   return { values: next, firms: missing.map((firm) => firm.name) };
+}
+
+/**
+ * Bring a tab made before the "Real estate only" column up to date, once, the
+ * way addSectorColumn did for sectors: add the column, mark the seed's
+ * real-estate-only firms by name, and append the firms that arrived with it
+ * (0014_more_firms.sql: banks, title companies, lenders, a tax firm) that the
+ * tab lacks. The column marks this as done, so a
+ * firm the owner deletes later stays deleted.
+ */
+/** The migration whose firms arrived with the column. */
+const MORE_FIRMS = '0014_more_firms.sql';
+
+async function addCreOnlyColumn(
+  client: SheetsClient,
+  values: string[][],
+  sheet: SheetFirmList,
+  seed: FirmRow[]
+): Promise<{ values: string[][]; firms: string[] }> {
+  const at = sheet.columns;
+  const header = values[0] ?? [];
+  const flagAt = Math.max(header.length, at.sector + 1, at.status + 1);
+  const bySeed = new Map(seed.map((firm) => [firm.name.trim().toLowerCase(), firm]));
+  const nameAt = (row: number) => (values[row - 1]?.[at.name] ?? '').trim().toLowerCase();
+
+  const next = values.map((row) => [...row]);
+  const put = (row: number, column: number, value: string) => {
+    const cells = (next[row - 1] ??= []);
+    while (cells.length < column) cells.push('');
+    cells[column] = value;
+  };
+
+  const column: Cell[][] = [];
+  for (let row = 1; row <= sheet.lastRow; row++) {
+    const value = row === 1 ? 'Real estate only' : bySeed.get(nameAt(row))?.creOnly ? 'yes' : '';
+    put(row, flagAt, value);
+    column.push([value]);
+  }
+  const L = letter(flagAt);
+  await client.write(tabRange(FIRMS_TAB, `${L}1:${L}${sheet.lastRow}`), column);
+
+  const present = new Set(Array.from({ length: sheet.lastRow - 1 }, (_, i) => nameAt(i + 2)));
+  const missing = seed.filter((firm) => (firm.creOnly || firm.seeded === MORE_FIRMS) && !present.has(firm.name.trim().toLowerCase()));
+  if (!missing.length || [at.name, at.ats, at.slug, at.host].some((index) => index < 0)) {
+    return { values: next, firms: [] };
+  }
+
+  const width = Math.max(flagAt, ...Object.values(at)) + 1;
+  const rows: Cell[][] = missing.map((firm) => {
+    const cells: Cell[] = Array.from({ length: width }, () => '');
+    cells[at.name] = firm.name;
+    cells[at.ats] = firm.ats;
+    cells[at.slug] = firm.atsSlug;
+    cells[at.host] = firm.atsHost ?? '';
+    if (at.active >= 0) cells[at.active] = firm.active ? 'yes' : 'no';
+    if (at.sector >= 0) cells[at.sector] = firm.sector ?? '';
+    cells[flagAt] = 'yes';
+    return cells;
+  });
+  const first = sheet.lastRow + 1;
+  await client.write(tabRange(FIRMS_TAB, `A${first}`), rows);
+  rows.forEach((cells, i) => (next[first - 1 + i] = cells.map((cell) => String(cell ?? ''))));
+
+  return { values: next, firms: missing.map((firm) => firm.name) };
+}
+
+/** A tab without the "Real estate only" column still applies the seed's rule, matched by firm name. */
+function pinSeedCreOnly(sheet: SheetFirmList, seed: FirmRow[]): void {
+  const bySeed = new Map(seed.map((firm) => [firm.name.trim().toLowerCase(), firm.creOnly === true]));
+  for (const entry of sheet.firms) {
+    if (entry.firm && !entry.firm.creOnly) entry.firm.creOnly = bySeed.get(entry.firm.name.trim().toLowerCase()) ?? false;
+  }
 }
 
 /**

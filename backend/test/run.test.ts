@@ -61,7 +61,8 @@ describe('runCollector', () => {
     expect(report.rejected).toEqual({
       'missing-fields': 1,
       'not-texas': 1,
-      'not-entry-level': 1
+      'not-entry-level': 1,
+      'off-topic': 0
     });
     expect(report.inserted).toBe(2);
     expect(report.updated).toBe(0);

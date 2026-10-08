@@ -1,6 +1,6 @@
 import type { Match, Posting, Profile, RawJob } from '../types.js';
 import type { FirmRow, Store } from '../db/store.js';
-import { normalize, type RejectReason } from './normalize.js';
+import { forFirm, normalize, type RejectReason } from './normalize.js';
 import { fetchAshby } from './sources/ashby.js';
 import { fetchGreenhouse } from './sources/greenhouse.js';
 import { fetchSmartRecruiters } from './sources/smartrecruiters.js';
@@ -99,7 +99,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     firmsFailed: 0,
     fetched: 0,
     kept: 0,
-    rejected: { 'missing-fields': 0, 'not-texas': 0, 'not-entry-level': 0 },
+    rejected: { 'missing-fields': 0, 'not-texas': 0, 'not-entry-level': 0, 'off-topic': 0 },
     sectorGuessed: 0,
     inserted: 0,
     updated: 0,
@@ -123,7 +123,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     let raw: RawJob[];
     try {
       raw = await fetcher(firm);
-      if (firm.sector) raw = raw.map((job) => ({ ...job, sector: firm.sector! }));
+      raw = forFirm(firm, raw);
       await store.markFirmPolled(firm.id, { ok: true });
     } catch (error) {
       report.firmsFailed++;
