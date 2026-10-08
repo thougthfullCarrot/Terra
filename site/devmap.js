@@ -69,7 +69,7 @@ export function disposeMap() {
  * The map card. With several cities it shows a city switcher and calls
  * onCity when one is picked; on a city's own page, cities is just that one.
  */
-export function developmentMap({ data, cities, city, onCity }) {
+export function developmentMap({ data, cities, city, bids, onCity }) {
   const box = el('section', 'card dev-card');
   box.setAttribute('aria-labelledby', 'dev-title');
   const head = el('div', 'dev-head');
@@ -118,6 +118,8 @@ export function developmentMap({ data, cities, city, onCity }) {
   layout.append(mapNode, list);
   const note = el('p', 'dev-note');
   box.append(layout, note);
+  const bidList = bidsSection(bids, city);
+  if (bidList) box.append(bidList);
 
   const draw = () => {
     const projects = cityProjects(data?.projects, city, { privateOnly });
@@ -230,7 +232,8 @@ function popup(project) {
   for (const [label, value] of [
     ['Owner', project.owner],
     ['Tenant', project.tenant],
-    ['Design', project.designFirm],
+    ['Architect', project.designFirm],
+    ['Contractor', project.contractor],
     ['Permit contact', project.contact]
   ]) {
     if (!value) continue;
@@ -268,6 +271,44 @@ function link(href, text) {
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
   return a;
+}
+
+/**
+ * Open public construction bids in the metro (TxDOT lettings from the
+ * state's open data portal), soonest to close first. Nothing when none.
+ */
+export function bidsSection(data, city) {
+  const rows = (data?.bids ?? []).filter((b) => b.city === city);
+  if (!rows.length) return null;
+  const box = el('section', 'dev-bids');
+  box.setAttribute('aria-labelledby', 'dev-bids-title');
+  const title = el('h4', 'dev-bids-title', 'Public bids');
+  title.id = 'dev-bids-title';
+  box.append(
+    title,
+    el('p', 'dev-note', `Construction contracts taking bids in the ${city} metro's counties, soonest to close first. From TxDOT's project list on the state's open data portal; search the dataset by the project's CSJ number for the plans and bid details.`)
+  );
+  const list = el('ol', 'dev-bids-list');
+  for (const bid of rows) {
+    const item = el('li', 'dev-bid');
+    const name = link(bid.url, `${bid.title} ↗`);
+    const meta = [bid.agency, `${bid.county} County`, bid.csj ? `CSJ ${bid.csj}` : ''].filter(Boolean).join(' · ');
+    item.append(name, el('span', 'dev-meta', meta), el('span', 'dev-meta', `Bids due ${dueDate(bid.due)}`));
+    list.append(item);
+  }
+  box.append(list);
+  return box;
+}
+
+/** "2026-11-03T13:00" → "Nov 3, 2026, 1:00 PM" (Texas time, as published). */
+export function dueDate(due) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(due ?? '');
+  if (!m) return due ?? '';
+  const [, y, mo, d, h, mi] = m;
+  const day = new Date(Date.UTC(+y, +mo - 1, +d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  if (h == null || (h === '00' && mi === '00')) return day;
+  const hour = +h % 12 || 12;
+  return `${day}, ${hour}:${mi} ${+h < 12 ? 'AM' : 'PM'}`;
 }
 
 function money(cost) {

@@ -16,6 +16,7 @@ export interface GrowthProject {
   owner?: string | null;
   tenant?: string | null;
   designFirm?: string | null;
+  contractor?: string | null;
   contact?: string | null;
 }
 
