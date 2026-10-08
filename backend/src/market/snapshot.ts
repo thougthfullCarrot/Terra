@@ -14,6 +14,7 @@ import { censusKey, growth, rentalVacancy, rentBurdened, renterShare, rentSevere
 import type { ApartmentListResult } from './apartmentList.js';
 import type { AppraisalFile, PropertyClass } from './appraisal.js';
 import type { MonthlyReading } from './csv.js';
+import type { BidsResult } from './bids.js';
 import type { DevelopmentsResult } from './developments.js';
 import type { SalaryFile } from './salaries.js';
 import type { ZoningResult } from './zoning.js';
@@ -107,6 +108,8 @@ export interface MarketSnapshot {
   counties?: { year: number; rows: CountyRow[] };
   /** Current development projects per city, for the map (TDLR TABS filings). */
   developments?: DevelopmentsResult;
+  /** Open public construction bids per market (TxDOT lettings), listed under the map. */
+  bids?: BidsResult;
   /** Brokerage vacancy and asking rents, and links to their free quarterly reports. */
   research?: Research;
   /** Pay on H-1B filings at commercial real estate employers, per market (salaries.yml). */
@@ -883,6 +886,7 @@ export function fillFromPrevious(next: MarketSnapshot, previous: MarketSnapshot 
     rates: next.rates ?? previous.rates,
     counties: next.counties ?? previous.counties,
     developments: next.developments ?? previous.developments,
+    bids: next.bids ?? previous.bids,
     salaries: next.salaries ?? previous.salaries,
     zoning: next.zoning ?? previous.zoning,
     markets: next.markets.map((market) => {

@@ -54,6 +54,8 @@ export interface CityPermit {
   work: 'New construction' | 'Addition';
   owner: string | null;
   contact: string | null;
+  /** The general contractor, where the city's record names one. */
+  contractor: string | null;
   scope: string | null;
   url: string;
 }
@@ -216,6 +218,7 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
       tenant: null,
       designFirm: null,
       contact: group.map((p) => p.contact).find(Boolean) ?? null,
+      contractor: group.map((p) => p.contractor).find(Boolean) ?? null,
       scope: lead.scope,
       squareFeet: squareFeet > 0 ? squareFeet : null,
       isPublic: group.some((p) => PUBLIC.test(p.text)) || PUBLIC.test(name) || PUBLIC.test(owner ?? ''),
@@ -291,6 +294,7 @@ export function sanAntonioPermit(row: PermitRow): CityPermit | null {
     work,
     owner: null,
     contact: row['PRIMARY CONTACT']?.trim() || null,
+    contractor: null,
     scope: null,
     url: COSA_DATASET_URL
   };
@@ -343,6 +347,8 @@ export interface AustinRow {
   longitude?: string;
   masterpermitnum?: string;
   contractor_company_name?: string;
+  /** "General Contractor" on building permits. */
+  contractor_trade?: string;
   original_city?: string;
   original_zip?: string;
   link?: { url?: string };
@@ -354,6 +360,8 @@ export function austinPermit(row: AustinRow): CityPermit | null {
   const street = (row.permit_location ?? '').replace(/\s+(?:BLDG|UNIT|STE)\b.*$/i, '').trim();
   const town = tidyStreet(row.original_city || 'Austin');
   const at = texas(num(row.latitude), num(row.longitude));
+  const company = row.contractor_company_name?.replace(/\*+[^*]*\*+/g, '').trim() || null;
+  const general = !row.contractor_trade || /general/i.test(row.contractor_trade);
   return {
     market: 'Austin',
     place: town,
@@ -370,7 +378,10 @@ export function austinPermit(row: AustinRow): CityPermit | null {
     squareFeet: num(row.total_new_add_sqft),
     work: /addition/i.test(row.work_class ?? '') ? 'Addition' : 'New construction',
     owner: null,
-    contact: row.contractor_company_name?.replace(/\*+[^*]*\*+/g, '').trim() || null,
+    // The contractor of record ("Harvey-Cleary Builders ***MAIN***"); on a
+    // building permit that is the general contractor, any other trade stays a contact.
+    contact: general ? null : company,
+    contractor: general ? company : null,
     scope: clip(row.description?.replace(/^ePlan:\s*/i, '')),
     url: row.link?.url ?? 'https://data.austintexas.gov/d/3syk-w9eu'
   };
@@ -469,6 +480,7 @@ export function fortWorthPermit(row: FortWorthRow, geometry?: { x?: number; y?: 
     work: /addition/i.test(row.Permit_SubType ?? '') ? 'Addition' : 'New construction',
     owner: row.Owner_Full_Name?.trim() || null,
     contact: null,
+    contractor: null,
     scope: clip(row.B1_WORK_DESC === 'B1_WORK_DESC' ? null : row.B1_WORK_DESC),
     url: FORT_WORTH_DATA_URL
   };
@@ -519,6 +531,7 @@ export function arlingtonPermit(row: ArlingtonRow, geometry?: { x?: number; y?: 
     work: /addition/i.test(row.WORKDESC ?? '') ? 'Addition' : 'New construction',
     owner: null,
     contact: null,
+    contractor: null,
     scope: [row.SUBDESC, use].filter(Boolean).join(' · ') || null,
     url: ARLINGTON_DATA_URL
   };

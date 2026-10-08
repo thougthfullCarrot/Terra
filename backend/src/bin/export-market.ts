@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchApartmentList } from '../market/apartmentList.js';
 import type { AppraisalFile } from '../market/appraisal.js';
 import { fetchBls } from '../market/bls.js';
+import { fetchBids } from '../market/bids.js';
 import { fetchDevelopments } from '../market/developments.js';
 import { fetchRates } from '../market/fred.js';
 import { fetchOpportunityZones } from '../market/opportunityZones.js';
@@ -157,6 +158,9 @@ async function main(): Promise<void> {
     fetchDevelopments(cities, { now, previous: previous?.developments?.projects, log: (line) => console.log(`TDLR TABS: ${line}`) })
   );
 
+  const bids = await attempt('TxDOT bids', () => fetchBids(cities, { now }));
+  if (bids) console.log(`TxDOT bids: ${bids.bids.length} open bids across ${new Set(bids.bids.map((b) => b.city)).size} markets`);
+
   const research = await attempt('Broker research', () =>
     fetchResearch({ cities, log: (line) => console.log(`Broker research: ${line}`) })
   );
@@ -201,6 +205,7 @@ async function main(): Promise<void> {
     previous
   );
   if (developments?.projects.length) snapshot.developments = developments;
+  if (bids) snapshot.bids = bids;
   const keptResearch = research ? keepResearch(research, previous?.research) : previous?.research;
   if (keptResearch) snapshot.research = keptResearch;
   if (salaries) snapshot.salaries = salaries;
