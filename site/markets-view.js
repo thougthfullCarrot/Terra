@@ -209,7 +209,7 @@ function toolView(tool) {
   return sitesView(snapshot, state.city);
 }
 
-function table(group) {
+function table(group, me = '') {
   const metrics = group.metrics.map(metricFor).filter(Boolean);
   const markets = sortMarkets(snapshot.markets, state.sort, state.order);
   const sorted = metricFor(state.sort);
@@ -224,7 +224,8 @@ function table(group) {
 
   const body = el('tbody');
   for (const market of markets) {
-    const row = el('tr');
+    const row = el('tr', market.city === me ? 'me' : '');
+    if (market.city === me) row.setAttribute('aria-current', 'true');
     const name = el('th', 'city-col');
     name.scope = 'row';
     if (placeFor?.has(market.city)) name.append(el('span', 'rank', String(placeFor.get(market.city))));
@@ -267,7 +268,7 @@ function table(group) {
  * way from a zero line; everything else starts at zero on the left. Hovering a
  * bar names its rank and period; clicking opens that market.
  */
-function chart(group) {
+function chart(group, me = '') {
   const metrics = group.metrics.map(metricFor).filter(Boolean);
   const metric = metricFor(state.sort) ?? metrics[0];
   const box = el('section', 'card chart-card');
@@ -301,7 +302,7 @@ function chart(group) {
   rows.setAttribute('aria-label', `${metric.label} by market`);
   for (const market of markets) {
     const value = market.values[metric.key];
-    const row = el('li', 'bar-row');
+    const row = el('li', `bar-row${market.city === me ? ' me' : ''}`);
     const link = el('a', 'bar-link');
     link.href = writeMarketHash({ ...state, city: market.city });
     const label = el('span', 'bar-label', market.city);
@@ -395,7 +396,16 @@ function cityView(city, focus) {
   const back = el('a', 'link', '← All markets');
   back.href = writeMarketHash({ ...state, city: '' });
   head.append(back, el('h2', 'role', market.city), el('p', 'firm', market.metro ?? ''));
-  frag.append(head, devMap(city));
+  frag.append(head, kpis(market, focus));
+  const pair = el('div', 'market-pair');
+  pair.append(chart(focus, city));
+  const points = talkingPoints(market, focus);
+  if (points) pair.append(points);
+  else pair.classList.add('single');
+  frag.append(pair);
+  const all = el('section', 'card market-all');
+  all.append(el('h3', 'group-title', `All markets · ${focus.label}`), table(focus, city));
+  frag.append(all, devMap(city));
 
   // The chosen property type first, then the rest.
   const groups = [focus, ...snapshot.groups.filter((g) => g.key !== focus.key)];
@@ -426,6 +436,75 @@ function cityView(city, focus) {
   }
   frag.append(grid);
   return frag;
+}
+
+/** How many markets have a figure for a metric. */
+function counted(key) {
+  return snapshot.markets.filter((m) => m.values[key] != null && Number.isFinite(m.values[key])).length;
+}
+
+/** The topic's first four figures for one city, each with its rank among the markets. */
+function kpis(market, group) {
+  const box = el('section', 'kpis');
+  box.setAttribute('aria-label', `${market.city} headline figures`);
+  for (const key of group.metrics.slice(0, 4)) {
+    const metric = metricFor(key);
+    if (!metric) continue;
+    const value = market.values[key];
+    const tile = el('div', 'card kpi');
+    if (metric.note) tile.title = metric.note;
+    const place = ranks(snapshot.markets, metric).get(market.city);
+    const bits = [];
+    if (place && metric.better) bits.push(`#${place} of ${counted(key)} markets`);
+    else if (place) bits.push(`${ordinal(place)} highest of ${counted(key)}`);
+    if (market.periods?.[key]) bits.push(market.periods[key]);
+    tile.append(el('small', '', metric.label), el('b', `num value ${tone(value, metric)}`, formatValue(value, metric.unit)), el('span', 'kpi-rank', bits.join(' · ') || 'No figure yet'));
+    box.append(tile);
+  }
+  return box;
+}
+
+/**
+ * Up to three sentences built only from the figures on this page: where the
+ * city ranks best and worst in the topic, and the 10-year Treasury's move.
+ * Nothing when there is too little to say.
+ */
+function talkingPoints(market, group) {
+  const ranked = [];
+  for (const key of group.metrics) {
+    const metric = metricFor(key);
+    const value = market.values[key];
+    if (!metric?.better || value == null) continue;
+    const place = ranks(snapshot.markets, metric).get(market.city);
+    const of = counted(key);
+    if (place && of >= 3) ranked.push({ metric, value, place, of });
+  }
+  const lines = [];
+  const best = [...ranked].sort((a, b) => a.place / a.of - b.place / b.of)[0];
+  if (best && best.place <= Math.ceil(best.of / 3)) {
+    lines.push(`${market.city} ranks ${ordinal(best.place)} of ${best.of} Texas markets on ${best.metric.label.toLowerCase()}, at ${formatValue(best.value, best.metric.unit)}.`);
+  }
+  const worst = [...ranked].sort((a, b) => b.place / b.of - a.place / a.of)[0];
+  if (worst && worst !== best && worst.place > Math.floor((worst.of * 2) / 3)) {
+    lines.push(`${market.city} trails on ${worst.metric.label.toLowerCase()}: ${formatValue(worst.value, worst.metric.unit)}, ${ordinal(worst.place)} of ${worst.of}.`);
+  }
+  const treasury = (snapshot.rates ?? []).find((r) => /10-year treasury/i.test(r.label));
+  if (treasury && treasury.change != null && Math.abs(treasury.change) >= 0.05) {
+    lines.push(
+      `The 10-year Treasury is ${formatValue(treasury.value, 'taxRate')}, ${treasury.change > 0 ? 'up' : 'down'} ${formatPoints(Math.abs(treasury.change)).replace(/^\+/, '')} from a year ago (${treasury.period}), which moves what buyers can pay.`
+    );
+  }
+  if (lines.length < 2) return null;
+  const box = el('section', 'card talk-card');
+  box.append(el('h3', 'group-title', `Talking points for a ${market.city} interview`));
+  const list = el('ol', 'talk');
+  lines.forEach((line, index) => {
+    const li = el('li');
+    li.append(el('span', 'talk-n', String(index + 1)), el('span', '', line));
+    list.append(li);
+  });
+  box.append(list, el('p', 'talk-note', 'Written from the numbers on this page. Check them before you quote them.'));
+  return box;
 }
 
 /** Every market as a tick on one line, this one as a dot: where it sits at a glance. */
@@ -462,32 +541,27 @@ function tone(value, metric) {
 function rates() {
   const list = snapshot.rates ?? [];
   if (!list.length) return '';
-  const box = el('section', 'card rates-card');
-  box.setAttribute('aria-labelledby', 'm-rates-title');
-  const head = el('div', 'rates-head');
-  const title = el('h3', 'group-title', 'Interest rates and lending');
-  title.id = 'm-rates-title';
-  head.append(title, el('p', 'group-blurb', 'National figures that set what every deal can borrow at, plus the Dallas Fed\'s Texas manufacturing survey. Change is from a year earlier.'));
-  const grid = el('div', 'rates-grid');
+  const box = el('section', 'card ticker');
+  box.setAttribute('aria-label', 'Interest rates and lending, change from a year earlier');
   for (const rate of list) {
-    const tile = el('a', 'rate-tile');
+    const tile = el('a', 'tick');
     tile.href = rate.url;
     tile.target = '_blank';
     tile.rel = 'noopener noreferrer';
-    tile.title = rate.note;
+    tile.title = `${rate.note} (${rate.period})`;
     const survey = /tightening/i.test(rate.label);
+    const dir = rate.change == null || Math.abs(rate.change) < 0.005 ? '' : rate.change > 0 ? ' rising' : ' falling';
     tile.append(
-      el('span', 'rate-label', rate.label),
+      el('small', '', rate.label),
       el(
-        'span',
-        'rate-value',
+        'b',
+        '',
         rate.format === 'index' ? (Math.round(rate.value * 10) / 10).toFixed(1) : survey ? formatValue(rate.value, 'rate') : formatValue(rate.value, 'taxRate')
       ),
-      el('span', 'rate-change', rate.change == null ? rate.period : `${formatPoints(rate.change)} vs. a year ago · ${rate.period}`)
+      el('span', `tick-change${dir}`, rate.change == null ? rate.period : `${formatPoints(rate.change)} yoy`)
     );
-    grid.append(tile);
+    box.append(tile);
   }
-  box.append(head, grid);
   return box;
 }
 

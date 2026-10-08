@@ -3,8 +3,8 @@
 // tracker.js. account.js hands over a store backed by Supabase (tracked_jobs);
 // without one (the open site, or before migration 0008) the section stays
 // hidden and the bookmark falls back to this device's saved list.
-import { STAGES, followUpLabel, groupByStage, trackedRow, trackerSummary } from './tracker.js';
-import { safeUrl } from './feed.js';
+import { STAGES, followUpLabel, groupByStage, texasToday, trackedRow, trackerSummary } from './tracker.js';
+import { deadlineLabel, initials, safeUrl } from './feed.js';
 import { showSection } from './markets-view.js';
 
 const $ = (id) => document.getElementById(id);
@@ -57,6 +57,11 @@ export function trackerOn() {
 
 export function trackedIds() {
   return new Set(rows.keys());
+}
+
+/** Every tracked_jobs row, for the jobs page's follow-ups count. */
+export function trackedRows() {
+  return [...rows.values()];
 }
 
 export function stageOf(id) {
@@ -128,6 +133,24 @@ export async function importTracked(list) {
   }
 }
 
+/** What an empty column says, so the board reads as a path. */
+const EMPTY_HINTS = {
+  Saved: 'Bookmark a job and it lands here.',
+  Applied: 'Move a job here once you apply.',
+  Interviewing: 'Move a job here when a firm asks to talk.',
+  Offer: 'Move a job here when an offer comes in.',
+  'Not selected': "Jobs that didn't work out go here. Keep the notes for next time."
+};
+
+const DAY = 24 * 60 * 60 * 1000;
+const SHORT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/** Whole days from today (Texas) to a YYYY-MM-DD date. */
+function daysTo(date, now) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${texasToday(now)}T00:00:00Z`)) / DAY);
+}
+
 function draw() {
   const view = $('tracker-view');
   if (view.hidden || !store) return;
@@ -141,21 +164,60 @@ function draw() {
     return;
   }
 
-  const sections = [];
+  const board = el('div', 'board');
   for (const [stage, items] of groupByStage(list)) {
-    if (!items.length) continue;
-    const section = el('section', 'track-stage');
-    const head = el('h3', 'track-stage-title', stage);
+    const column = el('section', 'board-col');
+    column.setAttribute('aria-label', `${stage}, ${items.length}`);
+    const head = el('h3', 'board-col-head', stage);
     head.append(el('span', 'chip-count', String(items.length)));
-    section.append(head, ...items.map((row) => item(row, now)));
-    sections.push(section);
+    column.append(head);
+    if (items.length) column.append(...items.map((row) => item(row, now)));
+    else column.append(el('p', 'board-empty', EMPTY_HINTS[stage] ?? ''));
+    board.append(column);
   }
-  $('t-body').replaceChildren(...sections);
+  $('t-body').replaceChildren(...[week(list, now), board].filter(Boolean));
 }
 
+/**
+ * Follow-ups and closing dates in the next seven days (and any overdue
+ * follow-up), soonest first. Nothing when the week is clear.
+ */
+function week(list, now) {
+  const due = [];
+  for (const row of list) {
+    const job = row.job ?? {};
+    const follow = daysTo(row.follow_up, now);
+    if (follow != null && follow <= 7) due.push({ days: follow, kind: 'follow', row, job });
+    const closes = daysTo(job.deadline, now);
+    if (closes != null && closes >= 0 && closes <= 7 && ['Saved', 'Applied'].includes(row.stage)) due.push({ days: closes, kind: 'closes', row, job });
+  }
+  if (!due.length) return null;
+  due.sort((a, b) => a.days - b.days);
+  const box = el('section', 'card week');
+  box.setAttribute('aria-labelledby', 't-week-title');
+  const head = el('div', 'week-head');
+  const title = el('h3', 'group-title', 'This week');
+  title.id = 't-week-title';
+  head.append(title, el('span', 'week-note', 'Follow-ups and closing dates in the next 7 days'));
+  const items = el('ul', 'week-list');
+  for (const { days, kind, row, job } of due) {
+    const li = el('li');
+    const when = days < 0 ? `${-days}d overdue` : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : SHORT.format(new Date(`${kind === 'follow' ? row.follow_up : job.deadline}T00:00:00Z`));
+    li.append(el('span', `due ${days <= 1 ? 'soon' : 'later'}`, when));
+    const text = el('span');
+    if (kind === 'follow') text.append('Follow up with ', el('b', '', job.firm || 'the firm'), ` on ${job.role || 'this role'}`);
+    else text.append(el('b', '', job.firm || 'A job'), ` ${job.role || ''} closes`.replace(/\s+/g, ' '));
+    li.append(text);
+    items.append(li);
+  }
+  box.append(head, items);
+  return box;
+}
+
+/** One card on the board: the job, its dates and note, with the edit controls folded away. */
 function item(row, now) {
   const job = { id: row.job_id, ...row.job };
-  const node = el('article', 'track-item');
+  const node = el('article', 'card track-item track-card');
   node.dataset.id = row.job_id;
 
   const head = el('div', 'track-head');
@@ -166,7 +228,24 @@ function item(row, now) {
     if (!hooks.openJob(row.job_id)) hooks.toast("That posting has left the boards. Your notes stay here.");
   });
   title.append(open);
-  head.append(title, el('p', 'firm', [job.firm, job.city].filter(Boolean).join(' · ')));
+  const who = el('div', 'track-who');
+  who.append(title, el('p', 'firm', [job.firm, job.city].filter(Boolean).join(' · ')));
+  head.append(el('span', 'monogram', initials(job.firm || '?')), who);
+  node.append(head);
+
+  const dates = el('div', 'track-dates');
+  const follow = followUpLabel(row.follow_up, now);
+  if (follow) {
+    const days = daysTo(row.follow_up, now);
+    dates.append(el('span', `due ${follow.due || days <= 1 ? 'soon' : 'later'}`, follow.text));
+  }
+  const deadline = ['Saved', 'Applied'].includes(row.stage) ? deadlineLabel(job.deadline, now) : null;
+  if (deadline) dates.append(el('span', `due ${deadline.urgent ? 'soon' : 'later'}`, deadline.text));
+  if (dates.childElementCount) node.append(dates);
+  if (row.note) node.append(el('p', 'track-note-text', row.note));
+
+  const edit = el('details', 'track-edit');
+  edit.append(el('summary', '', 'Edit'));
 
   const controls = el('div', 'track-controls');
   const stageLabel = el('label');
@@ -188,16 +267,15 @@ function item(row, now) {
 
   const noteLabel = el('label', 'track-note');
   const note = document.createElement('textarea');
-  note.rows = 2;
+  note.rows = 3;
   note.maxLength = 2000;
   note.placeholder = 'Recruiter name, interview date, what you sent…';
   note.value = row.note ?? '';
+  // Saved without a redraw so typing isn't interrupted; the card's note preview catches up on the next one.
   note.addEventListener('change', () => track(job, { note: note.value }, { redraw: false }));
   noteLabel.append(el('span', 'eyebrow', 'NOTES'), note);
 
   const foot = el('div', 'track-foot');
-  const follow = followUpLabel(row.follow_up, now);
-  if (follow) foot.append(el('span', `follow${follow.due ? ' due' : ''}`, follow.text));
   const href = safeUrl(job.applyUrl ?? '');
   if (href) {
     const apply = el('a', 'link', 'Open posting');
@@ -214,9 +292,15 @@ function item(row, now) {
   });
   foot.append(remove);
 
-  node.append(head, controls, noteLabel, foot);
+  edit.append(controls, noteLabel, foot);
+  // Keep a card's editor open across redraws (a stage change moves the card).
+  edit.open = openEditors.has(row.job_id);
+  edit.addEventListener('toggle', () => (edit.open ? openEditors.add(row.job_id) : openEditors.delete(row.job_id)));
+  node.append(edit);
   return node;
 }
+
+const openEditors = new Set();
 
 function el(tag, cls = '', text) {
   const node = document.createElement(tag);

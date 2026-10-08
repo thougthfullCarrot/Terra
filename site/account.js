@@ -42,6 +42,8 @@ let user = null;
 let access = null;
 let profile = null;
 let avatarUrl = null;
+/** The open jobs, kept for the profile's skill gaps. */
+let feedJobs = [];
 
 export async function startAccounts(hooks) {
   app = hooks;
@@ -87,6 +89,7 @@ function signedOut() {
   access = null;
   profile = null;
   avatarUrl = null;
+  feedJobs = [];
   app.hideFeed();
   app.setProfile(null);
   const price = CONFIG.paymentLink && CONFIG.priceLabel ? ` (${CONFIG.priceLabel})` : '';
@@ -156,6 +159,7 @@ async function loadFeed() {
     app.hideFeed(error ? `Couldn't load postings. ${error.message}` : 'The job list is being built. Check back in a few minutes.');
     return;
   }
+  feedJobs = data.data?.jobs ?? [];
   app.showFeed(data.data);
   app.setTracker(trackerStore());
   // Market data sits in the same members-only table, one row of its own.
@@ -452,6 +456,95 @@ function fillProfile() {
   if (!billing.hidden) billing.href = CONFIG.billingPortalLink;
 
   drawResume();
+  drawProgress();
+}
+
+/** The profile steps that make matching and alerts work, from the saved row. Each open step jumps to its field. */
+function drawProgress() {
+  const form = $('profile-form');
+  const steps = [
+    ['Your name', Boolean(profile?.name), () => form.elements.name],
+    ['College and class year', Boolean(profile?.school && profile?.grad_year), () => (profile?.school ? form.gradYear : form.school)],
+    ['Home city', Boolean(profile?.home_city), () => form.homeCity],
+    ['Resume uploaded', Boolean(profile?.resume_path), () => $('resume-file')],
+    ['Sectors you want', Boolean(profile?.sectors?.length), () => form.querySelector('input[name="sectors"]')]
+  ];
+  if (alertsReady()) steps.push(['Daily alerts on', Boolean(profile?.email_alerts), () => form.emailAlerts]);
+  const done = steps.filter(([, ok]) => ok).length;
+  const pct = Math.round((done / steps.length) * 100);
+  $('prof-meter-title').textContent = done === steps.length ? 'Profile complete' : `Profile ${pct}% complete`;
+  $('prof-meter-count').textContent = `${done} of ${steps.length}`;
+  $('prof-meter-fill').style.width = `${pct}%`;
+  $('prof-steps').replaceChildren(
+    ...steps.map(([label, ok, field]) => {
+      const li = document.createElement('li');
+      li.className = ok ? 'done' : 'todo';
+      const mark = document.createElement('i');
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = ok ? '✓' : '';
+      if (ok) {
+        li.append(mark, label);
+        return li;
+      }
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'link';
+      go.textContent = label;
+      go.addEventListener('click', () => {
+        const node = field();
+        node?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        node?.focus({ preventScroll: true });
+      });
+      li.append(mark, go);
+      return li;
+    })
+  );
+}
+
+/**
+ * The skills open postings ask for that the resume doesn't show, as a share
+ * of the postings that name any skill. Hidden without a resume or postings.
+ */
+function drawGaps(matcher, have) {
+  const box = $('skill-gaps');
+  const asking = feedJobs.filter((job) => job.match?.required?.length);
+  if (!matcher?.resumeSkillKeys || !asking.length) {
+    box.hidden = true;
+    return;
+  }
+  const counts = new Map();
+  for (const job of asking) {
+    for (const key of new Set(job.match.required)) if (!have.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const top = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  box.hidden = false;
+  $('gaps-count').textContent = `Across ${asking.length} open ${asking.length === 1 ? 'role' : 'roles'}`;
+  if (!top.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'Your resume covers every skill these postings name.';
+    $('gaps').replaceChildren(p);
+    return;
+  }
+  $('gaps').replaceChildren(
+    ...top.map(([key, n]) => {
+      const pct = Math.round((n / asking.length) * 100);
+      const row = document.createElement('div');
+      row.className = 'gap-row';
+      const name = document.createElement('b');
+      name.textContent = matcher.skillLabel(key);
+      const bar = document.createElement('span');
+      bar.className = 'meter-bar';
+      const fill = document.createElement('i');
+      fill.style.width = `${Math.max(pct, 2)}%`;
+      bar.append(fill);
+      const value = document.createElement('span');
+      value.className = 'meta';
+      value.textContent = `${pct}% of roles`;
+      row.append(name, bar, value);
+      return row;
+    })
+  );
 }
 
 async function drawResume() {
@@ -463,13 +556,17 @@ async function drawResume() {
     : 'PDF, Word or text, up to 5 MB. We use it to highlight your best matches.';
 
   let skills = [];
+  let matcher = null;
   if (profile?.resume_text) {
     try {
-      skills = (await import('./match.js')).resumeSkills(profile.resume_text);
+      matcher = await import('./match.js');
+      skills = matcher.resumeSkills(profile.resume_text);
     } catch {
       skills = [];
     }
   }
+  $('resume-skills-title').hidden = !skills.length;
+  drawGaps(matcher, new Set(matcher?.resumeSkillKeys?.(profile.resume_text) ?? []));
   $('resume-skills').replaceChildren(
     ...skills.map((skill) => {
       const li = document.createElement('li');
@@ -533,6 +630,7 @@ async function writeProfile(fields) {
   profile = data;
   drawAvatars();
   drawResume();
+  drawProgress();
   app.setProfile(toMatchProfile(profile));
   return true;
 }
