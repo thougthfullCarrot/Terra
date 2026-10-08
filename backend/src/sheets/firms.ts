@@ -266,10 +266,14 @@ async function addSectorColumn(
 /**
  * Bring a tab made before the "Real estate only" column up to date, once, the
  * way addSectorColumn did for sectors: add the column, mark the seed's
- * real-estate-only firms by name, and append the ones the tab lacks (the
- * banks, title companies and tax firms). The column marks this as done, so a
+ * real-estate-only firms by name, and append the firms that arrived with it
+ * (0014_more_firms.sql: banks, title companies, lenders, a tax firm) that the
+ * tab lacks. The column marks this as done, so a
  * firm the owner deletes later stays deleted.
  */
+/** The migration whose firms arrived with the column. */
+const MORE_FIRMS = '0014_more_firms.sql';
+
 async function addCreOnlyColumn(
   client: SheetsClient,
   values: string[][],
@@ -299,7 +303,7 @@ async function addCreOnlyColumn(
   await client.write(tabRange(FIRMS_TAB, `${L}1:${L}${sheet.lastRow}`), column);
 
   const present = new Set(Array.from({ length: sheet.lastRow - 1 }, (_, i) => nameAt(i + 2)));
-  const missing = seed.filter((firm) => firm.creOnly && !present.has(firm.name.trim().toLowerCase()));
+  const missing = seed.filter((firm) => (firm.creOnly || firm.seeded === MORE_FIRMS) && !present.has(firm.name.trim().toLowerCase()));
   if (!missing.length || [at.name, at.ats, at.slug, at.host].some((index) => index < 0)) {
     return { values: next, firms: [] };
   }
