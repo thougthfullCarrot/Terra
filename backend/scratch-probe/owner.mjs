@@ -11,41 +11,53 @@ async function get(url) {
     return { status: r.status, cors: r.headers.get('access-control-allow-origin'), ms: Math.round(t0() - s), body, text: text.slice(0, 200) };
   } catch (e) { return { status: 'ERR', ms: Math.round(t0() - s), err: String(e).slice(0, 160) }; }
 }
-const addr = {
-  Harris: ['700 Louisiana St', '1000 Main St', '2800 Post Oak Blvd', '1001 Fannin St', '5 Houston Center', '9 Greenway Plaza', '1500 Louisiana', '811 Main', '3200 Southwest Fwy', '10000 Memorial Dr'],
-  Dallas: ['2100 Ross Ave', '1601 Elm St', '500 N Akard St', '2200 Ross Avenue', '3000 Turtle Creek Blvd', '8333 Douglas Ave', '1 Cowboys Way'],
-  Tarrant: ['201 Main St', '777 Main St', '500 W 7th St', '2600 W 7th St', '3500 W Vickery Blvd'],
-  Bexar: ['300 Convent St', '100 Military Plaza', '1 Riverwalk Pl', '700 N St Marys St', '200 E Grayson St', '18756 Stone Oak Pkwy'],
-  Travis: ['100 Congress Ave', '500 W 2nd St', '301 W 2nd St', '11501 Alterra Pkwy', '600 Congress Ave', '1100 Congress Avenue', '401 W 2nd St']
-};
-for (const source of P.OWNER_SOURCES) {
-  console.log(`\n=== ${source.county}`);
-  for (const q of addr[source.county]) {
-    const where = P.addressWhere(source, q);
-    const r = await get(P.parcelQueryUrl(source, where, 10));
-    const rows = (r.body?.features ?? []).map((f) => source.read(f.attributes ?? {}));
-    console.log(`ADDR ${q} | ${where} | ${r.status} ${r.ms}ms cors=${r.cors} | ${r.body?.error ? 'ERROR ' + JSON.stringify(r.body.error).slice(0, 150) : rows.length + ' rows: ' + rows.slice(0, 3).map((x) => `${x.address} / ${x.owner}`).join(' ; ')}${r.err ?? ''}`);
-  }
-  for (const q of ['Hines', 'Brookfield', 'Lincoln Property', 'Greystar', 'Trammell Crow', 'Crescent']) {
-    const where = P.ownerLikeWhere(source, q);
-    const r = await get(P.parcelQueryUrl(source, where, 40));
-    const rows = (r.body?.features ?? []).map((f) => source.read(f.attributes ?? {}));
-    console.log(`OWNER ${q} | ${r.status} ${r.ms}ms | ${r.body?.error ? 'ERROR ' + JSON.stringify(r.body.error).slice(0, 150) : rows.length + ' rows: ' + rows.slice(0, 3).map((x) => x.owner).join(' ; ')}${r.err ?? ''}`);
-  }
-  // A sample of how the address field is written.
-  const r = await get(P.parcelQueryUrl(source, `${source.address} IS NOT NULL`, 5));
-  console.log('SAMPLE', (r.body?.features ?? []).map((f) => JSON.stringify(f.attributes[source.address])).join(' | '));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function layer(source, where, count) {
+  const r = await get(P.parcelQueryUrl(source, where, count));
+  return { ms: r.ms, rows: (r.body?.features ?? []).map((f) => ({ ...source.read(f.attributes ?? {}), source })), err: r.body?.error ? JSON.stringify(r.body.error).slice(0, 120) : r.err };
 }
-console.log('\n=== Statewide');
-for (const q of ['700 Louisiana St, Houston, TX 77002', '2100 Ross Ave, Dallas, TX 75201', '100 Congress Ave, Austin, TX 78701', '300 Convent St, San Antonio, TX 78205', '1 Riverwalk Pl, San Antonio, TX 78205', '4800 Overton Ridge Blvd, Fort Worth, TX 76132', '6100 Western Pl, Fort Worth, TX 76107', '201 E Main St, Round Rock, TX 78664', '5800 Granite Pkwy, Plano, TX 75024', '700 Louisiana St, Houston TX', '700 Louisiana Street Houston']) {
-  const g = await get(P.geocodeUrl(q));
+async function statewide(q, city) {
+  await sleep(1100);
+  const g = await get(P.geocodeUrl(P.geocodeText(q, city)));
   const point = P.readGeocode(g.body);
-  let line = `GEO ${q} | ${g.status} ${g.ms}ms cors=${g.cors} | ${point ? `${point.lat},${point.lng}` : 'no point ' + (g.text ?? g.err)}`;
-  if (point) {
-    const i = await get(P.identifyUrl(point));
-    const picked = P.pickStatewide(i.body, q);
-    line += ` | identify ${i.status} ${i.ms}ms cors=${i.cors} ${i.body?.error ? 'ERROR ' + JSON.stringify(i.body.error).slice(0, 120) : picked.length + ' parcels: ' + picked.slice(0, 3).map((p) => `${p.address} / ${p.owner}`).join(' ; ')}`;
+  if (!point) return { how: 'no geocode', rows: [] };
+  for (const tol of [8, 30]) {
+    const i = await get(P.identifyUrl(point, tol));
+    const rows = P.pickStatewide(i.body, q);
+    if (rows.length) return { how: `state tol ${tol}`, rows };
   }
-  console.log(line, 'full?', P.isFullAddress(q));
-  await new Promise((r) => setTimeout(r, 1100)); // Nominatim: one request a second
+  return { how: 'state 0 parcels', rows: [] };
+}
+const exact = (p, q) => { const x = P.parseAddress(q); const a = ` ${String(p.address).toUpperCase().replace(/[^A-Z0-9]+/g, ' ')} `; return a.startsWith(` ${x.number} `) && a.includes(` ${x.street} `); };
+async function lookup(q, city) {
+  const own = P.OWNER_SOURCES.filter((s) => s.cities.includes(city));
+  let ownFound = [];
+  for (const s of own) { const r = await layer(s, P.addressWhere(s, q), 25); ownFound.push(...r.rows); }
+  ownFound = P.rankAddresses(ownFound, q, city);
+  if (ownFound.length && exact(ownFound[0], q)) return { how: 'county', rows: ownFound };
+  if (city || P.isFullAddress(q)) { const r = await statewide(q, city); if (r.rows.length) return r; }
+  const rest = [];
+  for (const s of P.OWNER_SOURCES.filter((s) => !own.includes(s))) rest.push(...(await layer(s, P.addressWhere(s, q), 25)).rows);
+  return { how: 'other counties', rows: P.rankAddresses([...ownFound, ...rest], q, city) };
+}
+const cases = [
+  ['Houston', ['700 Louisiana St', '5 Houston Center', '1000 Main St', '811 Main', '2800 Post Oak Blvd']],
+  ['Dallas', ['1601 Elm St', '8333 Douglas Ave', '1 Cowboys Way', '2100 Ross Ave']],
+  ['Fort Worth', ['500 W 7th St', '201 Main St', '4800 Overton Ridge Blvd']],
+  ['San Antonio', ['1 Riverwalk Pl', '700 N St Marys St', '300 Convent St']],
+  ['Austin', ['301 W 2nd St', '401 W 2nd St', '1100 Congress Avenue', '500 W 2nd St', '100 Congress Ave']],
+  ['', ['700 Louisiana St, Houston TX', '700 Louisiana Street Houston', '4800 Overton Ridge Blvd, Fort Worth', '2100 Ross Ave', '201 E Main St, Round Rock']]
+];
+for (const [city, qs] of cases) {
+  for (const q of qs) {
+    const s = t0();
+    const r = await lookup(q, city);
+    console.log(`ADDR [${city || 'All'}] ${q} | ${r.how} ${Math.round(t0() - s)}ms | ${r.rows.length} rows: ${r.rows.slice(0, 3).map((x) => `${x.address} / ${x.owner} (${x.source.county})`).join(' ; ')}`);
+  }
+}
+for (const q of ['Hines', 'Lincoln Property', 'Greystar', 'Trammell Crow', 'Crescent Real Estate', 'Brookfield']) {
+  const all = [];
+  for (const s of P.OWNER_SOURCES) all.push(...(await layer(s, P.ownerLikeWhere(s, q), 40)).rows);
+  const ranked = P.rankOwners(all, q);
+  console.log(`OWNER ${q} | ${ranked.length} rows: ${ranked.slice(0, 5).map((x) => `${x.owner} (${x.source.county})`).join(' ; ')}`);
 }

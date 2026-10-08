@@ -40,15 +40,50 @@ describe('property hash', () => {
 describe('who owns this', () => {
   it('reads the house number and the street word from a typed address', () => {
     expect(parseAddress('700 Louisiana Street, Houston, TX 77002')).toEqual({ number: '700', street: 'LOUISIANA' });
-    expect(parseAddress('1000 N. Main St')).toEqual({ number: '1000', street: 'MAIN' });
+    expect(parseAddress('1000 N. Main St')).toEqual({ number: '1000', street: 'MAIN', dir: 'N' });
+    expect(parseAddress('700 N St Marys St')).toEqual({ number: '700', street: 'MARYS', dir: 'N' });
+    expect(parseAddress('100 West Ave')).toEqual({ number: '100', street: 'W' });
     expect(parseAddress('Hines')).toBeNull();
-    expect(addressWhere(houston, "100 O'Connor Dr")).toBe("UPPER(SITE_ADDR_1) LIKE '100 %CONNOR%'");
+    expect(addressWhere(houston, "100 O'Connor Dr")).toBe(
+      "(UPPER(SITE_ADDR_1) LIKE '100 CONNOR %' OR UPPER(SITE_ADDR_1) LIKE '100 CONNOR,%' OR UPPER(SITE_ADDR_1) LIKE '100 % CONNOR %' OR UPPER(SITE_ADDR_1) LIKE '100 % CONNOR' OR UPPER(SITE_ADDR_1) LIKE '100 % CONNOR,%')"
+    );
+  });
+
+  it('matches the street as a whole word, the way each district pads it', () => {
+    const like = (pattern: string) => new RegExp(`^${pattern.replace(/%/g, '.*')}$`);
+    const patterns = [...addressWhere(houston, '1601 Elm St')!.matchAll(/LIKE '([^']+)'/g)].map((m) => like(m[1] ?? ''));
+    const hits = (a: string) => patterns.some((p) => p.test(a));
+    expect(hits('1601 ELM ST')).toBe(true);
+    expect(hits('1601  ELM ST   ,DALLAS, TX 752012739')).toBe(true);
+    expect(hits('1601 ELM,DALLAS')).toBe(true);
+    expect(hits('1601 BELMONT ST, MESQUITE')).toBe(false);
+    expect(hits('11601 ELM ST')).toBe(false);
+  });
+
+  it('ranks the parcel at the typed number, direction and city first', async () => {
+    const { rankAddresses, addressPlace } = await import('../../site/property.js');
+    expect(addressPlace('700 Louisiana St, Houston, TX 77002')).toBe('HOUSTON');
+    expect(addressPlace('700 Louisiana St, 77002')).toBe('77002');
+    const rows = [{ address: '700 S SAINT MARYS ST' }, { address: '700 N ST MARYS ST' }];
+    expect(rankAddresses(rows, '700 N St Marys').map((r) => r.address)).toEqual(['700 N ST MARYS ST', '700 S SAINT MARYS ST']);
+    const mains = [{ address: '1000 MAIN ST BAYTOWN' }, { address: '1000 MAIN ST HOUSTON 77002' }];
+    expect(rankAddresses(mains, '1000 Main St', 'Houston')[0]?.address).toBe('1000 MAIN ST HOUSTON 77002');
   });
 
   it('builds owner queries with quotes escaped', () => {
     expect(ownerWhere(houston, { owner: "O'Brien Holdings LLC" })).toBe("UPPER(OWNER_LIST) = 'O''BRIEN HOLDINGS LLC'");
     expect(ownerWhere(houston, { mailLine: '700 Louisiana St Ste 225' })).toBe("UPPER(MAIL_ADDR_1) = '700 LOUISIANA ST STE 225'");
-    expect(ownerLikeWhere(houston, 'Hines REIT')).toBe("UPPER(OWNER_LIST) LIKE '%HINES%' AND UPPER(OWNER_LIST) LIKE '%REIT%'");
+    expect(ownerLikeWhere(houston, 'Hines REIT')).toBe(
+      "(UPPER(OWNER_LIST) LIKE 'HINES%' OR UPPER(OWNER_LIST) LIKE '% HINES%') AND (UPPER(OWNER_LIST) LIKE 'REIT%' OR UPPER(OWNER_LIST) LIKE '% REIT%')"
+    );
+  });
+
+  it('searches owners by the distinctive words and lists companies first', async () => {
+    const { ownerWords, rankOwners } = await import('../../site/property.js');
+    expect(ownerWords('Lincoln Property Company')).toEqual(['LINCOLN']);
+    expect(ownerWords('The Properties LLC')).toEqual(['THE', 'PROPERTIES', 'LLC']);
+    const rows = [{ owner: 'HINES TODD' }, { owner: 'HINESTROZA MARIA' }, { owner: 'HINES REIT 2100 ROSS LP' }];
+    expect(rankOwners(rows, 'Hines')[0]?.owner).toBe('HINES REIT 2100 ROSS LP');
   });
 
   it('tells companies from people and cleans the name for the state lookup', () => {
@@ -278,7 +313,17 @@ describe('statewide owner lookup', () => {
     const { isFullAddress } = await import('../../site/property.js');
     expect(isFullAddress('919 Milam St, Houston, TX 77002')).toBe(true);
     expect(isFullAddress('919 Milam St')).toBe(false);
-    expect(isFullAddress('919 Milam St, Houston TX')).toBe(false);
+    expect(isFullAddress('919 Milam St, Houston TX')).toBe(true);
+    expect(isFullAddress('700 Louisiana Street Houston TX')).toBe(true);
+    expect(isFullAddress('919 Milam St 77002')).toBe(true);
+    expect(isFullAddress('Hines, Houston')).toBe(false);
+  });
+
+  it('adds the market city when only the street was typed', async () => {
+    const { geocodeText, identifyUrl } = await import('../../site/property.js');
+    expect(geocodeText('919 Milam St', 'Houston')).toBe('919 Milam St, Houston, TX');
+    expect(geocodeText('919 Milam St, Houston', 'Dallas')).toBe('919 Milam St, Houston');
+    expect(new URL(identifyUrl({ lat: 29.75, lng: -95.36 }, 30)).searchParams.get('tolerance')).toBe('30');
   });
 
   it('reads a state parcel map record', async () => {

@@ -3,6 +3,7 @@
 
 export interface OwnerSource {
   county: string;
+  site: string;
   cities: string[];
   name: string;
   layer: string;
@@ -22,10 +23,14 @@ export const DEAL_LOAN: { down: number; closing: number; years: number; spread: 
 export const DEAL_TYPE_LABELS: Record<string, string>;
 export function readPropertyHash(hash: string): { open: boolean; tool: string; city: string; q: string; lat: number | null; lng: number | null };
 export function writePropertyHash(state: { tool?: string; city?: string; q?: string; lat?: number | null; lng?: number | null }): string;
-export function parseAddress(text: string): { number: string; street: string } | null;
+export function parseAddress(text: string): { number: string; street: string; dir?: string } | null;
+export function addressPlace(text: string): string;
+export function rankAddresses<T extends { address?: string }>(parcels: T[], address: string, city?: string): T[];
 export function addressWhere(source: OwnerSource, address: string): string | null;
 export function ownerWhere(source: OwnerSource, by: { owner?: string; mailLine?: string }): string | null;
 export function ownerLikeWhere(source: OwnerSource, name: string): string | null;
+export function ownerWords(name: string): string[];
+export function rankOwners<T extends { owner?: string }>(parcels: T[], name: string): T[];
 export function parcelQueryUrl(source: OwnerSource, where: string, count?: number): string;
 export function sourcesFor(city: string): OwnerSource[];
 export function isEntity(owner: string): boolean;
@@ -50,7 +55,8 @@ export function saleLinks(sale: { url: string | null; lat: number | null; lng: n
 export const STATEWIDE_PARCELS: string;
 export function geocodeUrl(address: string): string;
 export function readGeocode(body: unknown): { lat: number; lng: number } | null;
-export function identifyUrl(point: { lat: number; lng: number }): string;
+export function identifyUrl(point: { lat: number; lng: number }, tolerance?: number): string;
 export function readStatewide(attributes: Record<string, unknown>): Record<string, any> & { address: string; owner: string; account: string; source: { county: string; name: string; statewide: true } };
 export function pickStatewide(body: unknown, address: string): ReturnType<typeof readStatewide>[];
 export function isFullAddress(text: string): boolean;
+export function geocodeText(address: string, city?: string): string;
