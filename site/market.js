@@ -30,11 +30,96 @@ export function sortMarkets(markets, key, order = 'desc') {
 }
 
 /**
+ * The city whose figure this market repeats for a metric (New Braunfels
+ * showing the San Antonio metro's jobs), or null. Files written before
+ * version 2 carry no shared map, so nothing reads as shared.
+ */
+export function sharedWith(market, key) {
+  return market?.shared?.[key] ?? null;
+}
+
+/**
+ * Whether a figure was read on the latest build (fresh), kept from an earlier
+ * one because its source did not answer (retained), dropped as too old
+ * (expired) or never read (missing). Older files have no status: a value
+ * there reads as fresh.
+ */
+export function valueStatus(market, key) {
+  const status = market?.status?.[key];
+  if (status) return status;
+  return market?.values?.[key] != null ? 'fresh' : 'missing';
+}
+
+/** What kind of figure a metric is, as the page names it. */
+export const CATEGORY_LABELS = {
+  economic: 'Economy',
+  residential: 'Residential',
+  permits: 'Residential permits',
+  appraisal: 'Appraised values',
+  taxes: 'Taxes',
+  infrastructure: 'Infrastructure',
+  commercial: 'Commercial property'
+};
+
+/** The area a metric's figure describes, as the page names it. */
+export const GEOGRAPHY_LABELS = {
+  city: 'city limits',
+  metro: 'metro area',
+  msa: 'whole metro area',
+  district: 'TxDOT district',
+  fmrArea: 'HUD rent area'
+};
+
+/** "Oct 10, 2026" from an ISO time, in UTC; '' when it does not parse. */
+export function formatDate(iso) {
+  const time = Date.parse(iso ?? '');
+  if (!Number.isFinite(time)) return '';
+  return new Date(time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+/**
+ * The lines that explain one figure, for its tooltip and detail: the
+ * reporting period, the source and area, and whether it was kept from an
+ * earlier update, dropped as too old, or repeats another market's figure.
+ */
+export function valueNotes(market, metric) {
+  const key = metric.key;
+  const lines = [];
+  const period = market?.periods?.[key];
+  if (period) lines.push(period);
+  const where = GEOGRAPHY_LABELS[metric.geography];
+  if (metric.source) lines.push(`${metric.source}${where ? `, ${where}` : ''}`);
+  const status = valueStatus(market, key);
+  const read = formatDate(market?.fetchedAt?.[key]);
+  if (status === 'retained') lines.push(`Not refreshed: kept from an earlier update${read ? ` (read ${read})` : ''}`);
+  if (status === 'expired') lines.push(`Removed: the source has not answered since ${read || 'an earlier update'}`);
+  const same = sharedWith(market, key);
+  if (same) lines.push(`Same figure as ${same} (one ${where ?? 'area'}), counted once in rankings`);
+  return lines;
+}
+
+/** How many markets are ranked on a metric: those with a figure of their own, not repeating another's. */
+export function rankedCount(markets, key) {
+  return markets.filter((m) => m.values?.[key] != null && Number.isFinite(m.values[key]) && !sharedWith(m, key)).length;
+}
+
+/** Figures across the file kept from an earlier update because their source did not refresh. */
+export function retainedCount(snapshot) {
+  return (snapshot?.markets ?? []).reduce(
+    (sum, market) => sum + Object.keys(market.values ?? {}).filter((key) => valueStatus(market, key) === 'retained').length,
+    0
+  );
+}
+
+/**
  * Each city's place for one metric, 1 = best. Without a better end the
- * highest value is 1st. Cities without a value get no rank.
+ * highest value is 1st. Cities without a value get no rank, and neither does
+ * a city whose figure repeats another's (a shared metro is ranked once).
  */
 export function ranks(markets, metric) {
-  const ranked = sortMarkets(markets, metric.key, defaultOrder(metric)).filter((m) => m.values?.[metric.key] != null);
+  const ranked = sortMarkets(markets, metric.key, defaultOrder(metric)).filter(
+    (m) => m.values?.[metric.key] != null && !sharedWith(m, metric.key)
+  );
   const out = new Map();
   let place = 0;
   let last;

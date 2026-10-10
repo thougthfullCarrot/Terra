@@ -126,7 +126,11 @@ describe('snapshot with the new sources', () => {
     expect(by('Fort Worth').periods.rdcListPrice).toBe('Aug 2026, DFW metro');
     expect(by('Fort Worth').values.hpiGrowth5y).toBe(50);
     expect(by('Houston').values.fmr2).toBe(1450);
-    expect(by('El Paso').values.lihtcUnits).toBe(5000);
+    // LIHTC is not published while HUD's download is blocked, even if counts are passed in.
+    expect(by('El Paso').values.lihtcUnits).toBeUndefined();
+    expect(METRICS.some((m) => m.key.startsWith('lihtc'))).toBe(false);
+    // Fort Worth's Realtor.com figure is the DFW metro's, the same observation as Dallas's.
+    expect(by('Fort Worth').shared?.rdcListPrice).toBe('Dallas');
     expect(by('Austin').values.redfinPrice).toBeNull();
     const keys = new Set(METRICS.map((m) => m.key));
     for (const group of GROUPS) for (const key of group.metrics) expect(keys.has(key)).toBe(true);

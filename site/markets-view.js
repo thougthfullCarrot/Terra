@@ -6,14 +6,22 @@
 // or the members-only Supabase row when accounts are on.
 import {
   barPercent,
+  CATEGORY_LABELS,
   defaultOrder,
+  formatDate,
   formatPoints,
   formatValue,
+  GEOGRAPHY_LABELS,
   ordinal,
   pruneSnapshot,
+  rankedCount,
   ranks,
   readMarketHash,
+  retainedCount,
+  sharedWith,
   sortMarkets,
+  valueNotes,
+  valueStatus,
   writeMarketHash
 } from './market.js';
 import { developmentMap, disposeMap } from './devmap.js';
@@ -259,8 +267,10 @@ function table(group, me = '') {
       const value = market.values[metric.key];
       const cell = el('td', `num${metric.key === state.sort ? ' sorted' : ''}`);
       const text = el('span', `value ${tone(value, metric)}`, formatValue(value, metric.unit));
-      if (market.periods?.[metric.key]) text.title = market.periods[metric.key];
+      const notes = valueNotes(market, metric);
+      if (notes.length) text.title = notes.join('\n');
       cell.append(text);
+      if (valueStatus(market, metric.key) === 'retained') cell.append(staleMark());
       if (metric.key === state.sort && value != null) {
         const bar = el('span', 'bar');
         const fill = el('i');
@@ -302,13 +312,13 @@ function chart(group, me = '') {
     const pill = el('button', 'chip', m.label);
     pill.type = 'button';
     pill.setAttribute('aria-pressed', String(m.key === metric.key));
-    if (m.note) pill.title = m.note;
+    pill.title = metricTitle(m);
     pill.addEventListener('click', () => update({ sort: m.key, order: defaultOrder(m) }));
     pills.append(pill);
   }
 
   const head = el('div', 'chart-head');
-  head.append(el('h3', 'group-title', metric.label), el('p', 'group-blurb', metric.note ?? ''));
+  head.append(el('h3', 'group-title', metric.label), el('p', 'group-blurb', [categoryText(metric), metric.note].filter(Boolean).join(' · ')));
 
   const markets = sortMarkets(snapshot.markets, metric.key, state.sort === metric.key ? state.order : defaultOrder(metric));
   const values = markets.map((m) => m.values[metric.key]).filter((v) => v != null && Number.isFinite(v));
@@ -317,7 +327,7 @@ function chart(group, me = '') {
   const span = max - min || 1;
   const zero = ((0 - min) / span) * 100;
   const place = ranks(snapshot.markets, metric);
-  const counted = values.length;
+  const counted = rankedCount(snapshot.markets, metric.key);
 
   const rows = el('ol', 'bars');
   rows.setAttribute('aria-label', `${metric.label} by market`);
@@ -345,10 +355,11 @@ function chart(group, me = '') {
     link.append(label, track, text);
 
     const rank = place.get(market.city);
+    const same = sharedWith(market, metric.key);
     const tip = [
       `${market.city}: ${formatValue(value, metric.unit)}`,
-      rank ? `${ordinal(rank)} of ${counted}` : 'No figure',
-      market.periods?.[metric.key] ?? ''
+      rank ? `${ordinal(rank)} of ${counted}` : same && value != null ? `Counted once, as ${same}` : 'No figure',
+      ...valueNotes(market, metric)
     ].filter(Boolean);
     link.setAttribute('aria-label', `${tip.join(', ')}. Open ${market.city}.`);
     link.addEventListener('pointerenter', (event) => showTip(tip, event));
@@ -399,7 +410,7 @@ function headerCell(key, label, cls, metric) {
   if (active) th.setAttribute('aria-sort', state.order === 'asc' ? 'ascending' : 'descending');
   const button = el('button', 'sort-button', label);
   button.type = 'button';
-  if (metric?.note) button.title = metric.note;
+  if (metric) button.title = metricTitle(metric);
   if (active) button.append(el('span', 'arrow', state.order === 'asc' ? ' ↑' : ' ↓'));
   button.addEventListener('click', () => {
     if (active) update({ order: state.order === 'asc' ? 'desc' : 'asc' });
@@ -417,6 +428,8 @@ function cityView(city, focus) {
   const back = el('a', 'link', '← All markets');
   back.href = writeMarketHash({ ...state, city: '' });
   head.append(back, el('h2', 'role', market.city), el('p', 'firm', market.metro ?? ''));
+  const fresh = freshnessLine();
+  if (fresh) head.append(el('p', 'market-asof', fresh));
   // Only this city's figures here; the all-markets chart and table live on the All markets page.
   frag.append(head, kpis(market, focus));
   const points = talkingPoints(market, focus);
@@ -437,13 +450,15 @@ function cityView(city, focus) {
       const value = market.values[key];
       const place = ranks(snapshot.markets, metric).get(city);
       const term = el('dt', '', metric.label);
-      if (metric.note) term.title = metric.note;
+      term.title = metricTitle(metric);
+      if (metric.category && metric.category !== 'economic') term.append(' ', el('span', 'cat-tag', CATEGORY_LABELS[metric.category] ?? ''));
       const detail = el('dd');
       detail.append(el('span', `value ${tone(value, metric)}`, formatValue(value, metric.unit)));
+      if (valueStatus(market, key) === 'retained') detail.append(staleMark());
       if (value != null) detail.append(strip(key, value));
       const bits = [];
-      if (place) bits.push(`${ordinal(place)} of ${snapshot.markets.filter((m) => m.values[key] != null).length}`);
-      if (market.periods?.[key]) bits.push(market.periods[key]);
+      if (place) bits.push(`${ordinal(place)} of ${rankedCount(snapshot.markets, key)}`);
+      bits.push(...valueNotes(market, metric));
       if (bits.length) detail.append(el('span', 'metric-meta', bits.join(' · ')));
       list.append(term, detail);
     }
@@ -454,9 +469,29 @@ function cityView(city, focus) {
   return frag;
 }
 
-/** How many markets have a figure for a metric. */
+/** How many markets are ranked on a metric (a shared metro counts once). */
 function counted(key) {
-  return snapshot.markets.filter((m) => m.values[key] != null && Number.isFinite(m.values[key])).length;
+  return rankedCount(snapshot.markets, key);
+}
+
+/** A metric's hover text: what it is, what kind of figure, and the area it covers. */
+function metricTitle(metric) {
+  return [metric.note, categoryText(metric)].filter(Boolean).join('\n');
+}
+
+function categoryText(metric) {
+  const kind = CATEGORY_LABELS[metric.category];
+  const where = GEOGRAPHY_LABELS[metric.geography];
+  if (!kind && !where) return '';
+  return `${kind ?? ''}${kind && where ? ' figure, ' : ''}${where ? `by ${where}` : ''}`;
+}
+
+/** The mark beside a figure kept from an earlier update because its source did not refresh. */
+function staleMark() {
+  const mark = el('span', 'stale-mark', '•');
+  mark.title = 'Not refreshed on the latest update: an earlier figure is shown';
+  mark.setAttribute('aria-label', 'not refreshed on the latest update');
+  return mark;
 }
 
 /** The topic's first four figures for one city, each with its rank among the markets. */
@@ -468,12 +503,15 @@ function kpis(market, group) {
     if (!metric) continue;
     const value = market.values[key];
     const tile = el('div', 'card kpi');
-    if (metric.note) tile.title = metric.note;
     const place = ranks(snapshot.markets, metric).get(market.city);
     const bits = [];
     if (place && metric.better) bits.push(`#${place} of ${counted(key)} markets`);
     else if (place) bits.push(`${ordinal(place)} highest of ${counted(key)}`);
     if (market.periods?.[key]) bits.push(market.periods[key]);
+    if (valueStatus(market, key) === 'retained') bits.push('not refreshed');
+    const same = sharedWith(market, key);
+    if (same && value != null) bits.push(`same as ${same}`);
+    tile.title = [metricTitle(metric), ...valueNotes(market, metric)].join('\n');
     tile.append(el('small', '', metric.label), el('b', `num value ${tone(value, metric)}`, formatValue(value, metric.unit)), el('span', 'kpi-rank', bits.join(' · ') || 'No figure yet'));
     box.append(tile);
   }
@@ -658,7 +696,24 @@ function asOf(metrics) {
     periods.set(metric.source, list);
   }
   const parts = [...periods].map(([source, set]) => `${source}: ${[...set].join(', ')}`);
-  return el('p', 'market-asof', parts.length ? `As of ${parts.join(' · ')}` : '');
+  const box = el('div');
+  box.append(el('p', 'market-asof', parts.length ? `As of ${parts.join(' · ')}` : ''));
+  box.append(el('p', 'market-asof', freshnessLine()));
+  return box;
+}
+
+/** When the file was built, how many figures are older than that build, and which sources did not answer. */
+function freshnessLine() {
+  const bits = [];
+  const built = formatDate(snapshot.generatedAt);
+  if (built) bits.push(`Updated ${built}`);
+  const kept = retainedCount(snapshot);
+  if (kept) bits.push(`${kept} figure${kept === 1 ? '' : 's'} marked • ${kept === 1 ? 'was' : 'were'} not refreshed (source did not answer, or its reading failed a range check) and ${kept === 1 ? 'is' : 'are'} shown from an earlier update`);
+  const down = (snapshot.refresh ?? []).filter((o) => o.status === 'failed').map((o) => o.source);
+  if (down.length) bits.push(`Did not answer: ${down.join(', ')}`);
+  const behind = (snapshot.behind ?? []).map((lag) => `${lag.source} (newest ${lag.latest})`);
+  if (behind.length) bits.push(`Behind its usual schedule: ${behind.join(', ')}`);
+  return bits.join(' · ');
 }
 
 function mode(values) {

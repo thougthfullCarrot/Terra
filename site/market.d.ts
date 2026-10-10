@@ -10,6 +10,8 @@ export interface Metric {
   better: 'high' | 'low' | null;
   source?: string;
   note?: string;
+  geography?: string;
+  category?: string;
 }
 
 export interface Group {
@@ -24,7 +26,12 @@ export interface Market {
   metro?: string;
   values: Record<string, number | null>;
   periods?: Record<string, string | null>;
+  fetchedAt?: Record<string, string | null>;
+  status?: Record<string, ValueStatus>;
+  shared?: Record<string, string>;
 }
+
+export type ValueStatus = 'fresh' | 'retained' | 'expired' | 'missing';
 
 export type Tool = '' | 'compare' | 'calc' | 'leases' | 'reports' | 'sites';
 
@@ -52,6 +59,14 @@ export function defaultOrder(metric: Pick<Metric, 'better'> | undefined): Order;
 export function sortMarkets<T extends Market>(markets: T[], key: string, order?: Order): T[];
 export function ranks(markets: Market[], metric: Pick<Metric, 'key' | 'better'>): Map<string, number>;
 export function ordinal(n: number): string;
+export function sharedWith(market: Market | null | undefined, key: string): string | null;
+export function valueStatus(market: Market | null | undefined, key: string): ValueStatus;
+export const CATEGORY_LABELS: Record<string, string>;
+export const GEOGRAPHY_LABELS: Record<string, string>;
+export function formatDate(iso: string | null | undefined): string;
+export function valueNotes(market: Market | null | undefined, metric: Pick<Metric, 'key' | 'source' | 'geography'>): string[];
+export function rankedCount(markets: Market[], key: string): number;
+export function retainedCount(snapshot: { markets: Market[] } | null | undefined): number;
 export function formatValue(value: number | null | undefined, unit: Unit): string;
 export function formatPoints(value: number | null | undefined): string;
 export function barPercent(value: number | null | undefined, values: (number | null | undefined)[], unit: Unit): number;

@@ -45,6 +45,36 @@ import type { LihtcCount } from './lihtc.js';
  */
 export type Unit = 'count' | 'usd' | 'change' | 'rate' | 'taxRate';
 
+/**
+ * The area a figure actually describes. city: the municipality. metro: the
+ * metro area, or for Dallas and Fort Worth their metropolitan division. msa:
+ * the whole metro area even where a division exists (Realtor.com's DFW
+ * figure). district: a TxDOT district. fmrArea: a HUD Fair Market Rent area.
+ */
+export type Geography = 'city' | 'metro' | 'msa' | 'district' | 'fmrArea';
+
+/**
+ * What kind of figure it is. economic: jobs, people and income, including the
+ * employment proxies for office, industrial and retail demand (they are not
+ * property performance). residential: home and apartment rents, values,
+ * vacancy and listings. permits: residential building permits. appraisal:
+ * appraisal district roll values (not sale prices or market rents). taxes:
+ * property tax rates and tax incentives. infrastructure: public road spending.
+ * commercial: direct office, industrial or retail performance; none of the
+ * ranked metrics are this yet (broker lease figures live in research).
+ */
+export type Category = 'economic' | 'residential' | 'permits' | 'appraisal' | 'taxes' | 'infrastructure' | 'commercial';
+
+/**
+ * fresh: read on this build. retained: today's read failed or was rejected,
+ * so the last good figure is kept, with its own period and fetch time.
+ * expired: the kept figure passed its source's maximum age and was dropped.
+ * missing: no figure has been read for this market.
+ */
+export type ValueStatus = 'fresh' | 'retained' | 'expired' | 'missing';
+
+export type MetricSource = MarketMetric['source'];
+
 export interface MarketMetric {
   key: string;
   label: string;
@@ -67,7 +97,17 @@ export interface MarketMetric {
     | 'FHFA';
   /** One line on what the figure is, shown on hover and in the method notes. */
   note: string;
+  geography: Geography;
+  category: Category;
+  /**
+   * The plausible range for this metric from this source. A reading outside it
+   * is rejected (logged, and the last good figure kept) instead of published.
+   */
+  valid: { min: number; max: number };
 }
+
+/** A metric as written below, before its geography, category and range are filled in. */
+type MetricDraft = Omit<MarketMetric, 'geography' | 'category' | 'valid'> & Partial<Pick<MarketMetric, 'geography' | 'category'>>;
 
 export interface MarketGroup {
   key: string;
@@ -81,8 +121,46 @@ export interface MarketArea {
   city: City;
   metro: string;
   values: Record<string, number | null>;
-  /** When each value is from, e.g. "Aug 2026" or "2025". */
+  /** When each value is from, e.g. "Aug 2026" or "2025": the source's reporting period. */
   periods: Record<string, string | null>;
+  /** When each value was read from its source (ISO time); older than generatedAt for a retained value. */
+  fetchedAt?: Record<string, string | null>;
+  /** Whether each value was read on this build, kept from an earlier one, dropped as too old, or never read. */
+  status?: Record<string, ValueStatus>;
+  /**
+   * For a metric whose figure is the same observation as an earlier market's
+   * (New Braunfels repeating the San Antonio metro, Fort Worth repeating
+   * Realtor.com's DFW figure), the city it repeats. Rankings count it once.
+   */
+  shared?: Record<string, City>;
+}
+
+/** What one source did on the build that wrote the file. */
+export interface SourceOutcome {
+  source: string;
+  /** ok: answered. partial: answered with gaps. failed: no answer (figures kept from earlier). skipped: not run. */
+  status: 'ok' | 'partial' | 'failed' | 'skipped';
+  /** A short reason, with anything that looks like a key or token removed. */
+  detail?: string;
+}
+
+/** A source whose newest figure is older than its publication schedule explains. */
+export interface SourceLag {
+  source: MetricSource;
+  /** The newest period any market shows for the source, e.g. "May 2026". */
+  latest: string;
+  /** Days from the end of that period to the build. */
+  days: number;
+  maxLagDays: number;
+}
+
+/** A source reading that failed its metric's range check and was not published. */
+export interface Rejection {
+  city: City;
+  key: string;
+  value: number;
+  min: number;
+  max: number;
 }
 
 /** A Texas county on the "where people are moving" list. */
@@ -97,7 +175,15 @@ export interface CountyRow {
 }
 
 export interface MarketSnapshot {
+  /** 2 adds fetchedAt, status, shared, refresh and rejected; version 1 files have none of them. */
+  schemaVersion?: number;
   generatedAt: string;
+  /** Per-source outcomes of the build that wrote this file. */
+  refresh?: SourceOutcome[];
+  /** Readings dropped by the range checks on this build. */
+  rejected?: Rejection[];
+  /** Sources whose newest reporting period trails today by more than SOURCE_RULES allows. */
+  behind?: SourceLag[];
   metrics: MarketMetric[];
   groups: MarketGroup[];
   markets: MarketArea[];
@@ -121,14 +207,15 @@ export interface MarketSnapshot {
 /** Appraisal district figures per property type, keyed cad{Type}{Figure}. */
 const CAD_TYPES: { cls: PropertyClass; key: string; label: string; what: string }[] = [
   { cls: 'multifamily', key: 'Apartment', label: 'apartments', what: 'apartment properties (state code B)' },
-  { cls: 'commercial', key: 'Commercial', label: 'commercial', what: 'commercial properties: office, retail, hotel and other (state code F1)' },
+  // State code F1 does not split office from retail or hotels, so the label says so wherever it shows.
+  { cls: 'commercial', key: 'Commercial', label: 'commercial (office, retail and hotel combined)', what: 'commercial properties: office, retail, hotel and other together (state code F1), not office or retail alone' },
   { cls: 'industrial', key: 'Industrial', label: 'industrial', what: 'industrial properties (state code F2)' }
 ];
 
 const APPRAISED = 'Appraised by the county appraisal district, not a sale price: Texas does not disclose sale prices.';
 
-function appraisalMetrics(): MarketMetric[] {
-  return CAD_TYPES.flatMap(({ key, label, what }): MarketMetric[] => [
+function appraisalMetrics(): MetricDraft[] {
+  return CAD_TYPES.flatMap(({ key, label, what }): MetricDraft[] => [
     {
       key: `cad${key}Value`,
       label: `Median appraised value, ${label}`,
@@ -176,7 +263,7 @@ const TAX_NOTE = 'Dollars per $100 of taxable value, which is the same as a perc
 
 const cad = (type: string, ...figures: string[]) => figures.map((figure) => `cad${type}${figure}`);
 
-export const METRICS: MarketMetric[] = [
+const DRAFTS: MetricDraft[] = [
   { key: 'jobs', label: 'Total jobs', unit: 'count', better: 'high', source: 'BLS', note: 'Nonfarm payroll jobs, latest month.' },
   { key: 'jobsGrowth', label: 'Job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Nonfarm jobs vs. the same month a year earlier.' },
   { key: 'unemployment', label: 'Unemployment', unit: 'rate', better: 'low', source: 'BLS', note: 'Unemployment rate, latest month, not seasonally adjusted.' },
@@ -189,7 +276,7 @@ export const METRICS: MarketMetric[] = [
     unit: 'count',
     better: 'high',
     source: 'BLS',
-    note: 'Financial activities, professional and business services, and information: the industries that fill office space.'
+    note: 'Employment proxy, not office occupancy: jobs in financial activities, professional and business services, and information, the industries that fill office space.'
   },
   { key: 'officeJobsGrowth', label: 'Office-using job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Office-using jobs vs. a year earlier.' },
   {
@@ -198,29 +285,29 @@ export const METRICS: MarketMetric[] = [
     unit: 'count',
     better: 'high',
     source: 'BLS',
-    note: 'Manufacturing plus wholesale, transportation, warehousing and utilities: the tenants of industrial space.'
+    note: 'Employment proxy, not industrial occupancy: manufacturing plus wholesale, transportation, warehousing and utilities jobs, the tenants of industrial space.'
   },
   { key: 'industrialJobsGrowth', label: 'Industrial job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Industrial jobs vs. a year earlier.' },
-  { key: 'retailJobs', label: 'Retail jobs', unit: 'count', better: 'high', source: 'BLS', note: 'Retail trade payrolls.' },
+  { key: 'retailJobs', label: 'Retail jobs', unit: 'count', better: 'high', source: 'BLS', note: 'Employment proxy, not retail sales or occupancy: retail trade payrolls.' },
   { key: 'retailJobsGrowth', label: 'Retail job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Retail jobs vs. a year earlier.' },
   {
     key: 'constructionJobs',
-    label: 'Construction jobs',
+    label: 'Construction, mining and logging jobs',
     unit: 'count',
     better: 'high',
     source: 'BLS',
-    note: 'Construction payrolls (with mining and logging where BLS only publishes them together).'
+    note: 'Construction plus mining and logging payrolls (BLS supersector 15), the same count in every market: BLS publishes construction alone for only a few Texas metros. Mining weighs heavily in Midland.'
   },
-  { key: 'constructionJobsGrowth', label: 'Construction job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Construction jobs vs. a year earlier.' },
-  { key: 'medianRent', label: 'Median rent', unit: 'usd', better: null, source: 'Census ACS', note: 'Median gross rent (rent plus utilities), all rented homes.' },
-  { key: 'rentGrowth', label: 'Rent growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Median gross rent vs. the year before.' },
+  { key: 'constructionJobsGrowth', label: 'Construction, mining and logging job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Construction, mining and logging jobs vs. a year earlier.' },
+  { key: 'medianRent', label: 'Median residential rent', unit: 'usd', better: null, source: 'Census ACS', note: 'Residential: median gross rent (rent plus utilities) on all rented homes and apartments, metro-wide.' },
+  { key: 'rentGrowth', label: 'Residential rent growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Residential: median gross rent vs. the year before.' },
   {
     key: 'rentalVacancy',
-    label: 'Rental vacancy',
+    label: 'Residential rental vacancy',
     unit: 'rate',
     better: 'low',
     source: 'Census ACS',
-    note: 'Homes for rent as a share of the rental stock. Lower means a tighter apartment market.'
+    note: 'Residential: homes and apartments for rent as a share of the rental stock, metro-wide. Lower means a tighter rental market. Not commercial vacancy.'
   },
   { key: 'renterShare', label: 'Renter households', unit: 'rate', better: 'high', source: 'Census ACS', note: 'Share of occupied homes that are rented: the apartment demand pool.' },
   {
@@ -240,7 +327,7 @@ export const METRICS: MarketMetric[] = [
     note: 'Share of renter households spending half or more of income on rent and utilities ("severely cost burdened").'
   },
   { key: 'renterHouseholds', label: 'Renter households (count)', unit: 'count', better: null, source: 'Census ACS', note: 'Occupied homes that are rented.' },
-  { key: 'medianHomeValue', label: 'Median home value', unit: 'usd', better: null, source: 'Census ACS', note: 'Owner-estimated value of owner-occupied homes.' },
+  { key: 'medianHomeValue', label: 'Median home value (residential)', unit: 'usd', better: null, source: 'Census ACS', note: 'Owner-estimated value of owner-occupied homes.' },
   { key: 'homeValueGrowth', label: 'Home value growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Median home value vs. the year before.' },
   {
     key: 'zhvi',
@@ -279,21 +366,21 @@ export const METRICS: MarketMetric[] = [
   },
   {
     key: 'permitUnits',
-    label: 'New homes permitted',
+    label: 'New homes permitted (residential)',
     unit: 'count',
     better: 'high',
     source: 'Census BPS',
-    note: 'Housing units the city authorized in new buildings this year so far, as reported to the Census Building Permits Survey.'
+    note: 'Residential only: housing units the city authorized in new buildings this year so far, as reported to the Census Building Permits Survey.'
   },
   {
     key: 'multifamilyPermitUnits',
-    label: 'Apartment units permitted',
+    label: 'Apartment units permitted (residential)',
     unit: 'count',
     better: 'high',
     source: 'Census BPS',
     note: 'Of those, units in buildings of five or more: the apartment pipeline.'
   },
-  { key: 'permitGrowth', label: 'Permit growth', unit: 'change', better: 'high', source: 'Census BPS', note: 'Homes permitted this year so far vs. the same months last year.' },
+  { key: 'permitGrowth', label: 'Residential permit growth', unit: 'change', better: 'high', source: 'Census BPS', note: 'Residential: homes permitted this year so far vs. the same months last year.' },
   {
     key: 'pepPopulation',
     label: 'Population (latest estimate)',
@@ -382,7 +469,7 @@ export const METRICS: MarketMetric[] = [
     note: "Estimated construction cost of state highway projects in the area's TxDOT district that are under construction or about to start."
   },
   ...appraisalMetrics(),
-  { key: 'redfinPrice', label: 'Median sale price (Redfin)', unit: 'usd', better: null, source: 'Redfin', note: 'Median price of homes sold in the city (all residential), latest rolling three months.' },
+  { key: 'redfinPrice', label: 'Median sale price (Redfin)', unit: 'usd', better: null, source: 'Redfin', note: 'Median price of homes sold in the city (all residential), latest month in Redfin\'s public file.' },
   { key: 'redfinPriceGrowth', label: 'Sale price growth (Redfin)', unit: 'change', better: 'high', source: 'Redfin', note: 'Median sale price vs. a year earlier.' },
   { key: 'redfinInventory', label: 'Homes for sale (Redfin)', unit: 'count', better: null, source: 'Redfin', note: 'Active listings in the city at the end of the period.' },
   { key: 'redfinDom', label: 'Days on market (Redfin)', unit: 'count', better: 'low', source: 'Redfin', note: 'Median days from listing to contract for homes sold.' },
@@ -395,7 +482,7 @@ export const METRICS: MarketMetric[] = [
   { key: 'hpiGrowth', label: 'House prices, 1-year change (FHFA)', unit: 'change', better: 'high', source: 'FHFA', note: 'FHFA index vs. the same quarter a year earlier.' },
   { key: 'hpiGrowth5y', label: 'House prices, 5-year change (FHFA)', unit: 'change', better: 'high', source: 'FHFA', note: 'FHFA index vs. the same quarter five years earlier.' },
   ...['Efficiency', 'One-bedroom', 'Two-bedroom', 'Three-bedroom', 'Four-bedroom'].map(
-    (label, beds): MarketMetric => ({
+    (label, beds): MetricDraft => ({
       key: `fmr${beds}`,
       label: `Fair Market Rent, ${label.toLowerCase()}`,
       unit: 'usd',
@@ -404,9 +491,6 @@ export const METRICS: MarketMetric[] = [
       note: `HUD Fair Market Rent for a ${label.toLowerCase()} unit in the metro FMR area: the rent ceiling Housing Choice Vouchers are set from (rent plus utilities, 40th percentile).`
     })
   ),
-  { key: 'lihtcProjects', label: 'LIHTC properties', unit: 'count', better: null, source: 'HUD', note: 'Low-Income Housing Tax Credit properties placed in service in the metro (HUD LIHTC database).' },
-  { key: 'lihtcUnits', label: 'LIHTC low-income units', unit: 'count', better: null, source: 'HUD', note: 'Low-income units in those LIHTC properties.' },
-  { key: 'lihtcRecent', label: 'LIHTC properties, last 5 years', unit: 'count', better: null, source: 'HUD', note: 'LIHTC properties in the metro placed in service in the last five years.' },
   {
     key: 'cadNewConstruction',
     label: 'New construction added to the roll',
@@ -417,6 +501,142 @@ export const METRICS: MarketMetric[] = [
   }
 ];
 
+/**
+ * Where each source's figures come from, what kind of figure they are, and how
+ * long a figure may be kept after its source stops answering. The age runs
+ * from the last successful read, not the reporting period, so a yearly survey
+ * is not dropped just for being a year old: it is dropped only after its
+ * source has failed for longer than one release cycle plus slack.
+ */
+/**
+ * maxAgeDays: how long a figure may be kept after its source stops answering.
+ * maxLagDays: how far the newest reporting period may trail today before the
+ * source is flagged as behind (a source can answer every day with an old
+ * file, as Redfin's public download has since June 2026); null where the
+ * period is not a date (TxDOT's live list, the 2018 Opportunity Zone map).
+ */
+export const SOURCE_RULES: Record<MetricSource, { geography: Geography; category: Category; maxAgeDays: number; maxLagDays: number | null }> = {
+  BLS: { geography: 'metro', category: 'economic', maxAgeDays: 120, maxLagDays: 150 },
+  'Census ACS': { geography: 'metro', category: 'residential', maxAgeDays: 800, maxLagDays: 700 },
+  'Census estimates': { geography: 'metro', category: 'economic', maxAgeDays: 800, maxLagDays: 550 },
+  Zillow: { geography: 'city', category: 'residential', maxAgeDays: 120, maxLagDays: 90 },
+  'Apartment List': { geography: 'city', category: 'residential', maxAgeDays: 120, maxLagDays: 90 },
+  'Census BPS': { geography: 'city', category: 'permits', maxAgeDays: 150, maxLagDays: 120 },
+  'Appraisal districts': { geography: 'city', category: 'appraisal', maxAgeDays: 800, maxLagDays: 550 },
+  'Texas Comptroller': { geography: 'city', category: 'taxes', maxAgeDays: 800, maxLagDays: 550 },
+  HUD: { geography: 'fmrArea', category: 'residential', maxAgeDays: 800, maxLagDays: null },
+  TxDOT: { geography: 'district', category: 'infrastructure', maxAgeDays: 30, maxLagDays: null },
+  Redfin: { geography: 'city', category: 'residential', maxAgeDays: 150, maxLagDays: 90 },
+  'Realtor.com': { geography: 'msa', category: 'residential', maxAgeDays: 120, maxLagDays: 90 },
+  FHFA: { geography: 'metro', category: 'residential', maxAgeDays: 270, maxLagDays: 200 }
+};
+
+/** Metrics whose geography or category differs from their source's default. */
+const OVERRIDES: Record<string, Partial<Pick<MarketMetric, 'geography' | 'category'>>> = {
+  population: { category: 'economic' },
+  populationGrowth: { category: 'economic' },
+  medianIncome: { category: 'economic' },
+  ozTracts: { geography: 'metro', category: 'taxes' }
+};
+
+const growthRange = (limit: number) => ({ min: -limit, max: limit });
+const share = { min: 0, max: 100 };
+const homePrice = { min: 20_000, max: 5_000_000 };
+const jobCount = { min: 100, max: 10_000_000 };
+
+/**
+ * Plausible ranges, metric by metric. Wide enough for any real Texas market,
+ * narrow enough to catch a unit change (a fraction read as a percent), a
+ * shifted CSV column or a zero standing in for "no data".
+ */
+const VALID: Record<string, { min: number; max: number }> = {
+  jobs: { min: 1_000, max: 10_000_000 },
+  jobsGrowth: growthRange(30),
+  unemployment: { min: 0, max: 40 },
+  population: { min: 10_000, max: 50_000_000 },
+  populationGrowth: growthRange(15),
+  medianIncome: { min: 15_000, max: 300_000 },
+  officeJobs: jobCount,
+  officeJobsGrowth: growthRange(50),
+  industrialJobs: jobCount,
+  industrialJobsGrowth: growthRange(50),
+  retailJobs: jobCount,
+  retailJobsGrowth: growthRange(50),
+  constructionJobs: jobCount,
+  constructionJobsGrowth: growthRange(50),
+  medianRent: { min: 200, max: 6_000 },
+  rentGrowth: growthRange(30),
+  rentalVacancy: { min: 0, max: 50 },
+  renterShare: { min: 5, max: 95 },
+  rentBurdened: share,
+  rentSeverelyBurdened: share,
+  renterHouseholds: { min: 1_000, max: 10_000_000 },
+  medianHomeValue: homePrice,
+  homeValueGrowth: growthRange(40),
+  zhvi: homePrice,
+  zhviGrowth: growthRange(40),
+  zori: { min: 300, max: 10_000 },
+  zoriGrowth: growthRange(40),
+  aptRent: { min: 300, max: 10_000 },
+  aptRentGrowth: growthRange(40),
+  aptVacancy: { min: 0, max: 40 },
+  permitUnits: { min: 0, max: 200_000 },
+  multifamilyPermitUnits: { min: 0, max: 200_000 },
+  // Year-to-date counts swing hard in small cities: one big complex can multiply a year's total.
+  permitGrowth: { min: -100, max: 2_000 },
+  pepPopulation: { min: 10_000, max: 50_000_000 },
+  pepGrowth: growthRange(15),
+  migrationRate: growthRange(15),
+  netMigration: growthRange(1_000_000),
+  domesticMigration: growthRange(1_000_000),
+  internationalMigration: growthRange(1_000_000),
+  naturalChange: growthRange(1_000_000),
+  taxRate: { min: 0.5, max: 5 },
+  taxOnMillion: { min: 5_000, max: 50_000 },
+  taxRateChange: growthRange(50),
+  taxRateCity: { min: 0, max: 3 },
+  taxRateCounty: { min: 0, max: 2 },
+  taxRateSchool: { min: 0, max: 3 },
+  taxRateOther: { min: 0, max: 2 },
+  ozTracts: { min: 0, max: 2_000 },
+  txdotPlanned: { min: 0, max: 1e12 },
+  txdotUnderway: { min: 0, max: 1e12 },
+  cadNewConstruction: { min: 0, max: 1e12 },
+  redfinPrice: homePrice,
+  redfinPriceGrowth: growthRange(50),
+  redfinInventory: { min: 0, max: 1_000_000 },
+  redfinDom: { min: 0, max: 365 },
+  redfinSaleToList: { min: 70, max: 130 },
+  rdcListPrice: homePrice,
+  rdcListings: { min: 0, max: 1_000_000 },
+  rdcDom: { min: 0, max: 365 },
+  rdcPriceReduced: share,
+  hpi: { min: 50, max: 2_000 },
+  hpiGrowth: growthRange(40),
+  hpiGrowth5y: { min: -60, max: 300 },
+  ...Object.fromEntries([0, 1, 2, 3, 4].map((beds) => [`fmr${beds}`, { min: 200, max: 8_000 }])),
+  ...Object.fromEntries(
+    CAD_TYPES.flatMap(({ key }) => [
+      [`cad${key}Value`, { min: 1_000, max: 1e10 }],
+      [`cad${key}Growth`, { min: -80, max: 300 }],
+      [`cad${key}LandPsf`, { min: 0, max: 2_000 }],
+      [`cad${key}LandPsfMedian`, { min: 0, max: 2_000 }],
+      [`cad${key}Total`, { min: 0, max: 1e13 }]
+    ])
+  )
+};
+
+// LIHTC (lihtcProjects, lihtcUnits, lihtcRecent) is left out on purpose: HUD's
+// download sits behind a bot check for automated clients (export-market.ts),
+// so the figures were always blank. Add them back here once a source answers.
+export const METRICS: MarketMetric[] = DRAFTS.map((draft) => {
+  const rule = SOURCE_RULES[draft.source];
+  const valid = VALID[draft.key];
+  if (!valid) throw new Error(`No valid range for market metric ${draft.key}`);
+  return { geography: rule.geography, category: rule.category, ...OVERRIDES[draft.key], ...draft, valid };
+});
+
+const METRIC_BY_KEY = new Map(METRICS.map((m) => [m.key, m]));
 
 export const GROUPS: MarketGroup[] = [
   {
@@ -513,7 +733,9 @@ export const GROUPS: MarketGroup[] = [
       'hpiGrowth5y',
       'hpi',
       'zhvi',
-      'zhviGrowth'
+      'zhviGrowth',
+      'medianHomeValue',
+      'homeValueGrowth'
     ]
   },
   {
@@ -528,15 +750,11 @@ export const GROUPS: MarketGroup[] = [
       ...cad('Commercial', 'LandPsf'),
       ...cad('Industrial', 'LandPsf'),
       ...cad('Apartment', 'LandPsf'),
-      'zhvi',
-      'zhviGrowth',
       'constructionJobsGrowth',
       'constructionJobs',
       'txdotPlanned',
       'txdotUnderway',
-      'ozTracts',
-      'medianHomeValue',
-      'homeValueGrowth'
+      'ozTracts'
     ]
   },
   {
@@ -612,7 +830,7 @@ export const SOURCES: MarketSnapshot['sources'] = [
   {
     name: 'Redfin Data Center',
     url: 'https://www.redfin.com/news/data-center/',
-    detail: 'City market tracker: median sale price, homes for sale, days on market and sale-to-list ratio, rolling three months. Updated monthly.'
+    detail: 'City market tracker: median sale price, homes for sale, days on market and sale-to-list ratio, monthly. Redfin\'s public download has not been updated since June 2, 2026, so its latest month is May 2026; the page marks it as behind.'
   },
   {
     name: 'Realtor.com Economic Research',
@@ -669,7 +887,6 @@ export interface PropertyData {
 export function blsSeriesFor(metros: Metro[]): string[] {
   const industries: Industry[] = [
     'total',
-    'construction',
     'miningConstruction',
     'manufacturing',
     'tradeTransportUtilities',
@@ -692,12 +909,20 @@ export function buildMarketSnapshot(
   now: Date = new Date(),
   property: PropertyData = {}
 ): MarketSnapshot {
+  const fetchedAt = now.toISOString();
+  const rejected: Rejection[] = [];
   const markets = metros.map((metro): MarketArea => {
     const values: Record<string, number | null> = {};
     const periods: Record<string, string | null> = {};
     const set = (key: string, value: number | null | undefined, period: string | null) => {
-      const ok = value != null && Number.isFinite(value);
-      values[key] = ok ? value : null;
+      let ok = value != null && Number.isFinite(value);
+      const valid = METRIC_BY_KEY.get(key)?.valid;
+      if (ok && valid && (value! < valid.min || value! > valid.max)) {
+        // Out of range: drop it, so fillFromPrevious keeps the last good figure.
+        rejected.push({ city: metro.city, key, value: value!, min: valid.min, max: valid.max });
+        ok = false;
+      }
+      values[key] = ok ? value! : null;
       periods[key] = ok ? period : null;
     };
     // Metro-wide figures for a city that shares its metro say whose they are.
@@ -732,7 +957,10 @@ export function buildMarketSnapshot(
       ])
     );
     jobs('retailJobs', series('retail'));
-    jobs('constructionJobs', series('construction') ?? series('miningConstruction'));
+    // Mining, logging and construction (CES 15) for every market: BLS publishes
+    // construction alone (CES 20) for only a few Texas metros, and ranking one
+    // against the other compared different industries.
+    jobs('constructionJobs', series('miningConstruction'));
 
     const unemployment = bls?.get(unemploymentSeries(metro));
     set('unemployment', latest(unemployment)?.value, metroWide(monthLabel(latest(unemployment))));
@@ -783,8 +1011,16 @@ export function buildMarketSnapshot(
       set(`cad${key}LandPsfMedian`, summary?.medianLandPsf, period);
       set(`cad${key}Total`, summary?.totalValue, period);
     }
-    const built = roll ? Object.values(roll.classes).map((c) => c.newConstruction) : [];
-    set('cadNewConstruction', built.some((v) => v != null) ? built.reduce<number>((a, b) => a + (b ?? 0), 0) : null, roll?.period ?? null);
+    // A class the roll did not report is unknown, not zero: the total covers the
+    // classes reported, and its period names any left out.
+    const built = CAD_TYPES.map(({ cls, label }) => ({ label, value: roll?.classes[cls]?.newConstruction ?? null }));
+    const reported = built.filter((b) => b.value != null);
+    const left = built.filter((b) => b.value == null).map((b) => b.label.split(' ')[0]);
+    set(
+      'cadNewConstruction',
+      reported.length ? reported.reduce((sum, b) => sum + b.value!, 0) : null,
+      roll && reported.length ? `${roll.period}${left.length ? `, excl. ${left.join(' and ')} (not reported)` : ''}` : null
+    );
 
     // Population estimates: the latest July 1 and where the change came from.
     const pep = property.population;
@@ -842,20 +1078,28 @@ export function buildMarketSnapshot(
     const fmr = property.fmr?.get(metro.city);
     fmr?.rents.forEach((rent, beds) => set(`fmr${beds}`, rent, metroWide(fmr.period)));
 
-    const lihtc = property.lihtc?.get(metro.area);
-    const lihtcPeriod = metroWide(lihtc ? `HUD database, ${now.getUTCFullYear()}` : null);
-    set('lihtcProjects', lihtc?.projects, lihtcPeriod);
-    set('lihtcUnits', lihtc?.units, lihtcPeriod);
-    set('lihtcRecent', lihtc?.recentProjects, lihtcPeriod);
+    // LIHTC counts (property.lihtc) are not published until HUD's download answers; see METRICS.
 
+    const fetched: Record<string, string | null> = {};
+    const status: Record<string, ValueStatus> = {};
     for (const metric of METRICS) {
       values[metric.key] ??= null;
       periods[metric.key] ??= null;
+      fetched[metric.key] = values[metric.key] != null ? fetchedAt : null;
+      status[metric.key] = values[metric.key] != null ? 'fresh' : 'missing';
     }
-    return { city: metro.city, metro: metro.name, values, periods };
+    return { city: metro.city, metro: metro.name, values, periods, fetchedAt: fetched, status, shared: sharedFor(metros, metro) };
   });
 
-  const snapshot: MarketSnapshot = { generatedAt: now.toISOString(), metrics: METRICS, groups: GROUPS, markets, sources: SOURCES };
+  const snapshot: MarketSnapshot = {
+    schemaVersion: 2,
+    generatedAt: fetchedAt,
+    metrics: METRICS,
+    groups: GROUPS,
+    markets,
+    sources: SOURCES,
+    rejected
+  };
   if (property.rates?.length) snapshot.rates = property.rates;
   if (property.population?.counties.length) {
     const marketFor = (code: string) => metros.find((m) => m.counties.includes(code))?.city ?? null;
@@ -874,13 +1118,109 @@ export function buildMarketSnapshot(
   return snapshot;
 }
 
+const DAY_MS = 86_400_000;
+
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
 /**
- * Fill each figure today's pass could not read from the last published copy,
- * so a BLS quota or a Census outage leaves last month's figure (with its own
- * date) rather than a blank.
+ * The last day of a reporting period as the snapshot writes it: "Aug 2026",
+ * "Jan–Aug 2026", "July 2025", "Q2 2026", "2024", "2024–25", "FY 2027",
+ * "2025 rates", "2026 certified". Anything after a comma (", San Antonio
+ * metro") is ignored. Null when there is no date in it.
+ */
+export function periodEnd(period: string | null | undefined): Date | null {
+  const text = (period ?? '').split(',')[0]!.trim();
+  const quarter = /Q([1-4]) (\d{4})/.exec(text);
+  if (quarter) return new Date(Date.UTC(Number(quarter[2]), Number(quarter[1]) * 3, 0));
+  const months = [...text.matchAll(/\b([A-Z][a-z]+) (\d{4})\b/g)].filter((m) => MONTH_NAMES.includes(m[1]!.slice(0, 3).toLowerCase()));
+  const month = months.at(-1) ?? /([A-Z][a-z]{2})–[A-Z][a-z]{2} (\d{4})/.exec(text);
+  if (month) {
+    const index = MONTH_NAMES.indexOf(month[1]!.slice(0, 3).toLowerCase());
+    if (index >= 0) return new Date(Date.UTC(Number(month[2]), index + 1, 0));
+  }
+  const fiscal = /FY (\d{4})/.exec(text);
+  if (fiscal) return new Date(Date.UTC(Number(fiscal[1]), 8, 30));
+  const span = /(\d{4})–(\d{2})\b/.exec(text);
+  if (span) return new Date(Date.UTC(2000 + Number(span[2]), 11, 31));
+  const year = /\b(\d{4})\b/.exec(text);
+  if (year) return new Date(Date.UTC(Number(year[1]), 11, 31));
+  return null;
+}
+
+/**
+ * Sources whose newest period across the markets is older than their rule
+ * allows: the source answered, but with an old file. Figures stay published
+ * with their own period; this only flags them.
+ */
+export function laggingSources(snapshot: MarketSnapshot): SourceLag[] {
+  const built = Date.parse(snapshot.generatedAt);
+  const newest = new Map<MetricSource, { end: number; period: string }>();
+  for (const metric of snapshot.metrics) {
+    if (SOURCE_RULES[metric.source]?.maxLagDays == null) continue;
+    for (const market of snapshot.markets) {
+      if (market.values[metric.key] == null) continue;
+      const period = market.periods[metric.key];
+      const end = periodEnd(period)?.getTime();
+      if (end == null || !period) continue;
+      const have = newest.get(metric.source);
+      if (!have || end > have.end) newest.set(metric.source, { end, period: period.split(',')[0]!.trim() });
+    }
+  }
+  const out: SourceLag[] = [];
+  for (const [source, { end, period }] of newest) {
+    const maxLagDays = SOURCE_RULES[source].maxLagDays!;
+    const days = Math.floor((built - end) / DAY_MS);
+    if (days > maxLagDays) out.push({ source, latest: period, days, maxLagDays });
+  }
+  return out;
+}
+
+/** The id of the area a metric's figure describes for one market: two markets with the same id show one observation. */
+export function observationId(metro: Metro, geography: Geography): string {
+  switch (geography) {
+    case 'city':
+      return `city:${metro.city}`;
+    case 'metro':
+      return `metro:${metro.area}`;
+    case 'msa':
+      return `msa:${metro.census.msa}`;
+    case 'district':
+      return `district:${metro.txdotDistrict}`;
+    case 'fmrArea':
+      return `fmr:${metro.hudFmr}`;
+  }
+}
+
+/** For each metric, the earlier market whose observation this market repeats (in METROS order, the namesake city first). */
+function sharedFor(metros: Metro[], metro: Metro): Record<string, City> {
+  const out: Record<string, City> = {};
+  for (const metric of METRICS) {
+    const id = observationId(metro, metric.geography);
+    const first = metros.find((m) => observationId(m, metric.geography) === id);
+    if (first && first.city !== metro.city) out[metric.key] = first.city;
+  }
+  return out;
+}
+
+
+/**
+ * Fill each figure today's pass could not read (or rejected) from the last
+ * published copy, so a BLS quota or a Census outage leaves last month's
+ * figure, with its own period and the time it was originally read, rather
+ * than a blank. A kept figure is marked retained; once its source has gone
+ * unread for longer than SOURCE_RULES allows it is dropped and marked expired,
+ * so a dead source cannot show its last figure forever.
+ *
+ * Works with version 1 files too: a figure with no fetchedAt is taken as read
+ * when that file was generated.
  */
 export function fillFromPrevious(next: MarketSnapshot, previous: MarketSnapshot | null | undefined): MarketSnapshot {
   if (!previous?.markets) return next;
+  const now = Date.parse(next.generatedAt);
+  const maxAge = (key: string) => {
+    const metric = METRIC_BY_KEY.get(key);
+    return metric ? SOURCE_RULES[metric.source].maxAgeDays * DAY_MS : Infinity;
+  };
   return {
     ...next,
     rates: next.rates ?? previous.rates,
@@ -894,13 +1234,32 @@ export function fillFromPrevious(next: MarketSnapshot, previous: MarketSnapshot 
       if (!old) return market;
       const values = { ...market.values };
       const periods = { ...market.periods };
+      const fetchedAt = { ...market.fetchedAt };
+      const status = { ...market.status };
       for (const key of Object.keys(values)) {
-        if (values[key] == null && old.values?.[key] != null) {
-          values[key] = old.values[key]!;
-          periods[key] = old.periods?.[key] ?? null;
+        if (values[key] != null) continue;
+        if (old.values?.[key] == null) {
+          // Still gone: an expired figure stays marked expired, with when it was last read.
+          if (old.status?.[key] === 'expired') {
+            status[key] = 'expired';
+            fetchedAt[key] = old.fetchedAt?.[key] ?? null;
+          }
+          continue;
         }
+        const readAt = old.fetchedAt?.[key] ?? previous.generatedAt ?? null;
+        const age = readAt ? now - Date.parse(readAt) : NaN;
+        if (Number.isFinite(age) && age > maxAge(key)) {
+          // Too old to keep: blank, but say why, and when it was last read.
+          status[key] = 'expired';
+          fetchedAt[key] = readAt;
+          continue;
+        }
+        values[key] = old.values[key]!;
+        periods[key] = old.periods?.[key] ?? null;
+        fetchedAt[key] = readAt;
+        status[key] = 'retained';
       }
-      return { ...market, values, periods };
+      return { ...market, values, periods, fetchedAt, status };
     })
   };
 }
