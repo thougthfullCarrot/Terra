@@ -396,16 +396,11 @@ function cityView(city, focus) {
   const back = el('a', 'link', '← All markets');
   back.href = writeMarketHash({ ...state, city: '' });
   head.append(back, el('h2', 'role', market.city), el('p', 'firm', market.metro ?? ''));
+  // Only this city's figures here; the all-markets chart and table live on the All markets page.
   frag.append(head, kpis(market, focus));
-  const pair = el('div', 'market-pair');
-  pair.append(chart(focus, city));
   const points = talkingPoints(market, focus);
-  if (points) pair.append(points);
-  else pair.classList.add('single');
-  frag.append(pair);
-  const all = el('section', 'card market-all');
-  all.append(el('h3', 'group-title', `All markets · ${focus.label}`), table(focus, city));
-  frag.append(all, devMap(city));
+  if (points) frag.append(points);
+  frag.append(devMap(city));
 
   // The chosen property type first, then the rest.
   const groups = [focus, ...snapshot.groups.filter((g) => g.key !== focus.key)];
