@@ -94,6 +94,16 @@ jobs:
             node --check --input-type=module < "$f" || { echo "::error file=site/$(basename "$f")::syntax error"; exit 1; }
           done
 
+      # How long each job has been up and how often it was reposted
+      # (backend/src/site/history.ts). Kept beside the repo, never in site/:
+      # with accounts on, the job list is members-only.
+      - name: Restore the job history
+        uses: actions/cache/restore@v4
+        with:
+          path: job-history.json
+          key: job-history-none
+          restore-keys: job-history-
+
       - name: Export postings from the live boards
         # Optional. With these set, Adzuna search results join the board
         # postings; without them the site is built from the boards alone.
@@ -106,7 +116,14 @@ jobs:
           SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
-          npm run --silent export:site 2>&1 | tee /tmp/export.log
+          npm run --silent export:site -- --history ../job-history.json 2>&1 | tee /tmp/export.log
+
+      - name: Cache the job history
+        if: hashFiles('job-history.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: job-history.json
+          key: job-history-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Market data changes monthly (BLS) and yearly (Census), and keyless
       # BLS allows 25 requests a day, so a good file is cached for the day and
@@ -271,6 +288,30 @@ jobs:
           path: site/property
           key: property-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # The Career tab's new-agent sponsors (site/career/sponsors.json), from
+      # the Texas Real Estate Commission's open data set; rebuilt weekly.
+      - name: Restore the new-agent sponsors
+        uses: actions/cache/restore@v4
+        with:
+          path: site/career
+          key: career-none
+          restore-keys: career-
+
+      - name: Export the new-agent sponsors
+        id: sponsors
+        # A licensing data outage must never hold back the job list.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run --silent export:sponsors -- --max-age-days 7 2>&1 | tee /tmp/sponsors.log
+
+      - name: Cache the new-agent sponsors
+        if: steps.sponsors.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: site/career
+          key: career-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Summarize
         if: always()
         run: |
@@ -318,6 +359,12 @@ jobs:
             echo
             echo '```'
             cat /tmp/events.log 2>/dev/null || true
+            echo '```'
+            echo
+            echo '## Career'
+            echo
+            echo '```'
+            cat /tmp/sponsors.log 2>/dev/null || true
             echo '```'
             echo
             echo '## Property tools'

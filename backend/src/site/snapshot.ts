@@ -1,6 +1,7 @@
 import { CITIES, type City, type Kind, type Posting, type Sector } from '../types.js';
 import type { RunReport } from '../collector/run.js';
 import { matchInputs, type MatchInputs } from '../matching/score.js';
+import type { Seen } from './history.js';
 
 /**
  * One posting as the public website renders it.
@@ -34,6 +35,10 @@ export interface SitePosting {
   match: MatchInputs;
   /** The aggregator a posting came through, when it did not come from a firm board. */
   via: 'Adzuna' | null;
+  /** YYYY-MM-DD the seat was first listed, across builds (history.ts). */
+  openSince?: string;
+  /** Times the seat was reposted or came back after coming down. */
+  reposts?: number;
 }
 
 export interface SiteSnapshot {
@@ -49,9 +54,9 @@ export interface SiteSnapshot {
 /** Long enough to read as a summary on a card; the full text is one click away on the firm's board. */
 export const DESC_LIMIT = 600;
 
-export function buildSnapshot(postings: Posting[], report: RunReport): SiteSnapshot {
+export function buildSnapshot(postings: Posting[], report: RunReport, seen?: Map<string, Seen>): SiteSnapshot {
   const jobs = postings
-    .map(toSitePosting)
+    .map((posting) => ({ ...toSitePosting(posting), ...seen?.get(posting.id) }))
     // Newest first; id breaks ties so the file is stable between identical runs.
     .sort((a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id));
 

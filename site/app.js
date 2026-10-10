@@ -30,6 +30,8 @@ import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedId
 import { startNews } from './news-view.js';
 import { startEvents } from './events-view.js';
 import { startProperty } from './property-view.js';
+import { startCareer } from './career-view.js';
+import { jobFlags, writeCareerHash } from './career.js';
 import { startPitch } from './pitch.js';
 
 const $ = (id) => document.getElementById(id);
@@ -449,6 +451,14 @@ function card(job, now, index) {
   } else {
     deadlineNode.remove();
   }
+  const flag = jobFlags(job, now)[0];
+  const flagNode = node.querySelector('.job-flag');
+  if (flag) {
+    flagNode.textContent = flag.label;
+    flagNode.title = flag.hint;
+    flagNode.classList.add(flag.kind);
+    flagNode.hidden = false;
+  }
 
   const match = scores.get(job.id);
   const scoreNode = node.querySelector('.score');
@@ -597,6 +607,19 @@ function openPanel(job, { auto = false } = {}) {
   if (isNew(job.postedAt, now)) datesNode.append(el('span', 'new-tag', 'New'));
   datesNode.append(el('span', '', dates[0]));
   if (deadline) datesNode.append(el('span', `deadline${deadline.urgent ? ' urgent' : ''}`, deadline.text));
+
+  const flags = jobFlags(job, now);
+  $('jp-flags').replaceChildren(
+    ...flags.map((f) => {
+      const li = el('li', `job-flag ${f.kind}`);
+      li.append(el('strong', '', f.label), ' ', f.hint);
+      return li;
+    })
+  );
+  $('jp-flags').hidden = !flags.length;
+  $('jp-brief').href = writeCareerHash({ tool: 'brief', firm: job.firm });
+  // The brief opens in the Career tab, so the panel steps aside for it.
+  $('jp-brief').onclick = () => panel.close();
 
   drawFacts(job, now);
   const match = scores.get(job.id);
@@ -831,6 +854,7 @@ startTracker({
 startNews();
 startEvents();
 startProperty();
+startCareer();
 startPitch();
 
 if (isConfigured(CONFIG)) {
