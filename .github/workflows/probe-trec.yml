@@ -1,4 +1,4 @@
-# Temporary: finds TREC's public licensee download. Removed before merge.
+# Temporary: looks at TREC's public licensee file. Removed before merge.
 name: Probe TREC
 on:
   push:
@@ -9,13 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36'
-          for p in https://www.trec.texas.gov/ https://www.trec.texas.gov/public-information https://www.trec.texas.gov/license-holder-search https://www.trec.texas.gov/apps/license-holder-search/ https://www.trec.texas.gov/public-information/license-holder-information https://www.trec.texas.gov/agency-information/data https://www.trec.texas.gov/sitemap.xml; do
-            echo "=== $p"; curl -sSL -m 30 -A "$UA" -o /tmp/p.html -w "%{http_code} %{url_effective}\n" "$p" || true
-            grep -oiE 'href="[^"]*(\.txt|\.csv|\.zip|\.xlsx|download|data[^"]*|high-value[^"]*)"' /tmp/p.html | sort -u | head -40
-          done
-          for u in https://www.trec.texas.gov/sites/default/files/high-value-data-sets/trecfile.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/sales.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/broker.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/; do
-            echo "=== $u"; curl -sSL -m 120 -A "$UA" -r 0-3000 -w "\n%{http_code} %{size_download}\n" "$u" | head -c 3500; echo
-          done
-          echo "=== data.texas.gov"; curl -sS -m 30 "https://data.texas.gov/api/catalog/v1?q=real%20estate%20license&limit=15" | jq -r '.results[] | "\(.resource.id) \(.resource.name) | \(.resource.attribution)"' || true
-          curl -sS -m 30 "https://api.us.socrata.com/api/catalog/v1?domains=data.texas.gov&q=TREC&limit=15" | jq -r '.results[] | "\(.resource.id) \(.resource.name) | \(.resource.attribution)"' || true
+          UA='terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)'
+          curl -sSL -m 600 -A "$UA" -D - -o /tmp/t.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/trecfile.txt | head -20
+          ls -la /tmp/t.txt; wc -l /tmp/t.txt
+          tr -d '\000' < /tmp/t.txt > /tmp/c.txt
+          echo "--- types"; cut -f1 /tmp/c.txt | sort | uniq -c | sort -rn | head -30
+          echo "--- status by type SALE"; awk -F'\t' '$1=="SALE"{print $5}' /tmp/c.txt | sort | uniq -c | sort -rn | head
+          echo "--- columns"; awk -F'\t' '{print NF}' /tmp/c.txt | sort | uniq -c | sort -rn | head -3
+          echo "--- max orig date"; cut -f6 /tmp/c.txt | sort | tail -3
+          echo "--- max expiration"; cut -f7 /tmp/c.txt | sort | tail -3
+          echo "--- SALE originals since 20250901"; awk -F'\t' '$1=="SALE" && $6>="20250901"' /tmp/c.txt | wc -l
+          echo "--- sponsor types"; awk -F'\t' '$1=="SALE"{print $27}' /tmp/c.txt | sort | uniq -c | sort -rn | head
+          echo "--- sample brokers (non SALE)"; awk -F'\t' '$1!="SALE"' /tmp/c.txt | shuf -n 12 --random-source=/tmp/c.txt | cut -f1-9,13-19,27-33
+          echo "--- recent SALE sample"; awk -F'\t' '$1=="SALE" && $6>="20250901"' /tmp/c.txt | head -5 | cut -f1,2,5-9,16-19,27-33
+          echo "--- top sponsors of recent SALE"; awk -F'\t' '$1=="SALE" && $6>="20250901"{print $28}' /tmp/c.txt | sort | uniq -c | sort -rn | head -15 > /tmp/top.txt; cat /tmp/top.txt
+          for n in $(awk '{print $2}' /tmp/top.txt | head -8); do awk -F'\t' -v n="$n" '$2==n && $1!="SALE"' /tmp/c.txt | cut -f1-5,16-19,33; done
