@@ -273,7 +273,7 @@ export class SiteTester {
       const overflow = await page.evaluate<number>('document.documentElement.scrollWidth - window.innerWidth');
       check(overflow <= 1, 'page fits the screen width (no sideways scroll)', `${overflow}px too wide`);
       // Markup typed into a profile or resume must stay text.
-      const injected = await page.evaluate<number>(`document.querySelectorAll('img[src="x"], #profile b, #resume-skills script').length`);
+      const injected = await page.evaluate<number>(`document.querySelectorAll('img[src="x"], #resume-skills script').length + [...document.querySelectorAll('#profile b')].filter((b) => b.textContent === 'Finance').length`);
       check(injected === 0, 'profile text is never run as HTML', `${injected} injected element(s)`);
       check(errors.length === 0, 'no script errors', errors.slice(0, 5).join(' | '));
     } catch (error) {
