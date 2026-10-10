@@ -364,6 +364,7 @@
         <a href="#news" id="tab-news" class="tab">News</a>
         <a href="#events" id="tab-events" class="tab">Events</a>
         <a href="#property" id="tab-property" class="tab">Property</a>
+        <a href="#career" id="tab-career" class="tab">Career</a>
       </nav>
 
       <div id="jobs-view">
@@ -448,6 +449,7 @@
             <ul class="chips" id="jp-chips" hidden></ul>
             <dl class="facts" id="jp-facts"></dl>
             <p class="dates" id="jp-dates"></p>
+            <ul class="job-flags" id="jp-flags" hidden></ul>
             <div class="sheet-actions">
               <a class="primary" id="jp-apply" target="_blank" rel="noopener noreferrer">Apply on the firm's site</a>
               <button type="button" class="secondary" id="jp-save" aria-pressed="false">Save</button>
@@ -456,6 +458,7 @@
                 <select id="jp-stage"></select>
               </label>
               <button type="button" class="secondary" id="jp-share">Copy link</button>
+              <a class="secondary" id="jp-brief">Interview brief</a>
             </div>
             <section id="jp-why-wrap" hidden>
               <h3 class="sheet-h">Why it fits you</h3>
@@ -555,6 +558,22 @@
         <div id="p-sources" class="market-sources"></div>
       </section>
 
+      <!-- Career tools (interview brief, title decoder, skills, new-agent sponsors, near campus, market tour): career-view.js. -->
+      <section id="career-view" hidden aria-labelledby="career-title">
+        <h2 id="career-title" class="visually-hidden">Career tools</h2>
+        <form class="controls" id="career-controls" onsubmit="return false">
+          <nav class="market-tools" id="c-tools" aria-label="Career tools"></nav>
+          <div class="filters market-filters">
+            <label id="c-city-label">
+              <span class="eyebrow">MARKET</span>
+              <select id="c-city"></select>
+            </label>
+          </div>
+        </form>
+        <div class="summary"><p id="c-blurb" class="market-blurb"></p></div>
+        <div id="c-body"></div>
+      </section>
+
       <!-- Commercial real estate headlines by city: news-view.js draws them from news.json. -->
       <section id="news-view" hidden aria-labelledby="news-title">
         <h2 id="news-title" class="visually-hidden">Commercial real estate news</h2>
@@ -625,7 +644,7 @@
         <div class="card-foot">
           <p class="dates">
             <span class="new-tag" hidden>New</span><span class="posted"></span><span class="deadline"></span
-            ><span class="score"></span>
+            ><span class="job-flag" hidden></span><span class="score"></span>
             <a class="via" href="https://www.adzuna.com" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>
           </p>
           <a class="apply" target="_blank" rel="noopener noreferrer">Apply</a>
