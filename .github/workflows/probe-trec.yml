@@ -1,4 +1,4 @@
-# Temporary: looks at TREC's public licensee file. Removed before merge.
+# Temporary: looks for a current TREC licensee file. Removed before merge.
 name: Probe TREC
 on:
   push:
@@ -9,18 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA='terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)'
-          curl -sSL -m 600 -A "$UA" -D - -o /tmp/t.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/trecfile.txt | head -20
-          ls -la /tmp/t.txt; wc -l /tmp/t.txt
-          tr -d '\000' < /tmp/t.txt > /tmp/c.txt
-          echo "--- types"; cut -f1 /tmp/c.txt | sort | uniq -c | sort -rn | head -30
-          echo "--- status by type SALE"; awk -F'\t' '$1=="SALE"{print $5}' /tmp/c.txt | sort | uniq -c | sort -rn | head
-          echo "--- columns"; awk -F'\t' '{print NF}' /tmp/c.txt | sort | uniq -c | sort -rn | head -3
-          echo "--- max orig date"; cut -f6 /tmp/c.txt | sort | tail -3
-          echo "--- max expiration"; cut -f7 /tmp/c.txt | sort | tail -3
-          echo "--- SALE originals since 20250901"; awk -F'\t' '$1=="SALE" && $6>="20250901"' /tmp/c.txt | wc -l
-          echo "--- sponsor types"; awk -F'\t' '$1=="SALE"{print $27}' /tmp/c.txt | sort | uniq -c | sort -rn | head
-          echo "--- sample brokers (non SALE)"; awk -F'\t' '$1!="SALE"' /tmp/c.txt | shuf -n 12 --random-source=/tmp/c.txt | cut -f1-9,13-19,27-33
-          echo "--- recent SALE sample"; awk -F'\t' '$1=="SALE" && $6>="20250901"' /tmp/c.txt | head -5 | cut -f1,2,5-9,16-19,27-33
-          echo "--- top sponsors of recent SALE"; awk -F'\t' '$1=="SALE" && $6>="20250901"{print $28}' /tmp/c.txt | sort | uniq -c | sort -rn | head -15 > /tmp/top.txt; cat /tmp/top.txt
-          for n in $(awk '{print $2}' /tmp/top.txt | head -8); do awk -F'\t' -v n="$n" '$2==n && $1!="SALE"' /tmp/c.txt | cut -f1-5,16-19,33; done
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36'
+          curl -sSL -m 60 -A "$UA" https://www.trec.texas.gov/public/high-value-data-sets -o /tmp/h.html -w "%{http_code}\n"
+          grep -oiE 'href="[^"]+"' /tmp/h.html | grep -viE '\.css|\.js|#|twitter|facebook' | sort -u | head -80
+          sed -e 's/<[^>]*>/ /g' /tmp/h.html | tr -s ' \n' | grep -iE 'license|data|update|txt|csv' | head -60
+          echo "=== socrata s7ft-44qi"; curl -sS -m 30 "https://api.us.socrata.com/api/catalog/v1?ids=s7ft-44qi" | jq '.results[0] | {name: .resource.name, domain: .metadata.domain, updated: .resource.data_updated_at, cols: .resource.columns_name}'
+          for u in $(grep -oiE 'href="[^"]+\.(txt|csv|zip|xlsx)"' /tmp/h.html | sed 's/href="//;s/"$//' | sort -u | head -15); do
+            case "$u" in http*) ;; *) u="https://www.trec.texas.gov$u";; esac
+            echo "=== $u"; curl -sSIL -m 30 -A "$UA" "$u" | grep -iE '^(HTTP|content-length|last-modified)'
+          done
