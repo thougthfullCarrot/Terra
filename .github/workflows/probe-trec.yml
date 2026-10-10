@@ -1,0 +1,21 @@
+# Temporary: finds TREC's public licensee download. Removed before merge.
+name: Probe TREC
+on:
+  push:
+    branches: [claude/project-thread-qweiqx]
+    paths: ['.github/workflows/probe-trec.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36'
+          for p in https://www.trec.texas.gov/ https://www.trec.texas.gov/public-information https://www.trec.texas.gov/license-holder-search https://www.trec.texas.gov/apps/license-holder-search/ https://www.trec.texas.gov/public-information/license-holder-information https://www.trec.texas.gov/agency-information/data https://www.trec.texas.gov/sitemap.xml; do
+            echo "=== $p"; curl -sSL -m 30 -A "$UA" -o /tmp/p.html -w "%{http_code} %{url_effective}\n" "$p" || true
+            grep -oiE 'href="[^"]*(\.txt|\.csv|\.zip|\.xlsx|download|data[^"]*|high-value[^"]*)"' /tmp/p.html | sort -u | head -40
+          done
+          for u in https://www.trec.texas.gov/sites/default/files/high-value-data-sets/trecfile.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/sales.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/broker.txt https://www.trec.texas.gov/sites/default/files/high-value-data-sets/; do
+            echo "=== $u"; curl -sSL -m 120 -A "$UA" -r 0-3000 -w "\n%{http_code} %{size_download}\n" "$u" | head -c 3500; echo
+          done
+          echo "=== data.texas.gov"; curl -sS -m 30 "https://data.texas.gov/api/catalog/v1?q=real%20estate%20license&limit=15" | jq -r '.results[] | "\(.resource.id) \(.resource.name) | \(.resource.attribution)"' || true
+          curl -sS -m 30 "https://api.us.socrata.com/api/catalog/v1?domains=data.texas.gov&q=TREC&limit=15" | jq -r '.results[] | "\(.resource.id) \(.resource.name) | \(.resource.attribution)"' || true
