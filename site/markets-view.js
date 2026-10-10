@@ -23,6 +23,7 @@ import { growthView, payView, zoningView } from './insights-view.js';
 import { readNewsHash } from './news.js';
 import { readEventsHash } from './events.js';
 import { readPropertyHash } from './property.js';
+import { readCareerHash } from './career.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -45,6 +46,22 @@ export function setMarketLoader(next) {
   $('m-chart').replaceChildren();
   $('m-rates').replaceChildren();
   if (next && readMarketHash(location.hash, null).open) show();
+}
+
+/**
+ * The market data file, loaded once and shared with the Career tab, which
+ * reads its development maps, zoning cases and salary filings. null when
+ * signed out or not built yet.
+ */
+export async function marketSnapshot() {
+  if (snapshot) return snapshot;
+  if (!loader) return null;
+  loading ??= loader();
+  const data = await loading.catch(() => {
+    loading = null;
+    return null;
+  });
+  return data?.markets?.length ? data : null;
 }
 
 /** Show whichever section the hash names; the tracker calls this when its tab appears or goes. */
@@ -89,6 +106,7 @@ function section() {
   if (readNewsHash(location.hash, null).open) return 'news';
   if (readEventsHash(location.hash, null).open) return 'events';
   if (readPropertyHash(location.hash).open) return 'property';
+  if (readCareerHash(location.hash).open) return 'career';
   if (new URLSearchParams(location.hash.replace(/^#/, '')).has('tracker') && !$('tab-tracker').hidden) return 'tracker';
   return 'jobs';
 }
@@ -100,7 +118,7 @@ async function show() {
   document.body.dataset.section = active;
   // news-view.js, events-view.js and property-view.js show their own sections; the others step aside for it.
   for (const name of ['jobs', 'markets', 'tracker']) $(`${name}-view`).hidden = name !== active;
-  for (const name of ['jobs', 'markets', 'tracker', 'news', 'events', 'property']) {
+  for (const name of ['jobs', 'markets', 'tracker', 'news', 'events', 'property', 'career']) {
     if (name === active) $(`tab-${name}`).setAttribute('aria-current', 'page');
     else $(`tab-${name}`).removeAttribute('aria-current');
   }

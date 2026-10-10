@@ -3,6 +3,7 @@
  *
  *   npm run export:site                       # writes ../site/postings.json
  *   npm run export:site -- --out <path>
+ *   npm run export:site -- --history <path>   # how long each job has been up (site/history.ts)
  *
  * Needs no database: the firm list is read from the seed migration, as
  * verify-firms does, and the pass runs against an in-memory store. What lands
@@ -18,7 +19,7 @@
  * sheet cannot be read (src/sheets/firms.ts). SHEETS_WRITE=true also fills an
  * empty tab from the seed and writes each firm's result to "Last check".
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MemoryStore } from '../db/store.js';
@@ -26,6 +27,7 @@ import { loadFirmSeed } from '../collector/firmSeed.js';
 import { runCollector } from '../collector/run.js';
 import { adzunaAggregators } from '../collector/sources/adzuna.js';
 import { buildSnapshot } from '../site/snapshot.js';
+import { updateHistory, type JobHistory } from '../site/history.js';
 import { sheetsClientFromEnv } from '../sheets/env.js';
 import { firmStatuses, loadFirms } from '../sheets/firms.js';
 
@@ -57,7 +59,19 @@ async function main(): Promise<void> {
       );
     }
   }
-  const snapshot = buildSnapshot([...store.postings.values()], report);
+  const postings = [...store.postings.values()];
+  const historyFlag = process.argv.indexOf('--history');
+  const historyPath = historyFlag >= 0 ? process.argv[historyFlag + 1] : undefined;
+  let seen;
+  if (historyPath) {
+    const previous = await readFile(historyPath, 'utf8').then((text) => JSON.parse(text) as JobHistory, () => null);
+    const next = updateHistory(previous, postings);
+    seen = next.seen;
+    // A pass where every board failed is not published, so it must not age the history either.
+    if (report.firms > 0 && report.firmsFailed < report.firms) await writeFile(historyPath, `${JSON.stringify(next.history)}\n`);
+    console.log(`History: ${Object.keys(next.history.seats).length} seats${previous ? '' : ' (new file)'}.`);
+  }
+  const snapshot = buildSnapshot(postings, report, seen);
 
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, `${JSON.stringify(snapshot)}\n`);
