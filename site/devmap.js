@@ -7,6 +7,8 @@
 //
 // Leaflet (site/vendor, copied from npm by build:site) loads the first time a
 // map is shown, so the rest of the site never waits for it.
+import { followButton } from './watch-view.js';
+import { areaItem, projectItem } from './watch.js';
 import { cityProjects, markerRadius, projectDates } from './market.js';
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 
@@ -83,6 +85,9 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       `New buildings and additions under way in the ${city} metro, from state filings over the last two years${PERMIT_CITIES[city] ? ` and ${PERMIT_CITIES[city]} building permits` : ''}. Click a pin or a project for the details and a link to the developer.`
     )
   );
+  // Watchlists (migration 0016): new filings in this metro by email. Null while they're off.
+  const followArea = followButton(areaItem(city), 'Follow new filings here');
+  if (followArea) head.append(followArea);
   box.append(head);
 
   const controls = el('div', 'dev-controls');
@@ -254,6 +259,9 @@ function popup(project) {
   }
   if (project.scope) box.append(el('p', 'dev-pop-scope', project.scope));
   box.append(links(project));
+  // Status, finish date and cost changes by email; TABS projects only, since city permits carry no TABS number.
+  const followProject = project.source === 'city' ? null : followButton(projectItem(project.city, project.id, project.name), 'Follow this project');
+  if (followProject) box.append(followProject);
   return box;
 }
 

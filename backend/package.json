@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:db": "bash test/db/run.sh",
     "collect": "tsx src/bin/collect.ts",
     "verify:firms": "tsx src/bin/verify-firms.ts",
     "probe:slugs": "tsx src/bin/probe-slugs.ts",
@@ -28,7 +29,8 @@
     "build:site": "tsx src/bin/build-site.ts",
     "sync:sheets": "tsx src/bin/sync-sheets.ts",
     "test-users": "tsx src/bin/test-users.ts",
-    "send:alerts": "tsx src/bin/send-alerts.ts"
+    "send:alerts": "tsx src/bin/send-alerts.ts",
+    "store:history": "tsx src/bin/store-history.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

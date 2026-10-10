@@ -24,6 +24,7 @@ import {
   writeQuery
 } from './feed.js';
 import { setMarketLoader, startMarkets } from './markets-view.js';
+import { clearUnsubscribe, handleUnsubscribe } from './unsubscribe.js';
 import { setGrowthJobs } from './growth.js';
 import { STAGES, followUpLabel, importRows } from './tracker.js';
 import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedIds, trackedRows, trackerOn, untrack } from './tracker-view.js';
@@ -852,6 +853,13 @@ startTracker({
   }
 });
 startNews();
+// An unsubscribe link from an alert email works without signing in.
+handleUnsubscribe(CONFIG, location).then((result) => {
+  if (!result) return;
+  clearUnsubscribe(location, history);
+  toast(result.text);
+});
+
 startEvents();
 startProperty();
 startCareer();

@@ -391,6 +391,7 @@ jobs:
           STRIPE_PAYMENT_LINK: ${{ vars.STRIPE_PAYMENT_LINK }}
           STRIPE_BILLING_PORTAL_LINK: ${{ vars.STRIPE_BILLING_PORTAL_LINK }}
           PRICE_LABEL: ${{ vars.PRICE_LABEL }}
+          WATCHLISTS_ENABLED: ${{ vars.WATCHLISTS_ENABLED }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
             echo "Accounts not configured; publishing the open site."
@@ -404,7 +405,8 @@ jobs:
               supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
               paymentLink: process.env.STRIPE_PAYMENT_LINK || "",
               billingPortalLink: process.env.STRIPE_BILLING_PORTAL_LINK || "",
-              priceLabel: process.env.PRICE_LABEL || ""
+              priceLabel: process.env.PRICE_LABEL || "",
+              watchlists: process.env.WATCHLISTS_ENABLED === "true"
             };
             require("fs").writeFileSync("../site/config.js",
               "// Written by site.yml from the repository variables.\nexport const CONFIG = " + JSON.stringify(config, null, 2) + ";\n");
@@ -436,6 +438,21 @@ jobs:
               -H "Prefer: resolution=merge-duplicates,return=minimal" \
               --data-binary @/tmp/market-row.json
             echo "Market data stored in Supabase."
+          fi
+
+      # Watchlist digests (migration 0016) compare days, so each day's market
+      # figures are kept for 90 days. Off until the WATCHLISTS_ENABLED variable
+      # is true; never on pull requests. It warns instead of failing.
+      - name: Keep today's market figures for watchlists
+        if: steps.accounts.outputs.enabled == 'true' && vars.WATCHLISTS_ENABLED == 'true' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -f ../site/market.json ]; then
+            npm run --silent store:history -- ../site/market.json
+          else
+            echo "No market file on this build; nothing to keep."
           fi
 
       # Runs before the feed files are removed below. A Sheets problem must

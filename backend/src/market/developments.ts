@@ -115,7 +115,7 @@ export const CITY_CENTERS: Record<City, [number, number]> = {
   Midland: [31.9973, -102.0779]
 };
 
-const STATUS: Record<number, string> = {
+export const STATUS: Record<number, string> = {
   3001: 'Inspection complete',
   3002: 'Inspection under way',
   3003: 'Inspection scheduled',
@@ -130,7 +130,7 @@ const STATUS: Record<number, string> = {
 /** Finished or closed: no longer a current development. */
 const DONE = new Set([3001, 3007]);
 
-const WORK: Record<number, string> = { 9001: 'New construction', 9003: 'Addition' };
+export const WORK: Record<number, string> = { 9001: 'New construction', 9003: 'Addition' };
 
 /** One row of the TABS search results. */
 export interface TabsRow {

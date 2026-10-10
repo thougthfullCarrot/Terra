@@ -25,6 +25,8 @@ import {
   writeMarketHash
 } from './market.js';
 import { developmentMap, disposeMap } from './devmap.js';
+import { followButton } from './watch-view.js';
+import { marketItem } from './watch.js';
 import { calculatorView, compareView, leasesView, reportsView } from './market-tools.js';
 import { underwriteView } from './underwrite-view.js';
 import { sitesView } from './sites-view.js';
@@ -96,6 +98,11 @@ export function startMarkets() {
   );
   $('m-order').addEventListener('change', (e) => update({ order: e.target.value }));
   show();
+}
+
+/** A metric's label for the watchlist, or the key before the market data has loaded. */
+export function metricName(key) {
+  return snapshot?.metrics?.find((m) => m.key === key)?.label ?? key;
 }
 
 function metricFor(key) {
@@ -428,6 +435,8 @@ function cityView(city, focus) {
   const back = el('a', 'link', '← All markets');
   back.href = writeMarketHash({ ...state, city: '' });
   head.append(back, el('h2', 'role', market.city), el('p', 'firm', market.metro ?? ''));
+  const follow = watchControls(market.city);
+  if (follow) head.append(follow);
   const fresh = freshnessLine();
   if (fresh) head.append(el('p', 'market-asof', fresh));
   // Only this city's figures here; the all-markets chart and table live on the All markets page.
@@ -467,6 +476,41 @@ function cityView(city, focus) {
   }
   frag.append(grid);
   return frag;
+}
+
+/**
+ * Follow this market's figures (watchlists, migration 0016): every figure, or
+ * one figure with an optional line it must cross. Null while watchlists are off.
+ */
+function watchControls(city) {
+  const all = followButton(marketItem(city), 'Follow this market');
+  if (!all) return null;
+  const box = el('div', 'watch-controls');
+  box.append(all);
+  const details = el('details', 'watch-metric');
+  details.append(el('summary', '', 'Follow one figure'));
+  const pick = el('select');
+  pick.setAttribute('aria-label', 'Figure');
+  for (const metric of snapshot.metrics) pick.append(new Option(metric.label, metric.key));
+  const dir = el('select');
+  dir.setAttribute('aria-label', 'When');
+  for (const [value, text] of [['', 'any change'], ['above', 'rises above'], ['below', 'falls below']]) dir.append(new Option(text, value));
+  const line = el('input');
+  line.type = 'number';
+  line.step = 'any';
+  line.placeholder = 'value';
+  line.setAttribute('aria-label', 'Value');
+  const slot = el('span', 'watch-metric-button');
+  const redraw = () => {
+    const value = line.value === '' ? NaN : Number(line.value);
+    const threshold = dir.value && Number.isFinite(value) ? { [dir.value]: value } : {};
+    slot.replaceChildren(followButton(marketItem(city, pick.value, threshold), 'Follow') ?? '');
+  };
+  for (const input of [pick, dir, line]) input.addEventListener('change', redraw);
+  redraw();
+  details.append(pick, dir, line, slot);
+  box.append(details);
+  return box;
 }
 
 /** How many markets are ranked on a metric (a shared metro counts once). */
