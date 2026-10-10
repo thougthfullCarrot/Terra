@@ -24,6 +24,7 @@ import type { LihtcCount } from '../market/lihtc.js';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { redact } from '../lib/redact.js';
 import { outcomeLog } from '../market/outcomes.js';
 import { fetchApartmentList } from '../market/apartmentList.js';
 import type { AppraisalFile } from '../market/appraisal.js';
@@ -260,6 +261,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.stack : error);
+  // A crash outside any one source: still keep keys out of the log.
+  const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  console.error(redact(text, [process.env.BLS_API_KEY, process.env.CENSUS_API_KEY, process.env.HUD_API_TOKEN], 4000));
   process.exitCode = 1;
 });

@@ -255,6 +255,13 @@ describe('source outcomes', () => {
     expect(failed).not.toContain('s3cret-key-value');
   });
 
+  it('redacts a crash stack trace and keeps more of it', () => {
+    const stack = `Error: GET https://api.census.gov/data?key=abc123 failed\n${'    at frame (file.ts:1:1)\n'.repeat(20)}`;
+    const text = redact(stack, ['s3cret-key-value'], 4000);
+    expect(text).not.toContain('abc123');
+    expect(text.length).toBeGreaterThan(240);
+  });
+
   it('redacts token-shaped parameters', () => {
     expect(redact('url?registrationkey=XYZ&token=abc&x=1')).toBe('url?registrationkey=[redacted]&token=[redacted]&x=1');
   });
