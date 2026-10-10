@@ -23,10 +23,10 @@ export function permitFileUrl(year: number, month: number): string {
 }
 
 export interface PermitCounts {
-  /** New housing units authorized, all building sizes. */
-  units: number;
-  /** Units in buildings of five or more: apartments. */
-  multifamilyUnits: number;
+  /** New housing units authorized, all building sizes; null when a column was blank or unreadable. */
+  units: number | null;
+  /** Units in buildings of five or more: apartments; null when blank or unreadable. */
+  multifamilyUnits: number | null;
 }
 
 /**
@@ -41,8 +41,17 @@ export function parsePermitFile(text: string, cities: readonly City[]): Map<City
     if (row[1] !== '48' || !/^\d{6}$/.test(row[0] ?? '')) continue;
     const city = cities.find((c) => c === row[16]);
     if (!city || out.has(city)) continue;
-    const n = (index: number) => Number(row[index]) || 0;
-    out.set(city, { units: n(18) + n(21) + n(24) + n(27), multifamilyUnits: n(27) });
+    // A blank or malformed count is unknown, not zero: a city with any of the
+    // four unit columns unreadable gets no total rather than an undercount.
+    const n = (index: number): number | null => {
+      const field = row[index];
+      if (field == null || !/^\d+$/.test(field)) return null;
+      return Number(field);
+    };
+    const parts = [n(18), n(21), n(24), n(27)];
+    if (parts.every((v) => v == null)) continue;
+    const units = parts.some((v) => v == null) ? null : parts.reduce<number>((a, b) => a + b!, 0);
+    out.set(city, { units, multifamilyUnits: n(27) });
   }
   return out;
 }

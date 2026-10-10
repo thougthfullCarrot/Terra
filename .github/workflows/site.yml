@@ -333,6 +333,8 @@ jobs:
             if [ -f ../site/market.json ]; then
               echo "- Built: $(jq -r '.generatedAt' ../site/market.json)$([ '${{ steps.market-cache.outputs.cache-hit }}' = 'true' ] && echo ' (cached today)')"
               echo "- Figures filled: $(jq '[.markets[].values[] | select(. != null)] | length' ../site/market.json) of $(jq '[.markets[].values[]] | length' ../site/market.json)"
+              echo "- Kept from an earlier build (source did not answer): $(jq '[.markets[].status // {} | .[] | select(. == "retained")] | length' ../site/market.json); expired: $(jq '[.markets[].status // {} | .[] | select(. == "expired")] | length' ../site/market.json)"
+              echo "- Sources not ok: $(jq -r '[.refresh // [] | .[] | select(.status != "ok") | "\(.source) \(.status)"] | join(", ") | if . == "" then "none" else . end' ../site/market.json)"
             else
               echo "- No market data file."
             fi

@@ -1994,6 +1994,23 @@ th[aria-sort] .sort-button {
   color: var(--muted);
 }
 
+/* A figure kept from an earlier update because its source did not refresh. */
+.stale-mark {
+  margin-left: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  vertical-align: super;
+  cursor: help;
+}
+
+/* What kind of figure a metric is (Residential, Appraised values...), beside its name. */
+.cat-tag {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
 .market-asof {
   margin: 10px 2px 0;
   font-family: var(--mono);
