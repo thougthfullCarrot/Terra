@@ -4,9 +4,16 @@ export interface Uw {
   price: number;
   income: number;
   vacancy: number;
+  recovery: number;
   expenses: number;
   growth: number;
   expgrowth: number;
+  capex: number;
+  sqft: number;
+  rollover: number;
+  ti: number;
+  lc: number;
+  term: number;
   hold: number;
   exitcap: number;
   sellcost: number;
@@ -20,9 +27,14 @@ export interface Uw {
 export interface UwYear {
   year: number;
   gross: number;
+  reimbursements: number;
   vacancyLoss: number;
   expenses: number;
   noi: number;
+  capex: number;
+  ti: number;
+  lc: number;
+  beforeDebt: number;
   debtService: number;
   cashFlow: number;
   balance: number;
@@ -53,7 +65,7 @@ export interface UwResult {
   debtYield: number | null;
 }
 
-export const UW_FIELDS: { key: Exclude<keyof Uw, 'city'>; label: string; unit: 'usd' | 'pct' | 'years'; min: number; max?: number; step: number }[];
+export const UW_FIELDS: { key: Exclude<keyof Uw, 'city'>; label: string; unit: 'usd' | 'pct' | 'years' | 'sqft'; min: number; max?: number; step: number }[];
 export const DEFAULT_UW: Uw;
 export const EXIT_CAP_STEPS: number[];
 export const GROWTH_STEPS: number[];

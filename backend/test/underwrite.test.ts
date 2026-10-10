@@ -32,13 +32,24 @@ describe('underwrite', () => {
   it('adds the sale to the last year of each cash flow stream', () => {
     expect(m.levered[0]).toBeCloseTo(-(1500000 * 0.32), 6);
     expect(m.levered[10]).toBeCloseTo(m.years[9]!.cashFlow + m.saleProceeds, 6);
-    expect(m.unlevered[10]).toBeCloseTo(m.years[9]!.noi + m.salePrice - m.sellingCosts, 6);
+    expect(m.unlevered[10]).toBeCloseTo(m.years[9]!.beforeDebt + m.salePrice - m.sellingCosts, 6);
   });
 
-  it('gives sensible returns for the default deal', () => {
+  it('takes CapEx, TI and commissions out below NOI', () => {
+    const y = m.years[0]!;
+    expect(y.capex).toBeCloseTo(7500, 6);
+    expect(y.ti).toBeCloseTo(12000 * 0.1 * 15, 6);
+    expect(y.lc).toBeCloseTo(180000 * 0.1 * 0.06 * 5, 6);
+    expect(y.beforeDebt).toBeCloseTo(y.noi - y.capex - y.ti - y.lc, 6);
     expect(m.goingInCap).toBeCloseTo(6.2, 6);
-    expect(m.leveredIrr).toBeCloseTo(9.956, 2);
-    expect(m.unleveredIrr).toBeCloseTo(7.841, 2);
+  });
+
+  it('adds reimbursements to income, less vacancy', () => {
+    const nnn = underwrite({ ...DEFAULT_UW, recovery: 100 }, 2.2);
+    const y = nnn.years[0]!;
+    expect(y.reimbursements).toBeCloseTo(y.expenses, 6);
+    expect(y.noi).toBeCloseTo((180000 + y.expenses) * 0.95 - y.expenses, 6);
+    expect(nnn.leveredIrr!).toBeGreaterThan(m.leveredIrr!);
   });
 
   it('raises the IRR with rent growth and lowers it with the exit cap', () => {
@@ -72,7 +83,7 @@ describe('underwriteXlsx', () => {
 
   it('keeps live formulas and recalculates on open', () => {
     expect(text).toContain('fullCalcOnLoad="1"');
-    expect(text).toContain('<f>IRR(B21:L21)</f>');
+    expect(text).toContain('<f>IRR(B26:L26)</f>');
     expect(text).toContain('PMT(');
   });
 

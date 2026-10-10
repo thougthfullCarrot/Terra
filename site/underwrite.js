@@ -11,9 +11,16 @@ export const UW_FIELDS = [
   { key: 'price', label: 'Purchase price', unit: 'usd', min: 0, step: 10000 },
   { key: 'income', label: 'Gross rent, year 1', unit: 'usd', min: 0, step: 1000 },
   { key: 'vacancy', label: 'Vacancy and credit loss', unit: 'pct', min: 0, max: 100, step: 0.5 },
+  { key: 'recovery', label: 'Expenses reimbursed by tenants', unit: 'pct', min: 0, max: 100, step: 5 },
   { key: 'expenses', label: 'Operating expenses, year 1 (before property tax)', unit: 'usd', min: 0, step: 1000 },
   { key: 'growth', label: 'Rent growth a year', unit: 'pct', min: -20, max: 30, step: 0.25 },
   { key: 'expgrowth', label: 'Expense growth a year', unit: 'pct', min: -20, max: 30, step: 0.25 },
+  { key: 'capex', label: 'CapEx reserve, year 1', unit: 'usd', min: 0, step: 500 },
+  { key: 'sqft', label: 'Rentable square feet', unit: 'sqft', min: 0, step: 500 },
+  { key: 'rollover', label: 'Space re-leased each year', unit: 'pct', min: 0, max: 100, step: 1 },
+  { key: 'ti', label: 'Tenant improvements per sq ft re-leased', unit: 'usd', min: 0, step: 1 },
+  { key: 'lc', label: 'Leasing commission (% of rent over the term)', unit: 'pct', min: 0, max: 20, step: 0.5 },
+  { key: 'term', label: 'New lease term', unit: 'years', min: 1, max: 20, step: 1 },
   { key: 'hold', label: 'Hold period', unit: 'years', min: 1, max: 15, step: 1 },
   { key: 'exitcap', label: 'Exit cap rate', unit: 'pct', min: 0.5, max: 25, step: 0.05 },
   { key: 'sellcost', label: 'Selling costs', unit: 'pct', min: 0, max: 20, step: 0.25 },
@@ -27,9 +34,16 @@ export const DEFAULT_UW = {
   price: 1500000,
   income: 180000,
   vacancy: 5,
+  recovery: 0,
   expenses: 45000,
   growth: 3,
   expgrowth: 3,
+  capex: 7500,
+  sqft: 12000,
+  rollover: 10,
+  ti: 15,
+  lc: 6,
+  term: 5,
   hold: 10,
   exitcap: 7,
   sellcost: 2,
@@ -65,14 +79,22 @@ export function underwrite(uw, taxRate = null) {
   const payment = monthlyPayment(loan, num(uw.rate), num(uw.years));
   const debtService = payment * 12;
 
+  const recovery = clamp(num(uw.recovery), 0, 100) / 100;
+  const rollover = clamp(num(uw.rollover), 0, 100) / 100;
   const years = [];
   for (let t = 1; t <= hold + 1; t++) {
     const gross = Math.max(0, num(uw.income)) * (1 + growth) ** (t - 1);
-    const vacancyLoss = gross * vacancy;
-    const expenses = baseExpenses * (1 + expGrowth) ** (t - 1);
-    const noi = gross - vacancyLoss - expenses;
+    const costGrowth = (1 + expGrowth) ** (t - 1);
+    const expenses = baseExpenses * costGrowth;
+    const reimbursements = expenses * recovery;
+    const vacancyLoss = (gross + reimbursements) * vacancy;
+    const noi = gross + reimbursements - vacancyLoss - expenses;
+    const capex = Math.max(0, num(uw.capex)) * costGrowth;
+    const ti = Math.max(0, num(uw.sqft)) * rollover * Math.max(0, num(uw.ti)) * costGrowth;
+    const lc = gross * rollover * (Math.max(0, num(uw.lc)) / 100) * Math.max(1, num(uw.term));
+    const beforeDebt = noi - capex - ti - lc;
     const balance = loanBalance(loan, num(uw.rate), num(uw.years), t);
-    years.push({ year: t, gross, vacancyLoss, expenses, noi, debtService, cashFlow: noi - debtService, balance });
+    years.push({ year: t, gross, reimbursements, vacancyLoss, expenses, noi, capex, ti, lc, beforeDebt, debtService, cashFlow: beforeDebt - debtService, balance });
   }
 
   const exitCap = Math.max(0.01, num(uw.exitcap));
@@ -83,7 +105,7 @@ export function underwrite(uw, taxRate = null) {
 
   const levered = [-equity, ...years.slice(0, hold).map((y) => y.cashFlow)];
   levered[hold] += saleProceeds;
-  const unlevered = [-(price + closingCosts), ...years.slice(0, hold).map((y) => y.noi)];
+  const unlevered = [-(price + closingCosts), ...years.slice(0, hold).map((y) => y.beforeDebt)];
   unlevered[hold] += salePrice - sellingCosts;
 
   const distributions = levered.slice(1).reduce((a, b) => a + b, 0);

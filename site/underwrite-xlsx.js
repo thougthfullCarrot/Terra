@@ -14,23 +14,30 @@ const IN = {
   price: '$B$5',
   income: '$B$6',
   vacancy: '$B$7',
-  expenses: '$B$8',
-  tax: '$B$9',
-  growth: '$B$10',
-  expgrowth: '$B$11',
-  hold: '$B$12',
-  exitcap: '$B$13',
-  sellcost: '$B$14',
-  down: '$B$15',
-  closing: '$B$16',
-  rate: '$B$17',
-  years: '$B$18',
-  loan: '$B$21',
-  closingCost: '$B$22',
-  equity: '$B$23',
-  payment: '$B$24',
-  debtService: '$B$25',
-  taxAmount: '$B$26'
+  recovery: '$B$8',
+  expenses: '$B$9',
+  tax: '$B$10',
+  growth: '$B$11',
+  expgrowth: '$B$12',
+  capex: '$B$13',
+  sqft: '$B$14',
+  rollover: '$B$15',
+  ti: '$B$16',
+  lc: '$B$17',
+  term: '$B$18',
+  hold: '$B$19',
+  exitcap: '$B$20',
+  sellcost: '$B$21',
+  down: '$B$22',
+  closing: '$B$23',
+  rate: '$B$24',
+  years: '$B$25',
+  loan: '$B$28',
+  closingCost: '$B$29',
+  equity: '$B$30',
+  payment: '$B$31',
+  debtService: '$B$32',
+  taxAmount: '$B$33'
 };
 const ref = (key) => `${A}${IN[key]}`;
 
@@ -55,31 +62,38 @@ function assumptions(uw, m, taxRate, city, asOf) {
   rows[3] = [{ v: 'Inputs', s: 'header' }, { v: '', s: 'header' }, { v: '', s: 'header' }];
   rows[4] = ['Purchase price', { v: uw.price, s: 'inMoney' }];
   rows[5] = ['Gross rent, year 1', { v: uw.income, s: 'inMoney' }];
-  rows[6] = ['Vacancy and credit loss', pct(uw.vacancy)];
-  rows[7] = ['Operating expenses, year 1 (before property tax)', { v: uw.expenses, s: 'inMoney' }];
-  rows[8] = ['Property tax rate (on purchase price)', pct(taxRate ?? 0), { v: city ? `${city} combined rate, Texas Comptroller` : 'None: include it in expenses', s: 'note' }];
-  rows[9] = ['Rent growth a year', pct(uw.growth)];
-  rows[10] = ['Expense growth a year', pct(uw.expgrowth)];
-  rows[11] = ['Hold period (years)', { v: m.hold, s: 'number' }, { v: 'Fixed in this file: it sets the year columns. Change it on Terra and export again.', s: 'note' }];
-  rows[12] = ['Exit cap rate', pct(uw.exitcap)];
-  rows[13] = ['Selling costs', pct(uw.sellcost)];
-  rows[14] = ['Down payment', pct(uw.down)];
-  rows[15] = ['Closing costs', pct(uw.closing)];
-  rows[16] = ['Loan interest rate', pct(uw.rate)];
-  rows[17] = ['Amortization (years)', { v: uw.years, s: 'inNumber' }];
-  rows[19] = [{ v: 'Loan and equity', s: 'header' }, { v: '', s: 'header' }, { v: '', s: 'header' }];
-  rows[20] = ['Loan amount', { v: m.loan, f: `${IN.price}*(1-${IN.down})`, s: 'money' }];
-  rows[21] = ['Closing costs', { v: m.closingCosts, f: `${IN.price}*${IN.closing}`, s: 'money' }];
-  rows[22] = ['Equity invested (down payment + closing)', { v: m.equity, f: `${IN.price}*${IN.down}+${IN.closingCost}`, s: 'boldMoney' }];
-  rows[23] = ['Monthly loan payment', { v: m.payment, f: `IF(${IN.loan}>0,PMT(${IN.rate}/12,${IN.years}*12,-${IN.loan}),0)`, s: 'money' }];
-  rows[24] = ['Annual debt service', { v: m.debtService, f: `${IN.payment}*12`, s: 'money' }];
-  rows[25] = ['Property tax, year 1', { v: m.propertyTax, f: `${IN.price}*${IN.tax}`, s: 'money' }];
-  rows[27] = [{ v: 'A screening model for learning and first passes, not investment advice. Texas does not disclose sale prices, so check comps yourself.', s: 'note' }];
+  rows[6] = ['Vacancy and credit loss (on rent and reimbursements)', pct(uw.vacancy)];
+  rows[7] = ['Expenses reimbursed by tenants', pct(uw.recovery), { v: '0% for gross leases, near 100% for triple net (NNN).', s: 'note' }];
+  rows[8] = ['Operating expenses, year 1 (before property tax)', { v: uw.expenses, s: 'inMoney' }];
+  rows[9] = ['Property tax rate (on purchase price)', pct(taxRate ?? 0), { v: city ? `${city} combined rate, Texas Comptroller` : 'None: include it in expenses', s: 'note' }];
+  rows[10] = ['Rent growth a year', pct(uw.growth)];
+  rows[11] = ['Expense growth a year (also grows CapEx and TI)', pct(uw.expgrowth)];
+  rows[12] = ['CapEx reserve, year 1', { v: uw.capex, s: 'inMoney' }, { v: 'Roofs, parking, HVAC: below NOI, so it does not change the sale price.', s: 'note' }];
+  rows[13] = ['Rentable square feet', { v: uw.sqft, s: 'inNumber' }];
+  rows[14] = ['Space re-leased each year', pct(uw.rollover), { v: 'Share of the building that turns over and needs TI and commissions each year.', s: 'note' }];
+  rows[15] = ['Tenant improvements per sq ft re-leased', { v: uw.ti, s: 'inMoney' }];
+  rows[16] = ['Leasing commission (% of rent over the lease term)', pct(uw.lc)];
+  rows[17] = ['New lease term (years)', { v: uw.term, s: 'inNumber' }];
+  rows[18] = ['Hold period (years)', { v: m.hold, s: 'number' }, { v: 'Fixed in this file: it sets the year columns. Change it on Terra and export again.', s: 'note' }];
+  rows[19] = ['Exit cap rate', pct(uw.exitcap)];
+  rows[20] = ['Selling costs', pct(uw.sellcost)];
+  rows[21] = ['Down payment', pct(uw.down)];
+  rows[22] = ['Closing costs', pct(uw.closing)];
+  rows[23] = ['Loan interest rate', pct(uw.rate)];
+  rows[24] = ['Amortization (years)', { v: uw.years, s: 'inNumber' }];
+  rows[26] = [{ v: 'Loan and equity', s: 'header' }, { v: '', s: 'header' }, { v: '', s: 'header' }];
+  rows[27] = ['Loan amount', { v: m.loan, f: `${IN.price}*(1-${IN.down})`, s: 'money' }];
+  rows[28] = ['Closing costs', { v: m.closingCosts, f: `${IN.price}*${IN.closing}`, s: 'money' }];
+  rows[29] = ['Equity invested (down payment + closing)', { v: m.equity, f: `${IN.price}*${IN.down}+${IN.closingCost}`, s: 'boldMoney' }];
+  rows[30] = ['Monthly loan payment', { v: m.payment, f: `IF(${IN.loan}>0,PMT(${IN.rate}/12,${IN.years}*12,-${IN.loan}),0)`, s: 'money' }];
+  rows[31] = ['Annual debt service', { v: m.debtService, f: `${IN.payment}*12`, s: 'money' }];
+  rows[32] = ['Property tax, year 1', { v: m.propertyTax, f: `${IN.price}*${IN.tax}`, s: 'money' }];
+  rows[34] = [{ v: 'A screening model for learning and first passes, not investment advice. Texas does not disclose sale prices, so check comps yourself.', s: 'note' }];
   return { name: 'Assumptions', widths: [48, 16, 60], rows };
 }
 
 // Cash Flow rows (1-based) the other sheets point at.
-const R = { year: 4, gross: 5, vacancy: 6, egi: 7, opex: 8, noi: 9, ds: 10, cf: 11, balance: 12, sale: 15, sellcost: 16, payoff: 17, proceeds: 18, levered: 21, unlevered: 22 };
+const R = { year: 4, gross: 5, reimb: 6, vacancy: 7, egi: 8, opex: 9, noi: 10, capex: 11, ti: 12, lc: 13, cfbd: 14, ds: 15, cf: 16, balance: 17, sale: 20, sellcost: 21, payoff: 22, proceeds: 23, levered: 26, unlevered: 27 };
 
 function cashFlow(m) {
   const hold = m.hold;
@@ -100,24 +114,35 @@ function cashFlow(m) {
   label(R.year, 'Year', 'header');
   for (let t = 0; t <= hold + 1; t++) put(R.year, t, { v: t === 0 ? 'Close' : t, s: 'header' });
   label(R.gross, 'Gross rent');
+  label(R.reimb, 'Expense reimbursements');
   label(R.vacancy, 'Vacancy and credit loss');
   label(R.egi, 'Effective gross income', 'bold');
   label(R.opex, 'Operating expenses incl. property tax');
   label(R.noi, 'Net operating income', 'bold');
+  label(R.capex, 'CapEx reserve');
+  label(R.ti, 'Tenant improvements');
+  label(R.lc, 'Leasing commissions');
+  label(R.cfbd, 'Cash flow before debt', 'bold');
   label(R.ds, 'Debt service');
   label(R.cf, 'Cash flow after debt service', 'bold');
   label(R.balance, 'Loan balance, end of year');
   m.years.forEach((y, i) => {
     const t = i + 1;
     const x = c(t);
+    const grow = `(1+${ref('expgrowth')})^(${x}$${R.year}-1)`;
     put(R.gross, t, { v: y.gross, f: `${ref('income')}*(1+${ref('growth')})^(${x}$${R.year}-1)`, s: 'money' });
-    put(R.vacancy, t, { v: -y.vacancyLoss, f: `-${x}${R.gross}*${ref('vacancy')}`, s: 'money' });
-    put(R.egi, t, { v: y.gross - y.vacancyLoss, f: `${x}${R.gross}+${x}${R.vacancy}`, s: 'boldMoney' });
-    put(R.opex, t, { v: -y.expenses, f: `-(${ref('expenses')}+${ref('taxAmount')})*(1+${ref('expgrowth')})^(${x}$${R.year}-1)`, s: 'money' });
+    put(R.reimb, t, { v: y.reimbursements, f: `-${x}${R.opex}*${ref('recovery')}`, s: 'money' });
+    put(R.vacancy, t, { v: -y.vacancyLoss, f: `-(${x}${R.gross}+${x}${R.reimb})*${ref('vacancy')}`, s: 'money' });
+    put(R.egi, t, { v: y.gross + y.reimbursements - y.vacancyLoss, f: `SUM(${x}${R.gross}:${x}${R.vacancy})`, s: 'boldMoney' });
+    put(R.opex, t, { v: -y.expenses, f: `-(${ref('expenses')}+${ref('taxAmount')})*${grow}`, s: 'money' });
     put(R.noi, t, { v: y.noi, f: `${x}${R.egi}+${x}${R.opex}`, s: 'boldMoney' });
     if (t > hold) return;
+    put(R.capex, t, { v: -y.capex, f: `-${ref('capex')}*${grow}`, s: 'money' });
+    put(R.ti, t, { v: -y.ti, f: `-${ref('sqft')}*${ref('rollover')}*${ref('ti')}*${grow}`, s: 'money' });
+    put(R.lc, t, { v: -y.lc, f: `-${x}${R.gross}*${ref('rollover')}*${ref('lc')}*MAX(1,${ref('term')})`, s: 'money' });
+    put(R.cfbd, t, { v: y.beforeDebt, f: `SUM(${x}${R.noi}:${x}${R.lc})`, s: 'boldMoney' });
     put(R.ds, t, { v: -y.debtService, f: `-${ref('debtService')}`, s: 'money' });
-    put(R.cf, t, { v: y.cashFlow, f: `${x}${R.noi}+${x}${R.ds}`, s: 'boldMoney' });
+    put(R.cf, t, { v: y.cashFlow, f: `${x}${R.cfbd}+${x}${R.ds}`, s: 'boldMoney' });
     put(R.balance, t, { v: y.balance, f: `IF(${ref('loan')}>0,MAX(0,FV(${ref('rate')}/12,MIN(${x}$${R.year},${ref('years')})*12,${ref('payment')},-${ref('loan')})),0)`, s: 'money' });
   });
 
@@ -142,7 +167,7 @@ function cashFlow(m) {
     const x = c(t);
     const atSale = t === hold;
     put(R.levered, t, { v: m.levered[t], f: `${x}${R.cf}${atSale ? `+${x}${R.proceeds}` : ''}`, s: 'money' });
-    put(R.unlevered, t, { v: m.unlevered[t], f: `${x}${R.noi}${atSale ? `+${x}${R.sale}+${x}${R.sellcost}` : ''}`, s: 'money' });
+    put(R.unlevered, t, { v: m.unlevered[t], f: `${x}${R.cfbd}${atSale ? `+${x}${R.sale}+${x}${R.sellcost}` : ''}`, s: 'money' });
   }
 
   const lev = `B${R.levered}:${last}${R.levered}`;
@@ -184,8 +209,11 @@ function sensitivitySheet(uw, m, sens, taxRate) {
   for (let t = 0; t <= hold; t++) rows[work - 2][3 + t] = { v: t === 0 ? 'Close' : `Year ${t}`, s: 'header' };
   const g = (r) => `$B${r}`;
   const cap = (r) => `$C${r}`;
-  const noi = (r, t) =>
-    `(${ref('income')}*(1+${g(r)})^${t - 1}*(1-${ref('vacancy')})-(${ref('expenses')}+${ref('taxAmount')})*(1+${ref('expgrowth')})^${t - 1})`;
+  const gross = (r, t) => `${ref('income')}*(1+${g(r)})^${t - 1}`;
+  const opex = (t) => `(${ref('expenses')}+${ref('taxAmount')})*(1+${ref('expgrowth')})^${t - 1}`;
+  const noi = (r, t) => `((${gross(r, t)}+${opex(t)}*${ref('recovery')})*(1-${ref('vacancy')})-${opex(t)})`;
+  const costs = (r, t) =>
+    `(${ref('capex')}+${ref('sqft')}*${ref('rollover')}*${ref('ti')})*(1+${ref('expgrowth')})^${t - 1}+${gross(r, t)}*${ref('rollover')}*${ref('lc')}*MAX(1,${ref('term')})`;
 
   GROWTH_STEPS.forEach((dg, i) => {
     const gridRow = head + 1 + i;
@@ -201,7 +229,7 @@ function sensitivitySheet(uw, m, sens, taxRate) {
       ];
       for (let t = 1; t <= hold; t++) {
         const sale = t === hold ? `+${noi(r, hold + 1)}/${cap(r)}*(1-${ref('sellcost')})-'Cash Flow'!${col(1 + hold)}${R.balance}` : '';
-        row.push({ v: scenario.levered[t], f: `${noi(r, t)}-${ref('debtService')}${sale}`, s: 'money' });
+        row.push({ v: scenario.levered[t], f: `${noi(r, t)}-(${costs(r, t)})-${ref('debtService')}${sale}`, s: 'money' });
       }
       rows[r - 1] = row;
       const irr = sens.grid[i][j];

@@ -22,7 +22,7 @@ export function underwriteView(snapshot) {
   title.id = 'uw-title';
   card.append(
     title,
-    el('p', 'group-blurb', 'A yearly cash flow over the hold, a sale at the exit cap rate, and the returns an investment committee asks for. Download it to Excel with every formula live.')
+    el('p', 'group-blurb', 'A yearly cash flow with expense reimbursements, CapEx, tenant improvements and leasing commissions, a sale at the exit cap rate, and the returns an investment committee asks for. Download it to Excel with every formula live.')
   );
 
   const form = el('form', 'calc-form');
@@ -42,7 +42,7 @@ export function underwriteView(snapshot) {
     const box = el('span', 'calc-input');
     if (field.unit === 'usd') box.append(el('span', 'calc-affix', '$'));
     box.append(input);
-    if (field.unit !== 'usd') box.append(el('span', 'calc-affix', field.unit === 'pct' ? '%' : 'yrs'));
+    if (field.unit !== 'usd') box.append(el('span', 'calc-affix', field.unit === 'pct' ? '%' : field.unit === 'sqft' ? 'sq ft' : 'yrs'));
     label.append(el('span', 'eyebrow', field.label.toUpperCase()), box);
     form.append(label);
   }
@@ -167,9 +167,14 @@ function cashFlowTable(m) {
   const held = m.years.slice(0, m.hold);
   const rows = [
     ['Gross rent', held.map((y) => y.gross)],
+    ['Reimbursements', held.map((y) => y.reimbursements)],
     ['Vacancy', held.map((y) => -y.vacancyLoss)],
     ['Expenses', held.map((y) => -y.expenses)],
     ['NOI', held.map((y) => y.noi), true],
+    ['CapEx reserve', held.map((y) => -y.capex)],
+    ['Tenant improvements', held.map((y) => -y.ti)],
+    ['Leasing commissions', held.map((y) => -y.lc)],
+    ['Before debt', held.map((y) => y.beforeDebt), true],
     ['Debt service', held.map((y) => -y.debtService)],
     ['Cash flow', held.map((y) => y.cashFlow), true],
     ['Sale proceeds', held.map((_, i) => (i === m.hold - 1 ? m.saleProceeds : null))],
