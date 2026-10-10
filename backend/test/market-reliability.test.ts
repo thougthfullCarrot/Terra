@@ -4,13 +4,18 @@ import { METROS } from '../src/market/metros.js';
 import { outcomeLog } from '../src/market/outcomes.js';
 import { parsePermitFile } from '../src/market/permits.js';
 import {
+  blsSeriesFor,
   buildMarketSnapshot,
   fillFromPrevious,
   GROUPS,
+  laggingSources,
   METRICS,
+  periodEnd,
   SOURCE_RULES,
   type MarketSnapshot
 } from '../src/market/snapshot.js';
+import { cesSeries, type Point } from '../src/market/bls.js';
+import type { RedfinReading } from '../src/market/redfin.js';
 import type { ZillowResult } from '../src/market/zillow.js';
 import {
   CATEGORY_LABELS,
@@ -290,5 +295,68 @@ describe('older files', () => {
       expect(Object.keys(market.values).sort()).toEqual(METRICS.map((m) => m.key).sort());
       expect(Object.keys(market.periods).sort()).toEqual(METRICS.map((m) => m.key).sort());
     }
+  });
+});
+
+describe('reporting period end dates', () => {
+  const iso = (p: string | null) => periodEnd(p)?.toISOString().slice(0, 10) ?? null;
+
+  it('reads every period form the snapshot writes', () => {
+    expect(iso('May 2026')).toBe('2026-05-31');
+    expect(iso('Aug 2026, San Antonio metro')).toBe('2026-08-31');
+    expect(iso('Jan–Aug 2026')).toBe('2026-08-31');
+    expect(iso('July 2025')).toBe('2025-07-31');
+    expect(iso('Q2 2026')).toBe('2026-06-30');
+    expect(iso('2024')).toBe('2024-12-31');
+    expect(iso('2023–24')).toBe('2024-12-31');
+    expect(iso('FY 2027')).toBe('2027-09-30');
+    expect(iso('2025 rates')).toBe('2025-12-31');
+    expect(iso('2026 certified')).toBe('2026-12-31');
+    expect(iso('Houston district, 2026-10-10')).toBeNull();
+    expect(iso(null)).toBeNull();
+  });
+});
+
+describe('sources that answer with an old file', () => {
+  const redfin = (period: string, periodEnd: string): Map<'Dallas', RedfinReading> =>
+    new Map([['Dallas', { medianSalePrice: 512_200, medianSalePriceYoy: 1, inventory: 9000, medianDom: 40, saleToList: 97, periodEnd, period, seasonallyAdjusted: false }]]);
+
+  it('flags Redfin when its newest month is May in an October build', () => {
+    const snap = buildMarketSnapshot(METROS, null, null, at('2026-10-10T01:27:00Z'), { redfin: redfin('May 2026', '2026-05-31') });
+    expect(laggingSources(snap)).toEqual([{ source: 'Redfin', latest: 'May 2026', days: 132, maxLagDays: SOURCE_RULES.Redfin.maxLagDays }]);
+    // Still published, with its own date: it is real data, just old.
+    expect(dallas(snap).values.redfinPrice).toBe(512_200);
+    expect(dallas(snap).periods.redfinPrice).toBe('May 2026');
+  });
+
+  it('does not flag a source on its normal schedule', () => {
+    const snap = buildMarketSnapshot(METROS, null, null, at('2026-10-10T01:27:00Z'), {
+      redfin: redfin('Aug 2026', '2026-08-31'),
+      zillow: zillow(300_000, 'Aug 2026')
+    });
+    expect(laggingSources(snap)).toEqual([]);
+  });
+
+  it('judges a yearly survey by its own schedule', () => {
+    const acs = { year: 2024, current: new Map([['19124', { population: 5_000_000 } as never]]), previous: new Map() };
+    const snap = buildMarketSnapshot(METROS, null, acs, at('2026-10-10T00:00:00Z'));
+    expect(laggingSources(snap).map((l) => l.source)).not.toContain('Census ACS');
+  });
+});
+
+describe('construction jobs', () => {
+  const months = (base: number): Point[] =>
+    Array.from({ length: 13 }, (_, i) => ({ year: i < 1 ? 2025 : 2026, month: i < 1 ? 8 : i, value: base }));
+
+  it('uses mining, logging and construction in every market, never construction alone', () => {
+    const houston = METROS.find((m) => m.city === 'Houston')!;
+    const series = new Map<string, Point[]>([
+      [cesSeries(houston, 'construction'), months(240)],
+      [cesSeries(houston, 'miningConstruction'), months(330)]
+    ]);
+    const snap = buildMarketSnapshot(METROS, series, null, at('2026-10-10T00:00:00Z'));
+    expect(snap.markets.find((m) => m.city === 'Houston')!.values.constructionJobs).toBe(330_000);
+    expect(blsSeriesFor(METROS)).not.toContain(cesSeries(houston, 'construction'));
+    expect(metric('constructionJobs').label).toBe('Construction, mining and logging jobs');
   });
 });

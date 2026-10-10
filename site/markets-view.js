@@ -708,9 +708,11 @@ function freshnessLine() {
   const built = formatDate(snapshot.generatedAt);
   if (built) bits.push(`Updated ${built}`);
   const kept = retainedCount(snapshot);
-  if (kept) bits.push(`${kept} figure${kept === 1 ? '' : 's'} marked • ${kept === 1 ? 'was' : 'were'} not refreshed (source did not answer) and ${kept === 1 ? 'is' : 'are'} shown from an earlier update`);
+  if (kept) bits.push(`${kept} figure${kept === 1 ? '' : 's'} marked • ${kept === 1 ? 'was' : 'were'} not refreshed (source did not answer, or its reading failed a range check) and ${kept === 1 ? 'is' : 'are'} shown from an earlier update`);
   const down = (snapshot.refresh ?? []).filter((o) => o.status === 'failed').map((o) => o.source);
   if (down.length) bits.push(`Did not answer: ${down.join(', ')}`);
+  const behind = (snapshot.behind ?? []).map((lag) => `${lag.source} (newest ${lag.latest})`);
+  if (behind.length) bits.push(`Behind its usual schedule: ${behind.join(', ')}`);
   return bits.join(' · ');
 }
 

@@ -144,6 +144,16 @@ export interface SourceOutcome {
   detail?: string;
 }
 
+/** A source whose newest figure is older than its publication schedule explains. */
+export interface SourceLag {
+  source: MetricSource;
+  /** The newest period any market shows for the source, e.g. "May 2026". */
+  latest: string;
+  /** Days from the end of that period to the build. */
+  days: number;
+  maxLagDays: number;
+}
+
 /** A source reading that failed its metric's range check and was not published. */
 export interface Rejection {
   city: City;
@@ -172,6 +182,8 @@ export interface MarketSnapshot {
   refresh?: SourceOutcome[];
   /** Readings dropped by the range checks on this build. */
   rejected?: Rejection[];
+  /** Sources whose newest reporting period trails today by more than SOURCE_RULES allows. */
+  behind?: SourceLag[];
   metrics: MarketMetric[];
   groups: MarketGroup[];
   markets: MarketArea[];
@@ -280,13 +292,13 @@ const DRAFTS: MetricDraft[] = [
   { key: 'retailJobsGrowth', label: 'Retail job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Retail jobs vs. a year earlier.' },
   {
     key: 'constructionJobs',
-    label: 'Construction jobs',
+    label: 'Construction, mining and logging jobs',
     unit: 'count',
     better: 'high',
     source: 'BLS',
-    note: 'Construction payrolls (with mining and logging where BLS only publishes them together).'
+    note: 'Construction plus mining and logging payrolls (BLS supersector 15), the same count in every market: BLS publishes construction alone for only a few Texas metros. Mining weighs heavily in Midland.'
   },
-  { key: 'constructionJobsGrowth', label: 'Construction job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Construction jobs vs. a year earlier.' },
+  { key: 'constructionJobsGrowth', label: 'Construction, mining and logging job growth', unit: 'change', better: 'high', source: 'BLS', note: 'Construction, mining and logging jobs vs. a year earlier.' },
   { key: 'medianRent', label: 'Median residential rent', unit: 'usd', better: null, source: 'Census ACS', note: 'Residential: median gross rent (rent plus utilities) on all rented homes and apartments, metro-wide.' },
   { key: 'rentGrowth', label: 'Residential rent growth', unit: 'change', better: 'high', source: 'Census ACS', note: 'Residential: median gross rent vs. the year before.' },
   {
@@ -457,7 +469,7 @@ const DRAFTS: MetricDraft[] = [
     note: "Estimated construction cost of state highway projects in the area's TxDOT district that are under construction or about to start."
   },
   ...appraisalMetrics(),
-  { key: 'redfinPrice', label: 'Median sale price (Redfin)', unit: 'usd', better: null, source: 'Redfin', note: 'Median price of homes sold in the city (all residential), latest rolling three months.' },
+  { key: 'redfinPrice', label: 'Median sale price (Redfin)', unit: 'usd', better: null, source: 'Redfin', note: 'Median price of homes sold in the city (all residential), latest month in Redfin\'s public file.' },
   { key: 'redfinPriceGrowth', label: 'Sale price growth (Redfin)', unit: 'change', better: 'high', source: 'Redfin', note: 'Median sale price vs. a year earlier.' },
   { key: 'redfinInventory', label: 'Homes for sale (Redfin)', unit: 'count', better: null, source: 'Redfin', note: 'Active listings in the city at the end of the period.' },
   { key: 'redfinDom', label: 'Days on market (Redfin)', unit: 'count', better: 'low', source: 'Redfin', note: 'Median days from listing to contract for homes sold.' },
@@ -496,20 +508,27 @@ const DRAFTS: MetricDraft[] = [
  * is not dropped just for being a year old: it is dropped only after its
  * source has failed for longer than one release cycle plus slack.
  */
-export const SOURCE_RULES: Record<MetricSource, { geography: Geography; category: Category; maxAgeDays: number }> = {
-  BLS: { geography: 'metro', category: 'economic', maxAgeDays: 120 },
-  'Census ACS': { geography: 'metro', category: 'residential', maxAgeDays: 800 },
-  'Census estimates': { geography: 'metro', category: 'economic', maxAgeDays: 800 },
-  Zillow: { geography: 'city', category: 'residential', maxAgeDays: 120 },
-  'Apartment List': { geography: 'city', category: 'residential', maxAgeDays: 120 },
-  'Census BPS': { geography: 'city', category: 'permits', maxAgeDays: 150 },
-  'Appraisal districts': { geography: 'city', category: 'appraisal', maxAgeDays: 800 },
-  'Texas Comptroller': { geography: 'city', category: 'taxes', maxAgeDays: 800 },
-  HUD: { geography: 'fmrArea', category: 'residential', maxAgeDays: 800 },
-  TxDOT: { geography: 'district', category: 'infrastructure', maxAgeDays: 30 },
-  Redfin: { geography: 'city', category: 'residential', maxAgeDays: 150 },
-  'Realtor.com': { geography: 'msa', category: 'residential', maxAgeDays: 120 },
-  FHFA: { geography: 'metro', category: 'residential', maxAgeDays: 270 }
+/**
+ * maxAgeDays: how long a figure may be kept after its source stops answering.
+ * maxLagDays: how far the newest reporting period may trail today before the
+ * source is flagged as behind (a source can answer every day with an old
+ * file, as Redfin's public download has since June 2026); null where the
+ * period is not a date (TxDOT's live list, the 2018 Opportunity Zone map).
+ */
+export const SOURCE_RULES: Record<MetricSource, { geography: Geography; category: Category; maxAgeDays: number; maxLagDays: number | null }> = {
+  BLS: { geography: 'metro', category: 'economic', maxAgeDays: 120, maxLagDays: 150 },
+  'Census ACS': { geography: 'metro', category: 'residential', maxAgeDays: 800, maxLagDays: 700 },
+  'Census estimates': { geography: 'metro', category: 'economic', maxAgeDays: 800, maxLagDays: 550 },
+  Zillow: { geography: 'city', category: 'residential', maxAgeDays: 120, maxLagDays: 90 },
+  'Apartment List': { geography: 'city', category: 'residential', maxAgeDays: 120, maxLagDays: 90 },
+  'Census BPS': { geography: 'city', category: 'permits', maxAgeDays: 150, maxLagDays: 120 },
+  'Appraisal districts': { geography: 'city', category: 'appraisal', maxAgeDays: 800, maxLagDays: 550 },
+  'Texas Comptroller': { geography: 'city', category: 'taxes', maxAgeDays: 800, maxLagDays: 550 },
+  HUD: { geography: 'fmrArea', category: 'residential', maxAgeDays: 800, maxLagDays: null },
+  TxDOT: { geography: 'district', category: 'infrastructure', maxAgeDays: 30, maxLagDays: null },
+  Redfin: { geography: 'city', category: 'residential', maxAgeDays: 150, maxLagDays: 90 },
+  'Realtor.com': { geography: 'msa', category: 'residential', maxAgeDays: 120, maxLagDays: 90 },
+  FHFA: { geography: 'metro', category: 'residential', maxAgeDays: 270, maxLagDays: 200 }
 };
 
 /** Metrics whose geography or category differs from their source's default. */
@@ -811,7 +830,7 @@ export const SOURCES: MarketSnapshot['sources'] = [
   {
     name: 'Redfin Data Center',
     url: 'https://www.redfin.com/news/data-center/',
-    detail: 'City market tracker: median sale price, homes for sale, days on market and sale-to-list ratio, rolling three months. Updated monthly.'
+    detail: 'City market tracker: median sale price, homes for sale, days on market and sale-to-list ratio, monthly. Redfin\'s public download has not been updated since June 2, 2026, so its latest month is May 2026; the page marks it as behind.'
   },
   {
     name: 'Realtor.com Economic Research',
@@ -868,7 +887,6 @@ export interface PropertyData {
 export function blsSeriesFor(metros: Metro[]): string[] {
   const industries: Industry[] = [
     'total',
-    'construction',
     'miningConstruction',
     'manufacturing',
     'tradeTransportUtilities',
@@ -939,14 +957,10 @@ export function buildMarketSnapshot(
       ])
     );
     jobs('retailJobs', series('retail'));
-    const construction = series('construction');
-    jobs('constructionJobs', construction ?? series('miningConstruction'));
-    if (!construction) {
-      // BLS publishes construction only folded into mining and logging here: say so, since it is not the same count.
-      for (const key of ['constructionJobs', 'constructionJobsGrowth']) {
-        if (periods[key]) periods[key] = `${periods[key]}, incl. mining and logging`;
-      }
-    }
+    // Mining, logging and construction (CES 15) for every market: BLS publishes
+    // construction alone (CES 20) for only a few Texas metros, and ranking one
+    // against the other compared different industries.
+    jobs('constructionJobs', series('miningConstruction'));
 
     const unemployment = bls?.get(unemploymentSeries(metro));
     set('unemployment', latest(unemployment)?.value, metroWide(monthLabel(latest(unemployment))));
@@ -997,8 +1011,16 @@ export function buildMarketSnapshot(
       set(`cad${key}LandPsfMedian`, summary?.medianLandPsf, period);
       set(`cad${key}Total`, summary?.totalValue, period);
     }
-    const built = roll ? Object.values(roll.classes).map((c) => c.newConstruction) : [];
-    set('cadNewConstruction', built.some((v) => v != null) ? built.reduce<number>((a, b) => a + (b ?? 0), 0) : null, roll?.period ?? null);
+    // A class the roll did not report is unknown, not zero: the total covers the
+    // classes reported, and its period names any left out.
+    const built = CAD_TYPES.map(({ cls, label }) => ({ label, value: roll?.classes[cls]?.newConstruction ?? null }));
+    const reported = built.filter((b) => b.value != null);
+    const left = built.filter((b) => b.value == null).map((b) => b.label.split(' ')[0]);
+    set(
+      'cadNewConstruction',
+      reported.length ? reported.reduce((sum, b) => sum + b.value!, 0) : null,
+      roll && reported.length ? `${roll.period}${left.length ? `, excl. ${left.join(' and ')} (not reported)` : ''}` : null
+    );
 
     // Population estimates: the latest July 1 and where the change came from.
     const pep = property.population;
@@ -1096,6 +1118,63 @@ export function buildMarketSnapshot(
   return snapshot;
 }
 
+const DAY_MS = 86_400_000;
+
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * The last day of a reporting period as the snapshot writes it: "Aug 2026",
+ * "Jan–Aug 2026", "July 2025", "Q2 2026", "2024", "2024–25", "FY 2027",
+ * "2025 rates", "2026 certified". Anything after a comma (", San Antonio
+ * metro") is ignored. Null when there is no date in it.
+ */
+export function periodEnd(period: string | null | undefined): Date | null {
+  const text = (period ?? '').split(',')[0]!.trim();
+  const quarter = /Q([1-4]) (\d{4})/.exec(text);
+  if (quarter) return new Date(Date.UTC(Number(quarter[2]), Number(quarter[1]) * 3, 0));
+  const months = [...text.matchAll(/\b([A-Z][a-z]+) (\d{4})\b/g)].filter((m) => MONTH_NAMES.includes(m[1]!.slice(0, 3).toLowerCase()));
+  const month = months.at(-1) ?? /([A-Z][a-z]{2})–[A-Z][a-z]{2} (\d{4})/.exec(text);
+  if (month) {
+    const index = MONTH_NAMES.indexOf(month[1]!.slice(0, 3).toLowerCase());
+    if (index >= 0) return new Date(Date.UTC(Number(month[2]), index + 1, 0));
+  }
+  const fiscal = /FY (\d{4})/.exec(text);
+  if (fiscal) return new Date(Date.UTC(Number(fiscal[1]), 8, 30));
+  const span = /(\d{4})–(\d{2})\b/.exec(text);
+  if (span) return new Date(Date.UTC(2000 + Number(span[2]), 11, 31));
+  const year = /\b(\d{4})\b/.exec(text);
+  if (year) return new Date(Date.UTC(Number(year[1]), 11, 31));
+  return null;
+}
+
+/**
+ * Sources whose newest period across the markets is older than their rule
+ * allows: the source answered, but with an old file. Figures stay published
+ * with their own period; this only flags them.
+ */
+export function laggingSources(snapshot: MarketSnapshot): SourceLag[] {
+  const built = Date.parse(snapshot.generatedAt);
+  const newest = new Map<MetricSource, { end: number; period: string }>();
+  for (const metric of snapshot.metrics) {
+    if (SOURCE_RULES[metric.source]?.maxLagDays == null) continue;
+    for (const market of snapshot.markets) {
+      if (market.values[metric.key] == null) continue;
+      const period = market.periods[metric.key];
+      const end = periodEnd(period)?.getTime();
+      if (end == null || !period) continue;
+      const have = newest.get(metric.source);
+      if (!have || end > have.end) newest.set(metric.source, { end, period: period.split(',')[0]!.trim() });
+    }
+  }
+  const out: SourceLag[] = [];
+  for (const [source, { end, period }] of newest) {
+    const maxLagDays = SOURCE_RULES[source].maxLagDays!;
+    const days = Math.floor((built - end) / DAY_MS);
+    if (days > maxLagDays) out.push({ source, latest: period, days, maxLagDays });
+  }
+  return out;
+}
+
 /** The id of the area a metric's figure describes for one market: two markets with the same id show one observation. */
 export function observationId(metro: Metro, geography: Geography): string {
   switch (geography) {
@@ -1123,7 +1202,6 @@ function sharedFor(metros: Metro[], metro: Metro): Record<string, City> {
   return out;
 }
 
-const DAY_MS = 86_400_000;
 
 /**
  * Fill each figure today's pass could not read (or rejected) from the last

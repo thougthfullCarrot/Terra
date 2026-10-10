@@ -170,6 +170,8 @@ describe('appraisal figures in the snapshot', () => {
     expect(houston.values.cadCommercialLandPsf).toBe(31.5);
     expect(houston.values.cadCommercialGrowth).toBe(4.2);
     expect(houston.values.cadNewConstruction).toBe(1e8);
+    // Only commercial was reported: the others are named as left out, not counted as zero.
+    expect(houston.periods.cadNewConstruction).toBe('2026 roll, excl. apartments and industrial (not reported)');
     expect(houston.periods.cadCommercialTotal).toBe('2026 roll');
     expect(houston.values.cadIndustrialValue).toBeNull();
     expect(snapshot.markets.find((m) => m.city === 'Dallas')!.values.cadCommercialValue).toBeNull();

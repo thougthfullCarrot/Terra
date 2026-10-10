@@ -33,9 +33,11 @@ describe('BLS series ids', () => {
     expect(unemploymentSeries(dallas)).toBe('LAUDV481912400000003');
   });
 
-  it('asks for ten series per metro, once for a shared metro', () => {
-    expect(blsSeriesFor(METROS)).toHaveLength(90);
-    expect(new Set(blsSeriesFor(METROS)).size).toBe(90);
+  it('asks for nine series per metro, once for a shared metro', () => {
+    // Construction alone (CES 20) is no longer read: every market uses CES 15.
+    expect(blsSeriesFor(METROS)).toHaveLength(81);
+    expect(new Set(blsSeriesFor(METROS)).size).toBe(81);
+    expect(blsSeriesFor(METROS).some((id) => id.startsWith('SMU') && id.slice(10, 18) === '20000000')).toBe(false);
   });
 });
 
@@ -218,7 +220,7 @@ describe('buildMarketSnapshot', () => {
     // Manufacturing plus trade, transportation and utilities, less retail.
     expect(h.values.industrialJobs).toBe(Math.round((220 + 650 - 330 * 0.99) * 1000));
     expect(h.values.retailJobsGrowth).toBeCloseTo(-1);
-    // Construction falls back to mining, logging and construction.
+    // Mining, logging and construction in every market.
     expect(h.values.constructionJobsGrowth).toBeCloseTo(3);
     expect(h.values.unemployment).toBe(4.6);
   });

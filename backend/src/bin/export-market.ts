@@ -51,6 +51,7 @@ import {
   buildMarketSnapshot,
   filledCount,
   fillFromPrevious,
+  laggingSources,
   type MarketSnapshot
 } from '../market/snapshot.js';
 
@@ -221,6 +222,11 @@ async function main(): Promise<void> {
   if (keptZoning) snapshot.zoning = keptZoning;
 
   snapshot.refresh = outcomes;
+  const behind = laggingSources(snapshot);
+  if (behind.length) snapshot.behind = behind;
+  for (const lag of behind) {
+    console.error(`${lag.source}: newest figure is ${lag.latest}, ${lag.days} days old (expected within ${lag.maxLagDays}); published with its own date and flagged as behind.`);
+  }
   for (const r of snapshot.rejected ?? []) {
     console.error(`Rejected ${r.city} ${r.key} = ${r.value} (outside ${r.min} to ${r.max}); kept the last good figure if there was one.`);
   }
