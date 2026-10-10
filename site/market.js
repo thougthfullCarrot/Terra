@@ -113,7 +113,7 @@ export function barPercent(value, values, unit) {
   return Math.max(4, Math.round(((value - min) / (max - min)) * 100));
 }
 
-export const TOOLS = ['compare', 'calc', 'leases', 'reports', 'sites', 'pay', 'zoning', 'growth'];
+export const TOOLS = ['compare', 'calc', 'uw', 'leases', 'reports', 'sites', 'pay', 'zoning', 'growth'];
 
 /** The most cities the comparison puts side by side; fewer than two is filled up from the list. */
 export const MAX_COMPARE = 4;

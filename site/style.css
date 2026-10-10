@@ -5354,3 +5354,32 @@ svg.bars text {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Underwriting model (underwrite-view.js). */
+.uw-block {
+  margin-top: 16px;
+}
+
+.uw-table td.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.uw-table .uw-base {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  font-weight: 700;
+}
+
+.uw-table .uw-neg {
+  color: var(--red);
+}
+
+.uw-table tr.uw-total th,
+.uw-table tr.uw-total td {
+  font-weight: 700;
+}
+
+.uw-download {
+  font-weight: 600;
+}

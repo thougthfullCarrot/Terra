@@ -18,6 +18,7 @@ import {
 } from './market.js';
 import { developmentMap, disposeMap } from './devmap.js';
 import { calculatorView, compareView, leasesView, reportsView } from './market-tools.js';
+import { underwriteView } from './underwrite-view.js';
 import { sitesView } from './sites-view.js';
 import { growthView, payView, zoningView } from './insights-view.js';
 import { readNewsHash } from './news.js';
@@ -157,8 +158,8 @@ function render() {
   // The comparison picks its own cities; the calculator brings its own inputs; the topic means nothing to the broker views.
   $('m-city-label').hidden = tool === 'compare';
   $('m-focus-label').hidden = ['leases', 'reports', 'sites', ...INSIGHTS].includes(tool);
-  $('m-filters').hidden = tool === 'calc';
-  for (const name of ['', 'compare', 'calc', 'leases', 'sites', 'reports', ...INSIGHTS]) {
+  $('m-filters').hidden = tool === 'calc' || tool === 'uw';
+  for (const name of ['', 'compare', 'calc', 'uw', 'leases', 'sites', 'reports', ...INSIGHTS]) {
     const link = $(`m-tool-${name || 'data'}`);
     link.href = writeMarketHash({ ...state, tool: name, compare: name === 'compare' ? state.compare : [] });
     if (tool === name) link.setAttribute('aria-current', 'page');
@@ -190,6 +191,7 @@ const INSIGHTS = ['pay', 'zoning', 'growth'];
 const TOOL_BLURBS = {
   compare: 'Rents, permits, job growth and taxes for the cities you pick, side by side.',
   calc: "Run the numbers on a property with today's rates and a Texas city's property tax.",
+  uw: 'A 10-year hold with IRR, equity multiple and a sensitivity grid, downloadable to Excel with live formulas.',
   leases: 'Office, industrial and retail vacancy and asking rents from brokerages\' free quarterly reports.',
   sites: 'Land and buildings from county appraisal rolls, with zoning from the city: filter by use, size and appraised value per square foot.',
   reports: 'The latest free quarterly market reports from the big brokerages, by city.',
@@ -200,6 +202,7 @@ const TOOL_BLURBS = {
 
 function toolView(tool) {
   if (tool === 'calc') return calculatorView(snapshot);
+  if (tool === 'uw') return underwriteView(snapshot);
   if (tool === 'compare') return compareView(snapshot, state, update);
   if (tool === 'leases') return leasesView(snapshot, state.city);
   if (tool === 'reports') return reportsView(snapshot, state.city);
