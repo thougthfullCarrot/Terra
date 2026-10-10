@@ -1,4 +1,4 @@
-# Temporary: looks for a current TREC licensee file. Removed before merge.
+# Temporary: tries TREC's open data set on data.texas.gov. Removed before merge.
 name: Probe TREC
 on:
   push:
@@ -9,12 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36'
-          curl -sSL -m 60 -A "$UA" https://www.trec.texas.gov/public/high-value-data-sets -o /tmp/h.html -w "%{http_code}\n"
-          grep -oiE 'href="[^"]+"' /tmp/h.html | grep -viE '\.css|\.js|#|twitter|facebook' | sort -u | head -80
-          sed -e 's/<[^>]*>/ /g' /tmp/h.html | tr -s ' \n' | grep -iE 'license|data|update|txt|csv' | head -60
-          echo "=== socrata s7ft-44qi"; curl -sS -m 30 "https://api.us.socrata.com/api/catalog/v1?ids=s7ft-44qi" | jq '.results[0] | {name: .resource.name, domain: .metadata.domain, updated: .resource.data_updated_at, cols: .resource.columns_name}'
-          for u in $(grep -oiE 'href="[^"]+\.(txt|csv|zip|xlsx)"' /tmp/h.html | sed 's/href="//;s/"$//' | sort -u | head -15); do
-            case "$u" in http*) ;; *) u="https://www.trec.texas.gov$u";; esac
-            echo "=== $u"; curl -sSIL -m 30 -A "$UA" "$u" | grep -iE '^(HTTP|content-length|last-modified)'
-          done
+          B=https://data.texas.gov/resource/s7ft-44qi.json
+          q() { echo "=== $1"; curl -sS -m 120 -G "$B" --data-urlencode "$1" ${2:+--data-urlencode "$2"} ${3:+--data-urlencode "$3"} ${4:+--data-urlencode "$4"} ${5:+--data-urlencode "$5"} | head -c 2500; echo; }
+          q '$limit=3'
+          q '$select=license_type,count(*) as n' '$group=license_type'
+          q '$select=status,count(*) as n' '$group=status'
+          q '$select=related_license_type,count(*) as n' '$group=related_license_type'
+          q '$select=county,count(*) as n' '$group=county' '$order=n DESC' '$limit=15'
+          q '$select=max(original_license_date) as d, min(original_license_date) as m'
+          q "\$select=related_license_number,related_license_full_name,count(*) as n" "\$where=license_type='SALE' AND original_license_date > '2025-10-01'" '$group=related_license_number,related_license_full_name' '$order=n DESC' '$limit=15'
+          echo; curl -sS -m 60 -G "$B" --data-urlencode "\$select=count(*) as n" --data-urlencode "\$where=license_type='SALE' AND original_license_date > '2025-10-01'"
+          echo; curl -sS -m 60 -G "$B" --data-urlencode "\$select=related_license_number,count(*) as n" --data-urlencode "\$where=license_type='SALE' AND original_license_date > '2025-10-01'" --data-urlencode '$group=related_license_number' --data-urlencode '$limit=50000' | jq length
