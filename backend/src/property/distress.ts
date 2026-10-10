@@ -1,4 +1,4 @@
-import { fetchJson, type FetchJsonOptions } from '../lib/http.js';
+import { fetchJson, HttpError, type FetchJsonOptions } from '../lib/http.js';
 import { METRO_COUNTIES } from '../market/developments.js';
 import { CITIES, type City } from '../types.js';
 
@@ -157,8 +157,12 @@ export async function fetchTaxSales(cities: readonly City[] = CITIES, options: D
   const { log = () => {}, maxPerCounty = 1000, ...http } = options;
   const sales: TaxSale[] = [];
   const counties: DistressFile['counties'] = {};
+  // When the site can't be reached at all (it turns away GitHub's servers), every
+  // county fails the same way after a minute of retries; stop after two in a row.
+  let unreachable = 0;
   for (const city of cities) {
     for (const county of METRO_COUNTIES[city] ?? []) {
+      if (unreachable >= 2) continue;
       let read = 0;
       let kept = 0;
       try {
@@ -175,8 +179,13 @@ export async function fetchTaxSales(cities: readonly City[] = CITIES, options: D
           }
           if (!body.next) break;
         }
+        unreachable = 0;
       } catch (error) {
-        log(`${county} County: ${error instanceof Error ? error.message : error}`);
+        // Node reports a refused or reset connection as "fetch failed"; the reason is in its cause.
+        const cause = error instanceof Error && error.cause instanceof Error ? ` (${error.cause.message})` : '';
+        log(`${county} County: ${error instanceof Error ? error.message : error}${cause}`);
+        if (!read && !(error instanceof HttpError)) unreachable++;
+        if (unreachable >= 2) log('Tax sale site unreachable from this server; skipping the other counties.');
       }
       if (read) (counties[city] ??= []).push(county);
       if (read) log(`${county} County (${city}): ${kept} of ${read} listings kept.`);
