@@ -187,7 +187,7 @@ export async function loadFirms(
     if (!usable.length) {
       return { firms: seed, source: 'seed', note: `No usable row in the ${FIRMS_TAB} tab; using the seed list.`, sheet };
     }
-    const skipped = sheet.firms.length - usable.length;
+    const skipped = sheet.firms.filter((entry) => !entry.firm).length;
     return {
       firms: usable,
       source: 'sheet',
