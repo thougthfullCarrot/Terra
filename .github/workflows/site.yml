@@ -119,7 +119,7 @@ jobs:
           SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
-          npm run --silent export:site -- --history ../job-history.json --review ../job-review.json 2>&1 | tee /tmp/export.log
+          npm run --silent export:site -- --history ../job-history.json --review ../job-review.json --samples 2>&1 | tee /tmp/export.log
 
       # Postings held back because they state no experience and nothing says
       # entry level. Kept as a run artifact for a person to look through;

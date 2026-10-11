@@ -98,6 +98,17 @@ async function main(): Promise<void> {
     console.log(`Review: ${rows.length} postings held, written to ${reviewPath}.`);
   }
 
+  if (process.argv.includes('--samples')) {
+    console.log('\n--- Published ---');
+    for (const p of postings) console.log(`PUB  ${p.kind.padEnd(11)} ${p.role} | ${p.firm} | ${p.city}`);
+    console.log('\n--- Held for review ---');
+    for (const { posting: p, source } of review) console.log(`REV  ${source.padEnd(10)} ${p.role} | ${p.firm} | ${p.city}`);
+    for (const [reason, rows] of Object.entries(report.rejectedSamples)) {
+      console.log(`\n--- Rejected: ${reason} (first ${rows!.length}) ---`);
+      for (const r of rows!) console.log(`REJ  ${r.role} | ${r.firm} | ${r.location}`);
+    }
+  }
+
   const table = metricsTable(report, firms.firms.length);
   console.log(`\n${table}`);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${table}\n`).catch(() => undefined);

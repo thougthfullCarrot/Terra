@@ -12,6 +12,9 @@ import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
 
+/** Rejected postings kept per reason for the run log. */
+const SAMPLES_PER_REASON = 25;
+
 /** How long a posting can go unseen on its board before it stops being active. */
 export const STALE_DAYS = 14;
 
@@ -90,6 +93,8 @@ export interface RunReport {
   kinds: { Internship: number; 'Entry-level': number };
   /** Firms whose board answered with at least one published posting. */
   firmsWithOpenings: number;
+  /** A few rejected postings per reason, so the filters can be spot-checked in the run log. */
+  rejectedSamples: Partial<Record<RejectReason, { role: string; firm: string; location: string }[]>>;
   sectorGuessed: number;
   inserted: number;
   updated: number;
@@ -134,6 +139,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     bySource: {},
     kinds: { Internship: 0, 'Entry-level': 0 },
     firmsWithOpenings: 0,
+    rejectedSamples: {},
     sectorGuessed: 0,
     inserted: 0,
     updated: 0,
@@ -183,6 +189,8 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
         }
         report.rejected[result.reason]++;
         counts.rejected[result.reason]++;
+        const samples = (report.rejectedSamples[result.reason] ??= []);
+        if (samples.length < SAMPLES_PER_REASON) samples.push({ role: job.title, firm: job.firm, location: job.location });
         continue;
       }
       if (result.sectorGuessed) report.sectorGuessed++;

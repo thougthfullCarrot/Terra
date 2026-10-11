@@ -52,6 +52,7 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
     bySource: {},
     kinds: { Internship: 0, 'Entry-level': 0 },
     firmsWithOpenings: 0,
+    rejectedSamples: {},
     sectorGuessed: 0,
     inserted: 0,
     updated: 0,
