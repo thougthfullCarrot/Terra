@@ -1,6 +1,6 @@
 import type { Match, Posting, Profile, RawJob } from '../types.js';
 import type { FirmRow, Store } from '../db/store.js';
-import { forFirm, normalize, type RejectReason } from './normalize.js';
+import { emptyRejected, forFirm, normalize, type RejectReason, type ReviewReason } from './normalize.js';
 import { fetchAshby } from './sources/ashby.js';
 import { fetchGreenhouse } from './sources/greenhouse.js';
 import { fetchSmartRecruiters } from './sources/smartrecruiters.js';
@@ -11,6 +11,9 @@ import { fetchWorkable } from './sources/workable.js';
 import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
+
+/** Rejected postings kept per reason for the run log. */
+const SAMPLES_PER_REASON = 25;
 
 /** How long a posting can go unseen on its board before it stops being active. */
 export const STALE_DAYS = 14;
@@ -34,7 +37,27 @@ export interface AggregatorReport {
   /** Already listed on a firm board this pass. */
   duplicates: number;
   rejected: number;
+  /** Rejections by reason; 'unclassified' is a search hit with no sector word at all. */
+  rejectedBy?: Partial<Record<RejectReason | 'unclassified', number>>;
+  /** Held for review instead of published. */
+  review?: number;
   error?: string;
+}
+
+/** What one source contributed, so a thin feed can be traced to the collector behind it. */
+export interface SourceCounts {
+  fetched: number;
+  kept: number;
+  review: number;
+  rejected: Record<RejectReason, number>;
+}
+
+/** A posting held back for a person to check, with the reason it was held. */
+export interface ReviewItem {
+  posting: Posting;
+  reason: ReviewReason;
+  /** greenhouse, workday, adzuna, usajobs... */
+  source: string;
 }
 
 export interface Notifier {
@@ -61,6 +84,17 @@ export interface RunReport {
   fetched: number;
   kept: number;
   rejected: Record<RejectReason, number>;
+  /** Held for review, not published (no stated years, no entry-level signal). */
+  reviewed: number;
+  review: ReviewItem[];
+  /** Per ATS or aggregator. */
+  bySource: Record<string, SourceCounts>;
+  /** Published postings by kind. */
+  kinds: { Internship: number; 'Entry-level': number };
+  /** Firms whose board answered with at least one published posting. */
+  firmsWithOpenings: number;
+  /** A few rejected postings per reason, so the filters can be spot-checked in the run log. */
+  rejectedSamples: Partial<Record<RejectReason, { role: string; firm: string; location: string }[]>>;
   sectorGuessed: number;
   inserted: number;
   updated: number;
@@ -86,7 +120,7 @@ export interface RunReport {
 export async function runCollector(options: RunOptions): Promise<RunReport> {
   const {
     store,
-    fetcher = defaultFetcher,
+    fetcher = fetchBoard,
     notifier,
     now = new Date(),
     staleDays = STALE_DAYS,
@@ -99,7 +133,13 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     firmsFailed: 0,
     fetched: 0,
     kept: 0,
-    rejected: { 'missing-fields': 0, 'not-texas': 0, 'not-entry-level': 0, 'off-topic': 0 },
+    rejected: emptyRejected(),
+    reviewed: 0,
+    review: [],
+    bySource: {},
+    kinds: { Internship: 0, 'Entry-level': 0 },
+    firmsWithOpenings: 0,
+    rejectedSamples: {},
     sectorGuessed: 0,
     inserted: 0,
     updated: 0,
@@ -118,6 +158,8 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
   // Dedupe across firms as well as within one: two boards can carry the same
   // seat, and the id is what decides identity.
   const keep = new Map<string, Posting>();
+  const held = new Map<string, ReviewItem>();
+  const firmsWithOpenings = new Set<FirmRow['id']>();
 
   await inBatches(firms, concurrency, async (firm) => {
     let raw: RawJob[];
@@ -134,24 +176,51 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     }
 
     report.fetched += raw.length;
+    const counts = sourceCounts(report, firm.ats);
+    counts.fetched += raw.length;
 
     for (const job of raw) {
       const result = normalize(job, now);
       if (!result.ok) {
+        if (result.reason === 'needs-review') {
+          counts.review++;
+          if (!held.has(result.posting.id)) held.set(result.posting.id, { posting: result.posting, reason: result.review, source: firm.ats });
+          continue;
+        }
         report.rejected[result.reason]++;
+        counts.rejected[result.reason]++;
+        const samples = (report.rejectedSamples[result.reason] ??= []);
+        if (samples.length < SAMPLES_PER_REASON) samples.push({ role: job.title, firm: job.firm, location: job.location });
         continue;
       }
       if (result.sectorGuessed) report.sectorGuessed++;
+      counts.kept++;
+      firmsWithOpenings.add(firm.id);
       if (!keep.has(result.posting.id)) keep.set(result.posting.id, result.posting);
     }
   });
+  report.firmsWithOpenings = firmsWithOpenings.size;
 
   for (const aggregator of aggregators) {
-    report.aggregators.push(await collectAggregator(aggregator, keep, now));
+    const result = await collectAggregator(aggregator, keep, held, now);
+    report.aggregators.push(result);
+    const counts = sourceCounts(report, aggregator.name);
+    counts.fetched += result.fetched;
+    counts.kept += result.kept;
+    counts.review += result.review ?? 0;
+    for (const [reason, n] of Object.entries(result.rejectedBy ?? {})) {
+      // A search hit with no sector word is off-topic as far as the totals go.
+      const key = (reason === 'unclassified' ? 'off-topic' : reason) as RejectReason;
+      counts.rejected[key] += n;
+    }
   }
 
   const postings = [...keep.values()];
   report.kept = postings.length;
+  for (const posting of postings) report.kinds[posting.kind]++;
+  // A seat both published and held (two boards, two descriptions) is published.
+  report.review = [...held.values()].filter((item) => !keep.has(item.posting.id));
+  report.reviewed = report.review.length;
 
   const { inserted, updated } = await store.upsertPostings(postings, now);
   report.inserted = inserted.length;
@@ -224,9 +293,14 @@ function filterForAlerts(profile: Profile, postings: Posting[]): Posting[] {
 async function collectAggregator(
   aggregator: Aggregator,
   keep: Map<string, Posting>,
+  held: Map<string, ReviewItem>,
   now: Date
 ): Promise<AggregatorReport> {
-  const result: AggregatorReport = { name: aggregator.name, fetched: 0, kept: 0, duplicates: 0, rejected: 0 };
+  const result: AggregatorReport = { name: aggregator.name, fetched: 0, kept: 0, duplicates: 0, rejected: 0, rejectedBy: {}, review: 0 };
+  const reject = (reason: RejectReason | 'unclassified') => {
+    result.rejected++;
+    result.rejectedBy![reason] = (result.rejectedBy![reason] ?? 0) + 1;
+  };
 
   let raw: RawJob[];
   try {
@@ -241,13 +315,26 @@ async function collectAggregator(
 
   for (const job of raw) {
     const normalized = normalize(job, now);
+    if (!normalized.ok && normalized.reason !== 'needs-review') {
+      reject(normalized.reason);
+      continue;
+    }
     // A search source has no firm list to vouch for it, so a posting with no
     // sector keyword at all is more likely off-topic than unclassified.
-    if (!normalized.ok || normalized.sectorGuessed) {
-      result.rejected++;
+    if (normalized.sectorGuessed) {
+      reject('unclassified');
       continue;
     }
     const posting = normalized.posting;
+    if (!normalized.ok) {
+      if (!keep.has(posting.id) && !boardPostings.some((board) => sameSeat(board, posting))) {
+        result.review!++;
+        if (!held.has(posting.id)) held.set(posting.id, { posting, reason: normalized.review, source: aggregator.name });
+      } else {
+        result.duplicates++;
+      }
+      continue;
+    }
     if (keep.has(posting.id) || boardPostings.some((board) => sameSeat(board, posting))) {
       result.duplicates++;
       continue;
@@ -279,7 +366,12 @@ function canonicalRole(role: string): string {
   return role.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-async function defaultFetcher(firm: FirmRow): Promise<RawJob[]> {
+function sourceCounts(report: RunReport, source: string): SourceCounts {
+  return (report.bySource[source] ??= { fetched: 0, kept: 0, review: 0, rejected: emptyRejected() });
+}
+
+/** Read one firm's board with the reader for its ATS. */
+export async function fetchBoard(firm: FirmRow): Promise<RawJob[]> {
   switch (firm.ats) {
     case 'greenhouse':
       return fetchGreenhouse(firm.name, firm.atsSlug);

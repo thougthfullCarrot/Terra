@@ -188,7 +188,7 @@ function buildLines(profile: Profile, posting: ScoredPosting, ctx: LineContext):
 
   if (ctx.homeMatches) {
     lines.push(`${posting.city} based, so no relocation for this one.`);
-  } else if (profile.relocationOpen && (CITIES as readonly string[]).includes(posting.city)) {
+  } else if (profile.relocationOpen) {
     lines.push(`${posting.city} is in state and you marked relocation open.`);
   }
 

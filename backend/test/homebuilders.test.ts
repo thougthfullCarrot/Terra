@@ -48,7 +48,7 @@ describe('a firm row that pins a sector', () => {
     title: 'Land Acquisition Analyst',
     firm: 'Perry Homes',
     location: 'Houston, Texas',
-    description: 'Underwriting for land acquisitions and due diligence.',
+    description: 'Underwriting for land acquisitions and due diligence. 0-2 years of experience.',
     applyUrl: 'https://apply.workable.com/j/ABC',
     ats: 'workable'
   };

@@ -66,7 +66,7 @@ describe('normalize', () => {
 
   it('flags a fallback sector rather than hiding it', () => {
     const result = normalize(
-      { ...base, title: 'Analyst', description: 'A great place to work.' },
+      { ...base, title: 'Analyst', description: 'A great place to work. Entry-level role.' },
       now
     );
     expect(result.ok).toBe(true);

@@ -27,7 +27,7 @@ import { fetchIcims } from '../collector/sources/icims.js';
 import { fetchWorkable } from '../collector/sources/workable.js';
 import { fetchAshby } from '../collector/sources/ashby.js';
 import { fetchSmartRecruiters } from '../collector/sources/smartrecruiters.js';
-import { forFirm, normalize, type RejectReason } from '../collector/normalize.js';
+import { emptyRejected, forFirm, normalize, type RejectReason } from '../collector/normalize.js';
 
 
 type Verdict = 'OK' | 'EMPTY' | 'FAIL' | 'SKIP';
@@ -44,6 +44,8 @@ interface Result {
   verdict: Verdict;
   raw: number;
   kept: number;
+  /** Held for review: no stated years and no entry-level signal. */
+  review: number;
   rejected: Record<RejectReason, number>;
   error?: string;
   /** Workday and iCIMS: what the board listed before any filtering. */
@@ -93,12 +95,8 @@ async function main(): Promise<void> {
 }
 
 async function check(firm: FirmRow): Promise<Result> {
-  const rejected: Record<RejectReason, number> = {
-    'missing-fields': 0,
-    'not-texas': 0,
-    'not-entry-level': 0,
-    'off-topic': 0
-  };
+  const rejected = emptyRejected();
+  let review = 0;
 
   // Workday's and iCIMS's fetchers filter before they fetch details, so their
   // returned count cannot tell an empty board from a fully filtered one.
@@ -111,6 +109,7 @@ async function check(firm: FirmRow): Promise<Result> {
     for (const job of jobs) {
       const result = normalize(job);
       if (result.ok) kept++;
+      else if (result.reason === 'needs-review') review++;
       else rejected[result.reason]++;
     }
 
@@ -120,6 +119,7 @@ async function check(firm: FirmRow): Promise<Result> {
       verdict: kept > 0 ? 'OK' : 'EMPTY',
       raw: jobs.length,
       kept,
+      review,
       rejected,
       ...(firm.ats === 'workday' || firm.ats === 'icims' ? { stats } : {})
     };
@@ -129,6 +129,7 @@ async function check(firm: FirmRow): Promise<Result> {
       verdict: 'FAIL',
       raw: 0,
       kept: 0,
+      review,
       rejected,
       error: error instanceof Error ? error.message : String(error)
     };
@@ -176,7 +177,7 @@ function report(results: Result[]): void {
       result.firm.ats.padEnd(10),
       result.firm.atsSlug.padEnd(24),
       `${String(result.raw).padStart(4)} jobs`,
-      `${String(result.kept).padStart(3)} TX entry-level`
+      `${String(result.kept).padStart(3)} TX entry-level, ${result.review} for review`
     ].join('  ');
     console.log(result.error ? `${line}  — ${result.error}` : line);
 

@@ -110,13 +110,27 @@ jobs:
         env:
           ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
           ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          # Optional, free: https://developer.usajobs.gov/apirequest/
+          USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
+          USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           TERRA_SHEET_ID: ${{ vars.TERRA_SHEET_ID }}
           # Pull requests read the firm list but never write to the sheet.
           SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
-          npm run --silent export:site -- --history ../job-history.json 2>&1 | tee /tmp/export.log
+          npm run --silent export:site -- --history ../job-history.json --review ../job-review.json --samples 2>&1 | tee /tmp/export.log
+
+      # Postings held back because they state no experience and nothing says
+      # entry level. Kept as a run artifact for a person to look through;
+      # never published to the site.
+      - name: Keep the review list
+        if: always() && hashFiles('job-review.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-review
+          path: job-review.json
+          retention-days: 14
 
       - name: Cache the job history
         if: hashFiles('job-history.json') != ''

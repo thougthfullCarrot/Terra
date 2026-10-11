@@ -152,3 +152,10 @@ function workdaySite(path: string): string | null {
   const site = locale ? parts[1] : parts[0];
   return site && site !== 'job' ? site : null;
 }
+
+/** ATS URLs written into scripts and data attributes, where embedded boards keep them. */
+const ATS_URL = /https?:\/\/[a-z0-9.-]*(greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|icims\.com|workable\.com|ashbyhq\.com|smartrecruiters\.com|bamboohr\.com|applytojob\.com|paylocity\.com|adp\.com|taleo\.net|successfactors\.com|paycomonline\.net|ultipro\.com|ukg\.net|jobvite\.com|recruitee\.com|teamtailor\.com)[^"'\s<>\\)]*/gi;
+
+export function embeddedUrls(html: string): string[] {
+  return [...new Set(html.match(ATS_URL) ?? [])].map((url) => url.replace(/&amp;/g, '&'));
+}
