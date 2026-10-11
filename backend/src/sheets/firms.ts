@@ -180,7 +180,10 @@ export async function loadFirms(
       return { firms: seed, source: 'seed', note: `The ${FIRMS_TAB} tab is empty or missing; using the seed list.`, sheet: null };
     }
 
-    const usable = sheet.firms.flatMap((entry) => (entry.firm ? [entry.firm] : []));
+    const discovered = await addDiscoveredFirms(client, sheet, seed, options.write);
+    if (discovered.note) upgraded += `; ${discovered.note}`;
+
+    const usable = [...sheet.firms.flatMap((entry) => (entry.firm ? [entry.firm] : [])), ...discovered.firms];
     if (!usable.length) {
       return { firms: seed, source: 'seed', note: `No usable row in the ${FIRMS_TAB} tab; using the seed list.`, sheet };
     }
@@ -381,4 +384,73 @@ function letter(index: number): string {
     n = Math.floor((n - 1) / 26);
   }
   return out;
+}
+
+/** The migration holding the first employer discovery batch, approved by the owner on 2026-10-11. */
+export const DISCOVERED_FIRMS = '0017_discovered_firms.sql';
+
+/** A small tab recording which firm batches were added, so a firm the owner deletes is never added back. */
+export const BATCHES_TAB = 'Firm batches';
+
+/**
+ * Add an approved batch of discovered firms to the Firms tab, once.
+ *
+ * - Only builds that may write (the default branch, SHEETS_WRITE=true) touch
+ *   the sheet. Pull request builds poll the batch for that build only, so its
+ *   jobs can be measured first, and log the exact rows a write would add.
+ * - A firm already in the tab (by name) is never added again or overwritten;
+ *   rows are only appended below the last filled row.
+ * - The "Firm batches" tab records the batch after its rows are written. Once
+ *   recorded, the batch is skipped for good, so a firm the owner deletes stays
+ *   deleted. A failure between the two writes is safe to retry: the rows are
+ *   then already in the tab, so the retry appends nothing and records it.
+ */
+async function addDiscoveredFirms(
+  client: SheetsClient,
+  sheet: SheetFirmList,
+  seed: FirmRow[],
+  write: boolean
+): Promise<{ firms: FirmRow[]; note: string }> {
+  const batch = seed.filter((firm) => firm.seeded === DISCOVERED_FIRMS);
+  if (!batch.length) return { firms: [], note: '' };
+
+  const recorded = await client.read(tabRange(BATCHES_TAB)).catch(() => [] as string[][]);
+  if (recorded.some((row) => (row[0] ?? '').trim() === DISCOVERED_FIRMS)) return { firms: [], note: '' };
+
+  const present = new Set(sheet.firms.map((entry) => (entry.firm?.name ?? '').trim().toLowerCase()));
+  const missing = batch.filter((firm) => !present.has(firm.name.trim().toLowerCase()));
+  const at = sheet.columns;
+  const first = sheet.lastRow + 1;
+  const width = Math.max(...Object.values(at)) + 1;
+  const rows: Cell[][] = missing.map((firm) => {
+    const cells: Cell[] = Array.from({ length: width }, () => '');
+    cells[at.name] = firm.name;
+    cells[at.ats] = firm.ats;
+    cells[at.slug] = firm.atsSlug;
+    cells[at.host] = firm.atsHost ?? '';
+    if (at.active >= 0) cells[at.active] = 'yes';
+    if (at.sector >= 0) cells[at.sector] = firm.sector ?? '';
+    if (at.creOnly >= 0) cells[at.creOnly] = firm.creOnly ? 'yes' : '';
+    return cells;
+  });
+  const listed = rows.map((cells, i) => `row ${first + i}: ${cells.join(' | ')}`).join('; ');
+  // Ids past every sheet row, so they never collide with one.
+  const polled = missing.map((firm, i) => ({ ...firm, id: first + i }));
+
+  if (!write) {
+    return { firms: polled, note: missing.length ? `would add ${missing.length} discovered firms to the ${FIRMS_TAB} tab (${listed})` : '' };
+  }
+  // Appending needs a tab read by header with every board column.
+  if (!sheet.byHeader || [at.name, at.ats, at.slug, at.host].some((index) => index < 0)) {
+    return { firms: [], note: `did not add the discovered firms: the ${FIRMS_TAB} tab lacks a board column` };
+  }
+
+  if (rows.length) await client.write(tabRange(FIRMS_TAB, `A${first}`), rows);
+  await client.ensureTabs([BATCHES_TAB]);
+  const header = recorded.length ? [] : [['Batch', 'Added', 'Firms']];
+  await client.write(tabRange(BATCHES_TAB, `A${Math.max(recorded.length, 0) + 1}`), [
+    ...header,
+    [DISCOVERED_FIRMS, new Date().toISOString(), missing.map((firm) => firm.name).join(', ') || '(all already listed)']
+  ]);
+  return { firms: polled, note: missing.length ? `added ${missing.length} discovered firms (${listed})` : '' };
 }
