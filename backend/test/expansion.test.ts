@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveCity, STATEWIDE } from '../src/collector/texas.js';
 import { entryLevelEvident, experienceRequirement, withinExperienceLimit } from '../src/collector/experience.js';
 import { classifyKind } from '../src/collector/seniority.js';
+import { classifySector } from '../src/collector/sector.js';
 import { creRelevance } from '../src/collector/relevance.js';
 import { normalize } from '../src/collector/normalize.js';
 import { level, parseUsajobs, usajobsCredentials, usajobsUrl, type UsajobsJob } from '../src/collector/sources/usajobs.js';
@@ -324,5 +325,61 @@ describe('on-site apartment leasing with no stated experience', () => {
     expect(normalize({ ...raw, description: '0-1 years of experience required.' }, now).ok).toBe(true);
     expect(normalize({ ...raw, description: 'Entry-level role.' }, now).ok).toBe(true);
     expect(normalize({ ...raw, title: 'Leasing Summer 2027 Internship - Dallas, TX', description: '' }, now).ok).toBe(true);
+  });
+});
+
+describe('regressions Rod found on the live site (2026-10-11)', () => {
+  it('Huntington: development-program manager asking 5+ years is excluded and is not "Development"', () => {
+    const raw: RawJob = {
+      title: 'Commercial Analyst Development Program Manager',
+      firm: 'Huntington Bank',
+      location: 'Houston, TX',
+      description:
+        'Lead the Commercial Analyst Development Program, a rotational training program for new commercial banking analysts.\nBasic Qualifications\n5+ years of career program management or commercial banking background.',
+      applyUrl: 'https://example.com/hb',
+      ats: 'workday',
+      creOnly: true
+    };
+    expect(normalize(raw, now).ok).toBe(false);
+    // Each gate rejects it on its own, not only the title rule.
+    expect(experienceRequirement(raw.description).required).toBe(5.5);
+    expect(normalize({ ...raw, title: 'Commercial Analyst Development Program Coordinator' }, now)).toEqual({ ok: false, reason: 'over-experience' });
+    expect(classifySector(raw.title, raw.description).sector).toBeNull();
+  });
+
+  it('U.S. Oral Surgery Management: Assistant General Counsel is not a CRE seat', () => {
+    const raw: RawJob = {
+      title: 'Assistant General Counsel',
+      firm: 'U.S. Oral Surgery Management',
+      location: 'Dallas, TX',
+      description: 'Support the legal team on practice acquisitions, contracts and office leases. JD and bar admission required.',
+      applyUrl: 'https://www.adzuna.com/x',
+      ats: 'aggregator'
+    };
+    expect(normalize(raw, now)).toEqual({ ok: false, reason: 'off-topic' });
+  });
+
+  it('C&W: Maintenance Assistant is a building-operations trade seat, excluded as not a CRE career track', () => {
+    const raw: RawJob = {
+      title: 'Maintenance Assistant, Multifamily',
+      firm: 'Cushman & Wakefield',
+      location: 'San Antonio, TX',
+      description: 'Complete make-ready and work orders at an apartment community.',
+      applyUrl: 'https://example.com/cw',
+      ats: 'workday'
+    };
+    expect(normalize(raw, now)).toEqual({ ok: false, reason: 'off-topic' });
+    expect(classifySector(raw.title, raw.description).sector).not.toBe('Development');
+  });
+
+  it('keeps real development work filed under Development', () => {
+    expect(classifySector('Development Analyst', 'Underwrite ground-up multifamily development.').sector).toBe('Development');
+    expect(classifySector('Land Development Coordinator').sector).toBe('Development');
+    expect(classifySector('Business Development Summer 2027 Internship').sector).not.toBe('Development');
+  });
+
+  it('reads "background" as a professional experience bar', () => {
+    expect(experienceRequirement('3+ years of commercial lending background required.').required).toBe(3.5);
+    expect(experienceRequirement('1-2 years of property accounting background.').required).toBe(2);
   });
 });

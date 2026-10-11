@@ -35,12 +35,12 @@ const AFTER = new RegExp(
     `${N}` +
     String.raw`(?:\s*(?:-|–|—|to)\s*${N})?` +
     String.raw`\s*(\+|plus|or more)?\s*(?:\+\s*)?years?'?` +
-    String.raw`(?=[^.;\n]{0,60}?\bexperience\b)`,
+    String.raw`(?=[^.;\n]{0,60}?\b(?:experience|background|work history|track record)\b)`,
   'gi'
 );
 
 const BEFORE = new RegExp(
-  String.raw`\bexperience\b[^.;\n]{0,25}?` +
+  String.raw`\b(?:experience|background)\b[^.;\n]{0,25}?` +
     String.raw`(at least|minimum(?: of)?|min\.?|no less than|over|more than)?\s*` +
     `${N}` +
     String.raw`(?:\s*(?:-|–|—|to)\s*${N})?` +
@@ -49,7 +49,9 @@ const BEFORE = new RegExp(
 );
 
 /** Phrases between the figure and "experience" that mean it is not a work requirement. */
-const NOT_EXPERIENCE = /\b(degree|old|graduat\w*|program|rotation|term|lease|warranty|history|internships?|intern|academic|coursework|co-?op|school|student)\b/i;
+const NOT_EXPERIENCE = /\b(degree|old|graduat\w*|lease|warranty|history|internships?|intern|academic|coursework|co-?op|school|student)\b/i;
+/** A figure that names a program's length ('2-year rotational program'), not a bar. Only right after the figure. */
+const PROGRAM_LENGTH = /^\W*(?:rotational\s+|training\s+)?(?:program|rotation|term)\b/i;
 
 /** A clause that states a preference rather than a bar. */
 const PREFERRED_CLAUSE = /\b(preferred|preferably|prefer|desired|desirable|a plus|nice to have|ideal(?:ly)?|bonus|helpful|advantageous|an advantage|beneficial)\b/i;
@@ -98,8 +100,8 @@ export function experienceRequirement(text: string): ExperienceRequirement {
       const at = match.index!;
       // The span between the figure and the word "experience" decides relevance.
       const tail = re === AFTER ? text.slice(at + match[0].length, at + match[0].length + 60) : '';
-      const lead = tail.split(/\bexperience\b/i)[0] ?? '';
-      if (NOT_EXPERIENCE.test(lead) || NOT_EXPERIENCE.test(match[0])) continue;
+      const lead = tail.split(/\b(?:experience|background|work history|track record)\b/i)[0] ?? '';
+      if (NOT_EXPERIENCE.test(lead) || NOT_EXPERIENCE.test(match[0]) || PROGRAM_LENGTH.test(lead)) continue;
 
       const [, floorWord, low, high, plus] = match;
       const lowYears = toNumber(low);

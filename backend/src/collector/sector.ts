@@ -230,9 +230,18 @@ export interface SectorGuess {
  * `sector` is null when nothing matched, which lets the caller count how much
  * of a run needed the fallback instead of hiding it.
  */
+/**
+ * 'Development' that is not real estate development: an employee training
+ * program, career or business development, software. Blanked out before the
+ * keyword scan so a bank's "Analyst Development Program" is not filed under
+ * Development.
+ */
+const NOT_RE_DEVELOPMENT =
+  /\b(?:(?:analyst|associate|leadership|management|talent|professional|career|employee|executive|training|rotational|early career)\s+development(?:\s+program(?:me)?s?)?|development\s+program(?:me)?s?|business development|software development|product development|organizational development|learning (?:and|&) development|staff development|fund development|economic development officer)\b/g;
+
 export function classifySector(title: string, description = ''): SectorGuess {
-  const t = title.toLowerCase();
-  const d = description.toLowerCase();
+  const t = title.toLowerCase().replace(NOT_RE_DEVELOPMENT, ' ');
+  const d = description.toLowerCase().replace(NOT_RE_DEVELOPMENT, ' ');
 
   let best: SectorGuess = { sector: null, score: 0 };
 
