@@ -91,7 +91,8 @@ describe('recent TABS registrations', () => {
     const result = await readCounty('Harris', NOW, { fetchImpl, retries: 0 });
     expect(result).toMatchObject({ reported: 124, complete: true });
     expect(result.rows).toHaveLength(124);
-    expect(calls).toHaveLength(12);
+    // Two pages for the whole window (the second repeats), then one per day.
+    expect(calls).toHaveLength(2 + 11);
   });
 
   it('catches a search that ignores the page offset', async () => {
