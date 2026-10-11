@@ -311,3 +311,18 @@ describe('fixes from the first measured run', () => {
     expect(classifyKind('Leasing & Sales Consultant - Cortland Bear Creek')).toBe('Entry-level');
   });
 });
+
+describe('on-site apartment leasing with no stated experience', () => {
+  const raw: RawJob = { title: 'Leasing Professional - The Ellis', firm: 'Greystar', location: 'Dallas, TX', description: 'Lead tours and process applications.', applyUrl: 'https://example.com/g', ats: 'workday' };
+
+  it('is dropped as off-topic, not held for review', () => {
+    expect(normalize(raw, now)).toEqual({ ok: false, reason: 'off-topic' });
+    expect(normalize({ ...raw, title: 'Community Assistant - Camber Villas (Student Living)' }, now)).toEqual({ ok: false, reason: 'off-topic' });
+  });
+
+  it('is still published when it states 0 to 2 years or says entry level, and leasing internships are kept', () => {
+    expect(normalize({ ...raw, description: '0-1 years of experience required.' }, now).ok).toBe(true);
+    expect(normalize({ ...raw, description: 'Entry-level role.' }, now).ok).toBe(true);
+    expect(normalize({ ...raw, title: 'Leasing Summer 2027 Internship - Dallas, TX', description: '' }, now).ok).toBe(true);
+  });
+});

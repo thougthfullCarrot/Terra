@@ -34,6 +34,9 @@ export type NormalizeResult =
   | { ok: false; reason: RejectReason }
   | { ok: false; reason: 'needs-review'; review: ReviewReason; posting: Posting; sectorGuessed: boolean };
 
+/** On-site apartment leasing seats: Leasing Professional, Leasing & Sales Consultant, Community Assistant. */
+const ONSITE_LEASING = /\bleasing\b.*\b(consultant|agent|professional|specialist|representative|coordinator|associate)\b|\bcommunity assistant\b/i;
+
 /** Sector used when no keyword matched; counted separately so it stays visible. */
 const FALLBACK_SECTOR: Sector = 'Investment';
 
@@ -86,6 +89,9 @@ export function normalize(raw: RawJob, now = new Date()): NormalizeResult {
   // review rather than going out on the strength of its title.
   const boardSaysEntry = /\b(entry|junior|graduate|new grad)\b/i.test(raw.level ?? '');
   if (experience.required === null && kind !== 'Internship' && !boardSaysEntry && !entryLevelEvident(role, description)) {
+    // Rod (2026-10-11): an on-site apartment leasing seat with no stated bar
+    // is not a CRE career listing. Dropped, not held for review.
+    if (ONSITE_LEASING.test(role)) return { ok: false, reason: 'off-topic' };
     return { ok: false, reason: 'needs-review', review: 'experience-unstated', posting, sectorGuessed };
   }
 
