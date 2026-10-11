@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveCity, STATEWIDE } from '../src/collector/texas.js';
 import { entryLevelEvident, experienceRequirement, withinExperienceLimit } from '../src/collector/experience.js';
 import { classifyKind } from '../src/collector/seniority.js';
+import { classifySector } from '../src/collector/sector.js';
 import { creRelevance } from '../src/collector/relevance.js';
 import { normalize } from '../src/collector/normalize.js';
 import { level, parseUsajobs, usajobsCredentials, usajobsUrl, type UsajobsJob } from '../src/collector/sources/usajobs.js';
@@ -324,5 +325,126 @@ describe('on-site apartment leasing with no stated experience', () => {
     expect(normalize({ ...raw, description: '0-1 years of experience required.' }, now).ok).toBe(true);
     expect(normalize({ ...raw, description: 'Entry-level role.' }, now).ok).toBe(true);
     expect(normalize({ ...raw, title: 'Leasing Summer 2027 Internship - Dallas, TX', description: '' }, now).ok).toBe(true);
+  });
+});
+
+describe('regressions Rod found on the live site (2026-10-11)', () => {
+  it('Huntington: development-program manager asking 5+ years is excluded and is not "Development"', () => {
+    const raw: RawJob = {
+      title: 'Commercial Analyst Development Program Manager',
+      firm: 'Huntington Bank',
+      location: 'Houston, TX',
+      description:
+        'Lead the Commercial Analyst Development Program, a rotational training program for new commercial banking analysts.\nBasic Qualifications\n5+ years of career program management or commercial banking background.',
+      applyUrl: 'https://example.com/hb',
+      ats: 'workday',
+      creOnly: true
+    };
+    expect(normalize(raw, now).ok).toBe(false);
+    // Each gate rejects it on its own, not only the title rule.
+    expect(experienceRequirement(raw.description).required).toBe(5.5);
+    expect(normalize({ ...raw, title: 'Commercial Analyst Development Program Coordinator' }, now)).toEqual({ ok: false, reason: 'over-experience' });
+    expect(classifySector(raw.title, raw.description).sector).toBeNull();
+  });
+
+  it('U.S. Oral Surgery Management: Assistant General Counsel is not a CRE seat', () => {
+    const raw: RawJob = {
+      title: 'Assistant General Counsel',
+      firm: 'U.S. Oral Surgery Management',
+      location: 'Dallas, TX',
+      description: 'Support the legal team on practice acquisitions, contracts and office leases. JD and bar admission required.',
+      applyUrl: 'https://www.adzuna.com/x',
+      ats: 'aggregator'
+    };
+    expect(normalize(raw, now)).toEqual({ ok: false, reason: 'off-topic' });
+  });
+
+  it('C&W: Maintenance Assistant is a building-operations trade seat, excluded as not a CRE career track', () => {
+    const raw: RawJob = {
+      title: 'Maintenance Assistant, Multifamily',
+      firm: 'Cushman & Wakefield',
+      location: 'San Antonio, TX',
+      description: 'Complete make-ready and work orders at an apartment community.',
+      applyUrl: 'https://example.com/cw',
+      ats: 'workday'
+    };
+    expect(normalize(raw, now)).toEqual({ ok: false, reason: 'off-topic' });
+    expect(classifySector(raw.title, raw.description).sector).not.toBe('Development');
+  });
+
+  it('keeps real development work filed under Development', () => {
+    expect(classifySector('Development Analyst', 'Underwrite ground-up multifamily development.').sector).toBe('Development');
+    expect(classifySector('Land Development Coordinator').sector).toBe('Development');
+    expect(classifySector('Business Development Summer 2027 Internship').sector).not.toBe('Development');
+  });
+
+  it('reads "background" as a professional experience bar', () => {
+    expect(experienceRequirement('3+ years of commercial lending background required.').required).toBe(3.5);
+    expect(experienceRequirement('1-2 years of property accounting background.').required).toBe(2);
+  });
+});
+
+describe('discovery batch 1 firms (migration 0017)', () => {
+  const added = ['Fairfield Residential', 'Chesmar Homes', 'Kimco Realty', 'The NRP Group', 'JPI'];
+
+  it('loads the five approved firms from the seed, each once, with a verified board', async () => {
+    const { loadFirmSeed } = await import('../src/collector/firmSeed.js');
+    const firms = await loadFirmSeed();
+    for (const name of added) {
+      const rows = firms.filter((firm) => firm.name === name);
+      expect(rows, name).toHaveLength(1);
+      expect(rows[0]!.atsHost, name).toMatch(/myworkdayjobs\.com$|icims\.com$/);
+    }
+    const names = firms.map((firm) => firm.name.toLowerCase());
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('leaves out the wrong discovery matches', async () => {
+    const { loadFirmSeed } = await import('../src/collector/firmSeed.js');
+    const names = (await loadFirmSeed()).map((firm) => firm.name);
+    expect(names).not.toContain('Avison Young');
+    expect(names).not.toContain('Willow Bridge');
+  });
+});
+
+describe('experience wording beyond "years of experience"', () => {
+  it('counts background, industry experience, work history and track record as required years', async () => {
+    const { experienceRequirement, withinExperienceLimit } = await import('../src/collector/experience.js');
+    for (const text of [
+      'Requires 5+ years of banking background.',
+      '5+ years of industry experience required.',
+      'Must have 3 years of relevant work history.',
+      '4 years of proven track record in commercial lending.'
+    ]) {
+      expect(experienceRequirement(text).required, text).toBeGreaterThanOrEqual(3);
+      expect(withinExperienceLimit(text), text).toBe(false);
+    }
+  });
+
+  it('still keeps preferred years apart from required years', async () => {
+    const { experienceRequirement, withinExperienceLimit } = await import('../src/collector/experience.js');
+    const text = 'Required: 0-1 years of experience.\nPreferred: 5+ years of industry experience.';
+    expect(experienceRequirement(text)).toMatchObject({ required: 1, preferred: 5.5 });
+    expect(withinExperienceLimit(text)).toBe(true);
+  });
+});
+
+describe('multifamily on-site seats file under Property Mgmt', () => {
+  const boilerplate = 'A multifamily developer and operator. Development and acquisitions of apartment communities. Affordable housing.';
+  it.each([
+    'Community Leasing Associate',
+    'Community Leasing Associate - Affordable',
+    'Assistant Community Manager - Affordable',
+    'Assistant Community Manager',
+    'Leasing Professional'
+  ])('%s', async (title) => {
+    const { classifySector } = await import('../src/collector/sector.js');
+    expect(classifySector(title, boilerplate).sector).toBe('Property Mgmt');
+  });
+
+  it('keeps commercial leasing and construction seats where they were', async () => {
+    const { classifySector } = await import('../src/collector/sector.js');
+    expect(classifySector('Specialty Leasing Intern', boilerplate).sector).toBe('Brokerage');
+    expect(classifySector('Construction Intern', boilerplate).sector).toBe('Development');
   });
 });
