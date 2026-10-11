@@ -9,6 +9,12 @@
 -- in migration 0005 ('college' for a confirmed .edu address, 'subscriber'
 -- for an active subscription). College members get it free.
 --
+-- Private beta: until private.watch_settings.private_beta is set to false,
+-- only accounts listed in private.watch_testers can read, add or change
+-- watchlist items or get digests. Both tables sit in the private schema,
+-- which members and visitors cannot read, so no tester id is ever public.
+-- Testers are added by hand in the SQL editor (docs/watchlists.md).
+--
 -- Safe to run more than once.
 
 create extension if not exists pgcrypto with schema extensions;
@@ -25,6 +31,48 @@ begin
     alter table profiles add constraint profiles_digest_frequency_check check (digest_frequency in ('daily', 'weekly'));
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Private beta: the switch and the tester list. Service role and the
+-- database owner only. The beta starts on.
+-- ---------------------------------------------------------------------------
+
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
+create table if not exists private.watch_settings (
+  id           int primary key default 1 check (id = 1),
+  private_beta boolean not null default true
+);
+insert into private.watch_settings (id) values (1) on conflict (id) do nothing;
+
+create table if not exists private.watch_testers (
+  user_id  uuid primary key references auth.users on delete cascade,
+  added_at timestamptz not null default now()
+);
+
+-- Whether one account may use watchlists right now. Not callable by members.
+create or replace function private.watch_open_to(p_user uuid) returns boolean
+language sql stable security definer
+set search_path = private
+as $$
+  select p_user is not null and (
+    not coalesce((select private_beta from private.watch_settings where id = 1), true)
+    or exists (select 1 from private.watch_testers where user_id = p_user)
+  )
+$$;
+revoke execute on function private.watch_open_to(uuid) from public, anon, authenticated;
+
+-- The signed-in member's own answer, for the row policies and the site.
+-- Takes no argument, so it cannot be used to ask about anyone else.
+create or replace function public.watch_beta_access() returns boolean
+language sql stable security definer
+set search_path = private
+as $$
+  select private.watch_open_to(auth.uid())
+$$;
+revoke execute on function public.watch_beta_access() from public, anon;
+grant execute on function public.watch_beta_access() to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Watched items. kind:
@@ -72,20 +120,21 @@ create trigger watchlist_items_limit before insert on watchlist_items
 alter table watchlist_items enable row level security;
 
 -- Like the tracker (0008): a lapsed subscriber can still see and remove
--- items, but not add or change them.
+-- items, but not add or change them. During the private beta every policy
+-- also requires a listed tester. Signed-out visitors match no policy.
 drop policy if exists "own watchlist: read" on watchlist_items;
 create policy "own watchlist: read" on watchlist_items
-  for select using (auth.uid() = user_id);
+  for select to authenticated using (auth.uid() = user_id and public.watch_beta_access());
 drop policy if exists "own watchlist: remove" on watchlist_items;
 create policy "own watchlist: remove" on watchlist_items
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using (auth.uid() = user_id and public.watch_beta_access());
 drop policy if exists "own watchlist: add" on watchlist_items;
 create policy "own watchlist: add" on watchlist_items
-  for insert with check (auth.uid() = user_id and public.access_level() in ('college', 'subscriber'));
+  for insert to authenticated with check (auth.uid() = user_id and public.watch_beta_access() and public.access_level() in ('college', 'subscriber'));
 drop policy if exists "own watchlist: change" on watchlist_items;
 create policy "own watchlist: change" on watchlist_items
-  for update using (auth.uid() = user_id)
-  with check (auth.uid() = user_id and public.access_level() in ('college', 'subscriber'));
+  for update to authenticated using (auth.uid() = user_id and public.watch_beta_access())
+  with check (auth.uid() = user_id and public.watch_beta_access() and public.access_level() in ('college', 'subscriber'));
 
 -- ---------------------------------------------------------------------------
 -- What each member was sent, one row per change. state:
@@ -112,7 +161,7 @@ create index if not exists watch_sends_updated_idx on watch_sends (updated_at);
 alter table watch_sends enable row level security;
 drop policy if exists "own watch history" on watch_sends;
 create policy "own watch history" on watch_sends
-  for select using (auth.uid() = user_id);
+  for select to authenticated using (auth.uid() = user_id and public.watch_beta_access());
 
 -- The day each member's last digest went out, so the next one covers
 -- everything since. Service role only.
@@ -148,7 +197,7 @@ returns table (
   items            jsonb
 )
 language sql stable security definer
-set search_path = public, auth
+set search_path = public, auth, private
 as $$
   select u.id, u.email, p.digest_frequency, d.last_day,
          (select jsonb_agg(jsonb_build_object('id', w.id, 'kind', w.kind, 'city', w.city, 'ref', w.ref, 'filters', w.filters)
@@ -161,6 +210,7 @@ as $$
     and u.email_confirmed_at is not null
     and coalesce(u.raw_app_meta_data->>'terra_test_user', 'false') <> 'true'
     and exists (select 1 from public.watchlist_items w where w.user_id = u.id)
+    and private.watch_open_to(u.id)
     and (
       public.is_college_email(u.email)
       or exists (
@@ -181,9 +231,6 @@ grant execute on function public.watch_recipients() to service_role;
 -- random key that never leaves the database except to the sender (service
 -- role). The link works without signing in, and only turns emails off.
 -- ---------------------------------------------------------------------------
-
-create schema if not exists private;
-revoke all on schema private from public, anon, authenticated;
 
 create table if not exists private.alert_link_secret (
   id     int primary key default 1 check (id = 1),
