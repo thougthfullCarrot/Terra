@@ -98,7 +98,7 @@ export async function readCounty(
     const result = await fetchJson<SearchPage>(TABS_SEARCH_URL, {
       timeoutMs: 120_000,
       ...options,
-      form: recentForm(county, now, page * RECENT_PAGE),
+      form: recentForm(county, now, read),
       headers: { 'x-requested-with': 'XMLHttpRequest', referer: 'https://www.tdlr.texas.gov/TABS/Search/' }
     });
     const data = result.data ?? [];
@@ -108,7 +108,10 @@ export async function readCounty(
     for (const row of data) rows.set(row.ProjectNumber, row);
     // A page of rows already seen means the search ignored the page offset; stop and let the count show the gap.
     if (data.length && rows.size === before) break;
-    if (data.length < RECENT_PAGE || (reported != null && read >= reported)) {
+    // TABS may serve fewer rows than asked (it capped Harris at 100 a page), so the
+    // next page starts after the rows actually read, and only an empty page, a
+    // matched total, or a short page with no total ends the read.
+    if (!data.length || (reported != null ? read >= reported : data.length < RECENT_PAGE)) {
       endReached = true;
       break;
     }

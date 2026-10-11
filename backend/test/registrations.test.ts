@@ -30,7 +30,7 @@ function row(n: number, over: Partial<TabsRow> = {}): TabsRow {
 }
 
 /** A fake TABS search: `total` rows, served RECENT_PAGE at a time from the form's start. */
-function tabs(total: number, { reportTotal = true, ignoreStart = false, fail = new Set<string>() } = {}) {
+function tabs(total: number, { reportTotal = true, ignoreStart = false, pageCap = Infinity, fail = new Set<string>() } = {}) {
   const calls: Record<string, string>[] = [];
   const all = Array.from({ length: total }, (_, i) => row(i));
   const fetchImpl = (async (_url: string, init: RequestInit) => {
@@ -38,7 +38,7 @@ function tabs(total: number, { reportTotal = true, ignoreStart = false, fail = n
     calls.push(form);
     if (fail.has(form.LocationCounty!)) return new Response('busy', { status: 503 });
     const start = ignoreStart ? 0 : Number(form.start);
-    const data = all.slice(start, start + Number(form.length));
+    const data = all.slice(start, start + Math.min(Number(form.length), pageCap));
     return Response.json(reportTotal ? { data, recordsFiltered: total, recordsTotal: total } : { data });
   }) as typeof fetch;
   return { fetchImpl, calls };
@@ -67,6 +67,14 @@ describe('recent TABS registrations', () => {
     const result = await readCounty('Harris', NOW, { fetchImpl, retries: 0 });
     expect(result.complete).toBe(false);
     expect(result.rows).toHaveLength(RECENT_PAGE * RECENT_MAX_PAGES);
+  });
+
+  it('keeps reading when TABS serves fewer rows a page than asked', async () => {
+    const { fetchImpl, calls } = tabs(124, { pageCap: 100 });
+    const result = await readCounty('Harris', new Date('2026-10-11T12:00:00Z'), { fetchImpl, retries: 0 });
+    expect(calls.map((c) => c.start)).toEqual(['0', '100']);
+    expect(result).toMatchObject({ reported: 124, complete: true });
+    expect(result.rows).toHaveLength(124);
   });
 
   it('catches a search that ignores the page offset', async () => {
