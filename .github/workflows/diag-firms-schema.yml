@@ -1,0 +1,36 @@
+# Read-only check of the production firms table, for PR #66. Runs only on a
+# push to this throwaway branch. Inside a READ ONLY transaction it lists the
+# table's columns, unique constraints and the five firms' rows; it cannot write.
+name: Diagnose firms schema (read-only)
+on:
+  push:
+    branches: [claude/diag-firms-schema]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - name: Inspect
+        run: |
+          ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
+          q() {
+            jq -n --arg q "begin transaction read only; $1; commit;" '{query: $q}' | curl -sS -X POST \
+              "https://api.supabase.com/v1/projects/$ref/database/query" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-
+            echo
+          }
+          echo '--- columns'
+          q "select column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema='public' and table_name='firms' order by ordinal_position"
+          echo '--- constraints'
+          q "select conname, pg_get_constraintdef(oid) as def from pg_constraint where conrelid='public.firms'::regclass order by conname"
+          echo '--- the five firms, by name or board'
+          q "select id, name, ats, ats_slug, active from firms where name in ('Fairfield Residential','Chesmar Homes','Kimco Realty','The NRP Group','JPI') or ats_slug in ('ffres/fairfieldcareers','careers-mdch','kimcorealty/KimcoCareers','nrpgroup/NRP','jpi/JPIcareers')"
+          echo '--- counts'
+          q "select count(*) as firms, count(*) filter (where not active) as inactive from firms"
+          echo '--- watchlist tables present?'
+          q "select table_name from information_schema.tables where table_schema in ('public','private') and table_name like 'watch%'"
