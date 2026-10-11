@@ -448,3 +448,13 @@ describe('multifamily on-site seats file under Property Mgmt', () => {
     expect(classifySector('Construction Intern', boilerplate).sector).toBe('Development');
   });
 });
+
+describe('migration 0018 (discovered firms) on the production schema', () => {
+  it('inserts only columns 0001_init created, and skips firms already present', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const sql = await readFile(new URL('../supabase/migrations/0018_discovered_firms.sql', import.meta.url), 'utf8');
+    const columns = /insert into firms \(([^)]*)\)/.exec(sql)![1]!.split(',').map((c) => c.trim());
+    expect(columns).toEqual(['name', 'ats', 'ats_slug', 'ats_host', 'slug_verified', 'active']);
+    expect(sql).toMatch(/on conflict do nothing;\s*$/);
+  });
+});
