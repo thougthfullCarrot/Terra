@@ -163,7 +163,7 @@ describe.skipIf(!conn)('watchlists on a real database', () => {
 
   it('can be applied twice, keeping the same link secret, testers and beta switch', () => {
     const before = admin(`select public.alert_link_secret()`);
-    runFile(pending('pending/0016_watchlists.sql'));
+    runFile(pending('pending/0017_watchlists.sql'));
     expect(admin(`select public.alert_link_secret()`)).toBe(before);
     expect(admin(`select count(*) from watchlist_items`)).not.toBe('0');
     expect(as(ids.outsider)(`select public.watch_beta_access()`)).toBe('f');
@@ -225,15 +225,15 @@ describe.skipIf(!conn)('the private beta', () => {
   });
 });
 
-describe.skipIf(!conn)('rolling back 0016', () => {
+describe.skipIf(!conn)('rolling back 0017', () => {
   const su = (query: string) => execFileSync('psql', [conn!, '-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', query], { encoding: 'utf8' }).trim();
   const accounts = () =>
     su(`select (select count(*) from auth.users) || '|' || (select count(*) from profiles) || '|' || (select string_agg(user_id || status, ',' order by user_id) from subscriptions) || '|' || (select string_agg(id || email_alerts::text, ',' order by id) from profiles)`);
 
-  it('removes only what 0016 added, keeps accounts, billing and job alerts, and can be re-applied', () => {
+  it('removes only what 0017 added, keeps accounts, billing and job alerts, and can be re-applied', () => {
     su(`update profiles set email_alerts = (id::text like '%1' or id::text like '%2')`);
     const before = accounts();
-    runFile(pending('rollback/0016_watchlists_rollback.sql'));
+    runFile(pending('rollback/0017_watchlists_rollback.sql'));
     expect(accounts()).toBe(before);
     expect(su(`select count(*) from pg_tables where tablename in ('watchlist_items', 'watch_sends', 'watch_digests', 'market_history')`)).toBe('0');
     expect(su(`select count(*) from pg_namespace where nspname = 'private'`)).toBe('0');
@@ -241,9 +241,9 @@ describe.skipIf(!conn)('rolling back 0016', () => {
     expect(su(`select count(*) from pg_proc where proname in ('watch_recipients', 'alert_link_secret', 'unsubscribe_alerts', 'watch_beta_access', 'watch_open_to', 'watchlist_limit')`)).toBe('0');
     // Job alerts still have what they read.
     expect(Number(admin(`select count(*) from alert_recipients()`))).toBeGreaterThanOrEqual(0);
-    // Running it again is harmless, and 0016 goes back on cleanly, beta on.
-    runFile(pending('rollback/0016_watchlists_rollback.sql'));
-    runFile(pending('pending/0016_watchlists.sql'));
+    // Running it again is harmless, and 0017 goes back on cleanly, beta on.
+    runFile(pending('rollback/0017_watchlists_rollback.sql'));
+    runFile(pending('pending/0017_watchlists.sql'));
     expect(accounts()).toBe(before);
     expect(su(`select private_beta from private.watch_settings`)).toBe('t');
     expect(su(`select count(*) from private.watch_testers`)).toBe('0');

@@ -454,7 +454,7 @@ jobs:
             echo "Market data stored in Supabase."
           fi
 
-      # Watchlist digests (migration 0016) compare days, so each day's market
+      # Watchlist digests (migration 0017) compare days, so each day's market
       # figures are kept for 90 days. Off until the WATCHLISTS_ENABLED variable
       # is true; never on pull requests. It warns instead of failing.
       - name: Keep today's market figures for watchlists

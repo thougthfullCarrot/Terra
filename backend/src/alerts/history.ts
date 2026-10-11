@@ -4,7 +4,7 @@ import type { City } from '../types.js';
 
 /**
  * A compact copy of one day's market file, kept in market_history (migration
- * 0016) so watchlist digests can say what changed since the member's last
+ * 0017) so watchlist digests can say what changed since the member's last
  * email. It keeps every figure with its period and status, each project's
  * status, cost and end date, and the recent TABS registrations with their
  * coverage. Everything else (map points, scopes, research links) is left out.

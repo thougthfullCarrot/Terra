@@ -1,10 +1,10 @@
--- Removes everything migration 0016 (watchlists) added, and nothing else.
+-- Removes everything migration 0017 (watchlists) added, and nothing else.
 --
 -- NOT RUN AUTOMATICALLY. migrate.yml only applies supabase/migrations/, and
 -- the database tests run this file only against their throwaway Postgres.
 -- Run it by hand in the Supabase SQL editor, only with Rod's approval, and
 -- only AFTER setting the WATCHLISTS_ENABLED variable to false (otherwise the
--- next alerts run logs that 0016 is missing and sends job alerts without
+-- next alerts run logs that 0017 is missing and sends job alerts without
 -- unsubscribe links, which is harmless but noisy).
 --
 -- What it deletes for good: every member's watchlist, digest send log and
@@ -16,7 +16,7 @@
 -- columns, subscriptions and billing, job alerts (alert_sends, email_alerts),
 -- the tracker, and the site snapshots.
 --
--- Safe to run more than once, and 0016 can be applied again afterwards.
+-- Safe to run more than once, and 0017 can be applied again afterwards.
 
 begin;
 
@@ -35,7 +35,7 @@ drop function if exists private.watch_open_to(uuid);
 drop table if exists private.alert_link_secret;
 drop table if exists private.watch_testers;
 drop table if exists private.watch_settings;
--- 0016 is the only migration that uses the private schema. Without CASCADE
+-- 0017 is the only migration that uses the private schema. Without CASCADE
 -- this fails rather than drop anything added there later.
 drop schema if exists private;
 

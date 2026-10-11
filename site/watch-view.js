@@ -1,5 +1,5 @@
 // watch-view.js — Follow buttons and the profile's watchlist. account.js
-// hands over the member's store (watchlist_items, migration 0016) when
+// hands over the member's store (watchlist_items, migration 0017) when
 // watchlists are switched on; until then every button is left out.
 import { WATCH_LIMIT, addProblem, countLine, itemKey, itemLabel } from './watch.js';
 

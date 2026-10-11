@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HistoryDay } from './history.js';
 import type { SendRow, WatchStore } from './sendWatch.js';
 
-/** The WatchStore over Supabase with the service role (tables from migration 0016). */
+/** The WatchStore over Supabase with the service role (tables from migration 0017). */
 export function supabaseWatchStore(db: SupabaseClient): WatchStore {
   const check = <T>({ data, error }: { data: T; error: { message: string } | null }): T => {
     if (error) throw new Error(error.message);

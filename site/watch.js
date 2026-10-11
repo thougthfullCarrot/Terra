@@ -1,8 +1,8 @@
-// watch.js — rules for watchlists (migration 0016), kept free of the DOM so
+// watch.js — rules for watchlists (migration 0017), kept free of the DOM so
 // the backend's tests can run them. watch-view.js draws the buttons and the
 // profile list; account.js stores items in Supabase.
 
-/** Must match the trigger in migration 0016. */
+/** Must match the trigger in migration 0017. */
 export const WATCH_LIMIT = 25;
 export const DIGEST_FREQUENCIES = ['weekly', 'daily'];
 export const DEFAULT_FREQUENCY = 'weekly';

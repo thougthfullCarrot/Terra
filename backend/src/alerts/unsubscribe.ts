@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
  * Signed one-click unsubscribe links. The key is the random secret migration
- * 0016 keeps in the database (alert_link_secret(), service role only); the
+ * 0017 keeps in the database (alert_link_secret(), service role only); the
  * database checks the same HMAC in unsubscribe_alerts(), so a link works
  * without signing in but only for its own member and kind of email.
  */

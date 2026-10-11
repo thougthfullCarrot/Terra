@@ -85,7 +85,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       `New buildings and additions under way in the ${city} metro, from state filings over the last two years${PERMIT_CITIES[city] ? ` and ${PERMIT_CITIES[city]} building permits` : ''}. Click a pin or a project for the details and a link to the developer.`
     )
   );
-  // Watchlists (migration 0016): new filings in this metro by email. Null while they're off.
+  // Watchlists (migration 0017): new filings in this metro by email. Null while they're off.
   const followArea = followButton(areaItem(city), 'Follow new filings here');
   if (followArea) head.append(followArea);
   box.append(head);
