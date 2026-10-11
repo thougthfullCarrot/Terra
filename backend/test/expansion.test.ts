@@ -283,3 +283,31 @@ describe('no stretch category', () => {
     expect([...kinds].sort()).toEqual(['Entry-level', 'Internship']);
   });
 });
+
+describe('fixes from the first measured run', () => {
+  it('maps counties to their metro, so one seat is not listed twice', () => {
+    expect(resolveCity('Bexar County, Texas')).toBe('San Antonio');
+    expect(resolveCity('Collin County')).toBe('Dallas');
+    expect(resolveCity('Harris County, TX')).toBe('Houston');
+  });
+
+  it('does not read Midlothian, Scotland as Texas', () => {
+    expect(resolveCity('Edinburgh, Midlothian')).toBeNull();
+    expect(resolveCity('Midlothian, TX')).toBe('Midlothian');
+  });
+
+  it('takes the town from the last piece before the TX marker', () => {
+    expect(resolveCity('Broadstone Baybrook - Webster, TX')).toBe('Webster');
+  });
+
+  it('drops service desk, security and legal seats', () => {
+    expect(creRelevance('Service Desk Analyst', '', false)).toBe('off-topic');
+    expect(creRelevance('Security Analyst', '', false)).toBe('off-topic');
+    expect(creRelevance('2027 Summer Internship - Legal Intern', '', false)).toBe('off-topic');
+    expect(creRelevance('Assistant General Counsel', '', false)).toBe('off-topic');
+  });
+
+  it("recognizes 'Leasing & Sales Consultant'", () => {
+    expect(classifyKind('Leasing & Sales Consultant - Cortland Bear Creek')).toBe('Entry-level');
+  });
+});

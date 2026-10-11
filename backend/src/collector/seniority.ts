@@ -56,7 +56,7 @@ const ENTRY = [
   // CRE first seats whose titles carry none of the words above. They pass the
   // title gate only; the description still has to show 0 to 2 years or an
   // entry-level signal, or the posting goes to review (normalize.ts).
-  /\bleasing (consultant|agent|professional|specialist|representative)\b/,
+  /\bleasing\b.*\b(consultant|agent|professional|specialist|representative)\b/,
   /\baccountant\b/,
   /\b(property|lease|leasing|portfolio|real estate|closing|loan|title|escrow|contract) administrator\b/,
   /\b(acquisitions?|land|development|research|leasing|lease|title|escrow|closing|valuation|property tax|tax|appraisal|lease administration|due diligence|entitlement|right[- ]of[- ]way|realty|real estate|loan|credit|underwriting|transaction|transaction management|portfolio|investment|asset management) specialist\b/,

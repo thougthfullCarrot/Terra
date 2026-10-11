@@ -151,7 +151,28 @@ const ALIASES: Record<string, City> = {
   hutto: 'Austin',
   manor: 'Austin',
   'west lake hills': 'Austin',
-  'horseshoe bay': 'Austin'
+  'horseshoe bay': 'Austin',
+
+  // Aggregators and some boards give a county instead of a town.
+  'dallas county': 'Dallas',
+  'collin county': 'Dallas',
+  'denton county': 'Dallas',
+  'rockwall county': 'Dallas',
+  'tarrant county': 'Fort Worth',
+  'harris county': 'Houston',
+  'fort bend county': 'Houston',
+  'montgomery county, tx': 'Houston',
+  'brazoria county': 'Houston',
+  'travis county': 'Austin',
+  'williamson county': 'Austin',
+  'hays county': 'Austin',
+  'bexar county': 'San Antonio',
+  'comal county': 'New Braunfels',
+  'el paso county': 'El Paso',
+  'lubbock county': 'Lubbock',
+  'midland county': 'Midland',
+  'galveston county': 'Galveston',
+  'brazos county': 'College Station'
 };
 
 /**
@@ -183,8 +204,8 @@ const PLACES = [
   'Alice', 'Robstown', 'Portland', 'Aransas Pass', 'Ingleside', 'Sinton', 'Rio Grande City', 'Zapata',
   'Hereford', 'Dumas', 'Pampa', 'Borger', 'Plainview', 'Levelland', 'Snyder', 'Sweetwater', 'Andrews',
   'Monahans', 'Kermit', 'Seminole', 'Lamesa', 'Vernon', 'Graham', 'Decatur', 'Bridgeport', 'Bowie',
-  'Denton County', 'Collin County', 'Harris County', 'Travis County', 'Bexar County', 'Tarrant County',
-  'Fort Bend County', 'Montgomery County', 'Williamson County', 'Hays County', 'Hidalgo County'
+  'Hidalgo County', 'Nueces County', 'Cameron County', 'Webb County', 'McLennan County', 'Smith County',
+  'Midlothian'
 ] as const;
 
 /** Real Texas places whose names also belong to well-known places elsewhere. TX marker required. */
@@ -192,7 +213,7 @@ const AMBIGUOUS_PLACES = [
   'Paris', 'Athens', 'Victoria', 'Palestine', 'Columbia', 'Lancaster', 'Lewisville', 'Odessa', 'Pasadena',
   'Richmond', 'Portland', 'Columbus', 'Jacksonville', 'Henderson', 'Marshall', 'Orange', 'Mission',
   'Cleveland', 'Liberty', 'Florence', 'Princeton', 'Taylor', 'Temple', 'Canyon', 'Alpine', 'Graham',
-  'Decatur', 'Vernon', 'Anna', 'Alice', 'Porter', 'Montgomery', 'Dayton', 'Seminole'
+  'Decatur', 'Vernon', 'Anna', 'Alice', 'Porter', 'Montgomery', 'Dayton', 'Seminole', 'Midlothian'
 ];
 
 const PLACE_KEYS: [string, string][] = PLACES.filter((place) => !AMBIGUOUS_PLACES.includes(place))
@@ -288,7 +309,9 @@ const FILLER = /\b(tx|texas|usa|us|united states( of america)?|remote|hybrid|on-
  * trusted as a name; anything else is a statewide posting.
  */
 function unknownTown(segment: string): string | null {
-  const rest = segment
+  // 'Broadstone Baybrook - Webster, TX': the town is the last piece before the marker.
+  const pieces = segment.split(/\b(?:tx|texas)\b/)[0]!.split(/[,–—]| - /).map((piece) => piece.trim()).filter(Boolean);
+  const rest = (pieces.at(-1) ?? '')
     .replace(FILLER, ' ')
     .replace(/[^a-z' .-]/g, ' ')
     .replace(/[-.]+/g, ' ')
