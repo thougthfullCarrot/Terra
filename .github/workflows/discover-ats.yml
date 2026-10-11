@@ -16,6 +16,14 @@ on:
         description: 'Domain guesses to try per firm'
         required: false
         default: '5'
+      file:
+        description: 'Candidate list, relative to backend/ (blank for data/firm-candidates.txt)'
+        required: false
+        default: ''
+      check:
+        description: 'Read each board found once and count Texas entry-level jobs'
+        type: boolean
+        default: true
 
 jobs:
   discover:
@@ -40,9 +48,14 @@ jobs:
         id: discover
         env:
           DOMAINS: ${{ inputs.domains || '5' }}
+          FILE: ${{ inputs.file }}
+          CHECK: ${{ inputs.check }}
         run: |
           set +e
-          npm run --silent discover:ats -- --sql --limit "$DOMAINS" 2>&1 | tee /tmp/discover.txt
+          args=(--sql --limit "$DOMAINS" --csv ../employers-found.csv)
+          if [ -n "$FILE" ]; then args+=(--file "$FILE"); fi
+          if [ "$CHECK" = "true" ]; then args+=(--check); fi
+          npm run --silent discover:ats -- "${args[@]}" 2>&1 | tee /tmp/discover.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Publish the findings
@@ -55,6 +68,14 @@ jobs:
             cat /tmp/discover.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the registry rows
+        if: always() && hashFiles('employers-found.csv') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: employers-found
+          path: employers-found.csv
+          retention-days: 30
 
       - name: Fail if nothing was found
         if: steps.discover.outputs.exit_code != '0'

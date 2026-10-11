@@ -14,10 +14,14 @@ const SENIOR = [
   /\bchief\b/,
   /\bpartner\b/,
   /\bmanaging\b/,
-  /\bstaff\b/,
-  // Analyst II / III / IV and the spelled-out equivalents.
-  /\b(ii|iii|iv|2|3)\b/,
-  /\blevel\s*[234]\b/
+  /\bstaff (engineer|scientist|architect)\b/,
+  // Analyst II / III / IV. A bare digit only counts right after a job word,
+  // so 'Analyst 2' is out but 'Class of 2027' and '2 positions' are not.
+  /\b(ii|iii|iv|v)\b/,
+  /\b(analyst|associate|accountant|appraiser|specialist|coordinator|administrator|consultant|agent|underwriter)\s*(2|3|4)\b/,
+  /\blevel\s*[234]\b/,
+  // A manager is not a first seat; an assistant manager can be.
+  /^(?!.*\b(assistant|trainee|in[- ]training|intern)\b).*\bmanager\b/
 ];
 
 const INTERN = [
@@ -48,7 +52,18 @@ const ENTRY = [
   // Homebuilder training seats: 'Superintendent in Training', 'Early Career
   // Construction Program'. 'Assistant Superintendent' is already caught above.
   /\bin[- ]training\b/,
-  /\bearly[- ]career\b/
+  /\bearly[- ]career\b/,
+  // CRE first seats whose titles carry none of the words above. They pass the
+  // title gate only; the description still has to show 0 to 2 years or an
+  // entry-level signal, or the posting goes to review (normalize.ts).
+  /\bleasing (consultant|agent|professional|specialist|representative)\b/,
+  /\baccountant\b/,
+  /\b(property|lease|leasing|portfolio|real estate|closing|loan|title|escrow|contract) administrator\b/,
+  /\b(acquisitions?|land|development|research|leasing|lease|title|escrow|closing|valuation|property tax|tax|appraisal|lease administration|due diligence|entitlement|right[- ]of[- ]way|realty|real estate|loan|credit|underwriting|transaction|transaction management|portfolio|investment|asset management) specialist\b/,
+  /\bappraiser\b/,
+  /\bunderwriter\b/,
+  /\bresearcher\b/,
+  /\b(property tax|ad valorem|tax) consultant\b/
 ];
 
 /**

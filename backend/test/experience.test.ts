@@ -49,7 +49,7 @@ describe('normalize with an experience bar', () => {
 
   it('rejects an entry-level title that asks for 2+ years', () => {
     const result = normalize({ ...raw, description: 'Requires 2+ years of acquisitions experience.' });
-    expect(result).toEqual({ ok: false, reason: 'not-entry-level' });
+    expect(result).toEqual({ ok: false, reason: 'over-experience' });
   });
 
   it('keeps one that asks for 1-2 years', () => {

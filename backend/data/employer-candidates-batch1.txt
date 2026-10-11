@@ -1,0 +1,97 @@
+# Employer discovery, batch 1 (2026-10-11).
+#
+# Real Texas real estate employers of every size that are not yet on the firm
+# list or in firm-candidates.txt. Each line is a candidate, not a fact:
+# `npm run discover:ats -- --file data/employer-candidates-batch1.txt --csv ... --check`
+# finds the firm's own site (the website column is only a hint, and is ignored
+# unless the firm's name is on that page), follows its careers link, reads
+# which job board it uses, and reads that board once to count Texas
+# entry-level openings. Nothing here reaches the live firm list until that
+# check passes and Rod approves adding it.
+#
+# Name | website hint | sector | markets
+
+# --- Development, land and homebuilding ---
+Crescent Real Estate | crescent.com | Investment | Fort Worth; Houston
+Hunt Realty Investments | huntrealty.com | Investment | Dallas
+Hunt Companies | huntcompanies.com | Development | El Paso; Statewide
+Crow Holdings | crowholdings.com | Investment | Dallas
+JPI | jpi.com | Development | Dallas; Austin; Houston
+StreetLights Residential | streetlightsres.com | Development | Dallas; Houston; Austin
+Embrey Partners | embreydc.com | Development | San Antonio; Austin
+Weston Urban | westonurban.com | Development | San Antonio
+GrayStreet Partners | graystreetpartners.com | Development | San Antonio
+Republic Property Group | republicpg.com | Development | Dallas
+Johnson Development | johnsondevelopment.com | Development | Houston; Statewide
+Newland | newlandco.com | Development | Houston; Dallas; Austin
+The Hanover Company | hanoverco.com | Development | Houston; Austin; Dallas
+Morgan Group | morgangroup.com | Development | Houston
+Allied Orion Group | alliedorion.com | Development | Houston
+Highland Homes | highlandhomes.com | Homebuilder | Dallas; Houston; Austin; San Antonio
+David Weekley Homes | davidweekleyhomes.com | Homebuilder | Houston; Statewide
+Chesmar Homes | chesmar.com | Homebuilder | Houston; San Antonio
+Ashton Woods | ashtonwoods.com | Homebuilder | Dallas; Houston; Austin; San Antonio
+Gehan Homes | gehan.com | Homebuilder | Dallas; Houston; Austin; San Antonio
+Trophy Signature Homes | trophysignaturehomes.com | Homebuilder | Dallas; Fort Worth
+Bloomfield Homes | bloomfieldhomes.net | Homebuilder | Dallas; Fort Worth
+D.R. Horton | drhorton.com | Homebuilder | Statewide
+LGI Homes | lgihomes.com | Homebuilder | Houston; Statewide
+Century Communities | centurycommunities.com | Homebuilder | Dallas; Houston; Austin; San Antonio
+Dream Finders Homes | dreamfindershomes.com | Homebuilder | Austin; Houston; San Antonio
+
+# --- Brokerage, investment sales and research ---
+Avison Young | avisonyoung.us | Brokerage | Dallas; Houston; Austin; San Antonio
+Partners Real Estate | partnersrealestate.com | Brokerage | Houston; Dallas; Austin; San Antonio
+NAI Partners | naipartners.com | Brokerage | Houston; Dallas; Austin; San Antonio
+SRS Real Estate Partners | srsre.com | Brokerage | Dallas; Houston; Austin
+Caldwell Companies | caldwellcos.com | Brokerage | Houston
+Wulfe & Co | wulfe.com | Brokerage | Houston
+NewQuest Properties | newquest.com | Brokerage | Houston; San Antonio; Austin
+Lee & Associates | lee-associates.com | Brokerage | Dallas; Houston
+Bellwether Enterprise | bellwetherenterprise.com | Capital Markets | Dallas; Houston
+
+# --- Owners, REITs and investment managers ---
+Whitestone REIT | whitestonereit.com | Asset Mgmt | Houston; Dallas; Austin; San Antonio
+American Campus Communities | americancampus.com | Property Mgmt | Austin; Statewide
+Ashford Inc | ashfordinc.com | Asset Mgmt | Dallas
+Velocis | velocis.com | Investment | Dallas
+Lone Star Funds | lonestarfund.com | Investment | Dallas
+Moody National Companies | moodynational.com | Investment | Houston
+Cousins Properties | cousins.com | Asset Mgmt | Austin; Dallas
+Brandywine Realty Trust | brandywinerealty.com | Asset Mgmt | Austin
+Kimco Realty | kimcorealty.com | Asset Mgmt | Houston; Dallas
+Arbor Realty Trust | arbor.com | Lending | Dallas; Houston
+
+# --- Property management ---
+Asset Living | assetliving.com | Property Mgmt | Houston; Statewide
+RPM Living | rpmliving.com | Property Mgmt | Austin; Statewide
+ZRS Management | zrsmanagement.com | Property Mgmt | Dallas; Houston; Austin
+Willow Bridge Property Company | willowbridgepc.com | Property Mgmt | Dallas; Statewide
+Fairfield Residential | fairfieldresidential.com | Property Mgmt | Dallas; Houston; Austin
+Avenue5 Residential | avenue5.com | Property Mgmt | Dallas; Houston; Austin
+Tarantino Properties | tarantino.com | Property Mgmt | Houston
+The NRP Group | thenrpgroup.com | Affordable Housing | San Antonio; Statewide
+The Lynd Company | lynd.com | Property Mgmt | San Antonio
+
+# --- Lending (real estate seats only) ---
+Comerica Bank | comerica.com | Lending | Dallas; Houston; Austin
+PlainsCapital Bank | plainscapital.com | Lending | Dallas; Statewide
+Independent Financial | ifinancial.com | Lending | Dallas; Austin; Houston
+Veritex Community Bank | veritexbank.com | Lending | Dallas; Houston
+First Financial Bankshares | ffin.com | Lending | Abilene; Statewide
+Southside Bank | southside.com | Lending | Tyler; East Texas
+
+# --- Appraisal, valuation and property tax ---
+Popp Hutcheson | popphutcheson.com | Property Tax | Austin; Statewide
+Marvin F. Poer and Company | mfpoer.com | Property Tax | Dallas; Statewide
+O'Connor & Associates | poconnor.com | Property Tax | Houston; Statewide
+Integra Realty Resources | irr.com | Appraisal | Dallas; Houston; Austin; San Antonio
+Valbridge Property Advisors | valbridge.com | Appraisal | Dallas; Houston; Austin
+
+# --- Construction management and development consulting ---
+Rogers-O'Brien Construction | r-o.com | Development | Dallas; Austin; Houston; San Antonio
+Hensel Phelps | henselphelps.com | Development | Austin; Dallas; Houston
+Bartlett Cocke General Contractors | bartlettcocke.com | Development | San Antonio; Austin; Houston
+Vaughn Construction | vaughnconstruction.com | Development | Houston; Statewide
+Harvey Builders | harvey-builders.com | Development | Houston; Dallas
+Cumming Group | ccorpusa.com | Development | Dallas; Houston; Austin

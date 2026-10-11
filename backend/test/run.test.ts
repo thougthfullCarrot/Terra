@@ -62,6 +62,7 @@ describe('runCollector', () => {
       'missing-fields': 1,
       'not-texas': 1,
       'not-entry-level': 1,
+      'over-experience': 0,
       'off-topic': 0
     });
     expect(report.inserted).toBe(2);

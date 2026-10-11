@@ -19,13 +19,14 @@
  * sheet cannot be read (src/sheets/firms.ts). SHEETS_WRITE=true also fills an
  * empty tab from the seed and writes each firm's result to "Last check".
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MemoryStore } from '../db/store.js';
 import { loadFirmSeed } from '../collector/firmSeed.js';
-import { runCollector } from '../collector/run.js';
+import { runCollector, type RunReport } from '../collector/run.js';
 import { adzunaAggregators } from '../collector/sources/adzuna.js';
+import { usajobsAggregators } from '../collector/sources/usajobs.js';
 import { buildSnapshot } from '../site/snapshot.js';
 import { updateHistory, type JobHistory } from '../site/history.js';
 import { sheetsClientFromEnv } from '../sheets/env.js';
@@ -44,8 +45,9 @@ async function main(): Promise<void> {
   console.log(`Firm list: ${firms.note}`);
 
   const store = new MemoryStore(firms.firms);
-  const aggregators = adzunaAggregators();
-  if (!aggregators.length) console.warn('ADZUNA_APP_ID / ADZUNA_APP_KEY not set; boards only.');
+  const aggregators = [...adzunaAggregators(), ...usajobsAggregators()];
+  if (!aggregators.some((a) => a.name === 'adzuna')) console.warn('ADZUNA_APP_ID / ADZUNA_APP_KEY not set; no Adzuna results.');
+  if (!aggregators.some((a) => a.name === 'usajobs')) console.warn('USAJOBS_API_KEY / USAJOBS_EMAIL not set; no USAJOBS results.');
   const report = await runCollector({ store, aggregators });
 
   if (sheets && write && firms.sheet) {
@@ -76,7 +78,29 @@ async function main(): Promise<void> {
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, `${JSON.stringify(snapshot)}\n`);
 
-  console.log(JSON.stringify({ ...report, out }, null, 2));
+  // The held postings are listed in full in the review file, not in the log.
+  const { review, ...summary } = report;
+  console.log(JSON.stringify({ ...summary, out }, null, 2));
+
+  const reviewFlag = process.argv.indexOf('--review');
+  const reviewPath = reviewFlag >= 0 ? process.argv[reviewFlag + 1] : undefined;
+  if (reviewPath) {
+    const rows = review.map(({ posting, reason, source }) => ({
+      reason,
+      source,
+      role: posting.role,
+      firm: posting.firm,
+      city: posting.city,
+      applyUrl: posting.applyUrl,
+      desc: posting.description.slice(0, 400)
+    }));
+    await writeFile(resolve(reviewPath), `${JSON.stringify(rows, null, 2)}\n`);
+    console.log(`Review: ${rows.length} postings held, written to ${reviewPath}.`);
+  }
+
+  const table = metricsTable(report, firms.firms.length);
+  console.log(`\n${table}`);
+  if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${table}\n`).catch(() => undefined);
 
   // Every board failing is an outage, not an empty market, and publishing it
   // would replace a working site with a blank one. Zero postings from boards
@@ -87,6 +111,28 @@ async function main(): Promise<void> {
   } else if (report.kept === 0) {
     console.warn('Boards answered but none listed a Texas entry-level role.');
   }
+}
+
+/** The feed's counts by source and reason, as a Markdown table for the run summary. */
+function metricsTable(report: RunReport, firmsListed: number): string {
+  const reasons = ['not-texas', 'not-entry-level', 'over-experience', 'off-topic', 'missing-fields'] as const;
+  const lines = [
+    '### Job feed',
+    '',
+    `Employers monitored: ${report.firms} of ${firmsListed} listed · with openings: ${report.firmsWithOpenings} · failed: ${report.firmsFailed}`,
+    `Published: ${report.kept} (${report.kinds.Internship} internships, ${report.kinds['Entry-level']} entry-level) · held for review: ${report.reviewed}`,
+    '',
+    `| Source | Fetched | Published | Review | ${reasons.join(' | ')} |`,
+    `|---|---|---|---|${reasons.map(() => '---').join('|')}|`
+  ];
+  for (const [source, counts] of Object.entries(report.bySource).sort()) {
+    lines.push(`| ${source} | ${counts.fetched} | ${counts.kept} | ${counts.review} | ${reasons.map((r) => counts.rejected[r]).join(' | ')} |`);
+  }
+  for (const aggregator of report.aggregators) {
+    if (aggregator.error) lines.push(`\n${aggregator.name} failed: ${aggregator.error}`);
+  }
+  for (const error of report.errors) lines.push(`\nBoard failed: ${error.firm}: ${error.message}`);
+  return lines.join('\n');
 }
 
 main().catch((error: unknown) => {

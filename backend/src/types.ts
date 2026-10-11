@@ -50,7 +50,7 @@ export interface RawJob {
   /** Some boards expose an explicit seniority/level field; far more reliable than the title. */
   level?: string;
   /** Which board this came from, for provenance copy. */
-  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable' | 'ashby' | 'smartrecruiters' | 'aggregator';
+  ats: 'greenhouse' | 'lever' | 'workday' | 'icims' | 'workable' | 'ashby' | 'smartrecruiters' | 'aggregator' | 'usajobs';
   /**
    * Set when the firm's row names its sector (every homebuilder does). Wins
    * over the keyword guess: a builder's land analyst is a homebuilder seat even
@@ -69,7 +69,13 @@ export interface Posting {
   id: string;
   role: string;
   firm: string;
-  city: City;
+  /**
+   * Where in Texas. One of CITIES when the posting is in a tracked metro (its
+   * suburbs roll up), otherwise the town's own name ('Corpus Christi'), or
+   * 'Texas' for a statewide or remote-in-Texas seat. Market dashboards exist
+   * only for CITIES.
+   */
+  city: string;
   sector: Sector;
   kind: Kind;
   pay: string | null;
@@ -123,7 +129,7 @@ export interface UiPosting {
   id: string;
   role: string;
   firm: string;
-  city: City;
+  city: string;
   sector: Sector;
   kind: Kind;
   pay: string | null;

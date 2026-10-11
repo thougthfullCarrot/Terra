@@ -16,7 +16,8 @@ export interface SitePosting {
   id: string;
   role: string;
   firm: string;
-  city: City;
+  /** A tracked city, another Texas town, or 'Texas' (see Posting.city). */
+  city: string;
   sector: Sector;
   kind: Kind;
   pay: string | null;
@@ -34,7 +35,7 @@ export interface SitePosting {
    */
   match: MatchInputs;
   /** The aggregator a posting came through, when it did not come from a firm board. */
-  via: 'Adzuna' | null;
+  via: 'Adzuna' | 'USAJOBS' | null;
   /** YYYY-MM-DD the seat was first listed, across builds (history.ts). */
   openSince?: string;
   /** Times the seat was reposted or came back after coming down. */
@@ -46,8 +47,11 @@ export interface SiteSnapshot {
   generatedAt: string;
   /** Boards polled, and how many of them failed, so a thin feed can be told apart from a broken one. */
   boards: { polled: number; failed: number };
-  /** Every city Terra covers, so the filter offers one even on a day it has no postings. */
-  cities: City[];
+  /**
+   * The tracked cities, so the filter offers one even on a day it has no
+   * postings, then any other Texas town a job is in today, A to Z.
+   */
+  cities: string[];
   jobs: SitePosting[];
 }
 
@@ -63,7 +67,12 @@ export function buildSnapshot(postings: Posting[], report: RunReport, seen?: Map
   return {
     generatedAt: report.ranAt.toISOString(),
     boards: { polled: report.firms, failed: report.firmsFailed },
-    cities: [...CITIES],
+    cities: [
+      ...CITIES,
+      ...[...new Set(jobs.map((job) => job.city))]
+        .filter((city) => !(CITIES as readonly string[]).includes(city))
+        .sort((a, b) => a.localeCompare(b))
+    ],
     jobs
   };
 }
@@ -94,7 +103,9 @@ export function toSitePosting(posting: Posting): SitePosting {
 export function viaAggregator(applyUrl: string): SitePosting['via'] {
   try {
     const host = new URL(applyUrl).hostname;
-    return host === 'adzuna.com' || host.endsWith('.adzuna.com') ? 'Adzuna' : null;
+    if (host === 'adzuna.com' || host.endsWith('.adzuna.com')) return 'Adzuna';
+    if (host === 'usajobs.gov' || host.endsWith('.usajobs.gov')) return 'USAJOBS';
+    return null;
   } catch {
     return null;
   }
