@@ -25,6 +25,7 @@ pg "'$bin/pg_ctl' -D '$dir/data' -o '-p $port -k $dir -c listen_addresses=' -l '
 export PGHOST="$dir" PGPORT="$port" PGUSER=postgres PGDATABASE=postgres
 psql -q -v ON_ERROR_STOP=1 -f "$here/supabase-stub.sql" >/dev/null
 for f in "$backend"/supabase/migrations/*.sql "$backend"/supabase/pending/*.sql; do
+  [ -e "$f" ] || continue # pending/ may be empty
   case "$(basename "$f")" in 0004_*) continue ;; esac
   psql -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>"$dir/err" || { echo "Migration $(basename "$f") failed:" >&2; cat "$dir/err" >&2; exit 1; }
 done

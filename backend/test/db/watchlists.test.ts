@@ -163,7 +163,7 @@ describe.skipIf(!conn)('watchlists on a real database', () => {
 
   it('can be applied twice, keeping the same link secret, testers and beta switch', () => {
     const before = admin(`select public.alert_link_secret()`);
-    runFile(pending('pending/0017_watchlists.sql'));
+    runFile(pending('migrations/0017_watchlists.sql'));
     expect(admin(`select public.alert_link_secret()`)).toBe(before);
     expect(admin(`select count(*) from watchlist_items`)).not.toBe('0');
     expect(as(ids.outsider)(`select public.watch_beta_access()`)).toBe('f');
@@ -243,7 +243,7 @@ describe.skipIf(!conn)('rolling back 0017', () => {
     expect(Number(admin(`select count(*) from alert_recipients()`))).toBeGreaterThanOrEqual(0);
     // Running it again is harmless, and 0017 goes back on cleanly, beta on.
     runFile(pending('rollback/0017_watchlists_rollback.sql'));
-    runFile(pending('pending/0017_watchlists.sql'));
+    runFile(pending('migrations/0017_watchlists.sql'));
     expect(accounts()).toBe(before);
     expect(su(`select private_beta from private.watch_settings`)).toBe('t');
     expect(su(`select count(*) from private.watch_testers`)).toBe('0');
