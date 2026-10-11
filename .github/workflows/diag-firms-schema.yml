@@ -1,4 +1,4 @@
-# Read-only check of the production firms table, for PR #66. Runs only on a
+# Read-only check of the production firms table (re-run after PR #66 merged).
 # push to this throwaway branch. Inside a READ ONLY transaction it lists the
 # table's columns, unique constraints and the five firms' rows; it cannot write.
 name: Diagnose firms schema (read-only)
