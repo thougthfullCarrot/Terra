@@ -387,7 +387,15 @@ function letter(index: number): string {
 }
 
 /** The migration holding the first employer discovery batch, approved by the owner on 2026-10-11. */
-export const DISCOVERED_FIRMS = '0017_discovered_firms.sql';
+export const DISCOVERED_FIRMS = '0018_discovered_firms.sql';
+
+/**
+ * The name the batch is recorded under in the "Firm batches" tab. Production
+ * recorded it under the file's first name (0017_discovered_firms.sql, which
+ * failed as a database migration and was renamed 0018), so the id stays that
+ * value: changing it would make the batch look new again.
+ */
+export const DISCOVERED_BATCH = '0017_discovered_firms.sql';
 
 /** A small tab recording which firm batches were added, so a firm the owner deletes is never added back. */
 export const BATCHES_TAB = 'Firm batches';
@@ -415,7 +423,7 @@ async function addDiscoveredFirms(
   if (!batch.length) return { firms: [], note: '' };
 
   const recorded = await client.read(tabRange(BATCHES_TAB)).catch(() => [] as string[][]);
-  if (recorded.some((row) => (row[0] ?? '').trim() === DISCOVERED_FIRMS)) return { firms: [], note: '' };
+  if (recorded.some((row) => (row[0] ?? '').trim() === DISCOVERED_BATCH)) return { firms: [], note: '' };
 
   const present = new Set(sheet.firms.map((entry) => (entry.firm?.name ?? '').trim().toLowerCase()));
   const missing = batch.filter((firm) => !present.has(firm.name.trim().toLowerCase()));
@@ -450,7 +458,7 @@ async function addDiscoveredFirms(
   const header = recorded.length ? [] : [['Batch', 'Added', 'Firms']];
   await client.write(tabRange(BATCHES_TAB, `A${Math.max(recorded.length, 0) + 1}`), [
     ...header,
-    [DISCOVERED_FIRMS, new Date().toISOString(), missing.map((firm) => firm.name).join(', ') || '(all already listed)']
+    [DISCOVERED_BATCH, new Date().toISOString(), missing.map((firm) => firm.name).join(', ') || '(all already listed)']
   ]);
   return { firms: polled, note: missing.length ? `added ${missing.length} discovered firms (${listed})` : '' };
 }
