@@ -50,6 +50,7 @@ const KEYWORDS: Record<Sector, string[]> = {
     'permitting'
   ],
   'Property Mgmt': [
+    'community manager',
     'property management',
     'property manager',
     'facilities',
@@ -239,7 +240,15 @@ export interface SectorGuess {
 const NOT_RE_DEVELOPMENT =
   /\b(?:(?:analyst|associate|leadership|management|talent|professional|career|employee|executive|training|rotational|early career)\s+development(?:\s+program(?:me)?s?)?|development\s+program(?:me)?s?|business development|software development|product development|organizational development|learning (?:and|&) development|staff development|fund development|economic development officer)\b/g;
 
+/**
+ * On-site apartment seats: a community's leasing staff and its managers. Their
+ * title says 'leasing' (Brokerage) and a developer-operator's boilerplate says
+ * 'development', but the job is running a property.
+ */
+const ON_SITE_TITLE = /\b(?:(?:assistant\s+)?community\s+manager|community\s+leasing|leasing\s+(?:associate|professional|consultant|agent|specialist)|leasing\s+(?:&|and)\s+sales\s+consultant)\b/;
+
 export function classifySector(title: string, description = ''): SectorGuess {
+  if (ON_SITE_TITLE.test(title.toLowerCase())) return { sector: 'Property Mgmt', score: TITLE_WEIGHT };
   const t = title.toLowerCase().replace(NOT_RE_DEVELOPMENT, ' ');
   const d = description.toLowerCase().replace(NOT_RE_DEVELOPMENT, ' ');
 

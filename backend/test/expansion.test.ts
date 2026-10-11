@@ -428,3 +428,23 @@ describe('experience wording beyond "years of experience"', () => {
     expect(withinExperienceLimit(text)).toBe(true);
   });
 });
+
+describe('multifamily on-site seats file under Property Mgmt', () => {
+  const boilerplate = 'A multifamily developer and operator. Development and acquisitions of apartment communities. Affordable housing.';
+  it.each([
+    'Community Leasing Associate',
+    'Community Leasing Associate - Affordable',
+    'Assistant Community Manager - Affordable',
+    'Assistant Community Manager',
+    'Leasing Professional'
+  ])('%s', async (title) => {
+    const { classifySector } = await import('../src/collector/sector.js');
+    expect(classifySector(title, boilerplate).sector).toBe('Property Mgmt');
+  });
+
+  it('keeps commercial leasing and construction seats where they were', async () => {
+    const { classifySector } = await import('../src/collector/sector.js');
+    expect(classifySector('Specialty Leasing Intern', boilerplate).sector).toBe('Brokerage');
+    expect(classifySector('Construction Intern', boilerplate).sector).toBe('Development');
+  });
+});
