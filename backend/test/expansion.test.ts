@@ -99,10 +99,10 @@ describe('required versus preferred experience', () => {
 
 describe('postings with no stated experience', () => {
   const raw: RawJob = {
-    title: 'Leasing Consultant',
+    title: 'Property Accountant',
     firm: 'Asset Living',
     location: 'Houston, TX',
-    description: 'Give tours of our multifamily community and process leases.',
+    description: 'Prepare monthly financials for our multifamily communities.',
     applyUrl: 'https://example.com/lc',
     ats: 'workday'
   };
@@ -138,7 +138,7 @@ describe('postings with no stated experience', () => {
     const report = await runCollector({
       store,
       now,
-      fetcher: async () => [raw, { ...raw, title: 'Leasing Intern', applyUrl: 'https://example.com/li' }]
+      fetcher: async () => [raw, { ...raw, title: 'Accounting Intern', applyUrl: 'https://example.com/li' }]
     });
     expect(report.kept).toBe(1);
     expect(report.reviewed).toBe(1);
