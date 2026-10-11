@@ -299,7 +299,9 @@ function render() {
  */
 function fillSplit() {
   const panel = $('job-panel');
-  if (!WIDE.matches || isModal()) return;
+  // Not while another tab is showing: openPanel would make it a sheet, an
+  // invisible modal there that blocks every click on the page.
+  if (!WIDE.matches || isModal() || $('jobs-view').hidden) return;
   if (panelJob && shown.some((j) => j.id === panelJob.id)) {
     markSelected();
   } else if (shown.length) {
@@ -581,6 +583,11 @@ function bindPanel() {
     if (id) $('list').querySelector(`[data-id="${CSS.escape(id)}"] .open`)?.focus({ preventScroll: true });
     markSelected();
   });
+  // Coming back to the Jobs tab fills the side panel that fillSplit skipped
+  // while another tab was showing.
+  new MutationObserver(() => {
+    if (!$('jobs-view').hidden) fillSplit();
+  }).observe($('jobs-view'), { attributes: true, attributeFilter: ['hidden'] });
   // Crossing the breakpoint swaps the side panel for the sheet, or back.
   WIDE.addEventListener('change', () => {
     if (panel.open) panel.close();
