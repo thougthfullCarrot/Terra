@@ -1,5 +1,5 @@
 /**
- * Store today's compact market copy in market_history (migration 0016) and
+ * Store today's compact market copy in market_history (migration 0017) and
  * drop days older than HISTORY_DAYS, for watchlist digests.
  *
  *   npm run store:history -- ../site/market.json

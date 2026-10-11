@@ -479,7 +479,7 @@ function cityView(city, focus) {
 }
 
 /**
- * Follow this market's figures (watchlists, migration 0016): every figure, or
+ * Follow this market's figures (watchlists, migration 0017): every figure, or
  * one figure with an optional line it must cross. Null while watchlists are off.
  */
 function watchControls(city) {

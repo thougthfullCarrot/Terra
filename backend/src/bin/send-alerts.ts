@@ -54,7 +54,7 @@ if (!dryRun && (!smtpUser || !smtpPassword)) throw new Error('Set SMTP_USER and 
 const db = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
 /**
- * Watchlist digests and unsubscribe links (migration 0016) stay off until the
+ * Watchlist digests and unsubscribe links (migration 0017) stay off until the
  * WATCHLISTS_ENABLED repository variable is true; until then this script does
  * exactly what it did before.
  */
@@ -63,7 +63,7 @@ let linkSecret: string | null = null;
 if (watchlistsOn) {
   const secret = await db.rpc('alert_link_secret');
   if (secret.error || typeof secret.data !== 'string') {
-    console.log(`Watchlists are switched on but migration 0016 isn't in the database yet, so no digests or unsubscribe links: ${secret.error?.message ?? 'no secret'}`);
+    console.log(`Watchlists are switched on but migration 0017 isn't in the database yet, so no digests or unsubscribe links: ${secret.error?.message ?? 'no secret'}`);
   } else linkSecret = secret.data;
 }
 
@@ -223,7 +223,7 @@ const summary = [
           ? [`- Watchlist problems: ${watch.failed} failed (retried next run), ${watch.gaveUp} changes given up after ${MAX_ATTEMPTS} tries, ${watch.unconfirmed} sent but not confirmed in the log`]
           : [])
       ]
-    : [`- Watchlist digests: ${watchlistsOn ? 'on, but migration 0016 is not applied' : 'off (WATCHLISTS_ENABLED is not true)'}`])
+    : [`- Watchlist digests: ${watchlistsOn ? 'on, but migration 0017 is not applied' : 'off (WATCHLISTS_ENABLED is not true)'}`])
 ].join('\n');
 console.log(summary);
 if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);

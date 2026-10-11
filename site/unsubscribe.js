@@ -1,5 +1,5 @@
 // unsubscribe.js — the one-click unsubscribe link in alert emails. Reads the
-// link's parts and asks the database (unsubscribe_alerts, migration 0016) to
+// link's parts and asks the database (unsubscribe_alerts, migration 0017) to
 // turn that kind of email off. It works signed out: the signed token is the
 // proof, and it can only turn emails off.
 import { unsubscribeParams } from './watch.js';

@@ -3,7 +3,7 @@ import { unsubscribeUrl } from './unsubscribe.js';
 import { renderWatchEmail, watchEvents, type WatchItem } from './watch.js';
 
 /**
- * Sends watchlist digests (migration 0016), with the bookkeeping that keeps
+ * Sends watchlist digests (migration 0017), with the bookkeeping that keeps
  * an email from going out twice or being lost.
  *
  * For each member whose digest is due:

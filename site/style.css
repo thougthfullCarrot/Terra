@@ -5625,7 +5625,7 @@ svg.bars text {
   }
 }
 
-/* Watchlists (migration 0016): Follow buttons and the profile list. */
+/* Watchlists (migration 0017): Follow buttons and the profile list. */
 .follow-wrap { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .chip.follow[aria-pressed='true'] { background: var(--accent-tint); color: var(--accent); border-color: var(--accent); }
 .follow-status { font-size: 13px; color: var(--muted); }

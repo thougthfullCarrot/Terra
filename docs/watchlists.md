@@ -6,7 +6,7 @@ Members can follow a market's figures, new project filings in a metro, or a sing
 
 ## Private beta (on by default)
 
-Migration 0016 starts in **private beta**. Only accounts listed in `private.watch_testers` can read, add or change watchlist items, and only they get digests. The database enforces this in four places:
+Migration 0017 starts in **private beta**. Only accounts listed in `private.watch_testers` can read, add or change watchlist items, and only they get digests. The database enforces this in four places:
 
 - every row policy on `watchlist_items` and `watch_sends`;
 - `watch_recipients()`, which lists who gets a digest;
@@ -32,7 +32,7 @@ update private.watch_settings set private_beta = false;
 
 ## Launch steps (Rod's approval needed for each)
 
-1. **Apply the migration.** Move `backend/supabase/pending/0016_watchlists.sql` to `backend/supabase/migrations/` and merge. On that push, migrate.yml applies it to the production database. It only adds tables, columns (with defaults), and functions. It drops and renames nothing, and the private beta starts on with no testers, so nobody can use watchlists yet.
+1. **Apply the migration.** Move `backend/supabase/pending/0017_watchlists.sql` to `backend/supabase/migrations/` and merge. On that push, migrate.yml applies it to the production database. It only adds tables, columns (with defaults), and functions. It drops and renames nothing, and the private beta starts on with no testers, so nobody can use watchlists yet.
 2. **Add testers.** Use the SQL above.
 3. **Switch it on.** Set the repository variable `WATCHLISTS_ENABLED` to `true`. That:
    - shows the Follow buttons and the profile's Watchlist section, to testers only during the beta (site.yml writes `watchlists: true` into config.js);
@@ -48,11 +48,11 @@ From least to most drastic:
 
 1. **Stop everything.** Set `WATCHLISTS_ENABLED` to `false`. On the next build the UI is hidden and digests stop. Nothing is deleted.
 2. **Back to testers only.** In the SQL editor, run `update private.watch_settings set private_beta = true;`.
-3. **Remove 0016 completely.** Run `backend/supabase/rollback/0016_watchlists_rollback.sql` in the SQL editor, after step 1 and with Rod's approval.
+3. **Remove 0017 completely.** Run `backend/supabase/rollback/0017_watchlists_rollback.sql` in the SQL editor, after step 1 and with Rod's approval.
    - It deletes every watchlist, the send log, the history and the tester list.
    - It doesn't touch accounts, profiles' other columns, subscriptions, job alerts, the tracker or the snapshots.
    - Job alert unsubscribe links that were already sent stop working; members can still turn alerts off in their profile.
-   - `npm run test:db` runs this rollback on a throwaway database. It checks that accounts, billing rows and job-alert settings are unchanged, and that 0016 can be applied again afterwards.
+   - `npm run test:db` runs this rollback on a throwaway database. It checks that accounts, billing rows and job-alert settings are unchanged, and that 0017 can be applied again afterwards.
 
 ## Backups (checked 2026-10-11)
 
@@ -63,7 +63,7 @@ Before applying the migration, export a copy yourself. Two free ways:
 - the Supabase CLI: `supabase db dump`, with the database password;
 - the SQL editor's CSV export of `profiles` and `subscriptions`.
 
-Keep the copy off GitHub. Artifacts from this public repository can be downloaded by other people. 0016 only adds objects, so the rollback script, not a restore, is the normal way back.
+Keep the copy off GitHub. Artifacts from this public repository can be downloaded by other people. 0017 only adds objects, so the rollback script, not a restore, is the normal way back.
 
 ## What members can follow
 
