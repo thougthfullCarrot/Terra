@@ -1,0 +1,37 @@
+# Read-only audit of production for the Development Watch migration 0017.
+# Runs only on a push to this throwaway branch. Every query runs inside a
+# READ ONLY transaction and reads only the catalog (names, types, counts):
+# no account records, no secrets are printed, and nothing is written.
+name: Audit 0017 prerequisites (read-only)
+on:
+  push:
+    branches: [claude/diag-watch-0017]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - name: Audit
+        env:
+          WATCH_FLAG: ${{ vars.WATCHLISTS_ENABLED }}
+        run: |
+          echo "--- WATCHLISTS_ENABLED is 'true'? $([ "$WATCH_FLAG" = "true" ] && echo yes || echo no)"
+          ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
+          q() {
+            echo "--- $1"
+            jq -n --arg q "begin transaction read only; $2; commit;" '{query: $q}' | curl -sS -X POST \
+              "https://api.supabase.com/v1/projects/$ref/database/query" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-
+            echo
+          }
+          q 'required columns (table.column type)' "select table_schema||'.'||table_name||'.'||column_name as col, data_type from information_schema.columns where (table_schema, table_name, column_name) in (('public','profiles','id'),('public','profiles','email_alerts'),('public','subscriptions','user_id'),('public','subscriptions','status'),('public','subscriptions','current_period_end'),('auth','users','id'),('auth','users','email'),('auth','users','email_confirmed_at'),('auth','users','raw_app_meta_data'),('public','markets','city')) order by 1"
+          q 'required functions (signature -> returns)' "select n.nspname||'.'||p.proname||'('||pg_get_function_identity_arguments(p.oid)||')' as fn, pg_get_function_result(p.oid) as returns from pg_proc p join pg_namespace n on n.oid=p.pronamespace where (n.nspname, p.proname) in (('public','access_level'),('public','alert_recipients'),('public','is_college_email'),('auth','uid'),('extensions','gen_random_bytes'),('extensions','hmac'),('extensions','gen_random_uuid'),('public','gen_random_uuid')) order by 1"
+          q 'pgcrypto extension' "select extname, n.nspname as schema, extversion from pg_extension e join pg_namespace n on n.oid=e.extnamespace where extname in ('pgcrypto')"
+          q 'roles' "select rolname from pg_roles where rolname in ('anon','authenticated','service_role') order by 1"
+          q 'objects 0017 creates that already exist (expect none)' "select 'table '||table_schema||'.'||table_name as obj from information_schema.tables where (table_schema, table_name) in (('public','watchlist_items'),('public','watch_sends'),('public','watch_digests'),('public','market_history'),('private','watch_settings'),('private','watch_testers'),('private','alert_link_secret')) or table_name like 'watch%' union all select 'column profiles.'||column_name from information_schema.columns where table_schema='public' and table_name='profiles' and column_name in ('watch_emails','digest_frequency') union all select 'function '||n.nspname||'.'||p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname in ('watch_open_to','watch_beta_access','watchlist_limit','watch_recipients','alert_link_secret','unsubscribe_alerts') union all select 'constraint '||conname from pg_constraint where conname='profiles_digest_frequency_check' union all select 'schema '||nspname from pg_namespace where nspname='private'"
+          q 'row counts only (no records)' "select (select count(*) from public.profiles) as profiles, (select count(*) from public.subscriptions) as subscriptions, (select count(*) from public.markets) as markets, (select count(*) from public.firms) as firms"
