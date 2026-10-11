@@ -41,8 +41,12 @@ const ids = {
   lapsed: '00000000-0000-4000-8000-000000000004',
   unconfirmed: '00000000-0000-4000-8000-000000000005',
   testUser: '00000000-0000-4000-8000-000000000006',
-  full: '00000000-0000-4000-8000-000000000007'
+  full: '00000000-0000-4000-8000-000000000007',
+  outsider: '00000000-0000-4000-8000-000000000008'
 };
+
+const pending = (file: string) => new URL(`../../supabase/${file}`, import.meta.url).pathname;
+const runFile = (path: string) => execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path], { stdio: ['ignore', 'pipe', 'pipe'] });
 
 describe.skipIf(!conn)('watchlists on a real database', () => {
   beforeAll(() => {
@@ -56,11 +60,14 @@ describe.skipIf(!conn)('watchlists on a real database', () => {
         ('${ids.lapsed}', 'kim@gmail.com', now(), '{}'),
         ('${ids.unconfirmed}', 'ana@tamu.edu', null, '{}'),
         ('${ids.testUser}', 'fake@test.edu', now(), '{"terra_test_user": "true"}'),
-        ('${ids.full}', 'max@rice.edu', now(), '{}');
+        ('${ids.full}', 'max@rice.edu', now(), '{}'),
+        ('${ids.outsider}', 'jo@utdallas.edu', now(), '{}');
       insert into profiles (id) select id from auth.users;
       insert into subscriptions (user_id, stripe_customer_id, stripe_subscription_id, status, current_period_end) values
         ('${ids.subscriber}', 'cus_a', 'sub_a', 'active', now() + interval '20 days'),
         ('${ids.lapsed}', 'cus_b', 'sub_b', 'canceled', now() - interval '2 days');
+      -- Private beta: everyone but the outsider is a tester.
+      insert into private.watch_testers (user_id) select id from auth.users where id <> '${ids.outsider}';
     `]);
   });
 
@@ -154,12 +161,91 @@ describe.skipIf(!conn)('watchlists on a real database', () => {
     expect(admin(`select email_alerts::text || watch_emails::text from profiles where id = '${ids.subscriber}'`)).toBe('falsetrue');
   });
 
-  it('can be applied twice, keeping the same link secret', () => {
+  it('can be applied twice, keeping the same link secret, testers and beta switch', () => {
     const before = admin(`select public.alert_link_secret()`);
-    execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', new URL('../../supabase/pending/0016_watchlists.sql', import.meta.url).pathname], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
+    runFile(pending('pending/0016_watchlists.sql'));
     expect(admin(`select public.alert_link_secret()`)).toBe(before);
     expect(admin(`select count(*) from watchlist_items`)).not.toBe('0');
+    expect(as(ids.outsider)(`select public.watch_beta_access()`)).toBe('f');
+    expect(as(ids.student)(`select public.watch_beta_access()`)).toBe('t');
+  });
+});
+
+describe.skipIf(!conn)('the private beta', () => {
+  const outsider = () => as(ids.outsider);
+
+  it('starts on, and tells each member only about themselves', () => {
+    expect(execFileSync('psql', [conn!, '-X', '-A', '-t', '-c', 'select private_beta from private.watch_settings'], { encoding: 'utf8' }).trim()).toBe('t');
+    expect(outsider()(`select public.watch_beta_access()`)).toBe('f');
+    expect(as(ids.student)(`select public.watch_beta_access()`)).toBe('t');
+    // Visitors can't ask at all, and nobody can ask about another account.
+    expect(() => anon(`select public.watch_beta_access()`)).toThrow(/permission denied/);
+    expect(() => outsider()(`select private.watch_open_to('${ids.student}')`)).toThrow(/permission denied/);
+  });
+
+  it('refuses every watchlist read and write from a member who is not a tester', () => {
+    expect(() => outsider()(`insert into watchlist_items (kind, city) values ('market', 'Austin')`)).toThrow(/row-level security/);
+    admin(`insert into watchlist_items (user_id, kind, city) values ('${ids.outsider}', 'market', 'Dallas')`);
+    expect(outsider()(`select count(*) from watchlist_items`)).toBe('0');
+    expect(outsider()(`update watchlist_items set city = 'Houston' returning id`)).toBe('');
+    expect(outsider()(`delete from watchlist_items returning id`)).toBe('');
+    admin(`insert into watch_sends (user_id, event_id, state) values ('${ids.outsider}', 'o1', 'sent') on conflict do nothing`);
+    expect(outsider()(`select count(*) from watch_sends`)).toBe('0');
+    expect(admin(`select city from watchlist_items where user_id = '${ids.outsider}'`)).toBe('Dallas');
+  });
+
+  it('keeps the tester list and the switch out of reach of members and visitors', () => {
+    for (const who of [outsider(), as(ids.student), anon]) {
+      expect(() => who(`select * from private.watch_testers`)).toThrow(/permission denied/);
+      expect(() => who(`insert into private.watch_testers (user_id) values ('${ids.outsider}')`)).toThrow(/permission denied/);
+      expect(() => who(`update private.watch_settings set private_beta = false`)).toThrow(/permission denied/);
+    }
+    // Setting their own profile flag gets a non-tester nothing.
+    outsider()(`update profiles set watch_emails = true where id = '${ids.outsider}'`);
+    expect(outsider()(`select public.watch_beta_access()`)).toBe('f');
+  });
+
+  it('sends digests only to testers', () => {
+    admin(`update profiles set watch_emails = true where id = '${ids.outsider}'`);
+    expect(admin(`select count(*) from watch_recipients() where user_id = '${ids.outsider}'`)).toBe('0');
+    expect(admin(`select count(*) from watch_recipients()`)).not.toBe('0');
+  });
+
+  it('opens to every eligible member once the beta is switched off, and closes again', () => {
+    execFileSync('psql', [conn!, '-X', '-q', '-c', 'update private.watch_settings set private_beta = false']);
+    expect(outsider()(`select count(*) from watchlist_items`)).toBe('1');
+    expect(admin(`select count(*) from watch_recipients() where user_id = '${ids.outsider}'`)).toBe('1');
+    execFileSync('psql', [conn!, '-X', '-q', '-c', 'update private.watch_settings set private_beta = true']);
+    expect(outsider()(`select count(*) from watchlist_items`)).toBe('0');
+  });
+
+  it('drops out of the beta when a tester account is deleted', () => {
+    execFileSync('psql', [conn!, '-X', '-q', '-c', `delete from auth.users where id = '${ids.testUser}'`]);
+    expect(execFileSync('psql', [conn!, '-X', '-A', '-t', '-c', `select count(*) from private.watch_testers where user_id = '${ids.testUser}'`], { encoding: 'utf8' }).trim()).toBe('0');
+  });
+});
+
+describe.skipIf(!conn)('rolling back 0016', () => {
+  const su = (query: string) => execFileSync('psql', [conn!, '-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', query], { encoding: 'utf8' }).trim();
+  const accounts = () =>
+    su(`select (select count(*) from auth.users) || '|' || (select count(*) from profiles) || '|' || (select string_agg(user_id || status, ',' order by user_id) from subscriptions) || '|' || (select string_agg(id || email_alerts::text, ',' order by id) from profiles)`);
+
+  it('removes only what 0016 added, keeps accounts, billing and job alerts, and can be re-applied', () => {
+    su(`update profiles set email_alerts = (id::text like '%1' or id::text like '%2')`);
+    const before = accounts();
+    runFile(pending('rollback/0016_watchlists_rollback.sql'));
+    expect(accounts()).toBe(before);
+    expect(su(`select count(*) from pg_tables where tablename in ('watchlist_items', 'watch_sends', 'watch_digests', 'market_history')`)).toBe('0');
+    expect(su(`select count(*) from pg_namespace where nspname = 'private'`)).toBe('0');
+    expect(su(`select count(*) from information_schema.columns where table_name = 'profiles' and column_name in ('watch_emails', 'digest_frequency')`)).toBe('0');
+    expect(su(`select count(*) from pg_proc where proname in ('watch_recipients', 'alert_link_secret', 'unsubscribe_alerts', 'watch_beta_access', 'watch_open_to', 'watchlist_limit')`)).toBe('0');
+    // Job alerts still have what they read.
+    expect(Number(admin(`select count(*) from alert_recipients()`))).toBeGreaterThanOrEqual(0);
+    // Running it again is harmless, and 0016 goes back on cleanly, beta on.
+    runFile(pending('rollback/0016_watchlists_rollback.sql'));
+    runFile(pending('pending/0016_watchlists.sql'));
+    expect(accounts()).toBe(before);
+    expect(su(`select private_beta from private.watch_settings`)).toBe('t');
+    expect(su(`select count(*) from private.watch_testers`)).toBe('0');
   });
 });

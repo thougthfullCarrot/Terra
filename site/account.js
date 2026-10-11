@@ -165,8 +165,10 @@ async function loadFeed() {
   feedJobs = data.data?.jobs ?? [];
   app.showFeed(data.data);
   app.setTracker(trackerStore());
-  // Watchlists (migration 0016) stay hidden until site.yml switches them on.
-  await setWatchStore(CONFIG.watchlists ? watchStore() : null);
+  // Watchlists (migration 0016) stay hidden until site.yml switches them on,
+  // and during the private beta the database says whether this member is a
+  // tester. The database enforces the same rule on every read and write.
+  await setWatchStore(CONFIG.watchlists && (await watchAllowed()) ? watchStore() : null);
   fillWatch();
   // Market data sits in the same members-only table, one row of its own.
   app.setMarketLoader(async () => {
@@ -190,6 +192,12 @@ function trackerStore() {
       check(await table().upsert(rows.map((row) => ({ user_id: user.id, ...row }))).select('*')) ?? [],
     remove: async (jobId) => check(await table().delete().eq('user_id', user.id).eq('job_id', jobId))
   };
+}
+
+/** Whether the database lets this member use watchlists: false on any error, such as 0016 not applied. */
+async function watchAllowed() {
+  const { data, error } = await supabase.rpc('watch_beta_access');
+  return !error && data === true;
 }
 
 /** The member's watchlist, kept in watchlist_items (migration 0016). Each call throws on error. */
