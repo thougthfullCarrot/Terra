@@ -383,3 +383,48 @@ describe('regressions Rod found on the live site (2026-10-11)', () => {
     expect(experienceRequirement('1-2 years of property accounting background.').required).toBe(2);
   });
 });
+
+describe('discovery batch 1 firms (migration 0017)', () => {
+  const added = ['Fairfield Residential', 'Chesmar Homes', 'Kimco Realty', 'The NRP Group', 'JPI'];
+
+  it('loads the five approved firms from the seed, each once, with a verified board', async () => {
+    const { loadFirmSeed } = await import('../src/collector/firmSeed.js');
+    const firms = await loadFirmSeed();
+    for (const name of added) {
+      const rows = firms.filter((firm) => firm.name === name);
+      expect(rows, name).toHaveLength(1);
+      expect(rows[0]!.atsHost, name).toMatch(/myworkdayjobs\.com$|icims\.com$/);
+    }
+    const names = firms.map((firm) => firm.name.toLowerCase());
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('leaves out the wrong discovery matches', async () => {
+    const { loadFirmSeed } = await import('../src/collector/firmSeed.js');
+    const names = (await loadFirmSeed()).map((firm) => firm.name);
+    expect(names).not.toContain('Avison Young');
+    expect(names).not.toContain('Willow Bridge');
+  });
+});
+
+describe('experience wording beyond "years of experience"', () => {
+  it('counts background, industry experience, work history and track record as required years', async () => {
+    const { experienceRequirement, withinExperienceLimit } = await import('../src/collector/experience.js');
+    for (const text of [
+      'Requires 5+ years of banking background.',
+      '5+ years of industry experience required.',
+      'Must have 3 years of relevant work history.',
+      '4 years of proven track record in commercial lending.'
+    ]) {
+      expect(experienceRequirement(text).required, text).toBeGreaterThanOrEqual(3);
+      expect(withinExperienceLimit(text), text).toBe(false);
+    }
+  });
+
+  it('still keeps preferred years apart from required years', async () => {
+    const { experienceRequirement, withinExperienceLimit } = await import('../src/collector/experience.js');
+    const text = 'Required: 0-1 years of experience.\nPreferred: 5+ years of industry experience.';
+    expect(experienceRequirement(text)).toMatchObject({ required: 1, preferred: 5.5 });
+    expect(withinExperienceLimit(text)).toBe(true);
+  });
+});
