@@ -131,11 +131,17 @@ export async function readCounty(
   const whole = await readWindow((start) => recentForm(county, now, start), options);
   const { rows, reported } = whole;
   if (reported != null && rows.size < reported) {
+    const seen: string[] = [];
     for (let back = RECENT_DAYS; back >= 0; back--) {
+      // Each window runs to the next day, in case TABS treats the end date as
+      // midnight. Windows overlap; rows are kept once.
       const day = new Date(now.getTime() - back * 86_400_000);
-      const one = await readWindow((start) => recentForm(county, day, start, 0, day), options);
+      const next = new Date(day.getTime() + 86_400_000);
+      const one = await readWindow((start) => recentForm(county, day, start, 0, next), options);
       for (const [id, row] of one.rows) rows.set(id, row);
+      seen.push(`${one.rows.size}/${one.reported ?? '?'}`);
     }
+    console.error(`TDLR TABS new registrations: ${county} read day by day (rows/total per window): ${seen.join(' ')}`);
   }
   const complete = reported != null ? rows.size >= reported : whole.endReached ? null : false;
   return { rows: [...rows.values()], reported, complete };
