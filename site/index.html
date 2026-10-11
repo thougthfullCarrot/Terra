@@ -347,6 +347,23 @@
               </label>
             </div>
           </fieldset>
+          <fieldset class="sectors alerts" id="watch-settings" hidden>
+            <legend class="eyebrow">WATCHLIST</legend>
+            <label class="check">
+              <input type="checkbox" name="watchEmails" class="switch" role="switch" />
+              <span>Email me what changed in the markets and projects I follow</span>
+            </label>
+            <div class="watch-frequency" role="radiogroup" aria-label="How often">
+              <label class="check"><input type="radio" name="digestFrequency" value="weekly" /> <span>Weekly</span></label>
+              <label class="check"><input type="radio" name="digestFrequency" value="daily" /> <span>Daily</span></label>
+            </div>
+            <p class="hint" id="watch-count"></p>
+            <ul class="watch-list" id="watch-list"></ul>
+            <p class="hint">
+              Follow a market from its page, and new filings or a single project from the development map. New filings come
+              from TDLR TABS, the public record of qualifying project registrations, so they are not every project in Texas.
+            </p>
+          </fieldset>
           <div class="actions">
             <button type="submit" class="primary" id="profile-save">Save profile</button>
             <a class="link" id="billing" target="_blank" rel="noopener noreferrer" hidden>Manage subscription</a>

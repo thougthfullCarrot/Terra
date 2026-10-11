@@ -46,6 +46,8 @@ jobs:
       SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
       SMTP_SENDER_NAME: ${{ vars.SMTP_SENDER_NAME || 'Terra' }}
       MAX_EMAILS: ${{ vars.ALERT_MAX_EMAILS || '300' }}
+      # Watchlist digests and unsubscribe links (migration 0016): off unless this variable is true.
+      WATCHLISTS_ENABLED: ${{ vars.WATCHLISTS_ENABLED || 'false' }}
       # Scheduled runs send; a manual run sends only when dry run is unticked.
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
     steps:

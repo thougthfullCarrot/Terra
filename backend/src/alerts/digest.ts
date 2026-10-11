@@ -144,7 +144,7 @@ export interface AlertEmail {
  * The morning email for one member: tracker reminders first, then new jobs.
  * At least one of `picked` (pickJobs' output) and `reminders` must be non-empty.
  */
-export function renderEmail(picked: AlertJob[], siteUrl: string, reminders: Reminder[] = []): AlertEmail {
+export function renderEmail(picked: AlertJob[], siteUrl: string, reminders: Reminder[] = [], unsubscribeLink?: string): AlertEmail {
   const shown = picked.slice(0, EMAIL_LIMIT);
   const more = picked.length - shown.length;
   const first = shown[0]?.job;
@@ -177,7 +177,8 @@ export function renderEmail(picked: AlertJob[], siteUrl: string, reminders: Remi
       ''
     ]),
     ...(more > 0 ? [`And ${more} more on Terra: ${site}`, ''] : []),
-    `You get this email because job alerts are on in your Terra profile. Change or turn them off there: ${site}`
+    `You get this email because job alerts are on in your Terra profile. Change or turn them off there: ${site}`,
+    ...(unsubscribeLink ? [`Unsubscribe from job alerts: ${unsubscribeLink}`] : [])
   ].join('\n');
 
   const card = (item: AlertJob) => `
@@ -220,7 +221,9 @@ export function renderEmail(picked: AlertJob[], siteUrl: string, reminders: Remi
           ? `<tr><td style="padding:14px 0;font:14px/1.4 Arial,sans-serif"><a href="${escapeHtml(site)}" style="color:#1f6f50">See ${more} more on Terra</a></td></tr>`
           : ''
       }
-      <tr><td style="padding-top:16px;font:12px/1.5 Arial,sans-serif;color:#6b7076">You get this email because job alerts are on in your Terra profile. <a href="${escapeHtml(site)}" style="color:#6b7076">Change or turn them off</a> under Profile.</td></tr>
+      <tr><td style="padding-top:16px;font:12px/1.5 Arial,sans-serif;color:#6b7076">You get this email because job alerts are on in your Terra profile. <a href="${escapeHtml(site)}" style="color:#6b7076">Change or turn them off</a> under Profile${
+        unsubscribeLink ? `, or <a href="${escapeHtml(unsubscribeLink)}" style="color:#6b7076">unsubscribe</a>` : ''
+      }.</td></tr>
     </table>
   </td></tr></table>
 </body></html>`;

@@ -30,6 +30,9 @@ import {
   type TrackedJob
 } from '../alerts/digest.js';
 import type { SiteSnapshot } from '../site/snapshot.js';
+import { MAX_ATTEMPTS, runWatchDigests, type WatchRecipient, type WatchRunSummary } from '../alerts/sendWatch.js';
+import { unsubscribeUrl } from '../alerts/unsubscribe.js';
+import { supabaseWatchStore } from '../alerts/watchStore.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === 'true';
@@ -49,6 +52,20 @@ const smtpPassword = process.env.SMTP_PASSWORD;
 if (!dryRun && (!smtpUser || !smtpPassword)) throw new Error('Set SMTP_USER and SMTP_PASSWORD, or pass --dry-run.');
 
 const db = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+/**
+ * Watchlist digests and unsubscribe links (migration 0016) stay off until the
+ * WATCHLISTS_ENABLED repository variable is true; until then this script does
+ * exactly what it did before.
+ */
+const watchlistsOn = process.env.WATCHLISTS_ENABLED === 'true';
+let linkSecret: string | null = null;
+if (watchlistsOn) {
+  const secret = await db.rpc('alert_link_secret');
+  if (secret.error || typeof secret.data !== 'string') {
+    console.log(`Watchlists are switched on but migration 0016 isn't in the database yet, so no digests or unsubscribe links: ${secret.error?.message ?? 'no secret'}`);
+  } else linkSecret = secret.data;
+}
 
 const snapshotRow = await db.from('site_snapshots').select('data').eq('id', 'current').maybeSingle();
 if (snapshotRow.error) throw new Error(`Couldn't read the feed: ${snapshotRow.error.message}`);
@@ -134,10 +151,18 @@ for (const recipient of recipients) {
     continue;
   }
 
-  const email = renderEmail(picked, siteUrl, reminders);
+  const unsubscribe = linkSecret ? unsubscribeUrl(siteUrl, linkSecret, recipient.user_id, 'jobs') : undefined;
+  const email = renderEmail(picked, siteUrl, reminders, unsubscribe);
   if (transport) {
     try {
-      await transport.sendMail({ from, to: recipient.email, subject: email.subject, text: email.text, html: email.html });
+      await transport.sendMail({
+        from,
+        to: recipient.email,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        ...(unsubscribe ? { headers: { 'List-Unsubscribe': `<${unsubscribe}>` } } : {})
+      });
     } catch (error) {
       failed++;
       console.error(`One alert failed to send: ${error instanceof Error ? error.message : error}`);
@@ -163,6 +188,24 @@ for (const recipient of recipients) {
   remindersSent += reminders.length;
 }
 
+let watch: WatchRunSummary | null = null;
+if (linkSecret) {
+  const listed = await db.rpc('watch_recipients');
+  if (listed.error) throw new Error(`Couldn't list watchlist recipients: ${listed.error.message}`);
+  watch = await runWatchDigests({
+    recipients: (listed.data ?? []) as WatchRecipient[],
+    store: supabaseWatchStore(db),
+    mailer: transport
+      ? { send: async (m) => void (await transport.sendMail({ from, to: m.to, subject: m.subject, text: m.text, html: m.html, headers: m.headers })) }
+      : null,
+    today,
+    siteUrl,
+    linkSecret,
+    budget: Math.max(0, maxEmails - sent),
+    log: (line) => console.error(line)
+  });
+}
+
 const summary = [
   `## Job alerts${dryRun ? ' (dry run, nothing sent)' : ''}`,
   '',
@@ -171,10 +214,20 @@ const summary = [
   `- Emails ${dryRun ? 'that would go out' : 'sent'}: ${sent} (${jobsSent} jobs, ${remindersSent} tracker reminders)`,
   `- Nothing new for: ${nothingNew}`,
   ...(deferred ? [`- Held for tomorrow (daily cap of ${maxEmails}): ${deferred}`] : []),
-  ...(failed ? [`- Failed: ${failed}`] : [])
+  ...(failed ? [`- Failed: ${failed}`] : []),
+  ...(watch
+    ? [
+        `- Watchlist digests due: ${watch.due}; ${dryRun ? 'would send' : 'sent'} ${watch.sent} (${watch.events} changes); nothing new ${watch.nothingNew}; first digest, baseline only ${watch.baseline}`,
+        ...(watch.deferred ? [`- Watchlist digests held for tomorrow (daily cap): ${watch.deferred}`] : []),
+        ...(watch.failed || watch.gaveUp || watch.unconfirmed
+          ? [`- Watchlist problems: ${watch.failed} failed (retried next run), ${watch.gaveUp} changes given up after ${MAX_ATTEMPTS} tries, ${watch.unconfirmed} sent but not confirmed in the log`]
+          : [])
+      ]
+    : [`- Watchlist digests: ${watchlistsOn ? 'on, but migration 0016 is not applied' : 'off (WATCHLISTS_ENABLED is not true)'}`])
 ].join('\n');
 console.log(summary);
 if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
 transport?.close();
 // Every send failing means the sender is broken (a revoked app password), not one bad address.
 if (failed && sent === 0) process.exit(1);
+if (watch && watch.failed && watch.sent === 0) process.exit(1);

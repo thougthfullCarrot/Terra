@@ -31,6 +31,7 @@ import type { AppraisalFile } from '../market/appraisal.js';
 import { fetchBls } from '../market/bls.js';
 import { fetchBids } from '../market/bids.js';
 import { fetchDevelopments } from '../market/developments.js';
+import { coverageLine, fetchRegistrations } from '../market/registrations.js';
 import { fetchRates } from '../market/fred.js';
 import { fetchOpportunityZones } from '../market/opportunityZones.js';
 import { fetchPep } from '../market/pep.js';
@@ -166,6 +167,14 @@ async function main(): Promise<void> {
     fetchDevelopments(cities, { now, previous: previous?.developments?.projects, log: (line) => console.log(`TDLR TABS: ${line}`) })
   );
 
+  // Every recent filing, uncapped, for watchlist alerts; each county's read is checked against TABS's own count.
+  const registrations = await attempt('TDLR TABS new registrations', () => fetchRegistrations(cities, { now }));
+  if (registrations) {
+    const line = coverageLine(registrations.coverage);
+    console.log(`TDLR TABS new registrations: ${registrations.registrations.length} in the last ${registrations.days} days; ${line}.`);
+    if (registrations.coverage.some((c) => c.complete !== true)) partial('TDLR TABS new registrations', line);
+  }
+
   const bids = await attempt('TxDOT bids', () => fetchBids(cities, { now }));
   if (bids) console.log(`TxDOT bids: ${bids.bids.length} open bids across ${new Set(bids.bids.map((b) => b.city)).size} markets`);
 
@@ -215,6 +224,7 @@ async function main(): Promise<void> {
     previous
   );
   if (developments?.projects.length) snapshot.developments = developments;
+  if (registrations) snapshot.registrations = registrations;
   if (bids) snapshot.bids = bids;
   const keptResearch = research ? keepResearch(research, previous?.research) : previous?.research;
   if (keptResearch) snapshot.research = keptResearch;

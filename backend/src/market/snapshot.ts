@@ -16,6 +16,7 @@ import type { AppraisalFile, PropertyClass } from './appraisal.js';
 import type { MonthlyReading } from './csv.js';
 import type { BidsResult } from './bids.js';
 import type { DevelopmentsResult } from './developments.js';
+import type { RegistrationsResult } from './registrations.js';
 import type { SalaryFile } from './salaries.js';
 import type { ZoningResult } from './zoning.js';
 import type { RateReading } from './fred.js';
@@ -194,6 +195,8 @@ export interface MarketSnapshot {
   counties?: { year: number; rows: CountyRow[] };
   /** Current development projects per city, for the map (TDLR TABS filings). */
   developments?: DevelopmentsResult;
+  /** Every TABS registration of the last few days per market, uncapped, with each county's coverage (watchlist alerts). */
+  registrations?: RegistrationsResult;
   /** Open public construction bids per market (TxDOT lettings), listed under the map. */
   bids?: BidsResult;
   /** Brokerage vacancy and asking rents, and links to their free quarterly reports. */

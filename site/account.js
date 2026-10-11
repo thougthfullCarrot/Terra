@@ -28,6 +28,9 @@ import {
 import { schoolFor } from './school.js';
 import { updatedLabel } from './feed.js';
 import { closePitch, showPitchOnce } from './pitch.js';
+import { DEFAULT_FREQUENCY, digestRow } from './watch.js';
+import { drawWatchList, onWatchChange, setWatchStore, watchOn } from './watch-view.js';
+import { metricName } from './markets-view.js';
 
 const $ = (id) => document.getElementById(id);
 /** Resume text kept for matching. A long resume is a few thousand characters; this leaves room without storing a novel. */
@@ -162,6 +165,9 @@ async function loadFeed() {
   feedJobs = data.data?.jobs ?? [];
   app.showFeed(data.data);
   app.setTracker(trackerStore());
+  // Watchlists (migration 0016) stay hidden until site.yml switches them on.
+  await setWatchStore(CONFIG.watchlists ? watchStore() : null);
+  fillWatch();
   // Market data sits in the same members-only table, one row of its own.
   app.setMarketLoader(async () => {
     const market = await supabase.from('site_snapshots').select('data').eq('id', 'market').maybeSingle();
@@ -184,6 +190,49 @@ function trackerStore() {
       check(await table().upsert(rows.map((row) => ({ user_id: user.id, ...row }))).select('*')) ?? [],
     remove: async (jobId) => check(await table().delete().eq('user_id', user.id).eq('job_id', jobId))
   };
+}
+
+/** The member's watchlist, kept in watchlist_items (migration 0016). Each call throws on error. */
+function watchStore() {
+  const table = () => supabase.from('watchlist_items');
+  const check = ({ data, error }) => {
+    if (error) throw new Error(error.message);
+    return data;
+  };
+  return {
+    list: async () => check(await table().select('*').eq('user_id', user.id).order('created_at')) ?? [],
+    add: async (item) => check(await table().insert({ user_id: user.id, ...item }).select('*').single()),
+    remove: async (id) => check(await table().delete().eq('user_id', user.id).eq('id', id))
+  };
+}
+
+/** True once migration 0016 is in and watchlists are switched on. */
+function watchReady() {
+  return Boolean(CONFIG.watchlists) && watchOn() && Boolean(profile) && 'watch_emails' in profile;
+}
+
+let watchBound = false;
+
+/** The profile's watchlist section: the digest switch, how often, and what's followed. */
+function fillWatch() {
+  const box = $('watch-settings');
+  if (!box) return;
+  box.hidden = !watchReady();
+  if (box.hidden) return;
+  const form = $('profile-form');
+  form.watchEmails.checked = Boolean(profile?.watch_emails);
+  const frequency = profile?.digest_frequency ?? DEFAULT_FREQUENCY;
+  for (const radio of form.querySelectorAll('input[name="digestFrequency"]')) radio.checked = radio.value === frequency;
+  const draw = () => drawWatchList($('watch-list'), $('watch-count'), metricLabel);
+  draw();
+  if (!watchBound) {
+    watchBound = true;
+    onWatchChange(draw);
+  }
+}
+
+function metricLabel(key) {
+  return metricName(key);
 }
 
 function showPaywall() {
@@ -442,6 +491,7 @@ function fillProfile() {
   form.relocationOpen.checked = Boolean(profile?.relocation_open);
   for (const box of form.querySelectorAll('input[name="sectors"]')) box.checked = (profile?.sectors ?? []).includes(box.value);
   $('alert-settings').hidden = !alertsReady();
+  fillWatch();
   form.emailAlerts.checked = Boolean(profile?.email_alerts);
   for (const box of form.querySelectorAll('input[name="alertCities"]')) box.checked = (profile?.alert_cities ?? []).includes(box.value);
   for (const box of form.querySelectorAll('input[name="alertKinds"]')) box.checked = (profile?.alert_kinds ?? []).includes(box.value);
@@ -604,8 +654,12 @@ async function saveProfile(event) {
   });
   const turnedOn = alerts.email_alerts && !profile?.email_alerts;
 
+  const digest = watchReady()
+    ? digestRow({ watchEmails: form.watchEmails.checked, digestFrequency: form.querySelector('input[name="digestFrequency"]:checked')?.value })
+    : {};
+
   $('profile-save').disabled = true;
-  const saved = await writeProfile({ ...row, ...alerts });
+  const saved = await writeProfile({ ...row, ...alerts, ...digest });
   // The alert columns arrive with migration 0007; until it has run, save the rest.
   if (!saved && (await writeProfile(row))) {
     $('profile-save').disabled = false;

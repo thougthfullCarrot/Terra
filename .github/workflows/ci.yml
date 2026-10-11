@@ -24,6 +24,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # Row-level security and the watchlist limit, on a throwaway Postgres
+      # (ubuntu-latest ships the server). Never touches Supabase.
+      - name: Database tests
+        run: npm run test:db
 
   mobile:
     runs-on: ubuntu-latest
