@@ -78,18 +78,16 @@ interface SearchPage {
 
 const isoDate = (value: string | null | undefined) => (value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '');
 
-/** The search form for one page of a county's recent registrations. */
-export function recentForm(county: string, now: Date, start: number, days = RECENT_DAYS): Record<string, string> {
+/** The search form for one page of a county's registrations from `since` to `until`. */
+export function recentForm(county: string, now: Date, start: number, days = RECENT_DAYS, until = now): Record<string, string> {
   const since = new Date(now.getTime() - days * 86_400_000);
-  return { ...searchForm(county, since, now, RECENT_PAGE), start: String(start) };
+  return { ...searchForm(county, since, until, RECENT_PAGE), start: String(start) };
 }
 
-/** Read every page of one county's recent registrations, and say whether the read is complete. */
-export async function readCounty(
-  county: string,
-  now: Date,
-  options: FetchJsonOptions = {}
-): Promise<{ rows: TabsRow[]; reported: number | null; complete: boolean | null }> {
+type WindowRead = { rows: Map<string, TabsRow>; reported: number | null; endReached: boolean };
+
+/** Read every page of one date window, stopping when the pages run out or repeat. */
+async function readWindow(form: (start: number) => Record<string, string>, options: FetchJsonOptions): Promise<WindowRead> {
   const rows = new Map<string, TabsRow>();
   let reported: number | null = null;
   let read = 0;
@@ -98,7 +96,7 @@ export async function readCounty(
     const result = await fetchJson<SearchPage>(TABS_SEARCH_URL, {
       timeoutMs: 120_000,
       ...options,
-      form: recentForm(county, now, read),
+      form: form(read),
       headers: { 'x-requested-with': 'XMLHttpRequest', referer: 'https://www.tdlr.texas.gov/TABS/Search/' }
     });
     const data = result.data ?? [];
@@ -108,15 +106,38 @@ export async function readCounty(
     for (const row of data) rows.set(row.ProjectNumber, row);
     // A page of rows already seen means the search ignored the page offset; stop and let the count show the gap.
     if (data.length && rows.size === before) break;
-    // TABS may serve fewer rows than asked (it capped Harris at 100 a page), so the
-    // next page starts after the rows actually read, and only an empty page, a
-    // matched total, or a short page with no total ends the read.
+    // TABS may serve fewer rows than asked, so the next page starts after the
+    // rows actually read, and only an empty page, a matched total, or a short
+    // page with no total ends the read.
     if (!data.length || (reported != null ? read >= reported : data.length < RECENT_PAGE)) {
       endReached = true;
       break;
     }
   }
-  const complete = reported != null ? rows.size >= reported : endReached ? null : false;
+  return { rows, reported, endReached };
+}
+
+/**
+ * Read one county's recent registrations, and say whether the read is complete.
+ * The PR build showed TABS serving at most 100 rows a search and ignoring the
+ * page offset (Harris: 100 of 124), so a county the whole window can't cover is
+ * read again one day at a time, and the rows are checked against the total.
+ */
+export async function readCounty(
+  county: string,
+  now: Date,
+  options: FetchJsonOptions = {}
+): Promise<{ rows: TabsRow[]; reported: number | null; complete: boolean | null }> {
+  const whole = await readWindow((start) => recentForm(county, now, start), options);
+  const { rows, reported } = whole;
+  if (reported != null && rows.size < reported) {
+    for (let back = RECENT_DAYS; back >= 0; back--) {
+      const day = new Date(now.getTime() - back * 86_400_000);
+      const one = await readWindow((start) => recentForm(county, day, start, 0, day), options);
+      for (const [id, row] of one.rows) rows.set(id, row);
+    }
+  }
+  const complete = reported != null ? rows.size >= reported : whole.endReached ? null : false;
   return { rows: [...rows.values()], reported, complete };
 }
 

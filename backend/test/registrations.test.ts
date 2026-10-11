@@ -77,12 +77,30 @@ describe('recent TABS registrations', () => {
     expect(result.rows).toHaveLength(124);
   });
 
+  it('reads day by day when TABS caps a search at 100 rows and ignores the offset', async () => {
+    // 124 rows spread over the window, 12 or so a day; each search serves its first 100 matches.
+    const all = Array.from({ length: 124 }, (_, i) => ({ r: row(i), day: `10/${String(1 + (i % 10)).padStart(2, '0')}/2026` }));
+    const calls: Record<string, string>[] = [];
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      const form = Object.fromEntries(new URLSearchParams(String(init.body)));
+      calls.push(form);
+      const key = (d: string) => d.slice(6) + d.slice(0, 5);
+      const hits = all.filter((x) => key(x.day) >= key(form.RegistrationDateBegin!) && key(x.day) <= key(form.RegistrationDateEnd!));
+      return Response.json({ data: hits.slice(0, 100).map((x) => x.r), recordsFiltered: hits.length });
+    }) as typeof fetch;
+    const result = await readCounty('Harris', NOW, { fetchImpl, retries: 0 });
+    expect(result).toMatchObject({ reported: 124, complete: true });
+    expect(result.rows).toHaveLength(124);
+    expect(calls.filter((c) => c.RegistrationDateBegin === c.RegistrationDateEnd)).toHaveLength(11);
+  });
+
   it('catches a search that ignores the page offset', async () => {
     const { fetchImpl, calls } = tabs(900, { ignoreStart: true });
     const result = await readCounty('Harris', NOW, { fetchImpl, retries: 0 });
     expect(result).toMatchObject({ reported: 900, complete: false });
     expect(result.rows).toHaveLength(500);
-    expect(calls).toHaveLength(2);
+    // Two pages for the whole window, then two for each of the 11 days.
+    expect(calls).toHaveLength(2 + 11 * 2);
   });
 
   it('marks a county unverified when TABS reports no total', async () => {
