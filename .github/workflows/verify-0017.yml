@@ -1,23 +1,24 @@
-# One-off, read-only: what the live site actually serves. Never merged.
-name: Check live site (one-off, read-only)
+# One-off, read-only: who has signed in recently, and is it the tester. Never merged.
+# No email or user id is printed.
+name: Check tester sign-ins (one-off, read-only)
 on:
   push:
     branches: [claude/verify-0017]
 permissions:
   contents: read
 jobs:
-  live:
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
-      - name: Fetch the live files
+      - name: Read-only queries
         run: |
-          B=https://thougthfullcarrot.github.io/Terra
-          for f in index.html config.js account.js watch-view.js markets-view.js devmap.js app.js; do
-            curl -sS -D /tmp/h -o /tmp/$f "$B/$f?nocache=$RANDOM"; echo "== $f $(head -1 /tmp/h | tr -d '\r') bytes=$(wc -c < /tmp/$f) $(grep -i -E '^(last-modified|cache-control|age):' /tmp/h | tr -d '\r' | tr '\n' ' ')"
-          done
-          echo "== config watchlists:"; grep -o '"watchlists": *[a-z]*' /tmp/config.js || echo "no watchlists key"
-          echo "== 'Follow this market' in markets-view.js: $(grep -c 'Follow this market' /tmp/markets-view.js)"
-          echo "== watch_beta_access in account.js: $(grep -c watch_beta_access /tmp/account.js)"
-          echo "== script tags / imports in index.html:"; grep -o '<script[^>]*>' /tmp/index.html
-          echo "== imports of config:"; grep -n "config.js" /tmp/*.js /tmp/index.html | head
+          ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
+          q() { echo "== $1"; jq -n --arg q "$2" '{query: $q}' | curl -sS -X POST "https://api.supabase.com/v1/projects/$ref/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-; echo; }
+          q tester "select u.last_sign_in_at::text tester_last_sign_in, split_part(u.email,'@',2) tester_domain, (select count(*) from private.watch_testers) testers from private.watch_testers t join auth.users u on u.id = t.user_id"
+          q recent "select u.last_sign_in_at::text, split_part(u.email,'@',2) domain, exists (select 1 from private.watch_testers t where t.user_id = u.id) is_tester, public.is_college_email(u.email) college from auth.users u where coalesce(u.raw_app_meta_data->>'terra_test_user','false') <> 'true' and u.last_sign_in_at > now() - interval '24 hours' order by u.last_sign_in_at desc limit 10"
+          q items "select count(*) from public.watchlist_items"
