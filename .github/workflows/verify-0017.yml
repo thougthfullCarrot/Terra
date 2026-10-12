@@ -1,45 +1,36 @@
-# One-off (approved by Rod 2026-10-12 21:15): make his signed-in my.utsa.edu
-# account (user-id fingerprint 5ee1947aab59) the only watchlist tester, in one
-# transaction, then verify read-only. Ids and emails are never printed. Never merged.
-name: Swap tester (one-off)
+# One-off, read-only: private-beta checks. Writes are only attempted inside
+# transactions that are always rolled back. No ids or emails printed. Never merged.
+name: Beta check (one-off, read-only)
 on:
   push:
     branches: [claude/verify-0017]
 permissions:
   contents: read
 jobs:
-  swap:
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      FLAG: ${{ vars.WATCHLISTS_ENABLED }}
-      OLD: 6c3ad9c644e2
-      NEW: 5ee1947aab59
+      ME: 5ee1947aab59
     steps:
-      - name: Swap and verify
+      - name: Read-only queries
         run: |
           ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
           q() { echo "== $1"; jq -n --arg q "$2" '{query: $q}' | curl -sS -X POST "https://api.supabase.com/v1/projects/$ref/database/query" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-; echo; }
           fp="left(encode(extensions.digest(u.id::text, 'sha256'), 'hex'), 12)"
-          q before "select (select count(*) from auth.users u where $fp = '$NEW' and split_part(u.email,'@',2) = 'my.utsa.edu') new_matches, (select count(*) from auth.users u where $fp = '$OLD') old_matches, (select count(*) from private.watch_testers) testers, (select count(*) from public.subscriptions) subscriptions, (select count(*) filter (where watch_emails) from public.profiles) digests_on"
-          q swap "begin;
-            do \$\$ declare n int; o int; uid uuid; oid uuid; begin
-              select count(*), min(u.id::text)::uuid into n, uid from auth.users u where $fp = '$NEW' and split_part(u.email,'@',2) = 'my.utsa.edu';
-              if n <> 1 then raise exception 'expected exactly 1 target account, found %', n; end if;
-              select count(*), min(u.id::text)::uuid into o, oid from auth.users u where $fp = '$OLD';
-              if o <> 1 then raise exception 'expected exactly 1 old tester, found %', o; end if;
-              if (select count(*) from private.watch_testers) <> 1 or not exists (select 1 from private.watch_testers where user_id = oid) then raise exception 'tester list is not exactly the old tester'; end if;
-              delete from private.watch_testers where user_id = oid;
-              insert into private.watch_testers (user_id) values (uid) on conflict (user_id) do nothing;
-              if (select count(*) from private.watch_testers) <> 1 then raise exception 'tester count is not 1 after swap'; end if;
-            end \$\$;
-            commit; select 'ok' result"
-          q testers "select count(*) testers, bool_and($fp = '$NEW') is_target from private.watch_testers t join auth.users u on u.id = t.user_id"
-          q access "select count(*) filter (where private.watch_open_to(u.id)) users_with_access, bool_or(private.watch_open_to(u.id)) filter (where $fp = '$NEW') target_access, bool_or(private.watch_open_to(u.id)) filter (where $fp = '$OLD') gmail_access, (select private_beta from private.watch_settings) private_beta from auth.users u"
-          q beta_access_as_target "begin; select set_config('request.jwt.claims', json_build_object('sub', (select u.id from auth.users u where $fp = '$NEW'), 'role', 'authenticated')::text, true); set local role authenticated; select public.watch_beta_access() as watch_beta_access; rollback;"
-          q beta_access_as_gmail "begin; select set_config('request.jwt.claims', json_build_object('sub', (select u.id from auth.users u where $fp = '$OLD'), 'role', 'authenticated')::text, true); set local role authenticated; select public.watch_beta_access() as watch_beta_access; rollback;"
-          q after "select (select count(*) from public.subscriptions) subscriptions, (select count(*) filter (where watch_emails) from public.profiles) digests_on, (select count(*) from public.profiles) profiles, (select count(*) from public.watch_sends) watch_sends, (select count(*) from public.watch_recipients()) digest_recipients"
-          echo "WATCHLISTS_ENABLED is true: $([ "$FLAG" = true ] && echo yes || echo no)"
+          q counts "select (select count(*) from private.watch_testers) testers, (select bool_and($fp = '$ME') from private.watch_testers t join auth.users u on u.id = t.user_id) tester_is_rod, (select count(*) from public.watchlist_items) items, (select count(*) from public.watch_sends) watch_sends, (select count(*) from public.watch_digests) watch_digests, (select count(*) from public.alert_sends) alert_sends, (select max(sent_at)::text from public.alert_sends) last_alert_send, (select count(*) from public.subscriptions) subscriptions, (select md5(string_agg(user_id::text || status || coalesce(current_period_end::text,''), ',' order by user_id)) from public.subscriptions) subs_hash, (select count(*) filter (where email_alerts) from public.profiles) job_alerts_on, (select count(*) filter (where watch_emails) from public.profiles) digests_on, (select count(*) from public.market_history) history_days"
+          q items "select ($fp = '$ME') owner_is_rod, w.kind, w.city, w.ref, w.filters, w.created_at::text from public.watchlist_items w join auth.users u on u.id = w.user_id order by w.created_at"
+          q rod_settings "select p.watch_emails, p.digest_frequency from public.profiles p join auth.users u on u.id = p.id where $fp = '$ME'"
+          other="(select u.id from auth.users u where split_part(u.email,'@',2) = 'my.utsa.edu' and $fp <> '$ME' limit 1)"
+          as_other="begin; select set_config('request.jwt.claims', json_build_object('sub', $other, 'role', 'authenticated')::text, true); set local role authenticated;"
+          q nontester_beta_access "$as_other select public.watch_beta_access() v; rollback;"
+          q nontester_reads_items "$as_other select count(*) visible_items from public.watchlist_items; rollback;"
+          q nontester_reads_sends "$as_other select count(*) visible_sends from public.watch_sends; rollback;"
+          q nontester_insert "$as_other insert into public.watchlist_items (kind, city) values ('market', 'Dallas'); rollback;"
+          q nontester_update_rods "$as_other with x as (update public.watchlist_items set city = city returning 1) select count(*) rows_changed from x; rollback;"
+          q nontester_delete_rods "$as_other with x as (delete from public.watchlist_items returning 1) select count(*) rows_deleted from x; rollback;"
+          q nontester_reads_testers "$as_other select count(*) from private.watch_testers; rollback;"
+          q after_items "select count(*) items from public.watchlist_items"
