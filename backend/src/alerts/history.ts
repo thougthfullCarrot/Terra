@@ -1,6 +1,7 @@
 import type { CountyCoverage } from '../market/registrations.js';
 import type { MarketSnapshot, ValueStatus } from '../market/snapshot.js';
 import type { City } from '../types.js';
+import type { FollowedProject } from './followed.js';
 
 /**
  * A compact copy of one day's market file, kept in market_history (migration
@@ -9,7 +10,7 @@ import type { City } from '../types.js';
  * status, cost and end date, and the recent TABS registrations with their
  * coverage. Everything else (map points, scopes, research links) is left out.
  */
-export const HISTORY_VERSION = 1;
+export const HISTORY_VERSION = 2;
 /** Days of history kept. Rod chose 90 to start (2026-10-10). */
 export const HISTORY_DAYS = 90;
 
@@ -56,6 +57,11 @@ export interface HistoryDay {
   projects: Record<string, HistoryProject>;
   /** Null when the registrations search did not run or failed on this build. */
   registrations: { days: number; items: HistoryRegistration[]; coverage: CountyCoverage[] } | null;
+  /**
+   * Followed TABS projects checked on their own (v2, followed.ts), by project
+   * number, whether or not the map shows them. Missing on v1 rows.
+   */
+  followed?: Record<string, FollowedProject>;
 }
 
 /** Today's date in Texas, which is what a digest's "day" means to members. */

@@ -128,7 +128,7 @@ export const STATUS: Record<number, string> = {
   3010: 'Plan review pending'
 };
 /** Finished or closed: no longer a current development. */
-const DONE = new Set([3001, 3007]);
+export const DONE = new Set([3001, 3007]);
 
 export const WORK: Record<number, string> = { 9001: 'New construction', 9003: 'Addition' };
 
@@ -437,6 +437,22 @@ export async function searchCounty(county: string, now: Date, options: FetchJson
     headers: { 'x-requested-with': 'XMLHttpRequest', referer: `${TABS}/Search/` }
   });
   return data.data ?? [];
+}
+
+/**
+ * One project's search row by its TABS project number (the official id), or
+ * null when TABS answers that no such project is listed. Throws when TABS
+ * can't be read, so a caller never mistakes an outage for a missing project.
+ */
+export async function searchProject(number: string, options: FetchJsonOptions = {}): Promise<TabsRow | null> {
+  const data = await fetchJson<{ data?: TabsRow[] }>(TABS_SEARCH_URL, {
+    timeoutMs: 60_000,
+    ...options,
+    form: { draw: '1', start: '0', length: '5', ProjectNumber: number, DataVersionId: '900001' },
+    headers: { 'x-requested-with': 'XMLHttpRequest', referer: `${TABS}/Search/` }
+  });
+  if (!Array.isArray(data.data)) throw new Error('TABS answered without a result list');
+  return data.data.find((r) => r.ProjectNumber === number) ?? null;
 }
 
 /** A metro's biggest current projects across its counties, each project once. */

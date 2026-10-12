@@ -121,14 +121,18 @@ export async function runWatchDigests(options: WatchRunOptions): Promise<WatchRu
     if (!r.items?.length || !isDue(r, today)) continue;
     summary.due++;
     const baseline = baselineDay(r, today);
-    const days = comparisonDays(await historyFrom(baseline), baseline, today);
+    // Start a day before the last digest: a build that changed that day's row
+    // after the digest went out is caught here. Event ids name the value, so
+    // what the last digest already sent stays suppressed by the send log.
+    const from = r.last_day ? addDays(r.last_day, -1) : baseline;
+    const days = comparisonDays(await historyFrom(baseline), from, today);
     if (!days.length) {
       // No earlier day to compare with yet: start counting from today.
       summary.baseline++;
       if (mailer) await store.setDigestDay(r.user_id, today).catch((e) => log(`Couldn't record a digest day: ${message(e)}`));
       continue;
     }
-    const result = watchEvents(r.items, days);
+    const result = watchEvents(r.items, days, baseline);
     const ids = result.events.map((e) => e.id);
     const log_ = ids.length ? await store.sends(r.user_id, ids) : [];
     const known = new Map(log_.map((row) => [row.event_id, row]));
