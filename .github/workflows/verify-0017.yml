@@ -1,26 +1,45 @@
-# One-off, read-only: identify the my.utsa.edu account Rod is signed in with,
-# by its live sessions. Prints a short fingerprint of each user id (sha256,
-# first 12 hex), never the id or email. Never merged.
-name: Identify tester account (one-off, read-only)
+# One-off (approved by Rod 2026-10-12 21:15): make his signed-in my.utsa.edu
+# account (user-id fingerprint 5ee1947aab59) the only watchlist tester, in one
+# transaction, then verify read-only. Ids and emails are never printed. Never merged.
+name: Swap tester (one-off)
 on:
   push:
     branches: [claude/verify-0017]
 permissions:
   contents: read
 jobs:
-  check:
+  swap:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      FLAG: ${{ vars.WATCHLISTS_ENABLED }}
+      OLD: 6c3ad9c644e2
+      NEW: 5ee1947aab59
     steps:
-      - name: Read-only queries
+      - name: Swap and verify
         run: |
           ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
           q() { echo "== $1"; jq -n --arg q "$2" '{query: $q}' | curl -sS -X POST "https://api.supabase.com/v1/projects/$ref/database/query" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-; echo; }
           fp="left(encode(extensions.digest(u.id::text, 'sha256'), 'hex'), 12)"
-          q utsa_accounts "select $fp fp, u.created_at::text created, u.last_sign_in_at::text last_sign_in, (select max(s.updated_at)::text from auth.sessions s where s.user_id = u.id) last_session_use, (select count(*) from auth.sessions s where s.user_id = u.id) sessions, (select count(*) from auth.refresh_tokens r where r.user_id = u.id::text and r.created_at > now() - interval '2 hours') refreshes_2h, exists (select 1 from public.subscriptions x where x.user_id = u.id) has_sub_row, coalesce(u.raw_app_meta_data->>'terra_test_user','false') test from auth.users u where split_part(u.email,'@',2) = 'my.utsa.edu' order by 4 desc nulls last"
-          q tester "select $fp fp from private.watch_testers t join auth.users u on u.id = t.user_id"
-          q last_hour_sessions "select $fp fp, split_part(u.email,'@',2) domain, s.updated_at::text from auth.sessions s join auth.users u on u.id = s.user_id where s.updated_at > now() - interval '1 hour' order by s.updated_at desc"
+          q before "select (select count(*) from auth.users u where $fp = '$NEW' and split_part(u.email,'@',2) = 'my.utsa.edu') new_matches, (select count(*) from auth.users u where $fp = '$OLD') old_matches, (select count(*) from private.watch_testers) testers, (select count(*) from public.subscriptions) subscriptions, (select count(*) filter (where watch_emails) from public.profiles) digests_on"
+          q swap "begin;
+            do \$\$ declare n int; o int; uid uuid; oid uuid; begin
+              select count(*), min(u.id::text)::uuid into n, uid from auth.users u where $fp = '$NEW' and split_part(u.email,'@',2) = 'my.utsa.edu';
+              if n <> 1 then raise exception 'expected exactly 1 target account, found %', n; end if;
+              select count(*), min(u.id::text)::uuid into o, oid from auth.users u where $fp = '$OLD';
+              if o <> 1 then raise exception 'expected exactly 1 old tester, found %', o; end if;
+              if (select count(*) from private.watch_testers) <> 1 or not exists (select 1 from private.watch_testers where user_id = oid) then raise exception 'tester list is not exactly the old tester'; end if;
+              delete from private.watch_testers where user_id = oid;
+              insert into private.watch_testers (user_id) values (uid) on conflict (user_id) do nothing;
+              if (select count(*) from private.watch_testers) <> 1 then raise exception 'tester count is not 1 after swap'; end if;
+            end \$\$;
+            commit; select 'ok' result"
+          q testers "select count(*) testers, bool_and($fp = '$NEW') is_target from private.watch_testers t join auth.users u on u.id = t.user_id"
+          q access "select count(*) filter (where private.watch_open_to(u.id)) users_with_access, bool_or(private.watch_open_to(u.id)) filter (where $fp = '$NEW') target_access, bool_or(private.watch_open_to(u.id)) filter (where $fp = '$OLD') gmail_access, (select private_beta from private.watch_settings) private_beta from auth.users u"
+          q beta_access_as_target "begin; select set_config('request.jwt.claims', json_build_object('sub', (select u.id from auth.users u where $fp = '$NEW'), 'role', 'authenticated')::text, true); set local role authenticated; select public.watch_beta_access() as watch_beta_access; rollback;"
+          q beta_access_as_gmail "begin; select set_config('request.jwt.claims', json_build_object('sub', (select u.id from auth.users u where $fp = '$OLD'), 'role', 'authenticated')::text, true); set local role authenticated; select public.watch_beta_access() as watch_beta_access; rollback;"
+          q after "select (select count(*) from public.subscriptions) subscriptions, (select count(*) filter (where watch_emails) from public.profiles) digests_on, (select count(*) from public.profiles) profiles, (select count(*) from public.watch_sends) watch_sends, (select count(*) from public.watch_recipients()) digest_recipients"
+          echo "WATCHLISTS_ENABLED is true: $([ "$FLAG" = true ] && echo yes || echo no)"
