@@ -209,17 +209,18 @@ describe('watchlist changes', () => {
     expect(failedDay.notes[0]).toMatch(/could not be read on 2026-10-10/);
   });
 
-  it('reports a followed project changing status, finish date or cost, and leaving the map', () => {
+  it('reports a followed project changing status, finish date or cost, and stays quiet when it only leaves the map', () => {
     const watch = item({ kind: 'project', ref: 'TABS9' });
     const today = day('2026-10-10', {
       projects: { TABS9: { c: 'Austin', n: 'Tower', st: 'Inspection under way', cost: 6e7, end: '2027-09-01', src: 'tabs', url: 'u9' } }
     });
     expect(watchEvents([watch], [before, today]).events.map((e) => e.id)).toEqual([
-      'project:TABS9:status:Inspection under way',
-      'project:TABS9:end:2027-09-01',
-      'project:TABS9:cost:60000000'
+      'project:TABS9:status:2026-10-10:f1b691dbd6',
+      'project:TABS9:cost:2026-10-10:60000000',
+      'project:TABS9:end:2026-10-10:2027-09-01'
     ]);
-    expect(watchEvents([watch], [before, day('2026-10-10')]).events.map((e) => e.id)).toEqual(['project:TABS9:gone']);
+    // Off the map is not a fact about the project: no event (followed.ts checks it on its own).
+    expect(watchEvents([watch], [before, day('2026-10-10')]).events).toEqual([]);
     expect(watchEvents([watch], [before, before]).events).toEqual([]);
   });
 

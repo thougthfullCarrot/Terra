@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
 import type { City } from '../types.js';
 import { escapeHtml } from './digest.js';
+import { STATUS } from '../market/developments.js';
+import { isFinished, isTabsNumber, type FollowedDetails } from './followed.js';
 import type { HistoryDay, HistoryFigure, HistoryRegistration } from './history.js';
 
 /**
@@ -60,13 +63,18 @@ export const TABS_COVERAGE_NOTE =
  * Days in between are read for filings, so a gap longer than the
  * registrations window loses nothing that was stored.
  */
-export function watchEvents(items: WatchItem[], days: HistoryDay[]): WatchResult {
+export function watchEvents(items: WatchItem[], allDays: HistoryDay[], since?: string): WatchResult {
   const notes = new Set<string>();
+  // Project items read every day given (sendWatch starts them a day early);
+  // market and area items start at the newest day on or before `since`.
+  let first = 0;
+  if (since) allDays.forEach((d, i) => d.day <= since && (first = i));
+  const days = allDays.slice(first);
   const events = new Map<string, WatchEvent>();
   const add = (event: WatchEvent) => {
     if (!events.has(event.id)) events.set(event.id, event);
   };
-  if (days.length < 2) {
+  if (allDays.length < 2) {
     return { events: [], notes: ['Changes are measured from your first digest, so they start showing in the next one.'] };
   }
   const before = days[0]!;
@@ -75,7 +83,7 @@ export function watchEvents(items: WatchItem[], days: HistoryDay[]): WatchResult
   for (const item of items) {
     const city = item.city as City;
     if (item.kind === 'market') marketEvents(item, city, before, today, add);
-    else if (item.kind === 'project') projectEvents(item, before, today, add);
+    else if (item.kind === 'project') projectEvents(item, allDays, add, notes);
     else areaEvents(item, city, days, add, notes);
   }
 
@@ -152,45 +160,151 @@ function marketEvents(item: WatchItem, city: City, before: HistoryDay, today: Hi
   }
 }
 
-function projectEvents(item: WatchItem, before: HistoryDay, today: HistoryDay, add: (e: WatchEvent) => void) {
-  const t = today.projects[item.ref];
-  const b = before.projects[item.ref];
-  if (!t) {
-    if (b) {
-      add({
-        id: `project:${item.ref}:gone`,
-        kind: 'project',
-        city: item.city,
-        title: `${b.n} is off the development map`,
-        detail: 'It was finished or closed, or fell below the map’s size cut for its metro. Its TABS record stays public.',
-        url: b.url
-      });
+/** One day's view of a followed project, from its own TABS check or, failing that, the map. */
+interface Observation {
+  day: string;
+  src: 'followed' | 'map';
+  n: string;
+  st: string | null;
+  code: number | null;
+  cost: number | null;
+  start: string | null;
+  end: string | null;
+  url: string;
+  checked: string | null;
+  details: FollowedDetails | null;
+}
+
+type Seen = Observation | 'not_found' | 'error' | null;
+
+function observe(day: HistoryDay, ref: string): Seen {
+  const f = day.followed?.[ref];
+  if (f) {
+    if (f.state === 'error') return 'error';
+    if (f.state === 'not_found') return 'not_found';
+    return {
+      day: day.day,
+      src: 'followed',
+      n: f.n ?? day.projects[ref]?.n ?? ref,
+      st: f.st,
+      code: f.code,
+      cost: f.cost,
+      start: f.start,
+      end: f.end,
+      url: f.url,
+      checked: f.checked,
+      details: f.details
+    };
+  }
+  const p = day.projects[ref];
+  if (!p) return null;
+  return { day: day.day, src: 'map', n: p.n, st: p.st, code: null, cost: p.cost > 0 ? p.cost : null, start: null, end: p.end, url: p.url, checked: null, details: null };
+}
+
+/**
+ * A short, stable tag for a value, so an event id names the change itself:
+ * a different value seen on the same day (a later build) is a new event.
+ */
+function tag(value: unknown): string {
+  const text = String(value ?? '');
+  if (/^[\w.-]{1,24}$/.test(text)) return text;
+  return createHash('sha256').update(norm(text)).digest('hex').slice(0, 10);
+}
+
+const KNOWN_STATUS = new Set(Object.values(STATUS));
+const norm = (v: string) => v.replace(/\s+/g, ' ').trim().toLowerCase();
+
+export function shortDate(iso: string): string {
+  const d = new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' });
+}
+
+/**
+ * Every change to a followed project across the whole period, day by day, so
+ * a change that is undone before the digest still shows (A to B, then B back
+ * to A, is two events). Event ids name the field and the day the change was
+ * seen, so a rebuilt digest repeats none and a later change back is new.
+ * A day TABS couldn't be read, or a value TABS left blank, is never a change.
+ */
+function projectEvents(item: WatchItem, days: HistoryDay[], add: (e: WatchEvent) => void, notes: Set<string>) {
+  const ref = item.ref;
+  let prev: Observation | null = null;
+  let missingSince: string | null = null;
+  let missingRun = 0;
+  let lastSeen: Seen = null;
+  let everOnMap = false;
+
+  for (const day of days) {
+    const seen = observe(day, ref);
+    lastSeen = seen;
+    if (seen && seen !== 'error' && seen !== 'not_found' && seen.src === 'map') everOnMap = true;
+    if (seen === 'not_found') {
+      missingRun++;
+      missingSince ??= day.day;
+      if (missingRun === 2 && prev) {
+        add({
+          id: `project:${ref}:notfound:${missingSince}`,
+          kind: 'project',
+          city: item.city,
+          title: `${prev.n} is no longer listed in TDLR TABS`,
+          detail: `TABS answered two checks (since ${shortDate(missingSince)}) without this project number. It may have been withdrawn or renumbered; Terra keeps checking.`,
+          url: prev.url
+        });
+      }
+      continue;
     }
-    return;
+    if (!seen || seen === 'error') continue;
+    missingRun = 0;
+    missingSince = null;
+    if (prev) compare(ref, item.city, prev, seen, add);
+    prev = seen;
   }
-  if (!b) return;
-  if (t.st !== b.st) {
-    add({ id: `project:${item.ref}:status:${t.st}`, kind: 'project', city: t.c, title: `${t.n}: ${t.st}`, detail: `Status was ${b.st}.`, url: t.url });
+
+  if (lastSeen === 'error') {
+    const name = prev?.n ?? ref;
+    notes.add(
+      `TDLR TABS couldn't be checked for ${name} on the latest build${prev?.checked ? `; it was last checked ${shortDate(prev.checked)}` : ''}. Any change will show once TABS answers.`
+    );
+  } else if (lastSeen === null && everOnMap && !isTabsNumber(ref)) {
+    notes.add(`${prev?.n ?? ref} is no longer on the development map. City permits are read only through the map, so later changes to it can't be reported.`);
   }
-  if (t.end !== b.end && t.end) {
-    add({
-      id: `project:${item.ref}:end:${t.end}`,
-      kind: 'project',
-      city: t.c,
-      title: `${t.n}: new estimated finish ${t.end}`,
-      detail: b.end ? `Was ${b.end}.` : 'No finish date was filed before.',
-      url: t.url
-    });
+}
+
+function compare(ref: string, city: string, b: Observation, t: Observation, add: (e: WatchEvent) => void) {
+  const where = t.src === 'followed' ? `TDLR TABS, checked ${shortDate(t.checked ?? t.day)}` : `development map, ${shortDate(t.day)}`;
+  const event = (field: string, value: unknown, title: string, detail: string) =>
+    add({ id: `project:${ref}:${field}:${t.day}:${tag(value)}`, kind: 'project', city, title: `${t.n}: ${title}`, detail: `${detail} Source: ${where}.`, url: t.url });
+
+  // Labels from two sources only line up when both are known TABS statuses.
+  const comparable = b.src === t.src || (b.st != null && t.st != null && KNOWN_STATUS.has(b.st) && KNOWN_STATUS.has(t.st));
+  if (b.st && t.st && b.st !== t.st && comparable) {
+    if (isFinished(t.code)) event('status', t.st, `TABS lists it as ${t.st}`, `Status was ${b.st}. TABS marks the project finished or closed.`);
+    else event('status', t.st, t.st, `Status was ${b.st}.`);
   }
-  if (t.cost !== b.cost && t.cost > 0) {
-    add({
-      id: `project:${item.ref}:cost:${t.cost}`,
-      kind: 'project',
-      city: t.c,
-      title: `${t.n}: estimated cost now ${formatValue(t.cost, 'usd')}`,
-      detail: `Was ${formatValue(b.cost, 'usd')}.`,
-      url: t.url
-    });
+  if (b.cost != null && t.cost != null && b.cost !== t.cost) {
+    event('cost', t.cost, `estimated cost now ${formatValue(t.cost, 'usd')}`, `Was ${formatValue(b.cost, 'usd')}.`);
+  }
+  if (t.end && t.end !== b.end) {
+    event('end', t.end, `new estimated finish ${t.end}`, b.end ? `Was ${b.end}.` : 'No finish date was filed before.');
+  }
+  if (b.start && t.start && b.start !== t.start) {
+    event('start', t.start, `new estimated start ${t.start}`, `Was ${b.start}.`);
+  }
+  if (b.src === 'followed' && t.src === 'followed' && b.n && t.n && norm(b.n) !== norm(t.n)) {
+    event('name', t.n, 'renamed in TABS', `Was ${b.n}.`);
+  }
+  const bd = b.details;
+  const td = t.details;
+  if (bd && td && bd.checked !== td.checked) {
+    const page = `TDLR TABS project page, read ${shortDate(td.checked)}`;
+    const detail = (field: string, value: unknown, title: string, text: string) =>
+      add({ id: `project:${ref}:${field}:${t.day}:${tag(value)}`, kind: 'project', city, title: `${t.n}: ${title}`, detail: `${text} Source: ${page}.`, url: t.url });
+    if (bd.owner && td.owner && norm(bd.owner) !== norm(td.owner)) detail('owner', td.owner, `owner now ${td.owner}`, `Was ${bd.owner}.`);
+    if (bd.designFirm && td.designFirm && norm(bd.designFirm) !== norm(td.designFirm)) detail('design', td.designFirm, `design firm now ${td.designFirm}`, `Was ${bd.designFirm}.`);
+    if (bd.squareFeet != null && td.squareFeet != null && bd.squareFeet !== td.squareFeet) {
+      detail('size', td.squareFeet, `size now ${formatValue(td.squareFeet, 'count')} sq ft`, `Was ${formatValue(bd.squareFeet, 'count')} sq ft.`);
+    }
+    if (bd.scope && td.scope && norm(bd.scope) !== norm(td.scope)) detail('scope', td.scope, 'scope of work changed', `Now: ${td.scope}`);
   }
 }
 
