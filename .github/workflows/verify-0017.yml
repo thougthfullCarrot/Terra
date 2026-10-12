@@ -1,0 +1,45 @@
+# One-off, read-only check of migration 0017 in production. Runs only on a
+# push to this branch; never merged. Every query is a SELECT.
+name: Verify 0017 (read-only)
+on:
+  push:
+    branches: [claude/verify-0017]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      ANON: ${{ vars.SUPABASE_ANON_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      FLAG: ${{ vars.WATCHLISTS_ENABLED }}
+    steps:
+      - name: Database (read-only SELECTs)
+        run: |
+          ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
+          q() { echo "== $1"; jq -n --arg q "$2" '{query: $q}' | curl -sS -X POST "https://api.supabase.com/v1/projects/$ref/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-; echo; }
+          q tables "select relname, relrowsecurity from pg_class where relnamespace='public'::regnamespace and relname in ('watchlist_items','watch_sends','watch_digests','market_history') order by 1"
+          q policies "select tablename, policyname, cmd, roles::text from pg_policies where tablename in ('watchlist_items','watch_sends') order by 1,2"
+          q functions "select p.oid::regprocedure::text fn, p.prosecdef secdef, array_to_string(p.proconfig, ',') cfg from pg_proc p where p.proname in ('watch_open_to','watch_beta_access','watchlist_limit','watch_recipients','alert_link_secret','unsubscribe_alerts') order by 1"
+          q grants "select has_function_privilege('anon','public.alert_link_secret()','execute') anon_secret, has_function_privilege('authenticated','public.alert_link_secret()','execute') auth_secret, has_function_privilege('authenticated','public.watch_recipients()','execute') auth_recipients, has_function_privilege('anon','public.watch_recipients()','execute') anon_recipients, has_function_privilege('anon','public.watch_beta_access()','execute') anon_beta, has_function_privilege('authenticated','public.watch_beta_access()','execute') auth_beta, has_function_privilege('anon','private.watch_open_to(uuid)','execute') anon_open, has_function_privilege('authenticated','private.watch_open_to(uuid)','execute') auth_open"
+          q schema "select has_schema_privilege('anon','private','usage') anon_usage, has_schema_privilege('authenticated','private','usage') auth_usage"
+          q beta "select (select private_beta from private.watch_settings) private_beta, (select count(*) from private.watch_testers) testers, (select count(*) from private.alert_link_secret) secrets, (select count(*) from watchlist_items) items, (select count(*) from watch_sends) sends, (select count(*) from market_history) history"
+          q profiles "select count(*) total, count(*) filter (where watch_emails) digests_on, count(*) filter (where digest_frequency='weekly') weekly from profiles"
+          q recipients "select count(*) from public.watch_recipients()"
+          q job_alerts "select count(*) alert_recipients from public.alert_recipients()"
+          q trigger "select tgname from pg_trigger where tgrelid='public.watchlist_items'::regclass and not tgisinternal"
+      - name: API as a signed-out visitor (anon key the site ships)
+        run: |
+          echo "WATCHLISTS_ENABLED set: $([ "$FLAG" = true ] && echo yes || echo no)"
+          a() { echo "== $1"; curl -sS -o /tmp/r -w '%{http_code} ' "${@:2}" -H "apikey: $ANON" -H "Authorization: Bearer $ANON"; head -c 200 /tmp/r; echo; }
+          a "read watchlist_items" "$SUPABASE_URL/rest/v1/watchlist_items?select=id&limit=1"
+          a "add watchlist_items" -X POST "$SUPABASE_URL/rest/v1/watchlist_items" -H 'Content-Type: application/json' -H 'Prefer: return=minimal' -d '{"kind":"market","city":"Dallas"}'
+          a "read market_history" "$SUPABASE_URL/rest/v1/market_history?select=day&limit=1"
+          a "rpc watch_beta_access" -X POST "$SUPABASE_URL/rest/v1/rpc/watch_beta_access" -H 'Content-Type: application/json' -d '{}'
+          a "rpc watch_recipients" -X POST "$SUPABASE_URL/rest/v1/rpc/watch_recipients" -H 'Content-Type: application/json' -d '{}'
+          a "rpc alert_link_secret" -X POST "$SUPABASE_URL/rest/v1/rpc/alert_link_secret" -H 'Content-Type: application/json' -d '{}'
+          a "private schema" "$SUPABASE_URL/rest/v1/watch_testers?select=user_id" -H 'Accept-Profile: private'
+          a "unsubscribe with bad token" -X POST "$SUPABASE_URL/rest/v1/rpc/unsubscribe_alerts" -H 'Content-Type: application/json' -d '{"p_user":"00000000-0000-0000-0000-000000000000","p_scope":"jobs","p_token":"x"}'
