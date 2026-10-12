@@ -1,32 +1,23 @@
-# One-off: add Rod's existing account as the only Development Watch tester
-# (approved by Rod 2026-10-12), then read-only checks. Runs only on a push to
-# this branch; never merged. The account is matched by a SHA-256 of its
-# sign-in email so no email or user id appears in this public repo or log.
-name: Verify beta tester (one-off, read-only)
+# One-off, read-only: what the live site actually serves. Never merged.
+name: Check live site (one-off, read-only)
 on:
   push:
     branches: [claude/verify-0017]
 permissions:
   contents: read
 jobs:
-  tester:
+  live:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      FLAG: ${{ vars.WATCHLISTS_ENABLED }}
-      H: 02a8833074a5369ec4d1bbee09df55eaf2740078d23b92a8b36a4e524d5857ca
     steps:
-      - name: Verify (read-only; the tester was added by the previous commit's run)
+      - name: Fetch the live files
         run: |
-          ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
-          q() { echo "== $1"; jq -n --arg q "$2" '{query: $q}' | curl -sS -X POST "https://api.supabase.com/v1/projects/$ref/database/query" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-; echo; }
-          me="encode(extensions.digest(lower(u.email), 'sha256'), 'hex') = '$H' and coalesce(u.raw_app_meta_data->>'terra_test_user', 'false') <> 'true'"
-          q "testers" "select count(*) testers, count(*) filter (where exists (select 1 from auth.users u where u.id = t.user_id and $me)) testers_that_are_rod from private.watch_testers t"
-          q "access" "select (select private_beta from private.watch_settings) private_beta, count(*) filter (where private.watch_open_to(u.id)) users_with_access, count(*) filter (where private.watch_open_to(u.id) and $me) rod_has_access from auth.users u"
-          q "rod_eligible_to_add" "select public.is_college_email(u.email) college, exists (select 1 from public.subscriptions s where s.user_id = u.id and s.status in ('active','trialing') and (s.current_period_end is null or s.current_period_end > now())) subscriber, p.watch_emails digests_on from auth.users u join public.profiles p on p.id = u.id where $me"
-          q "digests" "select count(*) profiles, count(*) filter (where watch_emails) digests_on from public.profiles"
-          q "sends" "select (select count(*) from public.watch_sends) watch_sends, (select count(*) from public.watch_digests) watch_digests, (select count(*) from public.watchlist_items) items, (select count(*) from public.watch_recipients()) digest_recipients_now, (select count(*) from public.alert_recipients()) job_alert_recipients, (select max(sent_at)::text from public.alert_sends) last_job_alert_send, (select count(*) from public.subscriptions) subscriptions"
-          echo "WATCHLISTS_ENABLED set: $([ "$FLAG" = true ] && echo yes || echo no)"
+          B=https://thougthfullcarrot.github.io/Terra
+          for f in index.html config.js account.js watch-view.js markets-view.js devmap.js app.js; do
+            curl -sS -D /tmp/h -o /tmp/$f "$B/$f?nocache=$RANDOM"; echo "== $f $(head -1 /tmp/h | tr -d '\r') bytes=$(wc -c < /tmp/$f) $(grep -i -E '^(last-modified|cache-control|age):' /tmp/h | tr -d '\r' | tr '\n' ' ')"
+          done
+          echo "== config watchlists:"; grep -o '"watchlists": *[a-z]*' /tmp/config.js || echo "no watchlists key"
+          echo "== 'Follow this market' in markets-view.js: $(grep -c 'Follow this market' /tmp/markets-view.js)"
+          echo "== watch_beta_access in account.js: $(grep -c watch_beta_access /tmp/account.js)"
+          echo "== script tags / imports in index.html:"; grep -o '<script[^>]*>' /tmp/index.html
+          echo "== imports of config:"; grep -n "config.js" /tmp/*.js /tmp/index.html | head
