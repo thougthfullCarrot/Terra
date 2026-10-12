@@ -1,6 +1,7 @@
-# One-off, read-only: who has signed in recently, and is it the tester. Never merged.
-# No email or user id is printed.
-name: Check tester sign-ins (one-off, read-only)
+# One-off, read-only: identify the my.utsa.edu account Rod is signed in with,
+# by its live sessions. Prints a short fingerprint of each user id (sha256,
+# first 12 hex), never the id or email. Never merged.
+name: Identify tester account (one-off, read-only)
 on:
   push:
     branches: [claude/verify-0017]
@@ -19,7 +20,7 @@ jobs:
           ref="$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')"
           q() { echo "== $1"; jq -n --arg q "$2" '{query: $q}' | curl -sS -X POST "https://api.supabase.com/v1/projects/$ref/database/query" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-; echo; }
-          q tester "select u.last_sign_in_at::text tester_last_sign_in, split_part(u.email,'@',2) tester_domain, (select count(*) from private.watch_testers) testers from private.watch_testers t join auth.users u on u.id = t.user_id"
-          q recent "select u.last_sign_in_at::text, split_part(u.email,'@',2) domain, exists (select 1 from private.watch_testers t where t.user_id = u.id) is_tester, public.is_college_email(u.email) college from auth.users u where coalesce(u.raw_app_meta_data->>'terra_test_user','false') <> 'true' order by u.last_sign_in_at desc nulls last limit 10"
-          q items "select count(*) from public.watchlist_items"
-          q sessions "select s.updated_at::text session_last_used, split_part(u.email,'@',2) domain, exists (select 1 from private.watch_testers t where t.user_id = u.id) is_tester from auth.sessions s join auth.users u on u.id = s.user_id where coalesce(u.raw_app_meta_data->>'terra_test_user','false') <> 'true' order by s.updated_at desc nulls last limit 8"
+          fp="left(encode(extensions.digest(u.id::text, 'sha256'), 'hex'), 12)"
+          q utsa_accounts "select $fp fp, u.created_at::text created, u.last_sign_in_at::text last_sign_in, (select max(s.updated_at)::text from auth.sessions s where s.user_id = u.id) last_session_use, (select count(*) from auth.sessions s where s.user_id = u.id) sessions, (select count(*) from auth.refresh_tokens r where r.user_id = u.id::text and r.created_at > now() - interval '2 hours') refreshes_2h, exists (select 1 from public.subscriptions x where x.user_id = u.id) has_sub_row, coalesce(u.raw_app_meta_data->>'terra_test_user','false') test from auth.users u where split_part(u.email,'@',2) = 'my.utsa.edu' order by 4 desc nulls last"
+          q tester "select $fp fp from private.watch_testers t join auth.users u on u.id = t.user_id"
+          q last_hour_sessions "select $fp fp, split_part(u.email,'@',2) domain, s.updated_at::text from auth.sessions s join auth.users u on u.id = s.user_id where s.updated_at > now() - interval '1 hour' order by s.updated_at desc"
