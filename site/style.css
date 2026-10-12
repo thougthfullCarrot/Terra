@@ -1232,7 +1232,7 @@ button.link {
   gap: 5px;
 }
 
-.panel input:not([type='checkbox']):not([type='file']),
+.panel input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .panel select {
   width: 100%;
   padding: 11px 12px;
@@ -5399,6 +5399,8 @@ svg.bars text {
 
 .uw-download {
   font-weight: 600;
+}
+
 /* ------------------------------------------------------------ Career tab (career-view.js) */
 
 /* Open a long time / reposted, on job cards and in the job panel. */
@@ -5631,9 +5633,25 @@ svg.bars text {
 .follow-status { font-size: 13px; color: var(--muted); }
 .watch-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 8px; }
 .watch-metric summary { cursor: pointer; font-size: 14px; }
-.watch-metric select, .watch-metric input { margin: 6px 6px 0 0; max-width: 100%; }
-.watch-metric input { width: 7em; }
+/* One figure: the pickers sit in one wrapping row, not full-width stacks. */
+.watch-metric[open] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.watch-metric summary { flex-basis: 100%; }
+.watch-metric select { width: auto; max-width: 100%; }
+.watch-metric input {
+  width: 8em;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+}
+.watch-metric input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.watch-metric .follow-wrap { margin-top: 0; }
 .watch-list { list-style: none; margin: 8px 0; padding: 0; }
 .watch-list li { padding: 4px 0; font-size: 14px; }
 .watch-list li.muted { color: var(--muted); }
 .watch-frequency { display: flex; gap: 16px; margin: 6px 0; }
+#watch-settings label.check { display: inline-flex; }
+.watch-frequency input[type='radio'] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
