@@ -23,6 +23,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MemoryStore } from '../db/store.js';
+import { entryLevelEvident, experienceRequirement } from '../collector/experience.js';
 import { loadFirmSeed } from '../collector/firmSeed.js';
 import { runCollector, type RunReport } from '../collector/run.js';
 import { adzunaAggregators } from '../collector/sources/adzuna.js';
@@ -100,7 +101,12 @@ async function main(): Promise<void> {
 
   if (process.argv.includes('--samples')) {
     console.log('\n--- Published ---');
-    for (const p of postings) console.log(`PUB  ${p.kind.padEnd(11)} ${p.role} | ${p.firm} | ${p.city}`);
+    for (const p of postings) {
+      const need = experienceRequirement(p.description);
+      const stated = need.figures.map((figure) => `${figure.required ? 'req' : 'pref'} ${figure.text}`).join(', ') || 'no years stated';
+      const basis = entryLevelEvident(p.role, p.description) ? 'entry signal' : 'board level';
+      console.log(`PUB  ${p.kind.padEnd(11)} ${p.role} | ${p.firm} | ${p.city} | ${p.sector} | ${stated}${need.figures.length ? '' : ` (${basis})`}`);
+    }
     console.log('\n--- Held for review ---');
     for (const { posting: p, source } of review) console.log(`REV  ${source.padEnd(10)} ${p.role} | ${p.firm} | ${p.city}`);
     for (const [reason, rows] of Object.entries(report.rejectedSamples)) {

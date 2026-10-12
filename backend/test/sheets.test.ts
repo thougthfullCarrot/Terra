@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import type { FirmRow } from '../src/db/store.js';
 import { SheetsClient, signJwt, spreadsheetId, sheetsConfigFromEnv, tabRange } from '../src/sheets/google.js';
-import { FIRMS_TAB, firmStatuses, loadFirms, parseFirmTab, seedToRows } from '../src/sheets/firms.js';
+import { BATCHES_TAB, DISCOVERED_BATCH, DISCOVERED_FIRMS, FIRMS_TAB, firmStatuses, loadFirms, parseFirmTab, seedToRows } from '../src/sheets/firms.js';
 import { accessLabel, jobRows, marketRows, signupRows } from '../src/sheets/tables.js';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -317,5 +317,79 @@ describe('copying the site to the sheet', () => {
     expect(
       accessLabel({ id: 'x', email: 'a@b.com', created_at: '', email_confirmed_at: 'y' }, { user_id: 'x', status: 'canceled', current_period_end: null }, now)
     ).toBe('Subscription canceled');
+  });
+});
+
+describe('the approved discovery batch in the Firms tab', () => {
+  const HEAD = ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector', 'Real estate only'];
+  const batch: FirmRow[] = [
+    { id: 3, name: 'Fairfield Residential', ats: 'workday', atsSlug: 'ffres/fairfieldcareers', atsHost: 'ffres.wd1.myworkdayjobs.com', active: true, slugVerified: true, seeded: DISCOVERED_FIRMS },
+    { id: 4, name: 'Chesmar Homes', ats: 'icims', atsSlug: 'careers-mdch', atsHost: 'careers-mdch.icims.com', active: true, slugVerified: true, sector: 'Homebuilder', seeded: DISCOVERED_FIRMS }
+  ];
+  const tab = () => [HEAD, ['Lincoln Property Company', 'greenhouse', 'lincoln', '', 'yes', 'OK', '', '']];
+  const writes = (google: ReturnType<typeof fakeGoogle>) =>
+    google.calls.filter((call) => call.method !== 'GET' && call.url.includes('sheets.googleapis.com'));
+
+  it('never writes on a pull request build, but polls the batch and lists the rows a write would add', async () => {
+    const google = fakeGoogle({ [FIRMS_TAB]: tab() });
+    const result = await loadFirms(google.client, [...seed, ...batch], { write: false });
+    expect(writes(google)).toEqual([]);
+    expect(result.firms.map((firm) => firm.name)).toEqual(['Lincoln Property Company', 'Fairfield Residential', 'Chesmar Homes']);
+    expect(result.note).toContain('would add 2 discovered firms');
+    expect(result.note).toContain('row 3: Fairfield Residential | workday | ffres/fairfieldcareers');
+    expect(result.note).toContain('row 4: Chesmar Homes | icims | careers-mdch');
+  });
+
+  it('appends the batch once on a write build, below existing rows, and records it', async () => {
+    const google = fakeGoogle({ [FIRMS_TAB]: tab() });
+    await loadFirms(google.client, [...seed, ...batch], { write: true });
+    const rows = google.tabs.get(FIRMS_TAB)!;
+    expect(rows[1]).toEqual(tab()[1]);
+    expect(rows.slice(2).map((row) => row.slice(0, 5))).toEqual([
+      ['Fairfield Residential', 'workday', 'ffres/fairfieldcareers', 'ffres.wd1.myworkdayjobs.com', 'yes'],
+      ['Chesmar Homes', 'icims', 'careers-mdch', 'careers-mdch.icims.com', 'yes']
+    ]);
+    expect(google.tabs.get(BATCHES_TAB)![1]![0]).toBe(DISCOVERED_BATCH);
+
+    // A second build adds nothing.
+    await loadFirms(google.client, [...seed, ...batch], { write: true });
+    expect(google.tabs.get(FIRMS_TAB)).toHaveLength(4);
+  });
+
+  it('does not add back a firm the owner deleted after the batch was recorded', async () => {
+    const google = fakeGoogle({ [FIRMS_TAB]: tab() });
+    await loadFirms(google.client, [...seed, ...batch], { write: true });
+    google.tabs.set(FIRMS_TAB, tab());
+    const result = await loadFirms(google.client, [...seed, ...batch], { write: true });
+    expect(google.tabs.get(FIRMS_TAB)).toEqual(tab());
+    expect(result.firms.map((firm) => firm.name)).toEqual(['Lincoln Property Company']);
+  });
+
+  it('never duplicates or overwrites a firm already in the tab, and is safe to retry', async () => {
+    const existing = [...tab(), ['Fairfield Residential', 'workday', 'ffres/other', 'ffres.wd1.myworkdayjobs.com', 'no', '', '', '']];
+    const google = fakeGoogle({ [FIRMS_TAB]: existing.map((row) => [...row]) });
+    await loadFirms(google.client, [...seed, ...batch], { write: true });
+    const rows = google.tabs.get(FIRMS_TAB)!;
+    expect(rows.slice(0, 3)).toEqual(existing);
+    expect(rows.filter((row) => row[0] === 'Fairfield Residential')).toHaveLength(1);
+    expect(rows.filter((row) => row[0] === 'Chesmar Homes')).toHaveLength(1);
+  });
+});
+
+describe('the batch production already recorded', () => {
+  it('adds nothing to a Firms tab whose batch tab already names the batch, even with a firm removed', async () => {
+    const head = ['Firm', 'Board type', 'Board id', 'Workday host', 'Active', 'Last check', 'Sector', 'Real estate only'];
+    const firms = [head, ['Lincoln Property Company', 'greenhouse', 'lincoln', '', 'yes', 'OK', '', '']];
+    const google = fakeGoogle({
+      [FIRMS_TAB]: firms.map((row) => [...row]),
+      [BATCHES_TAB]: [['Batch', 'Added', 'Firms'], ['0017_discovered_firms.sql', '2026-10-11T21:54:00Z', 'Fairfield Residential, Chesmar Homes']]
+    });
+    const seeded: FirmRow[] = [
+      { id: 3, name: 'Fairfield Residential', ats: 'workday', atsSlug: 'ffres/fairfieldcareers', atsHost: 'ffres.wd1.myworkdayjobs.com', active: true, slugVerified: true, seeded: DISCOVERED_FIRMS }
+    ];
+    const result = await loadFirms(google.client, [...seed, ...seeded], { write: true });
+    expect(google.tabs.get(FIRMS_TAB)).toEqual(firms);
+    expect(result.firms.map((firm) => firm.name)).toEqual(['Lincoln Property Company']);
+    expect(google.calls.some((call) => call.method === 'PUT' && call.url.includes('Firm%20batches'))).toBe(false);
   });
 });

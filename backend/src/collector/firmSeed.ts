@@ -10,7 +10,8 @@ const MIGRATIONS = resolve(dirname(fileURLToPath(import.meta.url)), '../../supab
 export const SEED_PATHS = [
   resolve(MIGRATIONS, '0002_seed_firms.sql'),
   resolve(MIGRATIONS, '0006_homebuilders.sql'),
-  resolve(MIGRATIONS, '0014_more_firms.sql')
+  resolve(MIGRATIONS, '0014_more_firms.sql'),
+  resolve(MIGRATIONS, '0018_discovered_firms.sql')
 ];
 
 /**

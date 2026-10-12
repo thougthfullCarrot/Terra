@@ -62,12 +62,14 @@ jobs:
             echo "::notice::No previous commit to compare with; run migrations by hand."
             exit 0
           else
-            files="$(git diff --name-only --diff-filter=A "$BEFORE" "$GITHUB_SHA" -- "$dir" | grep '\.sql$' | sort || true)"
+            files="$(.github/scripts/new-migrations.sh "$BEFORE" "$GITHUB_SHA" "$dir")"
           fi
           if [ -z "$files" ]; then
             echo "No new migrations."
             exit 0
           fi
+          echo "Will apply, in this order:"
+          echo "$files"
           echo "files<<EOF" >> "$GITHUB_OUTPUT"
           echo "$files" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
