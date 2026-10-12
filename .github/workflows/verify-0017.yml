@@ -1,4 +1,4 @@
-# One-off, read-only: private-beta checks (after the dry run). Writes are only attempted inside
+# One-off, read-only: private-beta checks (after PR #69). Writes are only attempted inside
 # transactions that are always rolled back. No ids or emails printed. Never merged.
 name: Beta check (one-off, read-only)
 on:
