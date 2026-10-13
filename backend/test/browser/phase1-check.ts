@@ -74,9 +74,12 @@ const files: Record<string, unknown> = {
 const types: Record<string, string> = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 // Set by a step to hold one file back, so its loading box can be seen.
 let hold: string | null = null;
+// How many times each data file was asked for, to catch fetch loops.
+const hits = new Map<string, number>();
 
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
+  hits.set(path, (hits.get(path) ?? 0) + 1);
   if (hold && path === hold) await new Promise((r) => setTimeout(r, 2500));
   if (path in files) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(files[path]));
   const file = normalize(join(site, path.endsWith('/') ? `${path}index.html` : path));
@@ -94,10 +97,43 @@ const origin = `http://127.0.0.1:${typeof address === 'object' && address ? addr
 if (shots) await mkdir(shots, { recursive: true });
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium' });
-const devices = {
+const sizes = {
   desktop: { viewport: { width: 1280, height: 900 } },
   phone: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
 };
+// Every size in the light and the dark theme.
+const devices = Object.fromEntries(
+  Object.entries(sizes).flatMap(([name, opts]) => (['light', 'dark'] as const).map((scheme) => [`${name}-${scheme}`, { ...opts, colorScheme: scheme }]))
+);
+
+/** WCAG contrast of an element's text on the first opaque background behind it; null when the element is missing. */
+async function contrast(page: Page, selector: string): Promise<number | null> {
+  // A string, so the backend's typecheck (no DOM types) leaves the browser code alone.
+  const c = await page.evaluate<{ fg: number[]; bg: number[] } | null>(`(() => {
+    const node = document.querySelector(${JSON.stringify(selector)});
+    if (!node) return null;
+    const rgb = (s) => (s.match(/[\\d.]+/g) ?? []).map(Number);
+    let bg = [255, 255, 255];
+    for (let n = node; n; n = n.parentElement) {
+      const v = rgb(getComputedStyle(n).backgroundColor);
+      if (v.length === 3 || (v.length === 4 && v[3] > 0.5)) { bg = v.slice(0, 3); break; }
+    }
+    return { fg: rgb(getComputedStyle(node).color).slice(0, 3), bg };
+  })()`);
+  if (!c) return null;
+  const lum = (v: number[]) => {
+    const [r, g, b] = v.map((x) => (x / 255 <= 0.03928 ? x / 255 / 12.92 : ((x / 255 + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  const [hi, lo] = [lum(c.fg), lum(c.bg)].sort((a, b) => b - a);
+  return (hi! + 0.05) / (lo! + 0.05);
+}
+
+/** Text at least 4.5:1 against its background (WCAG AA for small text). */
+async function readable(page: Page, selector: string) {
+  const r = await contrast(page, selector);
+  return r == null ? `${selector} missing` : r >= 4.5 || `${r.toFixed(2)}:1`;
+}
 const failures: string[] = [];
 const results: string[] = [];
 
@@ -131,12 +167,16 @@ for (const [dev, opts] of Object.entries(devices)) {
 
   // Loading box while market.json is held back, then the table with source lines.
   hold = '/market.json';
+  hits.clear();
   await page.goto(`${origin}/#markets`);
   await check(dev, 'market loading box is a busy status', async () => (await page.locator('#m-body .state.loading[aria-busy="true"][role="status"]').count()) === 1);
   await shot(page, dev, 'loading');
   hold = null;
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(800);
+  await page.waitForTimeout(3000);
+  await check(dev, 'market.json read once (no fetch loop)', async () => hits.get('/market.json') === 1 || `${hits.get('/market.json')} reads`);
+  await check(dev, 'market page is not blank', async () => (await page.locator('#markets-view').innerText()).length > 300);
   await check(dev, 'market table columns show source and period', async () => {
     const text = await page.locator('.market-table th .figure-source').first().innerText();
     return /·/.test(text) || `got "${text}"`;
@@ -158,6 +198,9 @@ for (const [dev, opts] of Object.entries(devices)) {
   });
   await check(dev, 'compare rows are flagged and show periods', async () => (await page.locator('.compare-flag').count()) > 0 && (await page.locator('.compare-period').count()) > 0);
   await check(dev, 'compare has no page-wide horizontal scroll', async () => page.evaluate<boolean>('document.documentElement.scrollWidth <= window.innerWidth + 1'));
+  await check(dev, 'warning box text readable', () => readable(page, '.compare-warnings li'));
+  await check(dev, 'period under each value readable', () => readable(page, '.compare-period'));
+  await check(dev, 'source line readable', () => readable(page, '.figure-source'));
   await shot(page, dev, 'compare');
   await page.locator('.compare-warnings').first().scrollIntoViewIfNeeded();
   await shot(page, dev, 'compare-warnings');
@@ -173,6 +216,12 @@ for (const [dev, opts] of Object.entries(devices)) {
     await page.locator('select[name="taxcity"]').selectOption('');
     return (await page.locator('.calc-form .prov-verified').count()) === 0;
   });
+  for (const k of ['assumption', 'estimate']) await check(dev, `${k} tag readable`, () => readable(page, `.prov-${k}`));
+  await check(dev, 'no typed input is tagged Verified', async () =>
+    page.evaluate<boolean>(`[...document.querySelectorAll('.calc-form .calc-field')].every((f) => !f.querySelector('.prov-verified') || !!f.querySelector('select[name="taxcity"]'))`)
+  );
+  await page.locator('select[name="taxcity"]').selectOption({ index: 1 }).catch(() => undefined);
+  await check(dev, 'verified tag readable', () => readable(page, '.prov-verified'));
   await shot(page, dev, 'deal');
 
   // Underwriting: same labels, and still computes.
@@ -205,7 +254,11 @@ for (const [dev, opts] of Object.entries(devices)) {
   const failing = await ctx.newPage();
   failing.on('pageerror', (e) => errors.push(String(e)));
   await failing.route('**/market.json', (route) => route.fulfill({ status: 500, body: '' }));
+  hits.clear();
   await go(failing, '#markets');
+  await failing.waitForTimeout(3000);
+  await check(dev, 'failed market.json is not refetched in a loop', async () => (hits.get('/market.json') ?? 0) <= 1 || `${hits.get('/market.json')} reads`);
+  await check(dev, 'error box text readable', () => readable(failing, '#m-body .state.error'));
   await check(dev, 'market error is an alert with a retry button', async () => (await failing.locator('#m-body .state.error[role="alert"] .state-retry').count()) === 1);
   await shot(failing, dev, 'error');
 
