@@ -12,6 +12,8 @@ select json_build_object(
   'subscriptions', (select json_agg(json_build_object('status', status, 'n', n)) from (select status, count(*) n from public.subscriptions group by status) x),
   'alert_sends_last', (select max(sent_at) from public.alert_sends),
   'history', (select json_agg(json_build_object('day', day, 'v', data->>'v', 'bytes', octet_length(data::text), 'followed_bytes', octet_length(coalesce(data->'followed', '{}'::jsonb)::text), 'followed_keys', (select count(*) from jsonb_object_keys(coalesce(data->'followed', '{}'::jsonb))), 'rr_followed', data->'followed'->'TABS2025026208', 'rr_on_map', data->'projects' ? 'TABS2025026208') order by day) from public.market_history),
+  'compare', (select json_agg(json_build_object('day', day, 'generatedAt', data->>'generatedAt', 'followed', data->'followed', 'map', data->'projects'->'TABS2025026208') order by day) from public.market_history where day >= '2026-10-12'),
+  'alert_sends_24h', (select count(*) from public.alert_sends where sent_at > now() - interval '24 hours'),
   'history_rows_per_day_max', (select max(c) from (select count(*) c from public.market_history group by day) y),
   'db_bytes', pg_database_size(current_database()),
   'market_history_bytes', pg_total_relation_size('public.market_history')
