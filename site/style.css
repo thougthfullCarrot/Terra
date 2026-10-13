@@ -5655,3 +5655,129 @@ svg.bars text {
 .watch-frequency { display: flex; gap: 16px; margin: 6px 0; }
 #watch-settings label.check { display: inline-flex; }
 .watch-frequency input[type='radio'] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+
+/* ── Phase 1: section states, provenance tags, comparison warnings (labels.js) ── */
+.state.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.state-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--hairline);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: state-spin 0.8s linear infinite;
+}
+
+@keyframes state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .state-spinner {
+    animation: none;
+  }
+}
+
+.state-retry {
+  display: block;
+  margin: 12px auto 0;
+}
+
+.prov-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-family: var(--ui);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  vertical-align: middle;
+  white-space: nowrap;
+  border-radius: 4px;
+  cursor: help;
+}
+
+.prov-verified {
+  color: var(--on-tint);
+  background: var(--accent-tint);
+}
+
+.prov-assumption {
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--hairline);
+}
+
+.prov-estimate {
+  color: var(--ink);
+  background: var(--warn-surface);
+  font-style: italic;
+}
+
+.prov-legend {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.prov-legend .prov-tag {
+  margin-left: 0;
+}
+
+.calc-tile .prov-tag,
+.kpi .prov-tag {
+  margin: 4px 0 0;
+  align-self: flex-start;
+}
+
+.figure-source {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--ui);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.compare-period {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.compare-warnings {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--warn-surface);
+  border-radius: var(--radius);
+}
+
+.compare-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.compare-flag {
+  margin-left: 4px;
+  color: var(--amber);
+  cursor: help;
+}
+
+.prov-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 14px 0 6px;
+  grid-column: 1 / -1;
+}

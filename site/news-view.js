@@ -4,6 +4,7 @@
 // search RSS, refreshed with the site). Each headline links out to the
 // publisher; the page shows only the headline, source and date.
 import { filterHeadlines, newsDate, readNewsHash, topicCounts, writeNewsHash } from './news.js';
+import { stateBox } from './labels.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -38,7 +39,7 @@ async function show() {
   $('news-view').hidden = !open;
   if (!open) return;
   if (!file) {
-    message('Loading headlines…');
+    message('Loading headlines…', 'loading');
     loading ??= load();
     try {
       const data = await loading;
@@ -129,9 +130,8 @@ function item(headline, index, now) {
   return card;
 }
 
-function message(text, isError = false) {
-  const box = el('div', isError ? 'state error' : 'state', text);
-  $('n-list').replaceChildren(box);
+function message(text, kind = 'empty') {
+  $('n-list').replaceChildren(stateBox(text, kind, { retry: kind === true }));
 }
 
 function el(tag, className, text) {

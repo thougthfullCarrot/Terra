@@ -6,6 +6,7 @@
 // or the members-only Supabase row when accounts are on.
 import {
   barPercent,
+  figureSource,
   CATEGORY_LABELS,
   defaultOrder,
   formatDate,
@@ -35,6 +36,7 @@ import { readNewsHash } from './news.js';
 import { readEventsHash } from './events.js';
 import { readPropertyHash } from './property.js';
 import { readCareerHash } from './career.js';
+import { stateBox } from './labels.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -142,7 +144,7 @@ async function show() {
 
   if (!snapshot) {
     if (!loader) return;
-    message('Loading market data…');
+    message('Loading market data…', 'loading');
     loading ??= loader();
     const current = loading;
     try {
@@ -424,7 +426,14 @@ function headerCell(key, label, cls, metric) {
     else update({ sort: key, order: key === 'city' ? 'asc' : defaultOrder(metric) });
   });
   th.append(button);
+  if (metric) th.append(el('span', 'figure-source', columnSource(metric)));
   return th;
+}
+
+/** A column's source and the period most markets report, under its heading; a city on another period shows it on hover in its cell. */
+function columnSource(metric) {
+  const seen = snapshot.markets.map((m) => m.periods?.[metric.key]).filter(Boolean);
+  return [metric.source, seen.length ? mode(seen) : ''].filter(Boolean).join(' · ');
 }
 
 function cityView(city, focus) {
@@ -557,6 +566,7 @@ function kpis(market, group) {
     if (same && value != null) bits.push(`same as ${same}`);
     tile.title = [metricTitle(metric), ...valueNotes(market, metric)].join('\n');
     tile.append(el('small', '', metric.label), el('b', `num value ${tone(value, metric)}`, formatValue(value, metric.unit)), el('span', 'kpi-rank', bits.join(' · ') || 'No figure yet'));
+    if (value != null) tile.append(el('span', 'figure-source', figureSource(market, metric)));
     box.append(tile);
   }
   return box;
@@ -791,7 +801,7 @@ function sources() {
 function message(text, isError = false) {
   $('m-rates').replaceChildren();
   $('m-chart').replaceChildren();
-  $('m-body').replaceChildren(el('div', isError ? 'state error' : 'state', text));
+  $('m-body').replaceChildren(stateBox(text, isError, { retry: isError === true }));
   $('m-blurb').textContent = '';
 }
 

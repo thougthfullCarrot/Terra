@@ -1,7 +1,8 @@
 // market-tools.js — the two tools on the Market data tab: cities side by side
 // and the deal calculator. markets-view.js decides when each shows; the math
 // lives in market.js and deal.js.
-import { compareRows, formatValue, KEY_METRICS, MAX_COMPARE, writeMarketHash } from './market.js';
+import { compareRows, compareWarnings, figureSource, formatValue, KEY_METRICS, MAX_COMPARE, writeMarketHash } from './market.js';
+import { labelHeading, labelLegend, labelTag, taxSource } from './labels.js';
 import { analyzeDeal, DEAL_FIELDS, DEFAULT_DEAL, DEFAULT_SPREAD, readDeal, suggestedRate, writeDeal } from './deal.js';
 
 /**
@@ -43,7 +44,7 @@ export function compareView(snapshot, state, update) {
   const group = snapshot.groups.find((g) => g.key === state.focus) ?? snapshot.groups[0];
   const metrics = group.metrics.map(metricFor).filter(Boolean);
   if (metrics.length) frag.append(compareTable(snapshot, cities, group.label, group.blurb ?? '', metrics, state));
-  frag.append(el('p', 'market-asof', 'Change the topic above to compare another set of figures. Hover a figure for its period.'));
+  frag.append(el('p', 'market-asof', 'Change the topic above to compare another set of figures. Each figure shows its reporting period; hover it for the source and area.'));
   return frag;
 }
 
@@ -51,6 +52,23 @@ function compareTable(snapshot, cities, title, blurb, metrics, state) {
   const box = el('section', 'compare-block');
   box.append(el('h3', 'group-title', title));
   if (blurb) box.append(el('p', 'group-blurb', blurb));
+
+  // Figures that are not like for like are listed above the table and flagged in it.
+  const warnings = compareWarnings(snapshot.markets, metrics, cities);
+  if (warnings.length) {
+    const note = el('div', 'compare-warnings');
+    note.setAttribute('role', 'note');
+    note.append(el('strong', '', 'Check before comparing: '), 'some figures differ in period or area.');
+    const list = el('ul');
+    // One line per reason, naming every figure it applies to (Dallas's metro division touches most rows).
+    const byText = new Map();
+    for (const w of warnings) byText.set(w.text, [...(byText.get(w.text) ?? []), w.label]);
+    for (const [text, labels] of byText) list.append(el('li', '', `${labels.join(', ')}: ${text}`));
+    note.append(list);
+    box.append(note);
+  }
+  const flagged = new Map();
+  for (const w of warnings) flagged.set(w.key, [...(flagged.get(w.key) ?? []), w.text]);
 
   const wrap = el('div', 'table-wrap');
   const table = el('table', 'market-table compare-table');
@@ -76,15 +94,24 @@ function compareTable(snapshot, cities, title, blurb, metrics, state) {
     const name = el('th', 'city-col', row.metric.label);
     name.scope = 'row';
     if (row.metric.note) name.title = row.metric.note;
+    if (flagged.has(row.metric.key)) {
+      const flag = el('span', 'compare-flag', '⚠');
+      flag.title = flagged.get(row.metric.key).join('\n');
+      flag.setAttribute('aria-label', `Not like for like: ${flagged.get(row.metric.key).join(' ')}`);
+      name.append(flag);
+    }
+    if (row.metric.source) name.append(el('span', 'figure-source', row.metric.source));
     tr.append(name);
     cities.forEach((city, i) => {
       const value = row.values[i];
       const best = row.best.includes(city);
       const td = el('td', `num${best ? ' best' : ''}`);
       const text = el('span', `value ${tone(value, row.metric)}`, formatValue(value, row.metric.unit));
-      const period = snapshot.markets.find((m) => m.city === city)?.periods?.[row.metric.key];
-      if (period) text.title = period;
+      const market = snapshot.markets.find((m) => m.city === city);
+      const period = market?.periods?.[row.metric.key];
+      if (period) text.title = figureSource(market, row.metric);
       td.append(text);
+      if (value != null && period) td.append(el('span', 'compare-period', period));
       if (best) td.append(el('span', 'best-tag', 'Best'));
       tr.append(td);
     });
@@ -119,6 +146,7 @@ export function calculatorView(snapshot) {
     el('p', 'group-blurb', 'Enter a property and a loan to see its cap rate, payment, cash flow and cash-on-cash return. A first pass for learning and screening, not an underwriting model.')
   );
 
+  card.append(labelLegend(), labelHeading('Inputs', 'assumption'));
   const form = el('form', 'calc-form');
   form.addEventListener('submit', (e) => e.preventDefault());
   const inputs = {};
@@ -149,15 +177,21 @@ export function calculatorView(snapshot) {
   taxSelect.append(new Option('None (include it in expenses)', ''));
   for (const city of taxCities) taxSelect.append(new Option(`${city}: ${formatValue(taxFor(city), 'taxRate')}`, city));
   taxSelect.value = deal.city;
-  taxLabel.append(el('span', 'eyebrow', 'PROPERTY TAX FROM CITY'), taxSelect);
+  const taxEyebrow = el('span', 'eyebrow', 'PROPERTY TAX FROM CITY');
+  taxLabel.append(taxEyebrow, taxSelect);
   form.append(taxLabel);
   card.append(form);
+  const markTax = () => taxEyebrow.replaceChildren('PROPERTY TAX FROM CITY', ...(taxSelect.value ? [labelTag('verified', taxSource(snapshot, taxSelect.value))] : []));
+  taxSelect.addEventListener('change', markTax);
+  markTax();
 
   // Quick fills for the interest rate from the live rates on this tab.
   const fills = rateFills(snapshot.rates);
   if (fills.length) {
     const row = el('div', 'calc-fills');
-    row.append(el('span', 'eyebrow', 'USE A LIVE RATE'));
+    const rateHead = el('span', 'eyebrow', 'USE A LIVE RATE');
+    rateHead.append(labelTag('estimate', 'a published benchmark rate plus a typical lender spread'));
+    row.append(rateHead);
     for (const fill of fills) {
       const chip = el('button', 'chip', `${fill.label}: ${fill.value.toFixed(2)}%`);
       chip.type = 'button';
@@ -173,7 +207,7 @@ export function calculatorView(snapshot) {
 
   const results = el('div', 'calc-results');
   results.setAttribute('aria-live', 'polite');
-  card.append(results);
+  card.append(labelHeading('Results', 'estimate'), results);
   frag.append(card, glossary());
 
   function current() {
