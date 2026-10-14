@@ -327,12 +327,16 @@ export const FILED_WINDOWS = [
   { key: '365', label: 'Last 12 months', days: 365 }
 ];
 
-export const OWNERSHIP = [
-  { key: 'private', label: 'Private' },
-  { key: 'public', label: 'Public (schools, cities, universities)' }
+/**
+ * Public involvement as the filing states it (public funds or public land):
+ * a filing that doesn't say so isn't proof the project is private.
+ */
+export const PUBLIC_INVOLVEMENT = [
+  { key: 'public', label: 'Public involvement indicated' },
+  { key: 'private', label: 'Not indicated in filing' }
 ];
 
-export const EMPTY_DEV_FILTERS = Object.freeze({ query: '', place: '', work: '', ownership: '', cost: '', status: '', filed: '' });
+export const EMPTY_DEV_FILTERS = Object.freeze({ query: '', place: '', work: '', publicInvolvement: '', cost: '', status: '', filed: '' });
 
 /** Lowercase, accents and punctuation folded, so "TABS2025-026208" finds "TABS2025026208". */
 const fold = (text) =>
@@ -379,7 +383,7 @@ export function filterProjects(projects, filters = EMPTY_DEV_FILTERS, asOf = new
       matchesQuery(p, words) &&
       (!f.place || p.place === f.place) &&
       (!f.work || p.work === f.work) &&
-      (!f.ownership || (f.ownership === 'public') === Boolean(p.isPublic)) &&
+      (!f.publicInvolvement || (f.publicInvolvement === 'public') === Boolean(p.isPublic)) &&
       (!band || (p.cost > 0 && p.cost >= band.min && p.cost < band.max)) &&
       (!f.status || p.status === f.status) &&
       (!since || (/^\d{4}-\d{2}-\d{2}/.test(p.registered ?? '') && p.registered.slice(0, 10) >= since))

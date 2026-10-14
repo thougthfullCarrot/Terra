@@ -326,6 +326,16 @@ jobs:
           path: site/career
           key: career-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Pull requests only: the development map filters against the real
+      # market.json this run built (read-only; nothing is published).
+      - name: Check the development map filters on real data
+        if: github.event_name == 'pull_request' && hashFiles('site/market.json') != ''
+        run: |
+          npx playwright-core install --with-deps chromium > /dev/null
+          set -o pipefail
+          node test/browser/devmap-check.mjs ../site /tmp/devmap-shots 2>&1 | tee /tmp/devmap.log
+          { echo '## Development map filter check'; echo '```'; cat /tmp/devmap.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summarize
         if: always()
         run: |

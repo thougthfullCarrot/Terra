@@ -18,8 +18,8 @@ import {
   filterChoices,
   filterProjects,
   markerRadius,
-  OWNERSHIP,
-  projectDates
+  projectDates,
+  PUBLIC_INVOLVEMENT
 } from './market.js';
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 
@@ -120,7 +120,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     controls.append(pick);
   }
   const legend = el('span', 'dev-legend');
-  legend.append(el('i', 'dot private'), 'Private ', el('i', 'dot public'), 'Public (schools, cities, universities)');
+  legend.append(el('i', 'dot private'), 'Public involvement not indicated ', el('i', 'dot public'), 'Public involvement indicated');
   box.append(controls);
 
   if (filtersCity !== city) {
@@ -266,7 +266,7 @@ function filterPanel(all, onChange) {
   const tally = (rows) => rows.map((r) => ({ value: r.value, label: `${r.value} (${r.count})` }));
   if (choices.places.length > 1) menu('place', 'City or town', tally(choices.places));
   menu('work', 'Type of work', tally(choices.works));
-  menu('ownership', 'Ownership', OWNERSHIP.map((o) => ({ value: o.key, label: o.label })));
+  menu('publicInvolvement', 'Public involvement', PUBLIC_INVOLVEMENT.map((o) => ({ value: o.key, label: o.label })));
   menu('cost', 'Estimated cost', COST_BANDS.map((b) => ({ value: b.key, label: b.label })));
   if (choices.statuses.length > 1) menu('status', 'Filing status', tally(choices.statuses));
   menu('filed', 'Filed', FILED_WINDOWS.map((w) => ({ value: w.key, label: w.label })));
@@ -402,7 +402,8 @@ function popup(project) {
   if (project.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
   const facts = [money(project.cost), project.work, project.squareFeet ? `${project.squareFeet.toLocaleString('en-US')} sq ft` : ''].filter(Boolean);
   box.append(el('span', 'dev-pop-line', facts.join(' · ')));
-  const when = [project.status, projectDates(project.start, project.end)].filter(Boolean).join(' · ');
+  const status = project.status === 'Unknown status' && project.statusCode != null ? `Unknown status (TABS code ${project.statusCode})` : project.status;
+  const when = [status, projectDates(project.start, project.end)].filter(Boolean).join(' · ');
   if (when) box.append(el('span', 'dev-pop-line muted', when));
   const people = el('dl', 'dev-pop-people');
   for (const [label, value] of [

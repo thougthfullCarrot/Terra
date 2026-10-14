@@ -96,14 +96,14 @@ export interface DevFilters {
   query: string;
   place: string;
   work: string;
-  ownership: string;
+  publicInvolvement: string;
   cost: string;
   status: string;
   filed: string;
 }
 export const COST_BANDS: { key: string; label: string; min: number; max: number }[];
 export const FILED_WINDOWS: { key: string; label: string; days: number }[];
-export const OWNERSHIP: { key: string; label: string }[];
+export const PUBLIC_INVOLVEMENT: { key: string; label: string }[];
 export const EMPTY_DEV_FILTERS: Readonly<DevFilters>;
 export function projectSearchText(project: Partial<Development>): string;
 export function activeFilterCount(filters: Partial<DevFilters> | null | undefined): number;

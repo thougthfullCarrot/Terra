@@ -340,6 +340,14 @@ describe('map helpers on the site', async () => {
   });
 });
 
+describe('TABS status labels', () => {
+  it('names an unknown code as unknown, not as registered', async () => {
+    const { statusLabel } = await import('../src/market/developments.js');
+    expect(statusLabel(3004)).toBe('Plan review');
+    expect(statusLabel(3999)).toBe('Unknown status');
+  });
+});
+
 describe('development map filters on the site', async () => {
   const { activeFilterCount, filterChoices, filterProjects } = await import('../../site/market.js');
   const asOf = '2026-10-14T06:00:00Z';
@@ -362,8 +370,8 @@ describe('development map filters on the site', async () => {
   it('filters by town, work, ownership, cost, status and filing date', () => {
     expect(ids({ place: 'Boerne' })).toEqual(['TABS2026011111']);
     expect(ids({ work: 'Addition' })).toEqual(['TABS2026011111']);
-    expect(ids({ ownership: 'public' })).toEqual(['TABS2025026208']);
-    expect(ids({ ownership: 'private' })).toHaveLength(3);
+    expect(ids({ publicInvolvement: 'public' })).toEqual(['TABS2025026208']);
+    expect(ids({ publicInvolvement: 'private' })).toHaveLength(3);
     expect(ids({ cost: 'under5' })).toEqual(['TABS2026011111']); // a $0 cost is unknown, not under $5M
     expect(ids({ cost: '25to100' })).toEqual(['TABS2025026208']);
     expect(ids({ cost: 'over100' })).toEqual(['CITY-SanAntonio-12']);
@@ -373,7 +381,7 @@ describe('development map filters on the site', async () => {
   });
 
   it('combines filters and counts the ones set', () => {
-    expect(ids({ place: 'San Antonio', ownership: 'private', filed: '365' })).toEqual(['CITY-SanAntonio-12']);
+    expect(ids({ place: 'San Antonio', publicInvolvement: 'private', filed: '365' })).toEqual(['CITY-SanAntonio-12']);
     expect(ids({ work: 'Addition', cost: 'over100' })).toEqual([]);
     expect(activeFilterCount({ query: ' ', place: 'Boerne', cost: 'over100' })).toBe(2);
   });

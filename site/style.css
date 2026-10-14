@@ -5802,3 +5802,11 @@ svg.bars text {
 .watch-frequency { display: flex; gap: 16px; margin: 6px 0; }
 #watch-settings label.check { display: inline-flex; }
 .watch-frequency input[type='radio'] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+
+/* Keyboard focus on the development map filters. */
+.dev-filters-summary:focus-visible,
+.dev-clear:focus-visible,
+.dev-empty-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
