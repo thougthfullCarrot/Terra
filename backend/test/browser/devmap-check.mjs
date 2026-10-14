@@ -54,7 +54,12 @@ log('every cost is a positive number', data.projects.every((p) => Number.isFinit
 log('every type of work is New construction or Addition', data.projects.every((p) => ['New construction', 'Addition'].includes(p.work)));
 log('filing dates are YYYY-MM-DD or blank', data.projects.every((p) => !p.registered || iso.test(p.registered)), `${data.projects.filter((p) => !p.registered).length} blank`);
 log('coordinates come in pairs', data.projects.every((p) => (p.lat == null) === (p.lng == null)));
-log('project ids are unique', new Set(data.projects.map((p) => p.id)).size === data.projects.length);
+// Not a failure: the map keys pins by project, not id. Reported because Follow uses the id.
+const seen = new Map();
+for (const p of data.projects) seen.set(`${p.city}|${p.id}`, [...(seen.get(`${p.city}|${p.id}`) ?? []), p]);
+const dups = [...seen.values()].filter((g) => g.length > 1);
+console.log(`  Repeated ids within a metro: ${dups.length} ids, ${dups.reduce((n, g) => n + g.length, 0)} projects`);
+for (const g of dups.slice(0, 8)) console.log(`    ${g[0].city} ${g[0].id}: ${g.map((p) => `"${p.name}" ${p.address ?? ''} $${p.cost}`).join(' | ')}`);
 
 // ---- Independent expectation (deliberately not importing site/market.js).
 const asOf = Date.parse(data.asOf);

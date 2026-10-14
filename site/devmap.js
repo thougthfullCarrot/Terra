@@ -182,8 +182,9 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
 
   const apply = () => {
     const shown = filterProjects(all, filters, asOf);
-    const ids = new Set(shown.map((p) => p.id));
-    for (const [id, item] of items) item.hidden = !ids.has(id);
+    // Keyed by the project itself: city permit ids can repeat in a metro.
+    const ids = new Set(shown);
+    for (const [project, item] of items) item.hidden = !ids.has(project);
     empty.hidden = shown.length > 0 || !all.length;
     const active = activeFilterCount(filters);
     const pins = shown.filter((p) => p.lat != null && p.lng != null).length;
@@ -330,20 +331,20 @@ async function drawMap(node, list, projects, city) {
     });
     marker.bindPopup(() => popup(project), { maxWidth: 300, autoPanPadding: [24, 24] });
     marker.bindTooltip(project.name, { direction: 'top', offset: [0, -6] });
-    marker.on('popupopen', () => highlight(list, project.id));
-    markers.set(project.id, marker);
+    marker.on('popupopen', () => highlight(list, project));
+    markers.set(project, marker);
   }
   const center = () => map.setView(CENTERS[city] ?? [31, -99], 9);
   let last = null;
   let viewed = false;
   return {
     show(ids) {
-      const key = [...ids].join('|');
+      const key = projects.map((p) => (ids.has(p) ? 1 : 0)).join('');
       if (key === last) return;
       last = key;
       const visible = [];
-      for (const [id, marker] of markers) {
-        const on = ids.has(id);
+      for (const [project, marker] of markers) {
+        const on = ids.has(project);
         if (on) visible.push(marker.getLatLng());
         if (on !== layer.hasLayer(marker)) on ? layer.addLayer(marker) : layer.removeLayer(marker);
       }
@@ -355,13 +356,12 @@ async function drawMap(node, list, projects, city) {
   };
 }
 
-/** The list beside the map, every project once; filtering hides items. Returns id → item. */
+/** The list beside the map, every project once; filtering hides items. Returns project → item. */
 function drawList(list, projects) {
   const items = new Map();
   list.replaceChildren(
     ...projects.map((project) => {
       const item = el('li', 'dev-item');
-      item.dataset.id = project.id;
       const onMap = project.lat != null && project.lng != null;
       const button = el('button', 'dev-pick');
       button.type = 'button';
@@ -374,21 +374,26 @@ function drawList(list, projects) {
       );
       if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
       button.addEventListener('click', () => {
-        const marker = markers.get(project.id);
+        const marker = markers.get(project);
         if (!marker || !liveMap) return;
         liveMap.flyTo(marker.getLatLng(), Math.max(liveMap.getZoom(), 15), { duration: 0.6 });
         liveMap.once('moveend', () => marker.openPopup());
       });
       item.append(button, links(project));
-      items.set(project.id, item);
+      items.set(project, item);
+      rows.set(project, item);
       return item;
     })
   );
   return items;
 }
 
-function highlight(list, id) {
-  for (const item of list.children) item.classList.toggle('active', item.dataset.id != null && item.dataset.id === id);
+/** Each project's list item, for highlighting the one whose pin opened. */
+const rows = new WeakMap();
+
+function highlight(list, project) {
+  const row = rows.get(project);
+  for (const item of list.children) item.classList.toggle('active', item === row);
   const active = list.querySelector('.dev-item.active');
   if (active) list.scrollTo({ top: active.offsetTop - list.offsetTop - 8, behavior: 'smooth' });
 }
