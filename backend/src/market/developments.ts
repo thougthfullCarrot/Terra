@@ -199,6 +199,14 @@ export interface Development {
   aliases?: string[];
   /** When the pin came from another city permit at the same address: the site, not the building's own point. */
   locatedFrom?: string;
+  /** Every address the city lists for this permit, the shown one first (Fort Worth). */
+  addresses?: string[];
+  /** Every lot, block and legal description on the permit. */
+  parcels?: string[];
+  /** The permit numbers behind a project of several building permits at one site (Fort Worth). */
+  permits?: string[];
+  /** The city's own row ids behind the project (Fort Worth CAPIDs). */
+  sourceIds?: string[];
 }
 
 export interface DevelopmentsResult {
