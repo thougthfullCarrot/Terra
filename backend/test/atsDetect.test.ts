@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectAts } from '../src/collector/atsDetect.js';
+import { detectAts, embeddedUrls } from '../src/collector/atsDetect.js';
 import { domainCandidates } from '../src/collector/domainCandidates.js';
 import { careersCandidates, extractLinks } from '../src/collector/careersLinks.js';
 
@@ -164,5 +164,16 @@ describe('domain confirmation', () => {
     // A page would have to contain 'jackson' AND 'shaw' to be accepted.
     const words = domainCandidates('Jackson-Shaw');
     expect(words[0]).toBe('jacksonshaw.com');
+  });
+});
+
+describe('batch 2 false matches', () => {
+  it('ignores the iCIMS marketing site', () => {
+    expect(detectAts('https://www.icims.com/legal/privacy-notice-website/')).toBeNull();
+  });
+  it('stops an embedded URL at a JSON-escaped quote', () => {
+    expect(embeddedUrls('{"url":"https://careers-dreeshomes.icims.com/&quot;,&quot;htmlId&quot;:null}')).toEqual([
+      'https://careers-dreeshomes.icims.com/'
+    ]);
   });
 });
