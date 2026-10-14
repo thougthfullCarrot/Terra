@@ -347,9 +347,9 @@ const fold = (text) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-/** The text a search reads: name, facility, project or permit number, address and town. */
+/** The text a search reads: name, facility, project or permit number, every address and town. */
 export function projectSearchText(p) {
-  const text = fold([p.name, p.facility, p.id, p.address, p.place].filter(Boolean).join(' '));
+  const text = fold([p.name, p.facility, p.id, p.address, ...(p.addresses ?? []), p.place].filter(Boolean).join(' '));
   // Also the words run together, so a project number typed with or without dashes matches.
   return `${text} ${text.replace(/ /g, '')}`;
 }

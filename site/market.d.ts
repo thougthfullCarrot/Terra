@@ -88,6 +88,7 @@ export interface Development {
   place?: string | null;
   facility?: string | null;
   address?: string | null;
+  addresses?: string[];
   work?: string;
   status?: string;
   registered?: string;

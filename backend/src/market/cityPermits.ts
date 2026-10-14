@@ -58,6 +58,21 @@ export interface CityPermit {
   contractor: string | null;
   scope: string | null;
   url: string;
+  /**
+   * Sources that publish one row per address, parcel and owner of a permit
+   * (Fort Worth) group by permit number and fill these in, so the project
+   * keeps every row's references and the city's own status.
+   */
+  /** The row's street address key, kept to compare with grouping by site. */
+  site?: string;
+  /** A placeholder address ("26060032 For Review Only Way"): kept for its references, never shown. */
+  placeholder?: boolean;
+  /** The city's status for this row ("Plan Review", "Issued"). */
+  status?: string | null;
+  /** The city's id for this row (Fort Worth CAPID). */
+  sourceId?: string | null;
+  /** Lot, block and legal description. */
+  parcel?: string | null;
 }
 
 /** Names that mean public money: schools, cities and counties, utilities, transit, universities. */
@@ -179,6 +194,41 @@ export function permitCutoff(now: Date): string {
   return since.toISOString().slice(0, 10);
 }
 
+/** How far along a city status is, for picking the row that speaks for a permit. */
+export function statusRank(status: string | null | undefined): number {
+  const s = (status ?? '').toLowerCase();
+  if (/^issued|^approved|^active|^inspection/.test(s)) return 4;
+  if (/review/.test(s)) return 3;
+  if (/awaiting|hold|pending|accepted|submitted/.test(s)) return 2;
+  if (/incomplete/.test(s)) return 1;
+  return 0;
+}
+
+const leadRank = (p: CityPermit) => (p.placeholder ? 0 : 8) + (p.lat != null && p.lng != null ? 4 : 0) + Math.min(statusRank(p.status), 4) / 4;
+
+/**
+ * The status a permit shows: "City permit issued" once any of its rows is
+ * issued (and for sources that list only issued permits); otherwise the
+ * city's furthest-along status, in its own words ("Permit plan review").
+ */
+export function permitStatus(group: Pick<CityPermit, 'status'>[]): string {
+  const stated = group.map((p) => p.status?.trim()).filter((s): s is string => Boolean(s));
+  if (!stated.length) return 'City permit issued';
+  const best = stated.reduce((a, b) => (statusRank(b) > statusRank(a) ? b : a));
+  if (/^issued$/i.test(best)) return 'City permit issued';
+  return `Permit ${best.toLowerCase()}`;
+}
+
+/** Every address, parcel and source row behind a permit-grouped project, the shown address first. */
+function references(rows: CityPermit[], lead: CityPermit): Pick<Development, 'addresses' | 'parcels' | 'sourceIds'> {
+  const unique = (values: (string | null | undefined)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))];
+  return {
+    addresses: unique([lead.address, ...rows.filter((p) => !p.placeholder).map((p) => p.address)]),
+    parcels: unique(rows.map((p) => p.parcel)),
+    sourceIds: unique(rows.map((p) => p.sourceId))
+  };
+}
+
 /** Group one source's permits into projects, biggest first. */
 export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX): Development[] {
   const cutoff = permitCutoff(now);
@@ -188,13 +238,20 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
     groups.set(p.group, [...(groups.get(p.group) ?? []), p]);
   }
   const projects: Development[] = [];
+  // Fort Worth groups are one permit number each and are never joined with
+  // another permit: separate permits are separate buildings or phases.
   for (const group of groups.values()) {
+    // A permit whose only rows are placeholder addresses is not on a site yet.
+    if (group.every((p) => p.placeholder)) continue;
     // Each building's permit often repeats the whole project's value, so the
-    // biggest one is the project, not their sum.
-    const lead = group.reduce((best, p) => (p.value > best.value ? p : best));
+    // biggest one is the project, not their sum. Among equal values, a real
+    // address with a point and the furthest-along status leads.
+    const lead = group.reduce((best, p) => (p.value > best.value || (p.value === best.value && leadRank(p) > leadRank(best)) ? p : best));
     const cost = Math.round(lead.value);
     if (cost < MIN_VALUE || cost > 3e9) continue;
-    const at = group.find((p) => p.lat != null && p.lng != null);
+    const pinned = (p: CityPermit) => p.lat != null && p.lng != null;
+    const at = lead.site != null && pinned(lead) ? lead : group.find((p) => pinned(p) && !p.placeholder);
+    const rows = lead.site != null ? group : null;
     const issued = group.map((p) => p.issued).sort();
     const buildings = new Set(group.map((p) => p.permit)).size;
     const squareFeet = Math.round(group.reduce((sum, p) => sum + p.squareFeet, 0));
@@ -207,7 +264,10 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
       place: lead.place,
       name,
       facility: buildings > 1 ? `${buildings} building permits` : null,
-      status: 'City permit issued',
+      ...(rows && buildings > 1 ? { permits: [...new Set(group.map((p) => p.permit))] } : {}),
+      // The status of the rows the shown value comes from (PB26-01203: the
+      // $50M bridge is in plan review; only a $1.1M foundation row is issued).
+      status: permitStatus(group.filter((p) => p.value === lead.value)),
       work: lead.work,
       cost,
       registered: issued[0]!,
@@ -228,15 +288,18 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
       developerUrl: link.url,
       developerDirect: link.direct,
       url: lead.url,
-      source: 'city'
+      source: 'city',
+      ...(rows ? references(rows, lead) : {})
     });
   }
   // One project filed under a few addresses on the same tract (13210 Palo Alto
   // Rd and 13210 State Hwy 16) repeats its value: keep the first, preferring one with a point.
   projects.sort((a, b) => b.cost - a.cost || Number(b.lat != null) - Number(a.lat != null));
+  // Permit-grouped projects are one permit each, so they are never dropped here.
   const seen = new Set<string>();
   return projects
     .filter((p) => {
+      if (p.sourceIds) return true;
       const key = `${p.cost}|${/^\d+/.exec(p.address ?? '')?.[0] ?? p.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -449,6 +512,10 @@ export interface FortWorthRow {
   Use_Type?: string | null;
   Specific_Use?: string | null;
   SqFt?: string | null;
+  CAPID?: number | string | null;
+  B1_LOT?: string | null;
+  B1_BLOCK?: string | null;
+  B1_LEGAL_DESC?: string | null;
 }
 
 /** "X TEAM /// Edged Energy Outpost Building 2" → "Edged Energy Outpost Building 2". */
@@ -463,15 +530,25 @@ export function fortWorthPermit(row: FortWorthRow, geometry?: { x?: number; y?: 
   const street = (row.Address?.split(',')[0] ?? [row.Addr_No, row.Direction, row.Street_Name, row.Street_Suffix].filter(Boolean).join(' ')).trim();
   const at = texas(num(row.Latitude ?? geometry?.y), num(row.Longitude ?? geometry?.x));
   const special = row.B1_SPECIAL_TEXT?.trim();
+  // Placeholder addresses ("26060032 For Review Only Way") are not sites.
+  const placeholder = /for review only/i.test(street);
+  const permit = row.Permit_No?.trim();
+  const parcel = [row.B1_LOT ? `Lot ${row.B1_LOT}` : '', row.B1_BLOCK ? `Block ${row.B1_BLOCK}` : '', row.B1_LEGAL_DESC?.trim() ?? ''].filter(Boolean).join(', ');
   return {
     market: 'Fort Worth',
     place: 'Fort Worth',
-    permit: row.Permit_No ?? street,
-    // Placeholder addresses ("26060032 For Review Only Way") are not sites.
-    group: /for review only/i.test(street) ? '' : siteKey(street),
+    permit: permit || street,
+    // The city lists a permit once per address, parcel and owner, all with the
+    // permit's whole value: one permit number is one project.
+    group: permit || (placeholder ? '' : siteKey(street)),
+    site: placeholder ? '' : siteKey(street),
+    placeholder,
+    status: row.Current_Status?.trim() || null,
+    sourceId: row.CAPID != null && String(row.CAPID).trim() ? String(row.CAPID).trim() : null,
+    parcel: parcel || null,
     name: fortWorthName(special),
     text: `${special ?? ''} ${row.B1_WORK_DESC ?? ''} ${row.Owner_Full_Name ?? ''} ${row.Use_Type ?? ''}`,
-    address: street ? `${tidyStreet(street)}, Fort Worth, TX${row.Zip_Code ? ` ${row.Zip_Code}` : ''}` : null,
+    address: street && !placeholder ? `${tidyStreet(street)}, Fort Worth, TX${row.Zip_Code ? ` ${row.Zip_Code}` : ''}` : null,
     lat: at?.[0] ?? null,
     lng: at?.[1] ?? null,
     issued,
@@ -577,7 +654,7 @@ export async function fetchCityPermitProjects(
     try {
       const known = new Set([...tabs, ...out].filter((p) => p.city === source.market).map((p) => siteKey(p.address)));
       const projects = permitProjects(await source.fetch(now, http), now, CITY_MAX + known.size)
-        .filter((p) => !known.has(siteKey(p.address)))
+        .filter((p) => !(p.addresses ?? [p.address]).some((a) => known.has(siteKey(a))))
         .slice(0, CITY_MAX);
       out.push(...projects);
       log(`${source.name} city permits: ${projects.length} more projects`);

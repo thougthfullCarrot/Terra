@@ -69,7 +69,7 @@ const squash = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').
 function expected(city, f) {
   return (byCity.get(city) ?? []).filter((p) => {
     if (f.query) {
-      const hay = squash([p.name, p.facility, p.id, p.address, p.place].filter(Boolean).join(' '));
+      const hay = squash([p.name, p.facility, p.id, p.address, ...(p.addresses ?? []), p.place].filter(Boolean).join(' '));
       const all = `${hay} ${hay.replace(/ /g, '')}`;
       if (!squash(f.query).split(' ').filter(Boolean).every((w) => all.includes(w))) return false;
     }
