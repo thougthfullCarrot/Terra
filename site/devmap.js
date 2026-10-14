@@ -22,6 +22,7 @@ import {
   PUBLIC_INVOLVEMENT
 } from './market.js';
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
+import { stateBox } from './labels.js';
 
 export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
@@ -208,7 +209,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
         apply();
       })
       .catch((error) => {
-        mapNode.replaceChildren(el('div', 'state error', error instanceof Error ? error.message : "Couldn't load the map."));
+        mapNode.replaceChildren(stateBox(error instanceof Error ? error.message : "Couldn't load the map.", 'error'));
       })
   );
   return box;

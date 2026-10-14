@@ -3,6 +3,7 @@
 // square foot. The rules live in sites.js; the list in sites.json, loaded the
 // first time the finder opens.
 import { commonZoning, DEFAULT_SITE_FILTER, filterSites, formatArea, SITE_SORTS } from './sites.js';
+import { labelLegend, labelTag, stateBox } from './labels.js';
 
 const PAGE = 50;
 const USES = [
@@ -37,10 +38,10 @@ export function sitesView(snapshot, city) {
   const root = el('div', 'sites-view');
   if (file) draw(root, city);
   else {
-    root.append(el('div', 'state', 'Loading sites…'));
+    root.append(stateBox('Loading sites…', 'loading'));
     load()
       .then(() => root.isConnected && draw(root, city))
-      .catch((error) => root.replaceChildren(el('div', 'state error', `Couldn't load the site list. ${error instanceof Error ? error.message : ''}`.trim())));
+      .catch((error) => root.replaceChildren(stateBox(`Couldn't load the site list. ${error instanceof Error ? error.message : ''}`.trim(), 'error', { retry: true })));
   }
   return root;
 }
@@ -99,7 +100,7 @@ function draw(root, city) {
 
   const results = el('div', 'sites-results');
   results.setAttribute('aria-live', 'polite');
-  root.replaceChildren(form, results, notes(sources, city));
+  root.replaceChildren(labelLegend(['verified', 'estimate']), form, results, notes(sources, city));
   list(results, city);
 
   // Typing redraws only the results, so the field keeps focus.
@@ -122,9 +123,19 @@ function list(box, city) {
   const table = el('table', 'market-table sites-table');
   table.append(el('caption', 'visually-hidden', 'Sites matching the filters'));
   const head = el('tr');
-  for (const [text, cls] of [['Site', 'city-col'], ['Use', ''], ['Zoning', ''], ['Land', 'num'], ['Land $/sq ft', 'num'], ['Appraised value', 'num']]) {
+  // What each column is: appraisal-roll and zoning-map readings are official records; land $/sq ft is worked out from them.
+  const cols = [
+    ['Site', 'city-col', '', ''],
+    ['Use', '', 'verified', 'appraisal district roll'],
+    ['Zoning', '', 'verified', 'city zoning map at the parcel center; confirm with the city'],
+    ['Land', 'num', 'verified', 'appraisal district roll'],
+    ['Land $/sq ft', 'num', 'estimate', 'appraised land value ÷ land area'],
+    ['Appraised value', 'num', 'verified', 'appraisal district roll; a tax value, not a sale price']
+  ];
+  for (const [text, cls, kind, source] of cols) {
     const th = el('th', cls, text);
     th.scope = 'col';
+    if (kind) th.append(labelTag(kind, source));
     head.append(th);
   }
   const thead = el('thead');

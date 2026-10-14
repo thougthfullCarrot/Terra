@@ -8,6 +8,7 @@
 // browser, when someone searches or picks a spot.
 import { analyzeDeal, writeDeal } from './deal.js';
 import { ATTRIBUTION, CENTERS, loadLeaflet, TILES } from './devmap.js';
+import { stateBox } from './labels.js';
 import {
   addressWhere,
   comptrollerUrl,
@@ -121,10 +122,10 @@ function render() {
   $('p-blurb').textContent = BLURBS[state.tool];
   $('p-sources').replaceChildren();
   const body = $('p-body');
-  body.replaceChildren(el('div', 'state', 'Loading…'));
+  body.replaceChildren(stateBox('Loading…', 'loading'));
   const view = { owner: ownerView, leases: leasesView, distress: distressView, drive: driveView, deal: dealView }[state.tool];
   Promise.resolve(view(body))
-    .catch((error) => body.replaceChildren(el('div', 'state error', `Couldn't load this tool. ${error instanceof Error ? error.message : ''}`.trim())));
+    .catch((error) => body.replaceChildren(stateBox(`Couldn't load this tool. ${error instanceof Error ? error.message : ''}`.trim(), 'error', { retry: true })));
 }
 
 const BLURBS = {
@@ -272,7 +273,7 @@ async function lookup(q) {
 }
 
 async function search(q, results) {
-  results.replaceChildren(el('div', 'state', 'Searching the appraisal rolls…'));
+  results.replaceChildren(stateBox('Searching the appraisal rolls…', 'loading'));
   const byAddress = Boolean(parseAddress(q));
   const { found, failed, near } = await lookup(q);
   const nodes = [];
@@ -324,7 +325,7 @@ function parcelTable(parcels, results) {
     const pick = el('button', 'link owner-pick', parcel.address || `Account ${parcel.account}`);
     pick.type = 'button';
     pick.addEventListener('click', async () => {
-      results.replaceChildren(el('div', 'state', 'Loading…'));
+      results.replaceChildren(stateBox('Loading…', 'loading'));
       const nodes = await parcelDetail(parcel);
       ownerResults = { q: state.q, nodes };
       results.replaceChildren(...nodes);
@@ -671,7 +672,7 @@ async function driveView(body) {
     hint.textContent = '';
     layers.clearLayers();
     L.circleMarker([lat, lng], { radius: 7, color: '#fff', weight: 2, fillColor: color('--accent', '#2b4a8b'), fillOpacity: 1 }).addTo(layers);
-    results.replaceChildren(el('div', 'state', 'Drawing drive areas…'));
+    results.replaceChildren(stateBox('Drawing drive areas…', 'loading'));
     let rings;
     let estimated = false;
     try {

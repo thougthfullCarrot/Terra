@@ -421,3 +421,69 @@ export function projectDates(start, end) {
   if (to) return `Finishes ${to}`;
   return '';
 }
+
+/**
+ * Where one figure comes from, for the line under it: the source, the period
+ * it reports and the area it describes ("BLS · Aug 2026 · metro area"). Blank
+ * parts are left out, never guessed; a figure repeated from another city's
+ * metro says so.
+ */
+export function figureSource(market, metric) {
+  const parts = [];
+  if (metric?.source) parts.push(metric.source);
+  const period = market?.periods?.[metric?.key];
+  if (period) parts.push(period);
+  const shared = sharedWith(market, metric?.key);
+  if (shared) parts.push(`${shared}'s ${GEOGRAPHY_LABELS[metric.geography] ?? 'area'}`);
+  else if (GEOGRAPHY_LABELS[metric?.geography]) parts.push(GEOGRAPHY_LABELS[metric.geography]);
+  return parts.join(' · ');
+}
+
+/** Whether a market's metro-wide figures cover a metropolitan division (Dallas, Fort Worth) rather than a whole metro area. */
+export function isDivision(market) {
+  return /\bdivision\b/i.test(market?.metro ?? '');
+}
+
+/**
+ * Reasons the compared cities' figures for a metric are not like for like:
+ * different reporting periods, a city repeating another's metro figure, a mix
+ * of metro divisions and whole metros, or a figure kept from an earlier
+ * update. One entry per metric and reason, in metric order; none when every
+ * city with a figure matches. Cities without a figure are not compared.
+ */
+export function compareWarnings(markets, metrics, cities) {
+  const picked = cities.map((city) => markets.find((m) => m.city === city)).filter(Boolean);
+  const out = [];
+  for (const metric of metrics) {
+    const have = picked.filter((m) => m.values?.[metric.key] != null);
+    if (have.length < 2) continue;
+    const periods = new Map();
+    for (const m of have) {
+      const period = m.periods?.[metric.key];
+      if (!period) continue;
+      periods.set(period, [...(periods.get(period) ?? []), m.city]);
+    }
+    if (periods.size > 1) {
+      const text = [...periods].map(([period, list]) => `${list.join(', ')}: ${period}`).join('; ');
+      out.push({ key: metric.key, label: metric.label, kind: 'period', text: `Different reporting periods (${text}).` });
+    }
+    const unknown = have.filter((m) => !m.periods?.[metric.key]).map((m) => m.city);
+    if (unknown.length && periods.size) out.push({ key: metric.key, label: metric.label, kind: 'period', text: `No reporting period on record for ${unknown.join(', ')}.` });
+    for (const m of have) {
+      const shared = sharedWith(m, metric.key);
+      if (shared) out.push({ key: metric.key, label: metric.label, kind: 'geography', text: `${m.city} shows the ${shared} figure for the ${GEOGRAPHY_LABELS[metric.geography] ?? 'area'}, not its own.` });
+    }
+    if (metric.geography === 'metro') {
+      const div = have.filter((m) => isDivision(m) && !sharedWith(m, metric.key)).map((m) => m.city);
+      if (div.length && div.length < have.length)
+        out.push({ key: metric.key, label: metric.label, kind: 'geography', text: `${div.join(' and ')} ${div.length === 1 ? 'uses a metro division' : 'use metro divisions'} (part of the Dallas-Fort Worth metro); the others are whole metro areas.` });
+    }
+    if (metric.geography === 'msa') {
+      const div = have.filter((m) => isDivision(m)).map((m) => m.city);
+      if (div.length > 1) out.push({ key: metric.key, label: metric.label, kind: 'geography', text: `${div.join(' and ')} share one whole-metro figure here.` });
+    }
+    const stale = have.filter((m) => valueStatus(m, metric.key) === 'retained').map((m) => m.city);
+    if (stale.length) out.push({ key: metric.key, label: metric.label, kind: 'stale', text: `Not refreshed on the latest update for ${stale.join(', ')}; an earlier figure is shown.` });
+  }
+  return out;
+}
