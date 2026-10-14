@@ -22,6 +22,7 @@ import {
   PUBLIC_INVOLVEMENT
 } from './market.js';
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
+import { stateBox } from './labels.js';
 
 export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
@@ -78,7 +79,14 @@ export function loadLeaflet() {
 
 /** Remove the map on screen, before the section redraws or signs out. */
 export function disposeMap() {
-  liveMap?.remove();
+  // Stop a pan or zoom still running. Leaflet 1.9 ends a zoom animation with
+  // an untracked 250 ms timer that reads the map's panes; once remove() has
+  // deleted them that timer throws, unless the map no longer counts as zooming.
+  if (liveMap) {
+    liveMap.stop();
+    liveMap._animatingZoom = false;
+    liveMap.remove();
+  }
   liveMap = null;
 }
 
@@ -208,7 +216,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
         apply();
       })
       .catch((error) => {
-        mapNode.replaceChildren(el('div', 'state error', error instanceof Error ? error.message : "Couldn't load the map."));
+        mapNode.replaceChildren(stateBox(error instanceof Error ? error.message : "Couldn't load the map.", 'error'));
       })
   );
   return box;
@@ -339,6 +347,9 @@ async function drawMap(node, list, projects, city) {
   let viewed = false;
   return {
     show(ids) {
+      // A debounced search or filter from a card that has since been replaced
+      // (the city changed) must not move the removed map.
+      if (map !== liveMap) return;
       const key = projects.map((p) => (ids.has(p) ? 1 : 0)).join('');
       if (key === last) return;
       last = key;
@@ -423,6 +434,8 @@ function popup(project) {
   if (project.place && !project.address) box.append(el('span', 'dev-pop-line muted', project.place));
   if (project.address) box.append(el('span', 'dev-pop-line muted', project.address));
   if (project.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
+  else if (project.locatedFrom) box.append(el('span', 'dev-pop-line muted', `Pin is the site's location from ${project.locatedFrom.replace(/^City/, 'a city')}, not the building's own point.`));
+  if (project.aliases?.length) box.append(el('span', 'dev-pop-line muted', `Also filed as ${project.aliases.slice(0, 4).join(', ')}`));
   const facts = [money(project.cost), project.work, project.squareFeet ? `${project.squareFeet.toLocaleString('en-US')} sq ft` : ''].filter(Boolean);
   box.append(el('span', 'dev-pop-line', facts.join(' · ')));
   const status = project.status === 'Unknown status' && project.statusCode != null ? `Unknown status (TABS code ${project.statusCode})` : project.status;
@@ -434,7 +447,12 @@ function popup(project) {
     ['Tenant', project.tenant],
     ['Architect', project.designFirm],
     ['Contractor', project.contractor],
-    ['Permit contact', project.contact]
+    ['Permit contact', project.contact],
+    // A permit the city lists at several addresses or parcels: every one, so nothing it filed is hidden.
+    ['Also filed at', project.addresses?.length > 1 ? project.addresses.slice(1).join('; ') : null],
+    ['Permits', project.permits?.length > 1 ? project.permits.join(', ') : null],
+    ['Parcels', project.parcels?.length ? project.parcels.join('; ') : null],
+    ['City record ids', project.sourceIds?.length > 1 ? project.sourceIds.join(', ') : null]
   ]) {
     if (!value) continue;
     people.append(el('dt', '', label), el('dd', '', value));

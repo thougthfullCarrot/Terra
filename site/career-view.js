@@ -28,6 +28,7 @@ import { CENTERS } from './devmap.js';
 import { firmJobsHref, growthJobs } from './growth.js';
 import { money } from './insights-view.js';
 import { marketSnapshot } from './markets-view.js';
+import { stateBox } from './labels.js';
 
 const $ = (id) => document.getElementById(id);
 const MARKETS = Object.keys(CENTERS);
@@ -93,7 +94,7 @@ async function render() {
   // The brief and the campus view pick a firm or a school instead of a market.
   $('c-city-label').parentElement.hidden = state.tool === 'brief' || state.tool === 'campus';
   $('c-blurb').textContent = BLURBS[state.tool];
-  $('c-body').replaceChildren(el('div', 'state', 'Loading…'));
+  $('c-body').replaceChildren(stateBox('Loading…', 'loading'));
   const input = await data();
   if (run !== drawing) return;
   const view = VIEWS[state.tool](input);

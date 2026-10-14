@@ -3,6 +3,7 @@
 // that keeps its formulas. The math is in underwrite.js, the workbook in
 // underwrite-xlsx.js.
 import { formatValue } from './market.js';
+import { labelHeading, labelLegend, labelTag, taxSource } from './labels.js';
 import { suggestedRate } from './deal.js';
 import { DEFAULT_UW, readUw, sensitivity, underwrite, UW_FIELDS, writeUw } from './underwrite.js';
 import { underwriteXlsx, xlsxName } from './underwrite-xlsx.js';
@@ -25,6 +26,7 @@ export function underwriteView(snapshot) {
     el('p', 'group-blurb', 'A yearly cash flow with expense reimbursements, CapEx, tenant improvements and leasing commissions, a sale at the exit cap rate, and the returns an investment committee asks for. Download it to Excel with every formula live.')
   );
 
+  card.append(labelLegend(), labelHeading('Inputs', 'assumption'));
   const form = el('form', 'calc-form');
   form.addEventListener('submit', (e) => e.preventDefault());
   const inputs = {};
@@ -52,9 +54,13 @@ export function underwriteView(snapshot) {
   taxSelect.append(new Option('None (include it in expenses)', ''));
   for (const city of taxCities) taxSelect.append(new Option(`${city}: ${formatValue(taxFor(city), 'taxRate')}`, city));
   taxSelect.value = uw.city;
-  taxLabel.append(el('span', 'eyebrow', 'PROPERTY TAX FROM CITY'), taxSelect);
+  const taxEyebrow = el('span', 'eyebrow', 'PROPERTY TAX FROM CITY');
+  taxLabel.append(taxEyebrow, taxSelect);
   form.append(taxLabel);
   card.append(form);
+  const markTax = () => taxEyebrow.replaceChildren('PROPERTY TAX FROM CITY', ...(taxSelect.value ? [labelTag('verified', taxSource(snapshot, taxSelect.value))] : []));
+  taxSelect.addEventListener('change', markTax);
+  markTax();
 
   const actions = el('div', 'calc-fills');
   const download = el('button', 'chip uw-download', 'Download to Excel (.xlsx)');
@@ -78,7 +84,7 @@ export function underwriteView(snapshot) {
   results.setAttribute('aria-live', 'polite');
   const grid = el('section', 'card uw-block');
   const flows = el('section', 'card uw-block');
-  card.append(results);
+  card.append(labelHeading('Results', 'estimate'), results);
   frag.append(card, grid, flows);
 
   function current() {
@@ -151,7 +157,7 @@ function sensitivityTable(s) {
   });
   table.append(thead, body);
   wrap.append(table);
-  return [el('h3', 'group-title', 'Sensitivity: levered IRR'), el('p', 'group-blurb', 'How the return moves if rents grow faster or slower, or the buyer at exit pays a higher or lower cap rate. The outlined cell is your base case.'), wrap];
+  return [labelHeading('Sensitivity', 'estimate'), el('h3', 'group-title', 'Sensitivity: levered IRR'), el('p', 'group-blurb', 'How the return moves if rents grow faster or slower, or the buyer at exit pays a higher or lower cap rate. The outlined cell is your base case.'), wrap];
 }
 
 function cashFlowTable(m) {
@@ -189,7 +195,7 @@ function cashFlowTable(m) {
   }
   table.append(thead, body);
   wrap.append(table);
-  return [el('h3', 'group-title', 'Cash flow'), el('p', 'group-blurb', `Equity in at close: ${money(m.equity)}. Loan: ${money(m.loan)}, paid off from the sale.`), wrap];
+  return [labelHeading('Projection', 'estimate'), el('h3', 'group-title', 'Cash flow'), el('p', 'group-blurb', `Equity in at close: ${money(m.equity)}. Loan: ${money(m.loan)}, paid off from the sale.`), wrap];
 }
 
 function th(text, cls) {

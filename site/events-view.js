@@ -3,6 +3,7 @@
 // Real estate networking and industry events by city, from events.json
 // (chapter calendars, refreshed with the site). Each event links out to the
 // organizer's page.
+import { stateBox } from './labels.js';
 import {
   dateParts,
   eventCounts,
@@ -51,7 +52,7 @@ async function show() {
   $('events-view').hidden = !open;
   if (!open) return;
   if (!file) {
-    message('Loading events…');
+    message('Loading events…', 'loading');
     loading ??= load();
     try {
       const data = await loading;
@@ -235,8 +236,8 @@ function drawCalendar(events) {
   }
 }
 
-function message(text, isError = false) {
-  $('e-list').replaceChildren(el('div', isError ? 'state error' : 'state', text));
+function message(text, kind = 'empty') {
+  $('e-list').replaceChildren(stateBox(text, kind, { retry: kind === true }));
 }
 
 function el(tag, className, text) {

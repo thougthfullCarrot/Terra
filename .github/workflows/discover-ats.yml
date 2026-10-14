@@ -50,9 +50,13 @@ jobs:
           DOMAINS: ${{ inputs.domains || '5' }}
           FILE: ${{ inputs.file }}
           CHECK: ${{ inputs.check }}
+          # Read only: used to skip firms already on the live Firms tab.
+          # discover-ats never writes to the Sheet.
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          TERRA_SHEET_ID: ${{ vars.TERRA_SHEET_ID }}
         run: |
           set +e
-          args=(--sql --limit "$DOMAINS" --csv ../employers-found.csv)
+          args=(--sql --limit "$DOMAINS" --csv ../employers-found.csv --jobs ../jobs-found.json)
           if [ -n "$FILE" ]; then args+=(--file "$FILE"); fi
           if [ "$CHECK" = "true" ]; then args+=(--check); fi
           npm run --silent discover:ats -- "${args[@]}" 2>&1 | tee /tmp/discover.txt
@@ -74,7 +78,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: employers-found
-          path: employers-found.csv
+          path: |
+            employers-found.csv
+            jobs-found.json
           retention-days: 30
 
       - name: Fail if nothing was found

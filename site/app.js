@@ -35,6 +35,7 @@ import { startProperty } from './property-view.js';
 import { startCareer } from './career-view.js';
 import { jobFlags, TITLE_GUIDE, writeCareerHash } from './career.js';
 import { startPitch } from './pitch.js';
+import { stateBox } from './labels.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { firm: 'All firms', sector: 'All sectors' };
@@ -835,11 +836,8 @@ function el(tag, cls = '', text) {
   return node;
 }
 
-function showState(message, isError = false) {
-  const box = document.createElement('div');
-  box.className = isError ? 'state error' : 'state';
-  box.textContent = message;
-  $('list').replaceChildren(box);
+function showState(message, kind = 'empty') {
+  $('list').replaceChildren(stateBox(message, kind, { retry: kind === true }));
 }
 
 /** Market data is gated like the jobs: account.js hands over a loader once the visitor may read it. */

@@ -88,6 +88,9 @@ export interface Development {
   place?: string | null;
   facility?: string | null;
   address?: string | null;
+  addresses?: string[];
+  /** Other names and permit numbers the same site is filed under. */
+  aliases?: string[];
   work?: string;
   status?: string;
   registered?: string;
@@ -120,3 +123,13 @@ export function cityProjects<T extends Pick<Development, 'city' | 'cost' | 'isPu
 ): T[];
 export function markerRadius(cost: number, maxCost: number): number;
 export function projectDates(start: string | null | undefined, end: string | null | undefined): string;
+
+export interface CompareWarning {
+  key: string;
+  label: string;
+  kind: 'period' | 'geography' | 'stale';
+  text: string;
+}
+export function figureSource(market: Market | null | undefined, metric: Pick<Metric, 'key' | 'source' | 'geography'> | null | undefined): string;
+export function isDivision(market: Market | null | undefined): boolean;
+export function compareWarnings(markets: Market[], metrics: Pick<Metric, 'key' | 'label' | 'geography'>[], cities: string[]): CompareWarning[];

@@ -30,12 +30,17 @@ export interface Candidate {
   domain?: string;
   sector?: string;
   markets?: string;
+  /** The `# --- Group ---` header the line sits under, when the list has them. */
+  group?: string;
 }
 
 export function parseCandidates(text: string): Candidate[] {
   const seen = new Set<string>();
   const out: Candidate[] = [];
+  let group: string | undefined;
   for (const raw of text.split(/\r?\n/)) {
+    const header = /^#\s*---\s*(.+?)\s*---\s*$/.exec(raw.trim());
+    if (header) group = header[1];
     const line = raw.replace(/#.*$/, '').trim();
     if (!line) continue;
     const [name = '', domain, sector, markets] = line.split('|').map((part) => part.trim());
@@ -46,7 +51,8 @@ export function parseCandidates(text: string): Candidate[] {
       name,
       ...(domain ? { domain: domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase() } : {}),
       ...(sector ? { sector } : {}),
-      ...(markets ? { markets } : {})
+      ...(markets ? { markets } : {}),
+      ...(group ? { group } : {})
     });
   }
   return out;

@@ -77,7 +77,8 @@ export function detectAts(rawUrl: string): AtsMatch | null {
     };
   }
 
-  if (host.endsWith('icims.com')) {
+  // iCIMS's own marketing site (www.icims.com, privacy notices) is not a board.
+  if (host.endsWith('icims.com') && !/^(www\.)?icims\.com$/.test(host)) {
     return hit('icims', true, host.split('.')[0] ?? null, host, rawUrl);
   }
 
@@ -154,7 +155,7 @@ function workdaySite(path: string): string | null {
 }
 
 /** ATS URLs written into scripts and data attributes, where embedded boards keep them. */
-const ATS_URL = /https?:\/\/[a-z0-9.-]*(greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|icims\.com|workable\.com|ashbyhq\.com|smartrecruiters\.com|bamboohr\.com|applytojob\.com|paylocity\.com|adp\.com|taleo\.net|successfactors\.com|paycomonline\.net|ultipro\.com|ukg\.net|jobvite\.com|recruitee\.com|teamtailor\.com)[^"'\s<>\\)]*/gi;
+const ATS_URL = /https?:\/\/[a-z0-9.-]*(greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|icims\.com|workable\.com|ashbyhq\.com|smartrecruiters\.com|bamboohr\.com|applytojob\.com|paylocity\.com|adp\.com|taleo\.net|successfactors\.com|paycomonline\.net|ultipro\.com|ukg\.net|jobvite\.com|recruitee\.com|teamtailor\.com)[^"'\s<>\\)&]*(?:&(?!quot;)[^"'\s<>\\)&]*)*/gi;
 
 export function embeddedUrls(html: string): string[] {
   return [...new Set(html.match(ATS_URL) ?? [])].map((url) => url.replace(/&amp;/g, '&'));

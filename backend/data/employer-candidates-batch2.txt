@@ -1,0 +1,191 @@
+# Employer discovery, batch 2 (2026-10-12).
+#
+# Texas real estate employers of every size that are not on the firm list, in
+# firm-candidates.txt or in batch 1. Sources: TREC new-agent sponsor data
+# (data.texas.gov s7ft-44qi), SEC EDGAR filers with Texas headquarters, Nareit's
+# REIT directory, Texas and local apartment association management members,
+# Greater Houston / Dallas / Austin / San Antonio builder association members,
+# and NAIOP / ULI / CCIM Texas chapter sponsor pages. Each line is a candidate,
+# not a fact; `discover:ats --check` decides. Lines are grouped by category so
+# the run can report which categories produce jobs.
+#
+# Name | website hint | sector | markets
+
+# --- Developers (commercial, mixed-use, multifamily) ---
+Stillwater Capital | stillwatercap.com | Development | Dallas; Austin
+Larkspur Capital | larkspurcapital.com | Development | Dallas
+Ojala Partners | ojalapartners.com | Development | Dallas; Houston
+Mill Creek Residential | millcreekplaces.com | Development | Dallas; Austin; Houston
+Alamo Manhattan | alamomanhattan.com | Development | Dallas; Austin
+Columbus Realty Partners | columbusrealtypartners.com | Development | Dallas
+Ewing Real Estate | ewingre.com | Development | Dallas
+Cypress Equities | cypressequities.com | Development | Dallas
+Patrinely Group | patrinely.com | Development | Houston
+Lionstone Investments | lionstoneinvestments.com | Investment | Houston; Austin
+Catellus Development | catellus.com | Development | Austin
+Trinsic Residential Group | trinsicres.com | Development | Dallas; Austin; Houston
+Wood Partners | woodpartners.com | Development | Dallas; Austin; Houston
+Trammell Crow Residential | tcr.com | Development | Dallas; Austin; Houston
+Alliance Residential | allresco.com | Development | Dallas; Austin; Houston
+Bridge Tower Group | bridgetowergroup.com | Development | Dallas
+Fairway Investments | fairwayinvest.com | Development | Dallas
+Cadence McShane | cadencemcshane.com | Development | Dallas; Houston
+Wolverine Interests | wolverineinterests.com | Development | Houston
+Ancorian | ancorian.com | Development | Houston; San Antonio
+Trinity Investors | trinityinvestors.com | Investment | Dallas
+Lovett Industrial | lovettindustrial.com | Development | Houston
+Kairoi Residential | kairoi.com | Development | San Antonio; Austin
+Mission DG | missiondg.com | Development | San Antonio
+GrayCo Development | grayco.com | Development | San Antonio
+Hixon Properties | hixonproperties.com | Development | San Antonio
+Zachry Hospitality | zachryhospitality.com | Development | San Antonio
+Riverstone Companies | riverstonecos.com | Development | Houston
+StoneHawk Capital Partners | stonehawkcapital.com | Development | Houston
+Wan Bridge | wanbridge.com | Development | Houston
+Domain Companies | domaincompanies.com | Development | Houston
+Oden Hughes | odenhughes.com | Development | Austin
+Spire Realty Group | spirerealtygroup.com | Development | Austin
+CapRidge Partners | capridgepartners.com | Development | Dallas
+Peloton Commercial Real Estate | pelotoncre.com | Development | Dallas
+Sabre Realty Management | sabrerealty.com | Development | Dallas
+Seefried Industrial Properties | seefriedproperties.com | Development | Dallas; Houston
+Hunt Southwest | huntsouthwest.com | Development | Dallas
+Fort Worth Partners | fortworthpartners.com | Development | Fort Worth
+Cassco Development | casscodev.com | Development | Fort Worth
+Real Estate Strategies Group | resg.com | Development | Fort Worth
+
+# --- Land developers and master-planned communities ---
+Signorelli Company | signorellico.com | Land | Houston
+Friendswood Development | friendswooddevelopment.com | Land | Houston
+Land Tejas | landtejas.com | Land | Houston
+Centurion American Development | centurionamerican.com | Land | Dallas
+Terra Verde Group | terraverdegroup.com | Land | Dallas
+HC Lands | hclands.com | Land | Dallas
+Petrus Investment | petrusinvestment.com | Land | Dallas
+SouthStar Communities | southstarcommunities.com | Land | San Antonio; Austin
+Taurus of Texas | taurusoftexas.com | Land | Austin
+Walton Global | walton.com | Land | Dallas; Houston; Austin
+Forestar Group | forestar.com | Land | Statewide
+
+# --- Homebuilders (regional and national with Texas divisions) ---
+Shea Homes | sheahomes.com | Homebuilder | Dallas; Houston; San Antonio
+Coventry Homes | coventryhomes.com | Homebuilder | Houston; Austin; San Antonio
+Brightland Homes | brightlandhomes.com | Homebuilder | Statewide
+Sitterle Homes | sitterlehomes.com | Homebuilder | San Antonio
+Partners in Building | pib.com | Homebuilder | Houston
+Caldwell Homes | caldwellhomes.com | Homebuilder | Houston
+Westin Homes | westin-homes.com | Homebuilder | Houston
+Newmark Homes | newmarkhomes.com | Homebuilder | Houston
+Village Builders | villagebuilders.com | Homebuilder | Houston
+Long Lake Ltd | longlakeltd.com | Homebuilder | Houston
+Drees Custom Homes | dreeshomes.com | Homebuilder | Dallas; Austin; Houston
+CastleRock Communities | c-rock.com | Homebuilder | San Antonio; Houston; Austin
+Scott Felder Homes | scottfelderhomes.com | Homebuilder | Austin; San Antonio
+Pacesetter Homes | pacesetterhomestexas.com | Homebuilder | Austin
+Milestone Community Builders | milestonecommunitybuilders.com | Homebuilder | Austin
+Sterling Homes | sterlinghomes.com | Homebuilder | Dallas
+American Legend Homes | americanlegendhomes.com | Homebuilder | Dallas
+Grand Homes | grandhomes.com | Homebuilder | Dallas
+First Texas Homes | firsttexashomes.com | Homebuilder | Dallas
+Landon Homes | landonhomes.com | Homebuilder | Dallas
+UnionMain Homes | unionmainhomes.com | Homebuilder | Dallas
+Rausch Coleman Homes | rauschcoleman.com | Homebuilder | Statewide
+Impression Homes | impressionhomes.com | Homebuilder | Dallas; Fort Worth
+HistoryMaker Homes | historymaker.com | Homebuilder | Dallas; Houston
+Smith Douglas Homes | smithdouglas.com | Homebuilder | Houston
+Starlight Homes | starlighthomes.com | Homebuilder | Statewide
+Davidson Homes | davidsonhomes.com | Homebuilder | Houston
+Mattamy Homes | mattamyhomes.com | Homebuilder | Dallas; Houston; San Antonio
+Stanley Martin | stanleymartin.com | Homebuilder | Dallas
+
+# --- Brokerages (commercial and investment sales) ---
+Bridge Commercial Real Estate | bridgecre.com | Brokerage | Dallas
+NAI Robert Lynn | nairl.com | Brokerage | Dallas
+Boultinghouse Simpson Gates | bsgrealestate.com | Brokerage | Houston
+Colvill Office Properties | colvill.com | Brokerage | Houston
+Oxford Commercial | oxfordcommercial.com | Brokerage | Houston
+Beeler Commercial | beelercommercial.com | Brokerage | Houston
+Finial Group | finialgroup.com | Brokerage | Houston
+Reata Real Estate Services | reata.net | Brokerage | San Antonio
+Worth Ross Management | worthross.com | Brokerage | San Antonio
+Reliance Retail | relianceretail.com | Brokerage | San Antonio
+Matthews Real Estate Investment Services | matthews.com | Brokerage | Dallas; Houston; Austin
+Institutional Property Advisors | ipausa.com | Brokerage | Statewide
+Ariel Property Advisors | arielpa.com | Brokerage | Dallas
+SVN Trinity Advisors | svn.com | Brokerage | Dallas
+eXp Commercial | expcommercial.com | Brokerage | Statewide
+KW Commercial | kwcommercial.com | Brokerage | Austin
+Keller Williams Realty International | kw.com | Brokerage | Austin
+Ebby Halliday Realtors | ebby.com | Brokerage | Dallas
+Dave Perry-Miller Real Estate | daveperrymiller.com | Brokerage | Dallas
+Allie Beth Allman & Associates | alliebeth.com | Brokerage | Dallas
+Martha Turner Sotheby's | marthaturner.com | Brokerage | Houston
+Realty Austin | realtyaustin.com | Brokerage | Austin
+Phyllis Browning Company | phyllisbrowning.com | Brokerage | San Antonio
+JPAR Real Estate | jpar.com | Brokerage | Dallas
+Fathom Realty | fathomrealty.com | Brokerage | Statewide
+
+# --- REITs and public real estate companies (Texas HQ or large Texas footprint) ---
+CubeSmart Texas | cubesmart.com | Investment | Statewide
+Americold | americold.com | Investment | Statewide
+NexPoint Real Estate Finance | nexpoint.com | Investment | Dallas
+Invesco Real Estate | invesco.com | Investment | Dallas
+CNL Texas | cnl.com | Investment | Statewide
+Omega Healthcare | omegahealthcare.com | Investment | Statewide
+Agree Realty | agreerealty.com | Investment | Statewide
+EastGroup Properties | eastgroup.net | Investment | Dallas; Houston; Austin; San Antonio
+STAG Industrial | stagindustrial.com | Investment | Statewide
+First Industrial Realty Trust | firstindustrial.com | Investment | Dallas; Houston
+Rexford Industrial | rexfordindustrial.com | Investment | Statewide
+Independence Realty Trust | irtliving.com | Investment | Dallas; Houston; Austin
+Mid-America Apartment Communities | maac.com | Investment | Statewide
+AvalonBay Communities | avaloncommunities.com | Investment | Dallas; Austin
+Equity Residential | equityapartments.com | Investment | Dallas; Austin
+UDR | udr.com | Investment | Dallas; Austin
+Essex Property Trust | essex.com | Investment | Statewide
+Regency Centers | regencycenters.com | Investment | Dallas; Houston; Austin
+Federal Realty | federalrealty.com | Investment | Statewide
+Brixmor Property Group | brixmor.com | Investment | Statewide
+Kite Realty Group | kiterealty.com | Investment | Dallas; Houston; Austin
+Phillips Edison & Company | phillipsedison.com | Investment | Statewide
+Simon Property Group | simon.com | Investment | Statewide
+Healthpeak Properties | healthpeak.com | Investment | Houston
+Ventas | ventasreit.com | Investment | Statewide
+Welltower | welltower.com | Investment | Statewide
+Digital Realty | digitalrealty.com | Investment | Dallas; Austin
+Equinix Real Estate | equinix.com | Investment | Dallas
+CyrusOne | cyrusone.com | Investment | Dallas
+American Tower | americantower.com | Investment | Statewide
+
+# --- Property and asset management ---
+Investors Management Group | img-living.com | Property Management | Dallas
+Dominium | dominiuminc.com | Property Management | Statewide
+Bridge Property Management | bridgeinvestmentgroup.com | Property Management | Statewide
+Pegasus Residential | pegasusresidential.com | Property Management | Statewide
+Asset Plus Companies | assetpluscorp.com | Property Management | Houston
+Capstone Real Estate Services | capstonemgmt.com | Property Management | Austin; San Antonio
+Roscoe Property Management | roscoepm.com | Property Management | Austin
+Monument Real Estate Services | monumentres.com | Property Management | Statewide
+FPI Management | fpimgt.com | Property Management | Statewide
+HomeRiver Group | homeriver.com | Property Management | Statewide
+Mynd Property Management | mynd.co | Property Management | Statewide
+Pathlight Property Management | pathlightmgt.com | Property Management | Statewide
+Associa | associaonline.com | Property Management | Dallas; Statewide
+FirstService Residential Texas | fsresidential.com | Property Management | Statewide
+NexMetro Communities | nexmetro.com | Property Management | Dallas; Austin; San Antonio
+
+# --- Investment, lending and capital firms ---
+Hall Structured Finance | hallstructuredfinance.com | Lending | Dallas
+Bridge Investment Group | bridgeig.com | Investment | Statewide
+Harbert Management | harbert.net | Investment | Dallas
+Lone Star Investment Advisors | lonestarinvestmentadvisors.com | Investment | Dallas
+MetLife Investment Management Real Estate | investments.metlife.com | Lending | Dallas
+Prudential PGIM Real Estate | pgim.com | Investment | Dallas
+USAA Real Estate | usaa.com | Investment | San Antonio
+Cadence Bank Texas | cadencebank.com | Lending | Houston
+Inwood Bank | inwoodbank.com | Lending | Dallas
+American National Bank of Texas | anbtx.com | Lending | Dallas
+Benefit Street Partners | benefitstreetpartners.com | Lending | Dallas
+Trez Forman Capital | trezforman.com | Lending | Dallas
+Dougherty Mortgage | doughertymortgage.com | Lending | Statewide
+Berkeley Point | berkeleypointcapital.com | Lending | Dallas

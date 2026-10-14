@@ -69,7 +69,7 @@ const squash = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').
 function expected(city, f) {
   return (byCity.get(city) ?? []).filter((p) => {
     if (f.query) {
-      const hay = squash([p.name, p.facility, p.id, p.address, p.place].filter(Boolean).join(' '));
+      const hay = squash([p.name, p.facility, p.id, p.address, ...(p.addresses ?? []), p.place, ...(p.aliases ?? [])].filter(Boolean).join(' '));
       const all = `${hay} ${hay.replace(/ /g, '')}`;
       if (!squash(f.query).split(' ').filter(Boolean).every((w) => all.includes(w))) return false;
     }
@@ -115,7 +115,10 @@ for (const vp of [
   const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.mobile, hasTouch: !!vp.mobile, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => {
+    errors.push(e.message);
+    console.log(`  ${vp.name} page error: ${e.stack ?? e.message}`);
+  });
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const city = biggest;
   await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
@@ -228,7 +231,21 @@ for (const vp of [
   // Pin click: popup and list highlight.
   await check('showcase: $25M-$100M', { cost: '25to100' });
   await page.locator('.dev-card').scrollIntoViewIfNeeded();
-  await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
+  // Click a pin that is actually on screen and on top: the first one in the
+  // document can sit outside the phone's map view or under another pin.
+  const spot = await page.evaluate(() => {
+    const box = document.querySelector('.dev-map').getBoundingClientRect();
+    for (const path of document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive')) {
+      const r = path.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      if (x > box.left + 4 && x < box.right - 4 && y > box.top + 4 && y < box.bottom - 4 && document.elementFromPoint(x, y) === path) return { x, y };
+    }
+    return null;
+  });
+  console.log(`  ${v}: clicking the pin at ${spot ? `${Math.round(spot.x)},${Math.round(spot.y)}` : 'none on screen; first in page'}`);
+  if (spot) await page.mouse.click(spot.x, spot.y);
+  else await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
   await page.waitForSelector('.leaflet-popup .dev-pop-title', { timeout: 5000 }).catch(() => null);
   const popTitle = await page.locator('.leaflet-popup .dev-pop-title').textContent().catch(() => null);
   const active = await page.locator('.dev-item.active .dev-name').textContent().catch(() => null);
@@ -303,6 +320,35 @@ for (const vp of [
     log(`${v}: a project not on the map (${offCity}) opens its details from the list`, shown === offName && expanded === 'true' && links >= 1 && closed && reopened, `"${offName}"`);
   } else {
     log(`${v}: a project not on the map opens its details from the list`, false, 'no project without coordinates in market.json to test with');
+    }
+  // The Merc (TABS2025017471, TABS2025017477) and its San Antonio city permits:
+  // each query must list exactly what the generated data says it should.
+  const sa = byCity.get('San Antonio') ?? [];
+  if (sa.length) {
+    await page.goto(`${base}#markets&city=San%20Antonio`);
+    await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
+    if (vp.mobile && !(await page.locator('.dev-filters').evaluate((d) => d.open))) await page.locator('.dev-filters-summary').click();
+    const merc = ['TABS2025017471', 'TABS2025017477'].map((id) => sa.find((p) => p.id === id));
+    for (const p of merc.filter(Boolean)) {
+      console.log(`  Merc in data: ${p.id} "${p.name}" $${p.cost} at ${p.address ?? 'no address'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(site point: ${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
+    }
+    const street = (a) => String(a ?? '').split(',')[0].toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    for (const p of merc.filter(Boolean)) {
+      const twins = sa.filter((x) => x.source === 'city' && street(x.address) === street(p.address));
+      log(`${v}: ${p.id} has no city duplicate at ${street(p.address)}`, twins.length === 0, twins.map((x) => x.id).join(', '));
+      log(`${v}: ${p.id} has a pin with stated provenance`, p.lat != null , p.approximate ? 'ZIP center' : p.locatedFrom ?? 'geocoded address');
+    }
+    if (merc.some((p) => !p)) console.log(`  Merc not in data: ${['TABS2025017471', 'TABS2025017477'].filter((_, i) => !merc[i]).join(', ')}`);
+    for (const query of ['Merc', 'TABS2025017471', 'TABS2025017477', 'COM-SHL-PMT25-40400053', 'COM-SHL-PMT25-40400055', '5734 Utsa', '5730 Utsa']) {
+      await page.locator('.dev-search input').fill(query);
+      await page.waitForTimeout(250);
+      const listed = await page.$$eval('.dev-list .dev-item:not([hidden]) .dev-name', (ns) => ns.map((n) => n.textContent));
+      const want = expected('San Antonio', { query }).map((p) => p.name);
+      const mustFind = merc.filter((p) => p && expected('San Antonio', { query }).includes(p)).map((p) => p.name);
+      if (mustFind.length) log(`${v}: San Antonio search "${query}" finds ${mustFind.join(' and ')}`, mustFind.every((n) => listed.includes(n)));
+      log(`${v}: San Antonio search "${query}" lists what the data holds`, JSON.stringify([...listed].sort()) === JSON.stringify([...want].sort()), `${listed.length}: ${listed.slice(0, 4).join(' | ')}`);
+    }
+    await page.locator('.dev-search input').fill('');
   }
   log(`${v}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();

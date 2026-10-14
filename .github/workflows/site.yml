@@ -183,6 +183,8 @@ jobs:
           BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
           HUD_API_TOKEN: ${{ secrets.HUD_API_TOKEN }}
+          # Projects whose rank, page and pin the log reports (The Merc, Rod's report of 2026-10-14).
+          TABS_TRACE_IDS: TABS2025017471,TABS2025017477
         run: |
           set -o pipefail
           npm run --silent export:market 2>&1 | tee /tmp/market.log
@@ -327,14 +329,16 @@ jobs:
           key: career-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Pull requests only: the development map filters against the real
-      # market.json this run built (read-only; nothing is published).
+      # market.json this run built, and the city permit grouping against the
+      # cities' live permit layers (read-only; nothing is published).
       - name: Check the development map filters on real data
         if: github.event_name == 'pull_request' && hashFiles('site/market.json') != ''
         run: |
           npx playwright-core install --with-deps chromium > /dev/null
           set -o pipefail
           node test/browser/devmap-check.mjs ../site /tmp/devmap-shots 2>&1 | tee /tmp/devmap.log
-          { echo '## Development map filter check'; echo '```'; cat /tmp/devmap.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          npx tsx test/browser/permit-dedupe-report.ts 2>&1 | tee /tmp/permits.log
+          { echo '## Development map filter check'; echo '```'; cat /tmp/devmap.log; echo '```'; echo '## City permit grouping'; echo '```'; cat /tmp/permits.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Summarize
         if: always()
