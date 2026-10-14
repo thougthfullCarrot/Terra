@@ -9,6 +9,9 @@ const DAY_MS = 86_400_000;
 import { decodeTitle, TITLE_GUIDE } from './career.js';
 
 export const FILTERS = ['city', 'firm', 'kind', 'sector'];
+
+/** The state change that shows every job: Clear filters and the "open roles" tile both use it. */
+export const CLEAR_FILTERS = Object.freeze({ q: '', city: '', firm: '', kind: '', sector: '', role: '', saved: false });
 export const SORTS = ['newest', 'deadline', 'match'];
 
 /** Whole calendar days from `from` to `to`, in UTC. Matches the API's arithmetic. */

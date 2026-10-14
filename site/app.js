@@ -7,6 +7,7 @@
 import { CONFIG } from './config.js';
 import { isConfigured } from './access.js';
 import {
+  CLEAR_FILTERS,
   FILTERS,
   daysBetween,
   deadlineLabel,
@@ -222,7 +223,7 @@ function bind() {
   }
   $('sort').addEventListener('change', () => (sortChosen = true));
   $('clear').addEventListener('click', () => {
-    update({ q: '', city: '', firm: '', kind: '', sector: '', role: '', saved: false });
+    update(CLEAR_FILTERS);
     $('q').value = '';
     for (const key of SELECT_FILTERS) $(key).value = '';
   });
@@ -366,7 +367,7 @@ function drawToday(jobs, now) {
   const cities = new Set(jobs.map((j) => j.city)).size;
   tiles.push(
     tile(jobs.length, jobs.length === 1 ? 'open role' : 'open roles', `${firms} ${firms === 1 ? 'firm' : 'firms'} · ${cities} ${cities === 1 ? 'city' : 'cities'}`, () =>
-      update({ q: '', city: '', firm: '', kind: '', sector: '', saved: false })
+      update(CLEAR_FILTERS)
     )
   );
   const dated = jobs.filter((j) => j.postedAt && Number.isFinite(new Date(j.postedAt).getTime()));

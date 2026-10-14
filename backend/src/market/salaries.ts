@@ -89,7 +89,7 @@ export type Family = (typeof FAMILIES)[number];
  * "Senior Software Engineer" never lands in the construction family or a "Principal" one in Vice president.
  */
 const TECHNOLOGY =
-  /\b(software|developer (i|ii|iii|iv)|web developer|application developer|full[- ]?stack|front[- ]?end|back[- ]?end|devops|site reliability|sre|data (engineer|scientist|architect)|machine learning|cloud|information technology|it (analyst|manager|director|specialist|engineer)|systems? (engineer|administrator|analyst|architect|integration|integrator)|network (engineer|administrator)|cyber\s?security|security engineer|programmer|qa (engineer|analyst)|quality assurance engineer|test automation|solutions? architect|database|salesforce|sap |erp |technical lead|tech lead)\b/;
+  /\b(software|developer (i|ii|iii|iv)|web developer|application developer|full[- ]?stack|front[- ]?end|back[- ]?end|devops|site reliability|sre|data (engineer|scientist|architect)|(ai|artificial intelligence|ml|machine learning|genai|llm) (engineer|scientist|developer|architect|specialist|lead)|cloud|information technology|it (analyst|manager|director|specialist|engineer)|systems? (engineer|administrator|analyst|architect|integration|integrator)|network (engineer|administrator)|cyber\s?security|security engineer|programmer|qa (engineer|analyst)|quality assurance engineer|test automation|solutions? architect|database|salesforce|sap |erp |technical lead|tech lead)\b/;
 
 export function titleFamily(title: string): Family {
   const t = title.toLowerCase();

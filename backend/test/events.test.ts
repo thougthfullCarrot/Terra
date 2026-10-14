@@ -144,7 +144,7 @@ describe('GrowthZone (BOMA Dallas)', () => {
   });
 
   it('reads dates from JSON-LD or microdata', () => {
-    expect(parseGrowthZoneDetail(DETAIL_LD)).toEqual({ title: 'Fall Trade Show & Expo', start: '2026-10-28T08:00:00-05:00', end: '2026-10-28T14:00:00-05:00', venue: 'Fair Park' });
+    expect(parseGrowthZoneDetail(DETAIL_LD)).toMatchObject({ title: 'Fall Trade Show & Expo', start: '2026-10-28T08:00:00-05:00', end: '2026-10-28T14:00:00-05:00', venue: 'Fair Park' });
     expect(parseGrowthZoneDetail(DETAIL_MICRO)).toMatchObject({ start: '2026-11-06T17:30:00-06:00', venue: 'The Rustic' });
     expect(parseGrowthZoneDetail('<p>nothing</p>').start).toBeNull();
   });

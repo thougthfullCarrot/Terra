@@ -44,6 +44,7 @@ export interface QueryState {
   role: string;
 }
 
+export const CLEAR_FILTERS: Readonly<{ q: ''; city: ''; firm: ''; kind: ''; sector: ''; role: ''; saved: false }>;
 export const FILTERS: readonly ['city', 'firm', 'kind', 'sector'];
 export const SORTS: readonly ['newest', 'deadline', 'match'];
 

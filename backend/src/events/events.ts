@@ -263,8 +263,58 @@ export function slugTitle(url: string): string {
   return slug.split('-').filter(Boolean).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(' ');
 }
 
-/** Start/end/venue from a GrowthZone details page: schema.org JSON-LD first, then itemprop microdata. */
-export function parseGrowthZoneDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null } {
+/** True when an ISO time is midnight on its own (Central) calendar day: a date with no clock time. */
+export function isMidnight(iso: string | null | undefined): boolean {
+  return Boolean(iso) && /T00:00(:00)?(\.0+)?([+-]0[56]:00)$/.test(String(iso));
+}
+
+function clock(h: string, m: string | undefined, meridian: string): string {
+  let hour = Number(h) % 12;
+  if (/p/i.test(meridian)) hour += 12;
+  return `${String(hour).padStart(2, '0')}:${m ?? '00'}:00`;
+}
+
+/**
+ * The clock times printed next to the event's date on its page ("October 15, 2026 5:30 PM - 7:30 PM"),
+ * for pages whose structured data gives only midnight. Only text right after the event's own date is
+ * read, so a chamber's office hours elsewhere on the page are never taken for the event's time.
+ */
+export function visibleTimes(html: string, day: string): { start: string; end: string | null } | null {
+  const text = decodeText(html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')).replace(/\s+/g, ' ');
+  const [y, mo, d] = day.split('-').map(Number) as [number, number, number];
+  const month = MONTHS[mo - 1]!; // lowercase; the pattern ignores case
+  const dates = [new RegExp(`\\b(${month}|${month.slice(0, 3)}\\.?)\\s+${d}(st|nd|rd|th)?,?\\s+${y}\\b`, 'i'), new RegExp(`\\b0?${mo}/0?${d}/${y}\\b`)];
+  for (const pattern of dates) {
+    const at = pattern.exec(text);
+    if (!at) continue;
+    const near = text.slice(at.index, at.index + at[0].length + 120);
+    const range = /\b(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?\s*m?\.?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\b\.?/i.exec(near.slice(at[0].length));
+    if (range) {
+      const [, h1, m1, ap1, h2, m2, ap2] = range;
+      const startClock = clock(h1!, m1, ap1 ?? ap2!);
+      const endClock = clock(h2!, m2, ap2!);
+      return { start: centralIso(`${day} ${startClock}`)!, end: centralIso(`${day} ${endClock}`)! };
+    }
+    const single = /\b(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\b/i.exec(near.slice(at[0].length));
+    if (single) return { start: centralIso(`${day} ${clock(single[1]!, single[2], single[3]!)}`)!, end: null };
+  }
+  return null;
+}
+
+/**
+ * Start/end/venue from a GrowthZone details page: schema.org JSON-LD first, then itemprop microdata.
+ * When those give only midnight, the times printed beside the date are used; dateOnly is true when
+ * the page lists no clock time at all.
+ */
+export function parseGrowthZoneDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null; dateOnly: boolean } {
+  const found = structuredDetail(html);
+  if (!found.start || !isMidnight(found.start)) return { ...found, dateOnly: false };
+  const times = visibleTimes(html, found.start.slice(0, 10));
+  if (times) return { ...found, start: times.start, end: times.end, dateOnly: false };
+  return { ...found, dateOnly: true };
+}
+
+function structuredDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null } {
   for (const [, json = ''] of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
       const data = JSON.parse(json) as unknown;
@@ -653,7 +703,8 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
         city: source.city,
         organizer: source.organizer,
         venue: detail.venue,
-        cost: null
+        cost: null,
+        ...(detail.dateOnly ? { dateOnly: true } : {})
       });
     } catch (error) {
       log(`${link.url}: ${error instanceof Error ? error.message : String(error)}`);
@@ -677,7 +728,7 @@ export async function withDetailTimes(events: TerraEvent[], fetcher: Fetcher, lo
     read++;
     try {
       const detail = parseGrowthZoneDetail(await fetcher.text(e.url));
-      const timed = detail.start && !/T00:00:00/.test(detail.start) && detail.start.slice(0, 10) === e.start.slice(0, 10);
+      const timed = detail.start && !detail.dateOnly && detail.start.slice(0, 10) === e.start.slice(0, 10);
       if (timed) {
         const { dateOnly: _drop, ...rest } = e;
         out.push({ ...rest, start: detail.start!, end: detail.end && new Date(detail.end).getTime() > new Date(detail.start!).getTime() ? detail.end : null, venue: e.venue ?? detail.venue });
@@ -702,6 +753,20 @@ export function urlKey(url: string): string {
   }
 }
 
+/**
+ * When an event is over, in ms. A date with no clock time (midnight) means the whole of that
+ * day, so it ends at the next midnight in Texas, DST included; no end means the start's day.
+ */
+export function eventEnds(e: Pick<TerraEvent, 'start' | 'end'>): number {
+  const last = e.end ?? e.start;
+  if (!e.end || isMidnight(last)) {
+    const next = new Date(`${last.slice(0, 10)}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return new Date(centralIso(next.toISOString().slice(0, 10))!).getTime();
+  }
+  return new Date(last).getTime();
+}
+
 /** Upcoming (not yet ended, starting within the window), one per url, by start. */
 export function upcoming(events: TerraEvent[], now: Date, days = WINDOW_DAYS): TerraEvent[] {
   const limit = now.getTime() + days * 86_400_000;
@@ -709,7 +774,7 @@ export function upcoming(events: TerraEvent[], now: Date, days = WINDOW_DAYS): T
   for (const e of events) {
     const key = e.url ? urlKey(e.url) : e.id;
     const start = new Date(e.start).getTime();
-    const end = e.end ? new Date(e.end).getTime() : start + 86_400_000;
+    const end = eventEnds(e);
     if (!Number.isFinite(start) || start > limit || end < now.getTime()) continue;
     if (!byUrl.has(key)) byUrl.set(key, e);
   }

@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { titleFamily } from '../src/market/salaries.js';
 import { filterJobs, readQuery } from '../../site/feed.js';
-import { parseIcs, withDetailTimes, type EventSource, type Fetcher } from '../src/events/events.js';
-import { eventIcs, googleCalendarUrl } from '../../site/events.js';
+import { eventEnds, fetchSource, parseGrowthZoneDetail, parseIcs, upcoming, withDetailTimes, type EventSource, type Fetcher, type TerraEvent } from '../src/events/events.js';
+import { eventEnds as siteEventEnds, eventIcs, filterEvents, googleCalendarUrl } from '../../site/events.js';
 import { aboutElsewhere, buildNewsFile } from '../src/news/googleNews.js';
 import { sameFirm } from '../../site/growth.js';
 import { CAMPUSES, nearCampus, titleJobsHref, titleRows } from '../../site/career.js';
+import { CLEAR_FILTERS } from '../../site/feed.js';
 import { auctionsWithin, filterSales, isScheduled } from '../../site/property.js';
 
 const nb: EventSource = { key: 'nb-chamber', organizer: 'New Braunfels Chamber', city: 'New Braunfels', kind: 'growthzone', base: 'https://newbraunfelschamber.growthzoneapp.com', relevantOnly: true } as EventSource;
@@ -194,5 +195,133 @@ describe('9. profile back button', () => {
   it('says Back, since it returns to the section the profile was opened from', () => {
     const html = readFileSync(new URL('../../site/index.html', import.meta.url), 'utf8');
     expect(/id="profile-close">([^<]*)</.exec(html)?.[1]).toBe('Back');
+  });
+});
+
+// ---- Fixes after the PR #75 review ----
+
+/** Shaped like the real Veramendi mixer page: JSON-LD dates at midnight, times only in the visible text, office hours elsewhere. */
+const REAL_MIXER_PAGE = `<html><head>
+<script type="application/ld+json">{"@context":"http://schema.org","@type":"Event","name":"Membership Mixer: Veramendi - The Ledge","startDate":"2026-10-15T00:00:00","endDate":"2026-10-16T00:00:00","location":{"@type":"Place","name":"Veramendi - The Ledge"}}</script>
+</head><body>
+<header><p>Chamber office hours: Monday - Friday 8:00 AM - 5:00 PM</p></header>
+<h1>Membership Mixer: Veramendi - The Ledge</h1>
+<div class="gz-event-date"><span>Thursday Oct 15, 2026</span> <span>5:30 PM - 7:30 PM CDT</span></div>
+<div class="gz-details-date">Date and Time</div><p>Thursday Oct 15, 2026<br />5:30 PM - 7:30 PM CDT</p>
+</body></html>`;
+
+describe('review: event times from the real page shape', () => {
+  it('reads 5:30-7:30 PM from the visible text when JSON-LD says midnight', () => {
+    const d = parseGrowthZoneDetail(REAL_MIXER_PAGE);
+    expect(d.start).toBe('2026-10-15T17:30:00-05:00');
+    expect(d.end).toBe('2026-10-15T19:30:00-05:00');
+    expect(d.dateOnly).toBe(false);
+  });
+
+  it('never takes office hours for the event time', () => {
+    const noTime = REAL_MIXER_PAGE.replace(/5:30 PM - 7:30 PM CDT/g, '');
+    const d = parseGrowthZoneDetail(noTime);
+    expect(d.dateOnly).toBe(true);
+    expect(d.start!.slice(0, 10)).toBe('2026-10-15');
+  });
+
+  const feed = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:mixer', 'SUMMARY:Membership Mixer: Veramendi - The Ledge', `URL:${MIXER_URL}`, 'DTSTART;VALUE=DATE:20261015', 'DTEND;VALUE=DATE:20261016', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  const fetcher = (pages: Record<string, string>) => ({ text: async (url: string) => { if (url in pages) return pages[url]!; throw new Error(`404 ${url}`); }, json: async () => ({}) }) as unknown as Fetcher;
+
+  it('full acquisition through the calendar feed ends in a timed Google link', async () => {
+    const [e] = await fetchSource(nb, new Date('2026-10-14T12:00:00Z'), fetcher({ [`${nb.base}/events/ical`]: feed, [MIXER_URL]: REAL_MIXER_PAGE }), () => {});
+    expect(e!.start).toBe('2026-10-15T17:30:00-05:00');
+    expect(googleDates(e!)).toBe('20261015T223000Z/20261016T003000Z');
+  });
+
+  it('full acquisition through the event-page fallback is timed too', async () => {
+    const listing = `<a href="/events/Details/membership-mixer-veramendi-the-ledge-1744886">Membership Mixer: Veramendi - The Ledge</a>`;
+    const [e] = await fetchSource(nb, new Date('2026-10-14T12:00:00Z'), fetcher({ [`${nb.base}/events`]: listing, [MIXER_URL]: REAL_MIXER_PAGE }), () => {});
+    expect(e!.start).toBe('2026-10-15T17:30:00-05:00');
+    expect(e!.dateOnly).toBeUndefined();
+  });
+
+  it('the fallback marks a page with no clock time as date-only', async () => {
+    const listing = `<a href="/events/Details/membership-mixer-veramendi-the-ledge-1744886">Membership Mixer</a>`;
+    const page = REAL_MIXER_PAGE.replace(/5:30 PM - 7:30 PM CDT/g, '');
+    const [e] = await fetchSource(nb, new Date('2026-10-14T12:00:00Z'), fetcher({ [`${nb.base}/events`]: listing, [MIXER_URL]: page }), () => {});
+    expect(e!.dateOnly).toBe(true);
+  });
+});
+
+describe('review: a multi-day date-only event stays visible through its last day', () => {
+  // DTSTART 20261014, DTEND 20261016 (exclusive): covers Oct 14 and 15.
+  const [forum] = parseIcs(['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:f', 'SUMMARY:Candidate Forum', 'URL:https://x.example/f', 'DTSTART;VALUE=DATE:20261014', 'DTEND;VALUE=DATE:20261016', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'), nb);
+  const file = { cities: [{ city: 'Galveston', events: [forum!] }] };
+  const at = (iso: string) => new Date(iso);
+  const cases: Array<[string, boolean]> = [
+    ['2026-10-15T05:00:00Z', true], // Oct 15 00:00 CDT, start of the last day
+    ['2026-10-15T17:00:00Z', true], // Oct 15 noon CDT
+    ['2026-10-16T04:59:00Z', true], // Oct 15 23:59 CDT
+    ['2026-10-16T05:01:00Z', false] // just after
+  ];
+  for (const [now, visible] of cases) {
+    it(`${visible ? 'shown' : 'gone'} at ${now} in the collector and the page`, () => {
+      expect(upcoming([forum!], at(now)).length).toBe(visible ? 1 : 0);
+      expect(filterEvents(file as never, {}, at(now)).length).toBe(visible ? 1 : 0);
+    });
+  }
+
+  it('export and visibility agree: Google ends on Oct 16, visibility ends at Oct 16 00:00 Central', () => {
+    expect(googleDates(forum!)).toBe('20261014/20261016');
+    expect(eventEnds(forum!)).toBe(Date.parse('2026-10-16T05:00:00Z'));
+    expect(siteEventEnds(forum!)).toBe(Date.parse('2026-10-16T05:00:00Z'));
+  });
+
+  it('handles the November DST change: a Nov 1 all-day event ends at Nov 2 00:00 CST', () => {
+    const e = { start: '2026-11-01T00:00:00-05:00', end: null } as unknown as TerraEvent;
+    expect(eventEnds(e)).toBe(Date.parse('2026-11-02T06:00:00Z'));
+    expect(siteEventEnds(e)).toBe(Date.parse('2026-11-02T06:00:00Z'));
+  });
+
+  it('a timed end is still the real end instant', () => {
+    const e = { start: '2026-10-15T17:30:00-05:00', end: '2026-10-15T19:30:00-05:00' } as unknown as TerraEvent;
+    expect(eventEnds(e)).toBe(Date.parse('2026-10-16T00:30:00Z'));
+    expect(siteEventEnds(e)).toBe(Date.parse('2026-10-16T00:30:00Z'));
+  });
+});
+
+describe('review: the open-roles tile clears the Title Decoder filter', () => {
+  it('the shared all-jobs change resets role, so both jobs come back', () => {
+    const jobs = [
+      { id: 'a', role: 'Appraisal Trainee', firm: 'A', city: 'Dallas', sector: 'Appraisal', kind: 'Full-time', desc: '', reqs: [] },
+      { id: 'b', role: 'Leasing Associate', firm: 'B', city: 'Dallas', sector: 'Brokerage', kind: 'Full-time', desc: '', reqs: [] }
+    ] as unknown as Parameters<typeof filterJobs>[0];
+    const afterLink = readQuery('?role=appraisal');
+    expect(filterJobs(jobs, afterLink)).toHaveLength(1);
+    expect(filterJobs(jobs, { ...afterLink, ...CLEAR_FILTERS })).toHaveLength(2);
+  });
+
+  it('app.js uses that change for both the tile and Clear filters', () => {
+    const app = readFileSync(new URL('../../site/app.js', import.meta.url), 'utf8');
+    expect(app.match(/update\(CLEAR_FILTERS\)/g)).toHaveLength(2);
+    expect(app).not.toMatch(/update\(\{ q: '', city: ''/);
+  });
+});
+
+describe('review: AI engineers are Technology', () => {
+  it('classifies the real "Ai Engineer" title', () => {
+    expect(titleFamily('Ai Engineer')).toBe('Technology');
+    expect(titleFamily('Machine Learning Engineer')).toBe('Technology');
+  });
+  it('does not reclassify ambiguous engineering titles', () => {
+    expect(titleFamily('Quality Engineer')).toBe('Project / construction');
+    expect(titleFamily('Field Engineer')).toBe('Project / construction');
+  });
+});
+
+describe('review: kept headlines are checked too', () => {
+  it('a failed search keeps earlier headlines minus the Colorado story', async () => {
+    const previous = { generatedAt: '', source: '', topics: [], cities: [{ city: 'El Paso', fetchedAt: '2026-10-13T00:00:00Z', headlines: [
+      { title: "Buc-ee's submits site development plan to El Paso County staff", url: 'https://x/1', source: 'KOAA', publishedAt: null, topics: [] },
+      { title: 'El Paso warehouse development breaks ground', url: 'https://x/2', source: 'El Paso Inc.', publishedAt: null, topics: [] }
+    ] }] };
+    const file = await buildNewsFile(new Date('2026-10-14T12:00:00Z'), previous as never, { fetchCity: async () => { throw new Error('down'); }, fetchAffordable: async () => [], fetchShared: async () => [], log: () => {} });
+    expect(file.cities.find((c) => c.city === 'El Paso')!.headlines.map((h) => h.url)).toEqual(['https://x/2']);
   });
 });

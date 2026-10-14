@@ -273,8 +273,10 @@ export async function buildNewsFile(now: Date, previous: NewsFile | null, source
     const headlines = mergeAffordable(headlinesFrom(here([...(searched ?? []), ...named]), now), here(affordable), now);
     if (searched === null || (headlines.length === 0 && before?.headlines.length)) {
       if (before) {
-        log(`${city}: keeping ${before.headlines.length} headlines from ${before.fetchedAt}.`);
-        cities.push(before);
+        // Kept headlines pass the same out-of-state check, so an old Colorado story doesn't survive a failed search.
+        const kept = { ...before, headlines: before.headlines.filter((h) => !aboutElsewhere({ title: h.title, source: h.source }, city)) };
+        log(`${city}: keeping ${kept.headlines.length} headlines from ${before.fetchedAt}.`);
+        cities.push(kept);
       } else if (headlines.length) {
         cities.push({ city, fetchedAt: now.toISOString(), headlines });
       }
