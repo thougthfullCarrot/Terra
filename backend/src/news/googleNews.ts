@@ -269,11 +269,14 @@ export async function buildNewsFile(now: Date, previous: NewsFile | null, source
       log(`${city} affordable housing: ${error instanceof Error ? error.message : String(error)}`);
       return [] as RssItem[];
     });
-    const headlines = mergeAffordable(headlinesFrom([...(searched ?? []), ...named], now), affordable, now);
+    const here = (items: RssItem[]) => items.filter((item) => !aboutElsewhere(item, city));
+    const headlines = mergeAffordable(headlinesFrom(here([...(searched ?? []), ...named]), now), here(affordable), now);
     if (searched === null || (headlines.length === 0 && before?.headlines.length)) {
       if (before) {
-        log(`${city}: keeping ${before.headlines.length} headlines from ${before.fetchedAt}.`);
-        cities.push(before);
+        // Kept headlines pass the same out-of-state check, so an old Colorado story doesn't survive a failed search.
+        const kept = { ...before, headlines: before.headlines.filter((h) => !aboutElsewhere({ title: h.title, source: h.source }, city)) };
+        log(`${city}: keeping ${kept.headlines.length} headlines from ${before.fetchedAt}.`);
+        cities.push(kept);
       } else if (headlines.length) {
         cities.push({ city, fetchedAt: now.toISOString(), headlines });
       }
@@ -337,4 +340,40 @@ const CITY_NAMES: Array<{ city: City; pattern: RegExp }> = [
 /** The Terra cities a story names. */
 export function citiesNamedIn(text: string): City[] {
   return CITY_NAMES.filter((c) => c.pattern.test(text)).map((c) => c.city);
+}
+
+/** Places outside Texas: the other states, DC, and towns near a Terra city's out-of-state namesakes. */
+const ELSEWHERE = new RegExp(
+  '\\b(' +
+    [
+      'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Hawaii',
+      'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
+      'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey',
+      'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island',
+      'South Carolina', 'South Dakota', 'Tennessee', 'Utah', 'Vermont', 'Virginia', 'West Virginia', 'Wisconsin',
+      'Wyoming', 'D\\.C', 'Colorado Springs', 'Pueblo', 'Fairfax', 'Pittsburgh', 'Denver', 'I-25'
+    ].join('|') +
+    ')\\b'
+);
+
+/** Newsrooms that cover one out-of-state market; their stories are about it even when the headline only says "El Paso County". */
+const ELSEWHERE_OUTLETS = /\b(KOAA|KRDO|KKTV|FOX21|Colorado Springs Gazette|Gazette\.com|Denver Post|Pittsburgh Post-Gazette|Post-Gazette|Fairfax County Times|Washington Post|Sun-Sentinel|Star Tribune)\b/i;
+
+/** Terra cities whose name is shared by a place in another state. */
+const SHARED_NAMES = new Set<City>(['El Paso', 'Midland']);
+
+/**
+ * Whether a search result is about somewhere other than this Texas city. A Google
+ * search match only means the words appear: "El Paso County" is also in Colorado,
+ * and national commentary turns up in every city's search. A story that names
+ * Texas is kept (statewide stories included).
+ */
+export function aboutElsewhere(item: Pick<RssItem, 'title' | 'source' | 'summary'>, city: City): boolean {
+  const text = `${item.title} ${item.summary ?? ''}`;
+  if (/\b(Texas|TX|Tex\.)\b/.test(text)) return false;
+  if (ELSEWHERE_OUTLETS.test(`${item.source} ${item.title}`)) return true;
+  if (!ELSEWHERE.test(text)) return false;
+  // Another state is named and Texas is not: keep it only when it plainly names this city and the name is unambiguous.
+  const named = CITY_NAMES.find((c) => c.city === city)?.pattern.test(item.title) ?? false;
+  return SHARED_NAMES.has(city) || !named;
 }

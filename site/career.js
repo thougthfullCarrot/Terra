@@ -217,6 +217,11 @@ export function decodeTitle(role) {
   return TITLE_GUIDE.find((entry) => entry.match.test(String(role ?? ''))) ?? null;
 }
 
+/** The jobs link for a Title Decoder card: the same title family (and city) its "Open now" count used. */
+export function titleJobsHref(row, city = '', path = '') {
+  return `${path}?${new URLSearchParams({ role: row.key, ...(city ? { city } : {}) })}`;
+}
+
 /** Each guide entry with its open jobs and pay figures from the salary check. */
 export function titleRows(jobs, salaries, city = '') {
   const pool = (jobs ?? []).filter((j) => !city || j.city === city);
@@ -335,11 +340,14 @@ const located = (p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lng);
 /**
  * The private projects within `radius` miles of a campus, nearest first, and
  * the firms on them: owners, tenants, architects and contractors, with the
- * jobs any of them have open in the feed.
+ * jobs any of them have open in the feed. Projects pinned at a ZIP center
+ * (approximate) are left out: a filing's ZIP can be wrong, and a distance to
+ * it would look exact. `approximateLeftOut` counts them.
  */
 export function nearCampus(projects, jobs, campus, radius = 10) {
+  const approximateLeftOut = (projects ?? []).filter((p) => located(p) && !p.isPublic && p.approximate && miles(campus, p) <= radius).length;
   const near = (projects ?? [])
-    .filter((p) => located(p) && !p.isPublic)
+    .filter((p) => located(p) && !p.isPublic && !p.approximate)
     .map((p) => ({ ...p, miles: miles(campus, p) }))
     .filter((p) => p.miles <= radius)
     .sort((a, b) => a.miles - b.miles);
@@ -364,7 +372,7 @@ export function nearCampus(projects, jobs, campus, radius = 10) {
     jobs: (jobs ?? []).filter((j) => sameFirm(j.firm, row.name))
   }));
   list.sort((a, b) => b.jobs.length - a.jobs.length || b.projects.length - a.projects.length || b.cost - a.cost);
-  return { projects: near, firms: list };
+  return { projects: near, firms: list, approximateLeftOut };
 }
 
 /* ------------------------------------------------------------ Market tour */

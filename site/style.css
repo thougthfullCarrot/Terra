@@ -5936,3 +5936,9 @@ svg.bars text {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Details shown in the list for a project with no pin on the map. */
+.dev-detail {
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+}

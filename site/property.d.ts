@@ -48,7 +48,10 @@ export function sumInside(tracts: [number, number, number, number][], geometry: 
 export function circle(lat: number, lng: number, miles: number, steps?: number): Geometry;
 export function readIsochrones(body: any): { minutes: number; geometry: Geometry }[];
 export function filterMoves<T extends { city: string; end: string | null; squareFeet: number | null }>(moves: T[], city?: string, today?: string): T[];
-export function filterSales<T extends { city: string; saleDate: string | null; value: number | null }>(sales: T[], options?: { city?: string; scheduledOnly?: boolean }): T[];
+export function filterSales<T extends { city: string; saleDate: string | null; value: number | null }>(sales: T[], options?: { city?: string; scheduledOnly?: boolean; now?: Date }): T[];
+export function centralDay(now?: Date): string;
+export function isScheduled(sale: { saleDate?: string | null } | null | undefined, now?: Date): boolean;
+export function auctionsWithin<T extends { saleDate?: string | null }>(sales: T[], days?: number, now?: Date): T[];
 export function money(value: number | null): string;
 export function count(value: number | null): string;
 export function dealSteps(deal: any, file: any, analyze: (deal: any) => any): any;

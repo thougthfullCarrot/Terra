@@ -386,7 +386,11 @@ function drawList(list, projects) {
       if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
       button.addEventListener('click', () => {
         const marker = markers.get(project);
-        if (!marker || !liveMap) return;
+        // No pin (no coordinates, or the map library failed to load): show the details in the list instead.
+        if (!marker || !liveMap) {
+          toggleDetail(item, button, project);
+          return;
+        }
         liveMap.flyTo(marker.getLatLng(), Math.max(liveMap.getZoom(), 15), { duration: 0.6 });
         liveMap.once('moveend', () => marker.openPopup());
       });
@@ -397,6 +401,20 @@ function drawList(list, projects) {
     })
   );
   return items;
+}
+
+/** Opens or closes a project's details under its list item, for projects without a pin. */
+export function toggleDetail(item, button, project, render = popup) {
+  const open = item.querySelector(':scope > .dev-detail');
+  if (open) {
+    open.remove();
+    button.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  const panel = el('div', 'dev-detail');
+  panel.append(render(project));
+  button.after(panel);
+  button.setAttribute('aria-expanded', 'true');
 }
 
 /** Each project's list item, for highlighting the one whose pin opened. */

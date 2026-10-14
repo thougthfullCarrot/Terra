@@ -38,7 +38,7 @@ export function payView(snapshot, city) {
   const box = el('section', 'compare-block');
   box.append(el('h3', 'group-title', city ? `${city}: pay by role` : 'Pay by role and market'));
   box.append(el('p', 'group-blurb', 'Median yearly pay offered. "Entry level" is the median of jobs filed at the first two of the four Labor Department wage levels, the closest match to a 0-2 year role.'));
-  const families = ['Analyst', 'Associate', 'Project / construction', 'Manager', 'Director', 'Vice president'];
+  const families = ['Analyst', 'Associate', 'Project / construction', 'Manager', 'Director', 'Vice president', 'Technology'];
   const wrap = el('div', 'table-wrap');
   const table = el('table', 'market-table pay-table');
   table.append(el('caption', 'visually-hidden', 'Median pay offered by role'));

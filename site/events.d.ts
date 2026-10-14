@@ -27,6 +27,7 @@ export function readEventsHash(hash: string | null | undefined, file: EventsFile
 export function writeEventsHash(state: Partial<EventsState>): string;
 export function filterEvents(file: EventsFile | null, filter?: { city?: string }, now?: Date): SiteEvent[];
 export function eventCounts(file: EventsFile | null, now?: Date): Map<string, number>;
+export function eventEnds(event: { start: string; end?: string | null }): number;
 export function groupByMonth(events: SiteEvent[]): Array<{ month: string; events: SiteEvent[] }>;
 export function eventDate(iso: string): string;
 export function dateParts(iso: string): { month: string; day: string; weekday: string; ymd: string } | null;

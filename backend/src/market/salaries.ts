@@ -81,11 +81,19 @@ export function annualWage(value: string | number, unit: string): number | null 
 }
 
 /** Title families a student scans for, in career order. */
-export const FAMILIES = ['Analyst', 'Associate', 'Project / construction', 'Manager', 'Director', 'Vice president', 'Other'] as const;
+export const FAMILIES = ['Analyst', 'Associate', 'Project / construction', 'Manager', 'Director', 'Vice president', 'Technology', 'Other'] as const;
 export type Family = (typeof FAMILIES)[number];
+
+/**
+ * Software and IT titles at CRE employers (a bank's or a brokerage's tech staff). Checked first so a
+ * "Senior Software Engineer" never lands in the construction family or a "Principal" one in Vice president.
+ */
+const TECHNOLOGY =
+  /\b(software|developer (i|ii|iii|iv)|web developer|application developer|full[- ]?stack|front[- ]?end|back[- ]?end|devops|site reliability|sre|data (engineer|scientist|architect)|(ai|artificial intelligence|ml|machine learning|genai|llm) (engineer|scientist|developer|architect|specialist|lead)|cloud|information technology|it (analyst|manager|director|specialist|engineer)|systems? (engineer|administrator|analyst|architect|integration|integrator)|network (engineer|administrator)|cyber\s?security|security engineer|programmer|qa (engineer|analyst)|quality assurance engineer|test automation|solutions? architect|database|salesforce|sap |erp |technical lead|tech lead)\b/;
 
 export function titleFamily(title: string): Family {
   const t = title.toLowerCase();
+  if (TECHNOLOGY.test(t)) return 'Technology';
   if (/\b(vice president|vp|svp|evp|managing director|principal|partner)\b/.test(t)) return 'Vice president';
   if (/\bdirector\b/.test(t)) return 'Director';
   if (/\b(project manager|construction|superintendent|estimator|engineer|preconstruction|scheduler)\b/.test(t)) return 'Project / construction';

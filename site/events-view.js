@@ -141,7 +141,7 @@ function item(event, index) {
     title.textContent = event.title;
   }
   // The time (the date is in the block), then where.
-  const when = eventDate(event.start).split(' · ')[1] ?? 'All day';
+  const when = eventDate(event.start).split(' · ')[1] ?? (event.dateOnly ? 'Time not listed' : 'All day');
   const where = [event.venue, state.city ? '' : event.city].filter(Boolean).join(', ');
   body.append(title, el('p', 'event-where', [when, where].filter(Boolean).join(' · ')));
   const tags = el('div', 'event-tags');

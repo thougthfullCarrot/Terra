@@ -26,12 +26,31 @@ export function filterEvents(file, { city = '' } = {}, now = new Date()) {
   for (const entry of file?.cities ?? []) {
     if (city && entry.city !== city) continue;
     for (const event of entry.events ?? []) {
-      const end = new Date(event.end ?? event.start).getTime();
-      if (Number.isFinite(end) && end + (event.end ? 0 : 86_400_000) < now.getTime()) continue;
+      const end = eventEnds(event);
+      if (Number.isFinite(end) && end < now.getTime()) continue;
       out.push(event);
     }
   }
   return out.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+}
+
+/**
+ * When an event is over, in ms. A midnight end (a date with no clock time) means the whole of that
+ * day, so it lasts until the next Texas midnight; no end means the start's day. Same rule as the
+ * collector's eventEnds() in backend/src/events/events.ts.
+ */
+export function eventEnds(event) {
+  const last = event.end ?? event.start;
+  const d = new Date(last);
+  if (Number.isNaN(d.getTime())) return NaN;
+  if (event.end && !allDay(event.end)) return d.getTime();
+  const ymd = dateParts(last).ymd;
+  const next = new Date(`${ymd}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const day = next.toISOString().slice(0, 10);
+  // Texas midnight is 05:00 or 06:00 UTC depending on daylight time; take the one that reads 12:00 AM.
+  const cdt = new Date(`${day}T05:00:00Z`);
+  return allDay(cdt.toISOString()) ? cdt.getTime() : new Date(`${day}T06:00:00Z`).getTime();
 }
 
 export function eventCounts(file, now = new Date()) {

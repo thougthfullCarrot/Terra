@@ -600,10 +600,33 @@ export function filterMoves(moves, city = '', today = new Date().toISOString().s
 }
 
 /** Tax sale rows for a market (or all), soonest auction first; listings with no date after. */
-export function filterSales(sales, { city = '', scheduledOnly = false } = {}) {
+/** Today's date in Texas (Central) time, 'YYYY-MM-DD': the day boundary for auction dates. */
+export function centralDay(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(now);
+}
+
+/** A sale date that has not passed yet (today counts). A past date is history, not a scheduled auction. */
+export function isScheduled(sale, now = new Date()) {
+  return Boolean(sale?.saleDate) && String(sale.saleDate).slice(0, 10) >= centralDay(now);
+}
+
+/** Auctions from today through the last day of the window, in Texas time. */
+export function auctionsWithin(sales, days = 45, now = new Date()) {
+  const last = new Date(`${centralDay(now)}T12:00:00Z`);
+  last.setUTCDate(last.getUTCDate() + days);
+  const end = last.toISOString().slice(0, 10);
+  return (sales ?? []).filter((s) => isScheduled(s, now) && String(s.saleDate).slice(0, 10) <= end);
+}
+
+/**
+ * Sales for one city (or all). Upcoming auctions first by date; rows whose date has
+ * passed sort with the ones waiting for a date, and scheduledOnly leaves them out.
+ */
+export function filterSales(sales, { city = '', scheduledOnly = false, now = new Date() } = {}) {
+  const key = (s) => (isScheduled(s, now) ? s.saleDate : '9999');
   return (sales ?? [])
-    .filter((s) => (!city || s.city === city) && (!scheduledOnly || s.saleDate))
-    .sort((a, b) => (a.saleDate ?? '9999').localeCompare(b.saleDate ?? '9999') || (b.value ?? 0) - (a.value ?? 0));
+    .filter((s) => (!city || s.city === city) && (!scheduledOnly || isScheduled(s, now)))
+    .sort((a, b) => key(a).localeCompare(key(b)) || (b.value ?? 0) - (a.value ?? 0));
 }
 
 // ---------------------------------------------------------------- formatting

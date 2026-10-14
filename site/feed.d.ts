@@ -24,6 +24,8 @@ export interface FilterState {
   firm?: string;
   kind?: string;
   sector?: string;
+  /** A Title Decoder family key (career.js TITLE_GUIDE). */
+  role?: string;
   saved?: boolean;
   savedIds?: ReadonlySet<string>;
 }
@@ -38,8 +40,11 @@ export interface QueryState {
   saved: boolean;
   /** The job whose detail panel is open, so a link can share one posting. */
   job: string;
+  /** A Title Decoder family key; '' when absent or unknown. */
+  role: string;
 }
 
+export const CLEAR_FILTERS: Readonly<{ q: ''; city: ''; firm: ''; kind: ''; sector: ''; role: ''; saved: false }>;
 export const FILTERS: readonly ['city', 'firm', 'kind', 'sector'];
 export const SORTS: readonly ['newest', 'deadline', 'match'];
 

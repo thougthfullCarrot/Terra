@@ -7,6 +7,7 @@
 import { CONFIG } from './config.js';
 import { isConfigured } from './access.js';
 import {
+  CLEAR_FILTERS,
   FILTERS,
   daysBetween,
   deadlineLabel,
@@ -32,7 +33,7 @@ import { startNews } from './news-view.js';
 import { startEvents } from './events-view.js';
 import { startProperty } from './property-view.js';
 import { startCareer } from './career-view.js';
-import { jobFlags, writeCareerHash } from './career.js';
+import { jobFlags, TITLE_GUIDE, writeCareerHash } from './career.js';
 import { startPitch } from './pitch.js';
 import { stateBox } from './labels.js';
 
@@ -223,7 +224,7 @@ function bind() {
   }
   $('sort').addEventListener('change', () => (sortChosen = true));
   $('clear').addEventListener('click', () => {
-    update({ q: '', city: '', firm: '', kind: '', sector: '', saved: false });
+    update(CLEAR_FILTERS);
     $('q').value = '';
     for (const key of SELECT_FILTERS) $(key).value = '';
   });
@@ -263,10 +264,11 @@ function render() {
   drawChips();
 
   shown = sortJobs(filterJobs(jobs, { ...state, savedIds: saved }), state.sort);
-  const filtered = Boolean(state.q || state.saved || FILTERS.some((key) => state[key]));
+  const filtered = Boolean(state.q || state.saved || state.role || FILTERS.some((key) => state[key]));
+  const roleName = state.role ? TITLE_GUIDE.find((entry) => entry.key === state.role)?.title : '';
   const strong = shown.filter((job) => scores.get(job.id)?.strong).length;
 
-  $('count').textContent = `${shown.length} ${shown.length === 1 ? 'role' : 'roles'}${filtered ? ` of ${jobs.length}` : ''}${
+  $('count').textContent = `${shown.length} ${shown.length === 1 ? 'role' : 'roles'}${filtered ? ` of ${jobs.length}` : ''}${roleName ? ` · ${roleName}` : ''}${
     strong ? ` · ${strong} best ${strong === 1 ? 'match' : 'matches'} for you` : ''
   }`;
   $('clear').hidden = !filtered;
@@ -366,7 +368,7 @@ function drawToday(jobs, now) {
   const cities = new Set(jobs.map((j) => j.city)).size;
   tiles.push(
     tile(jobs.length, jobs.length === 1 ? 'open role' : 'open roles', `${firms} ${firms === 1 ? 'firm' : 'firms'} · ${cities} ${cities === 1 ? 'city' : 'cities'}`, () =>
-      update({ q: '', city: '', firm: '', kind: '', sector: '', saved: false })
+      update(CLEAR_FILTERS)
     )
   );
   const dated = jobs.filter((j) => j.postedAt && Number.isFinite(new Date(j.postedAt).getTime()));

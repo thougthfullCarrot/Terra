@@ -102,6 +102,7 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
+const offCity = [...byCity].find(([, rows]) => rows.some((p) => p.lat == null))?.[0] ?? null;
 const biggest = [...byCity].sort((a, b) => b[1].length - a[1].length)[0][0];
 const LABELS = { place: 'City or town', work: 'Type of work', publicInvolvement: 'Public involvement', cost: 'Estimated cost', status: 'Filing status', filed: 'Filed' };
 
@@ -296,6 +297,30 @@ for (const vp of [
     await page.waitForTimeout(100);
     log(`${v}: Enter on Clear filters resets`, (await state()).count === all.length);
   }
+  // A project with no pin ("Not on the map") opens its details from the list, by mouse and keyboard.
+  // Run in a metro that is known from the data to have one, so the case never silently skips.
+  // A fresh tab, so switching metros never tears down a map that is still mid-animation from the steps above.
+  if (offCity) {
+    const offPage = await ctx.newPage();
+    offPage.on('pageerror', (e) => errors.push(e.message));
+    await offPage.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+    await offPage.goto(`${base}#markets&city=${encodeURIComponent(offCity)}`);
+    await offPage.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
+    const offItem = offPage.locator('.dev-item:not([hidden]):has(.dev-off)').first();
+    await offItem.scrollIntoViewIfNeeded();
+    const offName = await offItem.locator('.dev-name').textContent();
+    await offItem.locator('.dev-pick').click();
+    const shown = await offItem.locator('.dev-detail .dev-pop-title').textContent().catch(() => null);
+    const expanded = await offItem.locator('.dev-pick').getAttribute('aria-expanded');
+    const links = await offItem.locator('.dev-detail .dev-links a').count();
+    await offItem.locator('.dev-pick').press('Enter');
+    const closed = (await offItem.locator('.dev-detail').count()) === 0;
+    await offItem.locator('.dev-pick').press('Enter');
+    const reopened = (await offItem.locator('.dev-detail').count()) === 1;
+    log(`${v}: a project not on the map (${offCity}) opens its details from the list`, shown === offName && expanded === 'true' && links >= 1 && closed && reopened, `"${offName}"`);
+  } else {
+    log(`${v}: a project not on the map opens its details from the list`, false, 'no project without coordinates in market.json to test with');
+    }
   // The Merc (TABS2025017471, TABS2025017477) and its San Antonio city permits:
   // each query must list exactly what the generated data says it should.
   const sa = byCity.get('San Antonio') ?? [];
