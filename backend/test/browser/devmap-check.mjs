@@ -227,14 +227,27 @@ for (const vp of [
   // Pin click: popup and list highlight.
   await check('showcase: $25M-$100M', { cost: '25to100' });
   await page.locator('.dev-card').scrollIntoViewIfNeeded();
-  await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
+  // Click a pin that is actually on screen and on top: the first one in the
+  // document can sit outside the phone's map view or under another pin.
+  const spot = await page.evaluate(() => {
+    const box = document.querySelector('.dev-map').getBoundingClientRect();
+    for (const path of document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive')) {
+      const r = path.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      if (x > box.left + 4 && x < box.right - 4 && y > box.top + 4 && y < box.bottom - 4 && document.elementFromPoint(x, y) === path) return { x, y };
+    }
+    return null;
+  });
+  if (spot) await page.mouse.click(spot.x, spot.y);
+  else await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
   await page.waitForSelector('.leaflet-popup .dev-pop-title', { timeout: 5000 }).catch(() => null);
   const popTitle = await page.locator('.leaflet-popup .dev-pop-title').textContent().catch(() => null);
   const active = await page.locator('.dev-item.active .dev-name').textContent().catch(() => null);
   const popLinks = await page.locator('.leaflet-popup .dev-links a').count();
   log(`${v}: pin click opens the project panel and highlights it in the list`, Boolean(popTitle) && popTitle === active && popLinks === 2, `"${popTitle}"`);
   if (shots) await page.locator('.dev-card').screenshot({ path: join(shots, `${v}-filtered.png`) });
-  await page.locator('.leaflet-popup-close-button').click();
+  await page.locator('.leaflet-popup-close-button').click({ timeout: 5000 }).catch(() => page.keyboard.press('Escape'));
   const target = page.locator('.dev-item:not([hidden]):not(:has(.dev-off)):not(.active)').nth(2);
   const pick = await target.locator('.dev-name').textContent();
   await target.locator('.dev-pick').click();
