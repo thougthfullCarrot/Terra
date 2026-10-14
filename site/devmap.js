@@ -9,7 +9,18 @@
 // map is shown, so the rest of the site never waits for it.
 import { followButton } from './watch-view.js';
 import { areaItem, projectItem } from './watch.js';
-import { cityProjects, markerRadius, projectDates } from './market.js';
+import {
+  activeFilterCount,
+  cityProjects,
+  COST_BANDS,
+  EMPTY_DEV_FILTERS,
+  FILED_WINDOWS,
+  filterChoices,
+  filterProjects,
+  markerRadius,
+  projectDates,
+  PUBLIC_INVOLVEMENT
+} from './market.js';
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 
 export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -39,7 +50,11 @@ const PERMIT_CITIES = {
 
 let leaflet = null;
 let liveMap = null;
-let privateOnly = false;
+/** The map's filters, kept while the section redraws or the city changes (the town resets with the city). */
+let filters = { ...EMPTY_DEV_FILTERS };
+let filtersCity = null;
+/** The filter panel's open state once someone toggles it; null follows the screen width. */
+let panelOpen = null;
 
 export function loadLeaflet() {
   leaflet ??= new Promise((resolve, reject) => {
@@ -104,64 +119,200 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     }
     controls.append(pick);
   }
-  const toggle = el('label', 'dev-toggle');
-  const check = el('input');
-  check.type = 'checkbox';
-  check.checked = privateOnly;
-  toggle.append(check, ' Private developments only');
   const legend = el('span', 'dev-legend');
-  legend.append(el('i', 'dot private'), 'Private ', el('i', 'dot public'), 'Public (schools, cities, universities)');
-  controls.append(toggle, legend);
+  legend.append(el('i', 'dot private'), 'Public involvement not indicated ', el('i', 'dot public'), 'Public involvement indicated');
   box.append(controls);
+
+  if (filtersCity !== city) {
+    filters = { ...filters, place: '' };
+    filtersCity = city;
+  }
+  const all = cityProjects(data?.projects, city);
+  const asOf = data?.asOf ?? new Date().toISOString();
+  const panel = filterPanel(all, () => apply());
+  controls.append(panel.node);
+
+  const results = el('div', 'dev-results');
+  const count = el('p', 'dev-count');
+  count.setAttribute('aria-live', 'polite');
+  const clear = el('button', 'chip dev-clear', 'Clear filters');
+  clear.type = 'button';
+  clear.addEventListener('click', () => {
+    filters = { ...EMPTY_DEV_FILTERS };
+    panel.sync();
+    apply();
+  });
+  results.append(count, clear, legend);
+  box.append(results);
 
   const layout = el('div', 'dev-layout');
   const mapNode = el('div', 'dev-map');
   mapNode.setAttribute('role', 'region');
   mapNode.setAttribute('aria-label', `Map of ${city} metro development projects`);
+  mapNode.append(el('div', 'state dev-loading', 'Loading the map…'));
   const list = el('ol', 'dev-list');
   list.setAttribute('aria-label', `${city} metro development projects, biggest first`);
+  const empty = el('li', 'dev-empty');
+  empty.hidden = true;
+  const emptyClear = el('button', 'link dev-empty-clear', 'Clear filters');
+  emptyClear.type = 'button';
+  emptyClear.addEventListener('click', () => clear.click());
+  const hint = el('span', 'dev-meta', 'Try a wider cost range or filing window, or ');
+  hint.append(emptyClear, '.');
+  empty.append(el('strong', '', 'No projects match these filters.'), hint);
   layout.append(mapNode, list);
   const note = el('p', 'dev-note');
   box.append(layout, note);
   const bidList = bidsSection(bids, city);
   if (bidList) box.append(bidList);
 
-  const draw = () => {
-    const projects = cityProjects(data?.projects, city, { privateOnly });
-    const placed = projects.filter((p) => p.lat != null && p.lng != null);
-    const updated = data?.asOf ? new Date(data.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-    const near = placed.filter((p) => p.approximate).length;
-    const parts = [`${placed.length} of ${projects.length} projects are on the map`];
-    if (near) parts.push(`${near} with a dashed outline sit at the center of their ZIP code because their new address is not on the Census street map yet`);
-    const sources = projects.some((p) => p.source === 'city') ? `state TABS filings and ${PERMIT_CITIES[city] ?? 'city'} building permits` : 'state TABS filings';
-    note.textContent = projects.length
-      ? `${parts.join('; ')}. From ${sources}${updated ? `, updated ${updated}` : ''}. Costs are the owner's estimate. Single-family homes are not included${PERMIT_CITIES[city] ? '' : ", and this metro's cities do not publish their permits, so smaller projects may be missing"}.`
-      : 'No projects to show yet.';
-    drawList(list, projects);
-    drawMap(mapNode, list, projects, city).catch((error) => {
-      mapNode.replaceChildren(el('div', 'state error', error instanceof Error ? error.message : "Couldn't load the map."));
-    });
+  const placed = all.filter((p) => p.lat != null && p.lng != null);
+  const updated = data?.asOf ? new Date(data.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const near = placed.filter((p) => p.approximate).length;
+  const parts = [`${placed.length} of ${all.length} projects have a map location`];
+  if (near) parts.push(`${near} with a dashed outline sit at the center of their ZIP code because their new address is not on the Census street map yet`);
+  const sources = all.some((p) => p.source === 'city') ? `state TABS filings and ${PERMIT_CITIES[city] ?? 'city'} building permits` : 'state TABS filings';
+  note.textContent = all.length
+    ? `${parts.join('; ')}. From ${sources}${updated ? `, updated ${updated}` : ''}. Costs are the owner's estimate. The filing date is the TABS registration date, or the permit's issue date for city permits. Single-family homes are not included${PERMIT_CITIES[city] ? '' : ", and this metro's cities do not publish their permits, so smaller projects may be missing"}.`
+    : 'No projects to show yet.';
+
+  const items = drawList(list, all);
+  list.append(empty);
+  let map = null;
+
+  const apply = () => {
+    const shown = filterProjects(all, filters, asOf);
+    // Keyed by the project itself: city permit ids can repeat in a metro.
+    const ids = new Set(shown);
+    for (const [project, item] of items) item.hidden = !ids.has(project);
+    empty.hidden = shown.length > 0 || !all.length;
+    const active = activeFilterCount(filters);
+    const pins = shown.filter((p) => p.lat != null && p.lng != null).length;
+    count.replaceChildren(
+      el('strong', '', shown.length.toLocaleString('en-US')),
+      ` ${active ? `of ${all.length.toLocaleString('en-US')} ` : ''}${shown.length === 1 ? 'project' : 'projects'}`,
+      el('span', 'dev-count-pins', ` · ${pins.toLocaleString('en-US')} ${pins === 1 ? 'pin' : 'pins'} on the map`)
+    );
+    clear.hidden = !active;
+    panel.badge(active);
+    mapNode.dataset.matches = String(shown.length);
+    map?.show(ids);
   };
-  check.addEventListener('change', () => {
-    privateOnly = check.checked;
-    draw();
-  });
+  apply();
   // After the card is on the page: Leaflet measures its container.
-  queueMicrotask(draw);
+  queueMicrotask(() =>
+    drawMap(mapNode, list, all, city)
+      .then((drawn) => {
+        if (!drawn) return;
+        map = drawn;
+        apply();
+      })
+      .catch((error) => {
+        mapNode.replaceChildren(el('div', 'state error', error instanceof Error ? error.message : "Couldn't load the map."));
+      })
+  );
   return box;
+}
+
+/** The filter controls: a search box and menus built from the values the metro's projects carry. */
+function filterPanel(all, onChange) {
+  const choices = filterChoices(all);
+  const details = el('details', 'dev-filters');
+  const narrow = window.matchMedia?.('(max-width: 760px)').matches;
+  details.open = panelOpen ?? !narrow;
+  details.addEventListener('toggle', () => {
+    panelOpen = details.open;
+  });
+  const summary = el('summary', 'dev-filters-summary');
+  const badge = el('span', 'dev-filters-badge');
+  summary.append(el('span', '', 'Filter projects'), badge);
+  const body = el('div', 'dev-filters-body');
+  details.append(summary, body);
+
+  const search = el('label', 'search dev-search');
+  const input = el('input');
+  input.type = 'search';
+  input.placeholder = 'Search name, project number or address';
+  input.setAttribute('aria-label', 'Search projects by name, project number or address');
+  input.autocomplete = 'off';
+  input.enterKeyHint = 'search';
+  search.insertAdjacentHTML('beforeend', '<svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>');
+  search.append(input);
+  let timer = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      filters = { ...filters, query: input.value };
+      onChange();
+    }, 120);
+  });
+  body.append(search);
+
+  const grid = el('div', 'filters dev-filter-grid');
+  const selects = {};
+  const menu = (key, label, options) => {
+    if (!options.length) return;
+    const wrap = el('label');
+    const select = el('select');
+    select.append(new Option(`All`, ''));
+    for (const o of options) select.append(new Option(o.label, o.value));
+    select.addEventListener('change', () => {
+      filters = { ...filters, [key]: select.value };
+      onChange();
+    });
+    wrap.append(el('span', 'dev-filter-label', label), select);
+    grid.append(wrap);
+    selects[key] = select;
+  };
+  const tally = (rows) => rows.map((r) => ({ value: r.value, label: `${r.value} (${r.count})` }));
+  if (choices.places.length > 1) menu('place', 'City or town', tally(choices.places));
+  menu('work', 'Type of work', tally(choices.works));
+  menu('publicInvolvement', 'Public involvement', PUBLIC_INVOLVEMENT.map((o) => ({ value: o.key, label: o.label })));
+  menu('cost', 'Estimated cost', COST_BANDS.map((b) => ({ value: b.key, label: b.label })));
+  if (choices.statuses.length > 1) menu('status', 'Filing status', tally(choices.statuses));
+  menu('filed', 'Filed', FILED_WINDOWS.map((w) => ({ value: w.key, label: w.label })));
+  body.append(grid);
+
+  const sync = () => {
+    input.value = filters.query;
+    for (const [key, select] of Object.entries(selects)) {
+      // A saved choice this metro doesn't carry (another metro's status) shows as All and is dropped.
+      select.value = filters[key];
+      if (select.value !== filters[key]) {
+        select.value = '';
+        filters = { ...filters, [key]: '' };
+      }
+    }
+  };
+  sync();
+  return {
+    node: details,
+    sync,
+    badge(active) {
+      badge.textContent = active ? `${active} on` : '';
+      badge.hidden = !active;
+    }
+  };
 }
 
 const markers = new Map();
 
+/**
+ * Draws every project's pin once; show() then adds or removes pins as the
+ * filters change, so filtering never rebuilds the map. Null when the card
+ * left the page while Leaflet loaded.
+ */
 async function drawMap(node, list, projects, city) {
   const L = await loadLeaflet();
-  if (!node.isConnected) return;
+  if (!node.isConnected) return null;
   disposeMap();
   markers.clear();
+  node.replaceChildren();
   const map = L.map(node, { scrollWheelZoom: true });
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener noreferrer">Leaflet</a>');
   liveMap = map;
   L.tileLayer(TILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map);
+  const layer = L.featureGroup().addTo(map);
 
   const styles = getComputedStyle(document.documentElement);
   const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
@@ -180,19 +331,37 @@ async function drawMap(node, list, projects, city) {
     });
     marker.bindPopup(() => popup(project), { maxWidth: 300, autoPanPadding: [24, 24] });
     marker.bindTooltip(project.name, { direction: 'top', offset: [0, -6] });
-    marker.on('popupopen', () => highlight(list, project.id));
-    marker.addTo(map);
-    markers.set(project.id, marker);
+    marker.on('popupopen', () => highlight(list, project));
+    markers.set(project, marker);
   }
-  if (placed.length) map.fitBounds(L.latLngBounds(placed.map((p) => [p.lat, p.lng])), { padding: [28, 28], maxZoom: 14 });
-  else map.setView(CENTERS[city] ?? [31, -99], 9);
+  const center = () => map.setView(CENTERS[city] ?? [31, -99], 9);
+  let last = null;
+  let viewed = false;
+  return {
+    show(ids) {
+      const key = projects.map((p) => (ids.has(p) ? 1 : 0)).join('');
+      if (key === last) return;
+      last = key;
+      const visible = [];
+      for (const [project, marker] of markers) {
+        const on = ids.has(project);
+        if (on) visible.push(marker.getLatLng());
+        if (on !== layer.hasLayer(marker)) on ? layer.addLayer(marker) : layer.removeLayer(marker);
+      }
+      node.dataset.pins = String(visible.length);
+      if (visible.length) map.fitBounds(L.latLngBounds(visible), { padding: [28, 28], maxZoom: 14 });
+      else if (!viewed) center();
+      viewed = true;
+    }
+  };
 }
 
+/** The list beside the map, every project once; filtering hides items. Returns project → item. */
 function drawList(list, projects) {
+  const items = new Map();
   list.replaceChildren(
     ...projects.map((project) => {
       const item = el('li', 'dev-item');
-      item.dataset.id = project.id;
       const onMap = project.lat != null && project.lng != null;
       const button = el('button', 'dev-pick');
       button.type = 'button';
@@ -205,19 +374,26 @@ function drawList(list, projects) {
       );
       if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
       button.addEventListener('click', () => {
-        const marker = markers.get(project.id);
+        const marker = markers.get(project);
         if (!marker || !liveMap) return;
         liveMap.flyTo(marker.getLatLng(), Math.max(liveMap.getZoom(), 15), { duration: 0.6 });
         liveMap.once('moveend', () => marker.openPopup());
       });
       item.append(button, links(project));
+      items.set(project, item);
+      rows.set(project, item);
       return item;
     })
   );
+  return items;
 }
 
-function highlight(list, id) {
-  for (const item of list.children) item.classList.toggle('active', item.dataset.id === id);
+/** Each project's list item, for highlighting the one whose pin opened. */
+const rows = new WeakMap();
+
+function highlight(list, project) {
+  const row = rows.get(project);
+  for (const item of list.children) item.classList.toggle('active', item === row);
   const active = list.querySelector('.dev-item.active');
   if (active) list.scrollTo({ top: active.offsetTop - list.offsetTop - 8, behavior: 'smooth' });
 }
@@ -231,7 +407,8 @@ function popup(project) {
   if (project.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
   const facts = [money(project.cost), project.work, project.squareFeet ? `${project.squareFeet.toLocaleString('en-US')} sq ft` : ''].filter(Boolean);
   box.append(el('span', 'dev-pop-line', facts.join(' · ')));
-  const when = [project.status, projectDates(project.start, project.end)].filter(Boolean).join(' · ');
+  const status = project.status === 'Unknown status' && project.statusCode != null ? `Unknown status (TABS code ${project.statusCode})` : project.status;
+  const when = [status, projectDates(project.start, project.end)].filter(Boolean).join(' · ');
   if (when) box.append(el('span', 'dev-pop-line muted', when));
   const people = el('dl', 'dev-pop-people');
   for (const [label, value] of [

@@ -127,6 +127,9 @@ export const STATUS: Record<number, string> = {
   3009: 'Plans reviewed',
   3010: 'Plan review pending'
 };
+/** A TABS status code as words; a code not in STATUS says so rather than passing for a known stage. */
+export const statusLabel = (code: number) => STATUS[code] ?? 'Unknown status';
+
 /** Finished or closed: no longer a current development. */
 export const DONE = new Set([3001, 3007]);
 
@@ -157,6 +160,8 @@ export interface Development {
   name: string;
   facility: string | null;
   status: string;
+  /** The raw TABS status code behind `status`, kept for diagnosing an "Unknown status". Absent on city permits. */
+  statusCode?: number;
   work: string;
   cost: number;
   /** YYYY-MM-DD the project registered. */
@@ -557,7 +562,8 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
         place: places.get(row.City) ?? placeOf(details.address),
         name: row.ProjectName.trim(),
         facility: row.FacilityName && row.FacilityName.trim() !== row.ProjectName.trim() ? row.FacilityName.trim() : null,
-        status: STATUS[row.ProjectStatus] ?? 'Registered',
+        status: statusLabel(row.ProjectStatus),
+        statusCode: row.ProjectStatus,
         work: WORK[row.TypeOfWork] ?? 'New construction',
         cost: Math.round(row.EstimatedCost),
         registered: isoDate(row.ProjectCreatedOn) ?? '',
