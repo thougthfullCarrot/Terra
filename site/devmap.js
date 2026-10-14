@@ -79,7 +79,14 @@ export function loadLeaflet() {
 
 /** Remove the map on screen, before the section redraws or signs out. */
 export function disposeMap() {
-  liveMap?.remove();
+  // Stop a pan or zoom still running. Leaflet 1.9 ends a zoom animation with
+  // an untracked 250 ms timer that reads the map's panes; once remove() has
+  // deleted them that timer throws, unless the map no longer counts as zooming.
+  if (liveMap) {
+    liveMap.stop();
+    liveMap._animatingZoom = false;
+    liveMap.remove();
+  }
   liveMap = null;
 }
 
@@ -340,6 +347,9 @@ async function drawMap(node, list, projects, city) {
   let viewed = false;
   return {
     show(ids) {
+      // A debounced search or filter from a card that has since been replaced
+      // (the city changed) must not move the removed map.
+      if (map !== liveMap) return;
       const key = projects.map((p) => (ids.has(p) ? 1 : 0)).join('');
       if (key === last) return;
       last = key;
@@ -406,6 +416,8 @@ function popup(project) {
   if (project.place && !project.address) box.append(el('span', 'dev-pop-line muted', project.place));
   if (project.address) box.append(el('span', 'dev-pop-line muted', project.address));
   if (project.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
+  else if (project.locatedFrom) box.append(el('span', 'dev-pop-line muted', `Pin is the site's location from ${project.locatedFrom.replace(/^City/, 'a city')}, not the building's own point.`));
+  if (project.aliases?.length) box.append(el('span', 'dev-pop-line muted', `Also filed as ${project.aliases.slice(0, 4).join(', ')}`));
   const facts = [money(project.cost), project.work, project.squareFeet ? `${project.squareFeet.toLocaleString('en-US')} sq ft` : ''].filter(Boolean);
   box.append(el('span', 'dev-pop-line', facts.join(' · ')));
   const status = project.status === 'Unknown status' && project.statusCode != null ? `Unknown status (TABS code ${project.statusCode})` : project.status;

@@ -89,6 +89,8 @@ export interface Development {
   facility?: string | null;
   address?: string | null;
   addresses?: string[];
+  /** Other names and permit numbers the same site is filed under. */
+  aliases?: string[];
   work?: string;
   status?: string;
   registered?: string;
