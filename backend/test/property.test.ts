@@ -185,8 +185,9 @@ describe('distress', () => {
 
   it('lists scheduled sales first', () => {
     const sales = [{ city: 'Houston', saleDate: null, value: 9 }, { city: 'Houston', saleDate: '2026-11-03', value: 1 }, { city: 'Dallas', saleDate: '2026-10-07', value: 1 }];
-    expect(filterSales(sales, { city: 'Houston' }).map((s) => s.saleDate)).toEqual(['2026-11-03', null]);
-    expect(filterSales(sales, { scheduledOnly: true }).map((s) => s.city)).toEqual(['Dallas', 'Houston']);
+    const now = new Date('2026-10-01T12:00:00Z');
+    expect(filterSales(sales, { city: 'Houston', now }).map((s) => s.saleDate)).toEqual(['2026-11-03', null]);
+    expect(filterSales(sales, { scheduledOnly: true, now }).map((s) => s.city)).toEqual(['Dallas', 'Houston']);
   });
 });
 

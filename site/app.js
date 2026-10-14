@@ -32,7 +32,7 @@ import { startNews } from './news-view.js';
 import { startEvents } from './events-view.js';
 import { startProperty } from './property-view.js';
 import { startCareer } from './career-view.js';
-import { jobFlags, writeCareerHash } from './career.js';
+import { jobFlags, TITLE_GUIDE, writeCareerHash } from './career.js';
 import { startPitch } from './pitch.js';
 
 const $ = (id) => document.getElementById(id);
@@ -222,7 +222,7 @@ function bind() {
   }
   $('sort').addEventListener('change', () => (sortChosen = true));
   $('clear').addEventListener('click', () => {
-    update({ q: '', city: '', firm: '', kind: '', sector: '', saved: false });
+    update({ q: '', city: '', firm: '', kind: '', sector: '', role: '', saved: false });
     $('q').value = '';
     for (const key of SELECT_FILTERS) $(key).value = '';
   });
@@ -262,10 +262,11 @@ function render() {
   drawChips();
 
   shown = sortJobs(filterJobs(jobs, { ...state, savedIds: saved }), state.sort);
-  const filtered = Boolean(state.q || state.saved || FILTERS.some((key) => state[key]));
+  const filtered = Boolean(state.q || state.saved || state.role || FILTERS.some((key) => state[key]));
+  const roleName = state.role ? TITLE_GUIDE.find((entry) => entry.key === state.role)?.title : '';
   const strong = shown.filter((job) => scores.get(job.id)?.strong).length;
 
-  $('count').textContent = `${shown.length} ${shown.length === 1 ? 'role' : 'roles'}${filtered ? ` of ${jobs.length}` : ''}${
+  $('count').textContent = `${shown.length} ${shown.length === 1 ? 'role' : 'roles'}${filtered ? ` of ${jobs.length}` : ''}${roleName ? ` · ${roleName}` : ''}${
     strong ? ` · ${strong} best ${strong === 1 ? 'match' : 'matches'} for you` : ''
   }`;
   $('clear').hidden = !filtered;

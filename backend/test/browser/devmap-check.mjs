@@ -241,6 +241,23 @@ for (const vp of [
   await page.waitForFunction((t) => document.querySelector('.leaflet-popup .dev-pop-title')?.textContent === t, pick, { timeout: 5000 }).catch(() => null);
   log(`${v}: list click flies to the pin and opens its panel`, (await page.locator('.leaflet-popup .dev-pop-title').textContent().catch(() => null)) === pick, `"${pick}"`);
 
+  // A project with no pin ("Not on the map") still opens its details from the list, by mouse and keyboard.
+  const offItem = page.locator('.dev-item:not([hidden]):has(.dev-off)').first();
+  if (await offItem.count()) {
+    const offName = await offItem.locator('.dev-name').textContent();
+    await offItem.locator('.dev-pick').click();
+    const shown = await offItem.locator('.dev-detail .dev-pop-title').textContent().catch(() => null);
+    const expanded = await offItem.locator('.dev-pick').getAttribute('aria-expanded');
+    await offItem.locator('.dev-pick').press('Enter');
+    const closed = (await offItem.locator('.dev-detail').count()) === 0;
+    await offItem.locator('.dev-pick').press('Enter');
+    const reopened = (await offItem.locator('.dev-detail').count()) === 1;
+    await offItem.locator('.dev-pick').click();
+    log(`${v}: a project not on the map opens its details from the list`, shown === offName && expanded === 'true' && closed && reopened, `"${offName}"`);
+  } else {
+    log(`${v}: a project not on the map opens its details from the list`, true, 'none in this metro');
+  }
+
   // Clear filters.
   await setF({ query: 'a', publicInvolvement: 'private', cost: 'over100', filed: '365' });
   await page.locator('.dev-clear').click();

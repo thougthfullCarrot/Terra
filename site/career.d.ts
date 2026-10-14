@@ -60,6 +60,7 @@ export function readCareerHash(hash: string): CareerState;
 export function writeCareerHash(state: Partial<CareerState>): string;
 export function jobFlags(job: CareerJob, now?: Date): JobFlag[];
 export function decodeTitle(role: string): (typeof TITLE_GUIDE)[number] | null;
+export function titleJobsHref(row: { key: string }, city?: string, path?: string): string;
 export function titleRows(jobs: CareerJob[], salaries: unknown, city?: string): ((typeof TITLE_GUIDE)[number] & { jobs: CareerJob[]; pay: { family: string; median: number | null; entry: number | null; filings: number } })[];
 export function skillDemand(
   jobs: CareerJob[],
@@ -76,7 +77,7 @@ export function nearCampus(
   jobs: CareerJob[],
   campus: Point,
   radius?: number
-): { projects: (CareerProject & { miles: number })[]; firms: { name: string; roles: string[]; projects: CareerProject[]; cost: number; jobs: CareerJob[] }[] };
+): { projects: (CareerProject & { miles: number })[]; firms: { name: string; roles: string[]; projects: CareerProject[]; cost: number; jobs: CareerJob[] }[]; approximateLeftOut: number };
 export function tourStops(projects: CareerProject[], city: string, start: Point, options?: { stops?: number; pool?: number; minCost?: number }): (CareerProject & { leg: number })[];
 export function tourUrl(start: Point, stops: { lat: number | null; lng: number | null }[]): string;
 export function tourMiles(stops: { leg: number }[]): number;

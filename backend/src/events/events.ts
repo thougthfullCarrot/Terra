@@ -23,6 +23,8 @@ export interface TerraEvent {
   cost: string | null;
   /** "Added by hand" for rows from the Google Sheet's Events tab; absent for calendar feeds. */
   source?: string;
+  /** True when the source gave only dates (no clock time): shown as "Time not listed", not "All day". */
+  dateOnly?: boolean;
 }
 
 export interface EventSource {
@@ -188,6 +190,18 @@ function icsDate(value: string): string | null {
   return z ? `${y}-${mo}-${d}T${h}:${mi}:${s}Z` : centralIso(`${y}-${mo}-${d} ${h}:${mi}:${s}`);
 }
 
+/** The day before an ISO date's calendar day, at Central midnight. */
+function dayBefore(iso: string): string | null {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return centralIso(d.toISOString().slice(0, 10));
+}
+
+/** True when an iCal date value carries no clock time (VALUE=DATE). */
+function icsDateOnly(value: string): boolean {
+  return /^\d{8}$/.test(value.trim());
+}
+
 function icsText(value: string): string {
   return value.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').replace(/\s+/g, ' ').trim();
 }
@@ -206,12 +220,21 @@ export function parseIcs(text: string, source: EventSource, fallbackUrl?: string
     const url = httpUrl(field('URL')) ?? httpUrl(fallbackUrl);
     const start = icsDate(field('DTSTART'));
     if (!title || !url || !start) continue;
+    const dateOnly = icsDateOnly(field('DTSTART'));
+    let end = icsDate(field('DTEND'));
+    // An iCal all-day DTEND is exclusive (the day after the last day); store the last day itself,
+    // as every other source does, so calendar exports add exactly one day back.
+    if (end && icsDateOnly(field('DTEND'))) {
+      const last = dayBefore(end);
+      end = last && last.slice(0, 10) > start.slice(0, 10) ? last : null;
+    }
     out.push({
       id: `${source.key}-${field('UID') || url}`,
       title,
       url,
       start,
-      end: icsDate(field('DTEND')),
+      end,
+      ...(dateOnly ? { dateOnly: true } : {}),
       city: source.city,
       organizer: source.organizer,
       venue: icsText(field('LOCATION')) || null,
@@ -606,7 +629,7 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       const events = parseIcs(await fetcher.text(feed), source);
       if (events.length) {
         log(`${source.organizer}: ${events.length} events from ${feed}`);
-        return events;
+        return withDetailTimes(events, fetcher, log);
       }
     } catch (error) {
       log(`${source.organizer}: ${feed}: ${error instanceof Error ? error.message : String(error)}`);
@@ -635,6 +658,35 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
     } catch (error) {
       log(`${link.url}: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+  return out;
+}
+
+/**
+ * Chamber iCal feeds often list an evening mixer as a date with no time. For those, read the
+ * event's own page (at most `limit` of them) and take its clock times when it lists them.
+ */
+export async function withDetailTimes(events: TerraEvent[], fetcher: Fetcher, log: (m: string) => void, limit = 30): Promise<TerraEvent[]> {
+  let read = 0;
+  const out: TerraEvent[] = [];
+  for (const e of events) {
+    if (!e.dateOnly || read >= limit) {
+      out.push(e);
+      continue;
+    }
+    read++;
+    try {
+      const detail = parseGrowthZoneDetail(await fetcher.text(e.url));
+      const timed = detail.start && !/T00:00:00/.test(detail.start) && detail.start.slice(0, 10) === e.start.slice(0, 10);
+      if (timed) {
+        const { dateOnly: _drop, ...rest } = e;
+        out.push({ ...rest, start: detail.start!, end: detail.end && new Date(detail.end).getTime() > new Date(detail.start!).getTime() ? detail.end : null, venue: e.venue ?? detail.venue });
+        continue;
+      }
+    } catch (error) {
+      log(`${e.url}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    out.push(e);
   }
   return out;
 }

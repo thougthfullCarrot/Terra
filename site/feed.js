@@ -6,6 +6,8 @@
 
 const DAY_MS = 86_400_000;
 
+import { decodeTitle, TITLE_GUIDE } from './career.js';
+
 export const FILTERS = ['city', 'firm', 'kind', 'sector'];
 export const SORTS = ['newest', 'deadline', 'match'];
 
@@ -40,7 +42,7 @@ export function facet(jobs, field, always = []) {
  * empty one is ignored. `saved` keeps only the ids in `savedIds`, the jobs the
  * visitor starred on this device.
  */
-export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sector = '', saved = false, savedIds } = {}) {
+export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sector = '', role = '', saved = false, savedIds } = {}) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   return jobs.filter((job) => {
     if (saved && !savedIds?.has(job.id)) return false;
@@ -48,6 +50,8 @@ export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sect
     if (firm && job.firm !== firm) return false;
     if (kind && job.kind !== kind) return false;
     if (sector && job.sector !== sector) return false;
+    // role: a Title Decoder family key (career.js), so "See the openings" lands on the jobs it counted.
+    if (role && decodeTitle(job.role)?.key !== role) return false;
     if (!words.length) return true;
     const haystack = [job.role, job.firm, job.city, job.sector, job.kind, job.desc, ...(job.reqs ?? [])]
       .join(' ')
@@ -164,6 +168,7 @@ export function readQuery(search) {
   for (const key of FILTERS) state[key] = params.get(key) ?? '';
   if (!SORTS.includes(state.sort)) state.sort = 'newest';
   state.job = params.get('job') ?? '';
+  state.role = TITLE_GUIDE.some((entry) => entry.key === params.get('role')) ? params.get('role') : '';
   return state;
 }
 
@@ -173,6 +178,7 @@ export function writeQuery(state) {
   for (const key of FILTERS) if (state[key]) params.set(key, state[key]);
   if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
   if (state.saved) params.set('saved', '1');
+  if (state.role) params.set('role', state.role);
   if (state.job) params.set('job', state.job);
   const text = params.toString();
   return text ? `?${text}` : '';

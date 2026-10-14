@@ -21,7 +21,9 @@ import {
   FALLBACK_MPH,
   filterMoves,
   saleLinks,
+  auctionsWithin,
   filterSales,
+  isScheduled,
   franchiseUrl,
   isEntity,
   isochroneUrl,
@@ -544,12 +546,12 @@ async function distressView(body) {
   const draw = () => {
     const sales = filterSales(file.sales, { city: state.city, scheduledOnly });
     const all = filterSales(file.sales, { city: state.city });
-    const soon = all.filter((s) => s.saleDate && Date.parse(s.saleDate) - Date.now() < 45 * 86_400_000).length;
+    const soon = auctionsWithin(all, 45).length;
     const tiles = el('div', 'calc-results distress-tiles');
     tiles.append(
       tile('Auctions in the next 45 days', count(soon), 'Tax sales on the county steps or online'),
       tile('All tax sale listings', count(all.length), 'Including ones waiting for a sale date'),
-      tile('Value of the scheduled lots', money(all.filter((s) => s.saleDate).reduce((n, s) => n + (s.value ?? 0), 0)), 'Appraisal district values')
+      tile('Value of the scheduled lots', money(all.filter((s) => isScheduled(s)).reduce((n, s) => n + (s.value ?? 0), 0)), 'Appraisal district values')
     );
     const toggle = el('label', 'dev-toggle');
     const check = el('input');
@@ -596,7 +598,7 @@ function salesTable(sales) {
     meta.append([sale.place, `${sale.county} County`].filter(Boolean).join(' · '));
     for (const l of saleLinks(sale)) meta.append(' · ', link(l.label, l.url));
     name.append(meta);
-    const when = el('td', '', sale.saleDate ? longDate(sale.saleDate) : '—');
+    const when = el('td', '', !sale.saleDate ? '—' : isScheduled(sale) ? longDate(sale.saleDate) : `Past: ${longDate(sale.saleDate)}`);
     when.append(el('span', 'metric-meta', sale.status));
     tr.append(name, when, el('td', 'num', money(sale.value)), el('td', 'num', money(sale.minimumBid)));
     tbody.append(tr);

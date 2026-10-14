@@ -12,6 +12,7 @@ import {
   CAMPUSES,
   CAREER_TOOLS,
   decodeTitle,
+  titleJobsHref,
   readCareerHash,
   skillDemand,
   SKILL_LABELS,
@@ -244,7 +245,7 @@ function titlesView({ jobs, market }) {
     card.append(tags);
     if (row.jobs.length) {
       const a = el('a', 'link', `See ${row.jobs.length === 1 ? 'the opening' : `the ${row.jobs.length} openings`} →`);
-      a.href = `${location.pathname}?${new URLSearchParams({ sector: row.sectors[0], ...(state.city ? { city: state.city } : {}) })}`;
+      a.href = titleJobsHref(row, state.city, location.pathname);
       card.append(a);
     }
     grid.append(card);
@@ -392,6 +393,9 @@ function campusView({ jobs, market }) {
     ul.append(li);
   }
   list2.append(ul);
+  if (near.approximateLeftOut) {
+    list2.append(el('p', 'calc-note', `${near.approximateLeftOut} more project${near.approximateLeftOut === 1 ? ' has' : 's have'} only a ZIP-code location, so ${near.approximateLeftOut === 1 ? 'it is' : 'they are'} left out rather than shown at a distance that may be wrong.`));
+  }
   const tour = el('a', 'secondary', 'Make it a driving tour');
   tour.href = writeCareerHash({ tool: 'tour', city: campus.city, campus: campus.key });
   list2.append(tour);

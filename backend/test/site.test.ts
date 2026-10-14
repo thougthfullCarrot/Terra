@@ -224,7 +224,8 @@ describe('site feed rules', () => {
       sector: '',
       sort: 'deadline' as const,
       saved: true,
-      job: 'abc'
+      job: 'abc',
+      role: 'appraisal'
     };
     expect(readQuery(writeQuery(state))).toEqual(state);
     expect(writeQuery({ q: '', city: '', firm: '', kind: '', sector: '', sort: 'newest', saved: false, job: '' })).toBe('');

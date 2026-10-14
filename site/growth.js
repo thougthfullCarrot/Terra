@@ -52,7 +52,17 @@ export const ALIASES = {
   'pulte': /\bpulte\b/i,
   'taylor morrison': /\btaylor morrison\b/i,
   'm/i homes': /\bm\/?i homes\b/i,
-  'kb home': /\bkb home\b/i
+  'kb home': /\bkb home\b/i,
+  'ryan companies': /\bryan\s*(companies|cos|a\s*\+\s*e)\b/i
+};
+
+/**
+ * Different companies that share a one-word name: a firm whose identifying word
+ * is the key never matches a filing party the pattern describes. Ryan (the tax
+ * firm in the job feed) is not Ryan Companies or its architecture arm Ryan A+E.
+ */
+export const COLLISIONS = {
+  ryan: /\bryan\s*(a\s*\+\s*e\b|companies\b|cos\b)/i
 };
 
 /** The words that identify a company. */
@@ -75,6 +85,12 @@ export function sameFirm(firm, party) {
   if (!firm || !party) return false;
   const alias = ALIASES[String(firm).toLowerCase().trim()];
   if (alias?.test(party)) return true;
+  const firmCore = [...core(firm)];
+  if (firmCore.length === 1 && COLLISIONS[firmCore[0]]?.test(party)) return false;
+  // A short joined token like "A+E" distinguishes a company even though each letter is too short to count.
+  const joined = (v) => new Set((String(v).toLowerCase().match(/\b[a-z0-9]{1,3}\s*\+\s*[a-z0-9]{1,3}\b/g) ?? []).map((t) => t.replace(/\s+/g, '')));
+  const firmJoined = joined(firm);
+  if ([...joined(party)].some((t) => !firmJoined.has(t))) return false;
   const a = significant(firm);
   const b = significant(party);
   if (!a.size || !b.size) return false;
