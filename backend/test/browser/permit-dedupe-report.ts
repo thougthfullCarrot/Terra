@@ -66,8 +66,12 @@ for (const [name, fetch] of [
   // Safety: nothing combined, nothing lost.
   const afterIds = new Set(after.map((p) => p.id));
   check(`${name}: no id repeats after`, repeated(after).length === 0, `${repeated(after).length}`);
-  const lost = [...new Set(before.map((p) => p.id))].filter((id) => !afterIds.has(id));
-  check(`${name}: every project shown before is still shown (by permit)`, lost.length === 0, lost.slice(0, 10).join(', '));
+  // A permit can now sit inside a site project led by another permit, so check permit numbers, not ids.
+  const shownAfter = new Set(after.flatMap((p) => p.permits ?? [p.id.replace(/^CITY-\w+?-/, '')]));
+  const lost = [...new Set(before.map((p) => p.id.replace(/^CITY-\w+?-/, '')))].filter((n) => !shownAfter.has(n));
+  check(`${name}: every permit shown before is still shown`, lost.length === 0, lost.slice(0, 10).join(', '));
+  const folded = [...new Set(before.map((p) => p.id))].filter((id) => !afterIds.has(id));
+  console.log(`Ids now shown inside another permit's site project: ${folded.length}${folded.length ? ` (${folded.join(', ')})` : ''}`);
   if (name === 'Fort Worth') {
     // Each permit number is in exactly one project, and a project's rows are only its own permits'.
     const permitsOf = (p: Development) => p.permits ?? [p.id.replace(/^CITY-\w+?-/, '')];
