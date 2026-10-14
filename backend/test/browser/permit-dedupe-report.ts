@@ -69,12 +69,16 @@ for (const [name, fetch] of [
   const lost = [...new Set(before.map((p) => p.id))].filter((id) => !afterIds.has(id));
   check(`${name}: every project shown before is still shown (by permit)`, lost.length === 0, lost.slice(0, 10).join(', '));
   if (name === 'Fort Worth') {
-    // Each project is exactly one permit number.
-    const mixed = after.filter((p) => {
-      const permit = p.id.replace(/^CITY-\w+?-/, '');
-      return (p.sourceIds ?? []).some((sid) => !(permits.get(permit) ?? []).some((r) => r.sourceId === sid));
-    });
-    check(`${name}: every project's source rows belong to its one permit number`, mixed.length === 0, mixed.map((p) => p.id).join(', '));
+    // Each permit number is in exactly one project, and a project's rows are only its own permits'.
+    const permitsOf = (p: Development) => p.permits ?? [p.id.replace(/^CITY-\w+?-/, '')];
+    const mixed = after.filter((p) => (p.sourceIds ?? []).some((sid) => !permitsOf(p).some((n) => (permits.get(n) ?? []).some((r) => r.sourceId === sid))));
+    check(`${name}: every project's source rows belong to its listed permits`, mixed.length === 0, mixed.map((p) => p.id).join(', '));
+    const seen = new Map<string, number>();
+    for (const p of after) for (const n of permitsOf(p)) seen.set(n, (seen.get(n) ?? 0) + 1);
+    const twice = [...seen].filter(([, n]) => n > 1);
+    check(`${name}: no permit number is shown in two projects`, twice.length === 0, twice.slice(0, 10).map(([n]) => n).join(', '));
+    const sites = after.filter((p) => (p.permits?.length ?? 0) > 1);
+    console.log(`Projects joining several building permits at one site (as before this change): ${sites.length}${sites.length ? `, e.g. ${sites.slice(0, 4).map((p) => `${p.name} [${p.permits!.join(', ')}] ${money(p.cost)}`).join('; ')}` : ''}`);
     const unref = after.filter((p) => !p.sourceIds?.length);
     check(`${name}: every project keeps its city row ids`, unref.length === 0, `${unref.length} without`);
     const newIds = after.filter((p) => !before.some((b) => b.id === p.id));

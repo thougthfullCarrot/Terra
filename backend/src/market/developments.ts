@@ -195,6 +195,8 @@ export interface Development {
   addresses?: string[];
   /** Every lot, block and legal description on the permit. */
   parcels?: string[];
+  /** The permit numbers behind a project of several building permits at one site (Fort Worth). */
+  permits?: string[];
   /** The city's own row ids behind the project (Fort Worth CAPIDs). */
   sourceIds?: string[];
 }

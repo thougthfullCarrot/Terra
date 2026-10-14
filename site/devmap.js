@@ -419,6 +419,7 @@ function popup(project) {
     ['Permit contact', project.contact],
     // A permit the city lists at several addresses or parcels: every one, so nothing it filed is hidden.
     ['Also filed at', project.addresses?.length > 1 ? project.addresses.slice(1).join('; ') : null],
+    ['Permits', project.permits?.length > 1 ? project.permits.join(', ') : null],
     ['Parcels', project.parcels?.length ? project.parcels.join('; ') : null],
     ['City record ids', project.sourceIds?.length > 1 ? project.sourceIds.join(', ') : null]
   ]) {

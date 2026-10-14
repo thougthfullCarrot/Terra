@@ -219,6 +219,35 @@ export function permitStatus(group: Pick<CityPermit, 'status'>[]): string {
   return `Permit ${best.toLowerCase()}`;
 }
 
+/**
+ * Permit-grouped rows (Fort Worth) joined by the site each permit is shown at,
+ * as every source groups its permits: one site's building permits are one
+ * project, often each carrying the whole project's value. Each permit joins
+ * exactly one site, its leading row's, so no permit is shown twice. Groups
+ * from sources without permit grouping pass through as they are.
+ */
+function bySite(groups: Map<string, CityPermit[]>): CityPermit[][] {
+  const out: CityPermit[][] = [];
+  const sites = new Map<string, CityPermit[]>();
+  for (const group of groups.values()) {
+    const real = group.filter((p) => !p.placeholder);
+    if (group[0]?.site == null || !real.length) {
+      out.push(group);
+      continue;
+    }
+    const lead = real.reduce((best, p) => (p.value > best.value || (p.value === best.value && leadRank(p) > leadRank(best)) ? p : best));
+    const key = lead.site || lead.permit;
+    const site = sites.get(key);
+    if (site) site.push(...group);
+    else {
+      const rows = [...group];
+      sites.set(key, rows);
+      out.push(rows);
+    }
+  }
+  return out;
+}
+
 /** Every address, parcel and source row behind a permit-grouped project, the shown address first. */
 function references(rows: CityPermit[], lead: CityPermit): Pick<Development, 'addresses' | 'parcels' | 'sourceIds'> {
   const unique = (values: (string | null | undefined)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))];
@@ -238,8 +267,7 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
     groups.set(p.group, [...(groups.get(p.group) ?? []), p]);
   }
   const projects: Development[] = [];
-  const byPermit = new Set<Development>();
-  for (const group of groups.values()) {
+  for (const group of bySite(groups)) {
     // A permit whose only rows are placeholder addresses is not on a site yet.
     if (group.every((p) => p.placeholder)) continue;
     // Each building's permit often repeats the whole project's value, so the
@@ -263,6 +291,7 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
       place: lead.place,
       name,
       facility: buildings > 1 ? `${buildings} building permits` : null,
+      ...(rows && buildings > 1 ? { permits: [...new Set(group.map((p) => p.permit))] } : {}),
       status: permitStatus(group),
       work: lead.work,
       cost,
@@ -287,7 +316,6 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
       source: 'city',
       ...(rows ? references(rows, lead) : {})
     });
-    if (rows) byPermit.add(projects.at(-1)!);
   }
   // One project filed under a few addresses on the same tract (13210 Palo Alto
   // Rd and 13210 State Hwy 16) repeats its value: keep the first, preferring one with a point.
@@ -295,8 +323,6 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
   const seen = new Set<string>();
   return projects
     .filter((p) => {
-      // Grouped by permit number already: two permits at one street number are two projects.
-      if (byPermit.has(p)) return true;
       const key = `${p.cost}|${/^\d+/.exec(p.address ?? '')?.[0] ?? p.id}`;
       if (seen.has(key)) return false;
       seen.add(key);

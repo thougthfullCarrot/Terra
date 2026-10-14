@@ -235,7 +235,7 @@ describe('Austin, Fort Worth and Arlington permits', () => {
       });
     });
 
-    it('keeps two permits at one address as two projects, even at the same value', () => {
+    it('joins two permits shown at one site as one project, as every source does, listing both', () => {
       const projects = permitProjects(
         [
           fw({ Permit_No: 'PB26-1', Address: '2000 EAGLE PKWY', Current_Status: 'Issued', Latitude: 33, Longitude: -97.31 }),
@@ -243,8 +243,23 @@ describe('Austin, Fort Worth and Arlington permits', () => {
         ],
         NOW
       );
-      expect(projects.map((p) => p.id).sort()).toEqual(['CITY-FortWorth-PB26-1', 'CITY-FortWorth-PB26-2']);
-      expect(projects.every((p) => p.status === 'City permit issued')).toBe(true);
+      expect(projects).toHaveLength(1);
+      expect(projects[0]).toMatchObject({ cost: 500000000, facility: '2 building permits', permits: ['PB26-1', 'PB26-2'], status: 'City permit issued' });
+    });
+
+    it('shows a permit listed at two sites once, at the site its leading row names', () => {
+      const projects = permitProjects(
+        [
+          fw({ Permit_No: 'PB26-1', Address: '100 A ST', Current_Status: 'Issued', Latitude: 33, Longitude: -97.31 }),
+          fw({ Permit_No: 'PB26-1', Address: '200 B ST', Current_Status: 'Plan Review' }),
+          fw({ Permit_No: 'PB26-2', Address: '200 B ST', Current_Status: 'Issued', JobValue: 2000000, Latitude: 33.1, Longitude: -97.3 })
+        ],
+        NOW
+      );
+      expect(projects.map((p) => [p.id, p.cost])).toEqual([
+        ['CITY-FortWorth-PB26-1', 500000000],
+        ['CITY-FortWorth-PB26-2', 2000000]
+      ]);
     });
 
     it('leaves out a permit whose only rows are placeholder addresses', () => {
