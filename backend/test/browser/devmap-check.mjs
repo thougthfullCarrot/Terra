@@ -304,6 +304,12 @@ for (const vp of [
     for (const p of merc.filter(Boolean)) {
       console.log(`  Merc in data: ${p.id} "${p.name}" $${p.cost} at ${p.address ?? 'no address'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(site point: ${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
     }
+    const street = (a) => String(a ?? '').split(',')[0].toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    for (const p of merc.filter(Boolean)) {
+      const twins = sa.filter((x) => x.source === 'city' && street(x.address) === street(p.address));
+      log(`${v}: ${p.id} has no city duplicate at ${street(p.address)}`, twins.length === 0, twins.map((x) => x.id).join(', '));
+      log(`${v}: ${p.id} has a pin with stated provenance`, p.lat != null , p.approximate ? 'ZIP center' : p.locatedFrom ?? 'geocoded address');
+    }
     if (merc.some((p) => !p)) console.log(`  Merc not in data: ${['TABS2025017471', 'TABS2025017477'].filter((_, i) => !merc[i]).join(', ')}`);
     for (const query of ['Merc', 'TABS2025017471', 'TABS2025017477', 'COM-SHL-PMT25-40400053', 'COM-SHL-PMT25-40400055', '5734 Utsa', '5730 Utsa']) {
       await page.locator('.dev-search input').fill(query);

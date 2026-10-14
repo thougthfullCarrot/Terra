@@ -839,6 +839,9 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     const p = projects.find((x) => x.id === id);
     const ranked = searched.some(([, rows]) => rows.some((r) => r.ProjectNumber === id));
     if (p) {
+      const street = (p.address ?? '').split(',')[0]!.toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      const twins = projects.filter((x) => x !== p && x.city === p.city && x.source === 'city' && street && (x.address ?? '').split(',')[0]!.toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim() === street);
+      log(`trace ${id}: city entries at the same street address: ${twins.length ? twins.map((x) => `${x.id} "${x.name}"`).join(', ') : 'none (city fallback replaced)'}`);
       log(`trace ${id}: listed in ${p.city}; ${known.has(id) ? 'page from an earlier build' : 'page read this build'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
     } else {
       log(`trace ${id}: not listed (${waited.has(id) ? 'within the cap, page waits for a later build' : ranked ? 'dropped' : 'not among the current filings read'})`);
