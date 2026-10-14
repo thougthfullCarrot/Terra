@@ -4,6 +4,7 @@ import {
   austinPermit,
   fetchCityPermitProjects,
   fortWorthPermit,
+  permitStatus,
   permitPoint,
   permitProjects,
   projectName,
@@ -190,5 +191,70 @@ describe('Austin, Fort Worth and Arlington permits', () => {
     });
     expect(projects.map((p) => p.name)).toEqual(['Nacogdoches Apartments']);
     expect(lines).toEqual(['San Antonio city permits: 1 more projects', 'Broken city permits: not read (502)']);
+  });
+
+  describe('Fort Worth permits listed at several addresses', () => {
+    // Shaped like the city's rows for PB26-13452 and PB26-03131 (2026-10-14).
+    const day = Date.UTC(2026, 8, 1);
+    const fw = (over: Record<string, unknown>) =>
+      fortWorthPermit({
+        Permit_No: 'PB26-13452',
+        Permit_SubType: 'New',
+        B1_SPECIAL_TEXT: 'X TEAM /// DFW SPE 2 LLC',
+        B1_WORK_DESC: 'X TEAM /// construct a 1 story 156,866 sf data center',
+        Zip_Code: '76177',
+        B1_LOT: '3',
+        B1_BLOCK: '1',
+        B1_LEGAL_DESC: 'A1130A T.S. RAYBURN, TR 2B, 24.8413 ACRES',
+        Owner_Full_Name: 'ADL DEVELOPMENT LP',
+        File_Date: day,
+        Status_Date: day,
+        JobValue: 500000000,
+        ...over
+      })!;
+
+    it('makes one project per permit number, at its value once, keeping every address, parcel and row id', () => {
+      const projects = permitProjects(
+        [
+          fw({ Address: '14460 HERITAGE PKWY', Current_Status: 'Incomplete Submittal', CAPID: 1623053, Latitude: 32.9933, Longitude: -97.3008 }),
+          fw({ Address: '14664 HERITAGE PKWY', Current_Status: 'Plan Review', CAPID: 1625074, Latitude: 32.998, Longitude: -97.2974 }),
+          fw({ Address: '26060099 FOR REVIEW ONLY WAY', Zip_Code: '', Current_Status: 'Awaiting Client Reply', CAPID: 1625999 })
+        ],
+        NOW
+      );
+      expect(projects).toHaveLength(1);
+      expect(projects[0]).toMatchObject({
+        id: 'CITY-FortWorth-PB26-13452',
+        cost: 500000000,
+        status: 'Permit plan review',
+        address: '14664 Heritage Pkwy, Fort Worth, TX 76177',
+        lat: 32.998,
+        addresses: ['14664 Heritage Pkwy, Fort Worth, TX 76177', '14460 Heritage Pkwy, Fort Worth, TX 76177'],
+        parcels: ['Lot 3, Block 1, A1130A T.S. RAYBURN, TR 2B, 24.8413 ACRES'],
+        sourceIds: ['1623053', '1625074', '1625999']
+      });
+    });
+
+    it('keeps two permits at one address as two projects, even at the same value', () => {
+      const projects = permitProjects(
+        [
+          fw({ Permit_No: 'PB26-1', Address: '2000 EAGLE PKWY', Current_Status: 'Issued', Latitude: 33, Longitude: -97.31 }),
+          fw({ Permit_No: 'PB26-2', Address: '2000 EAGLE PKWY', Current_Status: 'Issued', Latitude: 33, Longitude: -97.31 })
+        ],
+        NOW
+      );
+      expect(projects.map((p) => p.id).sort()).toEqual(['CITY-FortWorth-PB26-1', 'CITY-FortWorth-PB26-2']);
+      expect(projects.every((p) => p.status === 'City permit issued')).toBe(true);
+    });
+
+    it('leaves out a permit whose only rows are placeholder addresses', () => {
+      expect(permitProjects([fw({ Address: '26060016 FOR REVIEW ONLY WAY', Current_Status: 'Plan Review' })], NOW)).toEqual([]);
+    });
+
+    it("words the city's status, issued once any row is", () => {
+      expect(permitStatus([{ status: 'Incomplete Submittal' }, { status: 'Issued' }])).toBe('City permit issued');
+      expect(permitStatus([{ status: 'Awaiting Client Reply' }, { status: 'Plan Review' }])).toBe('Permit plan review');
+      expect(permitStatus([{}])).toBe('City permit issued');
+    });
   });
 });

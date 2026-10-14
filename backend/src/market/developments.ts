@@ -191,6 +191,12 @@ export interface Development {
   contact?: string | null;
   /** The general contractor named on the city permit, where the city publishes it. */
   contractor?: string | null;
+  /** Every address the city lists for this permit, the shown one first (Fort Worth). */
+  addresses?: string[];
+  /** Every lot, block and legal description on the permit. */
+  parcels?: string[];
+  /** The city's own row ids behind the project (Fort Worth CAPIDs). */
+  sourceIds?: string[];
 }
 
 export interface DevelopmentsResult {
