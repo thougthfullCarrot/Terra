@@ -200,14 +200,14 @@ describe('9. profile back button', () => {
 
 // ---- Fixes after the PR #75 review ----
 
-/** Shaped like the real Veramendi mixer page: JSON-LD dates at midnight, times only in the visible text, office hours elsewhere. */
+/** Date/time lines copied verbatim from the live Veramendi mixer page (read Oct 14, 2026); the surrounding markup is not the real HTML. Shaped like the real page: JSON-LD dates at midnight, times only in the visible text, office hours elsewhere. */
 const REAL_MIXER_PAGE = `<html><head>
 <script type="application/ld+json">{"@context":"http://schema.org","@type":"Event","name":"Membership Mixer: Veramendi - The Ledge","startDate":"2026-10-15T00:00:00","endDate":"2026-10-16T00:00:00","location":{"@type":"Place","name":"Veramendi - The Ledge"}}</script>
 </head><body>
 <header><p>Chamber office hours: Monday - Friday 8:00 AM - 5:00 PM</p></header>
 <h1>Membership Mixer: Veramendi - The Ledge</h1>
-<div class="gz-event-date"><span>Thursday Oct 15, 2026</span> <span>5:30 PM - 7:30 PM CDT</span></div>
-<div class="gz-details-date">Date and Time</div><p>Thursday Oct 15, 2026<br />5:30 PM - 7:30 PM CDT</p>
+<div class="gz-event-date">Thursday, October 15, 2026 (5:30 PM - 7:30 PM) (CDT ((GMT-06:00) Central Time))</div>
+<div class="gz-details-date">Date and Time</div><p>Thursday, October 15, 2026 (5:30 PM - 7:30 PM)</p><p>(CDT ((GMT-06:00) Central Time))</p>
 </body></html>`;
 
 describe('review: event times from the real page shape', () => {
@@ -219,7 +219,7 @@ describe('review: event times from the real page shape', () => {
   });
 
   it('never takes office hours for the event time', () => {
-    const noTime = REAL_MIXER_PAGE.replace(/5:30 PM - 7:30 PM CDT/g, '');
+    const noTime = REAL_MIXER_PAGE.replace(/ \(5:30 PM - 7:30 PM\)/g, '');
     const d = parseGrowthZoneDetail(noTime);
     expect(d.dateOnly).toBe(true);
     expect(d.start!.slice(0, 10)).toBe('2026-10-15');
@@ -243,7 +243,7 @@ describe('review: event times from the real page shape', () => {
 
   it('the fallback marks a page with no clock time as date-only', async () => {
     const listing = `<a href="/events/Details/membership-mixer-veramendi-the-ledge-1744886">Membership Mixer</a>`;
-    const page = REAL_MIXER_PAGE.replace(/5:30 PM - 7:30 PM CDT/g, '');
+    const page = REAL_MIXER_PAGE.replace(/ \(5:30 PM - 7:30 PM\)/g, '');
     const [e] = await fetchSource(nb, new Date('2026-10-14T12:00:00Z'), fetcher({ [`${nb.base}/events`]: listing, [MIXER_URL]: page }), () => {});
     expect(e!.dateOnly).toBe(true);
   });
