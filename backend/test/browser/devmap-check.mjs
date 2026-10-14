@@ -69,7 +69,7 @@ const squash = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').
 function expected(city, f) {
   return (byCity.get(city) ?? []).filter((p) => {
     if (f.query) {
-      const hay = squash([p.name, p.facility, p.id, p.address, p.place].filter(Boolean).join(' '));
+      const hay = squash([p.name, p.facility, p.id, p.address, p.place, ...(p.aliases ?? [])].filter(Boolean).join(' '));
       const all = `${hay} ${hay.replace(/ /g, '')}`;
       if (!squash(f.query).split(' ').filter(Boolean).every((w) => all.includes(w))) return false;
     }
@@ -239,6 +239,7 @@ for (const vp of [
     }
     return null;
   });
+  console.log(`  ${v}: clicking the pin at ${spot ? `${Math.round(spot.x)},${Math.round(spot.y)}` : 'none on screen; first in page'}`);
   if (spot) await page.mouse.click(spot.x, spot.y);
   else await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
   await page.waitForSelector('.leaflet-popup .dev-pop-title', { timeout: 5000 }).catch(() => null);
@@ -247,7 +248,7 @@ for (const vp of [
   const popLinks = await page.locator('.leaflet-popup .dev-links a').count();
   log(`${v}: pin click opens the project panel and highlights it in the list`, Boolean(popTitle) && popTitle === active && popLinks === 2, `"${popTitle}"`);
   if (shots) await page.locator('.dev-card').screenshot({ path: join(shots, `${v}-filtered.png`) });
-  await page.locator('.leaflet-popup-close-button').click({ timeout: 5000 }).catch(() => page.keyboard.press('Escape'));
+  await page.locator('.leaflet-popup-close-button').click();
   const target = page.locator('.dev-item:not([hidden]):not(:has(.dev-off)):not(.active)').nth(2);
   const pick = await target.locator('.dev-name').textContent();
   await target.locator('.dev-pick').click();
@@ -291,6 +292,29 @@ for (const vp of [
     await page.locator('.dev-clear').press('Enter');
     await page.waitForTimeout(100);
     log(`${v}: Enter on Clear filters resets`, (await state()).count === all.length);
+  }
+  // The Merc (TABS2025017471, TABS2025017477) and its San Antonio city permits:
+  // each query must list exactly what the generated data says it should.
+  const sa = byCity.get('San Antonio') ?? [];
+  if (sa.length) {
+    await page.goto(`${base}#markets&city=San%20Antonio`);
+    await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
+    if (vp.mobile && !(await page.locator('.dev-filters').evaluate((d) => d.open))) await page.locator('.dev-filters-summary').click();
+    const merc = ['TABS2025017471', 'TABS2025017477'].map((id) => sa.find((p) => p.id === id));
+    for (const p of merc.filter(Boolean)) {
+      console.log(`  Merc in data: ${p.id} "${p.name}" $${p.cost} at ${p.address ?? 'no address'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(site point: ${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
+    }
+    if (merc.some((p) => !p)) console.log(`  Merc not in data: ${['TABS2025017471', 'TABS2025017477'].filter((_, i) => !merc[i]).join(', ')}`);
+    for (const query of ['Merc', 'TABS2025017471', 'TABS2025017477', 'COM-SHL-PMT25-40400053', 'COM-SHL-PMT25-40400055', '5734 Utsa', '5730 Utsa']) {
+      await page.locator('.dev-search input').fill(query);
+      await page.waitForTimeout(250);
+      const listed = await page.$$eval('.dev-list .dev-item:not([hidden]) .dev-name', (ns) => ns.map((n) => n.textContent));
+      const want = expected('San Antonio', { query }).map((p) => p.name);
+      const mustFind = merc.filter((p) => p && expected('San Antonio', { query }).includes(p)).map((p) => p.name);
+      if (mustFind.length) log(`${v}: San Antonio search "${query}" finds ${mustFind.join(' and ')}`, mustFind.every((n) => listed.includes(n)));
+      log(`${v}: San Antonio search "${query}" lists what the data holds`, JSON.stringify([...listed].sort()) === JSON.stringify([...want].sort()), `${listed.length}: ${listed.slice(0, 4).join(' | ')}`);
+    }
+    await page.locator('.dev-search input').fill('');
   }
   log(`${v}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();

@@ -164,7 +164,12 @@ async function main(): Promise<void> {
   // Last so a slow TDLR day cannot hold up the other sources; projects read on
   // an earlier build keep their page and map point.
   const developments = await attempt('TDLR TABS', () =>
-    fetchDevelopments(cities, { now, previous: previous?.developments?.projects, log: (line) => console.log(`TDLR TABS: ${line}`) })
+    fetchDevelopments(cities, {
+      now,
+      previous: previous?.developments?.projects,
+      log: (line) => console.log(`TDLR TABS: ${line}`),
+      trace: (process.env.TABS_TRACE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean)
+    })
   );
   const shortCounties = developments?.coverage?.filter((c) => !c.complete) ?? [];
   if (shortCounties.length) partial('TDLR TABS', `county reads incomplete: ${tabsCoverageLine(shortCounties)}`);

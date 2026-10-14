@@ -183,6 +183,8 @@ jobs:
           BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
           HUD_API_TOKEN: ${{ secrets.HUD_API_TOKEN }}
+          # Projects whose rank, page and pin the log reports (The Merc, Rod's report of 2026-10-14).
+          TABS_TRACE_IDS: TABS2025017471,TABS2025017477
         run: |
           set -o pipefail
           npm run --silent export:market 2>&1 | tee /tmp/market.log

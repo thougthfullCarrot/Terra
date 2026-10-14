@@ -440,6 +440,8 @@ export interface FetchDevelopmentsOptions extends FetchJsonOptions {
   /** Wait between project page reads, to stay a light visitor. */
   pauseMs?: number;
   log?: (line: string) => void;
+  /** TABS ids to report on in the log: rank, cap, page read and final pin. */
+  trace?: string[];
 }
 
 /**
@@ -541,7 +543,9 @@ export async function searchCounty(
       return false;
     }
     // Split by the reported count, so a busy window takes one round, not a halving per level.
-    const pieces = Math.min(days, Math.max(2, Math.ceil((total ?? SEARCH_PAGE * 2) / SPLIT_TARGET)));
+    // Once the map's cutoff is known, halve instead: only the part of a window
+    // above the cutoff needs reading, and halves let the rest drop out early.
+    const pieces = floor([...rows.values()]) > 0 ? 2 : Math.min(days, Math.max(2, Math.ceil((total ?? SEARCH_PAGE * 2) / SPLIT_TARGET)));
     let whole = true;
     for (let i = 0; i < pieces; i++) {
       // Each window ends on the day the next begins, in case TABS reads the end
@@ -666,9 +670,10 @@ export function placeOf(address: string | null): string | null {
 }
 
 export async function fetchDevelopments(cities: readonly City[], options: FetchDevelopmentsOptions = {}): Promise<DevelopmentsResult> {
-  const { now = new Date(), previous = [], pauseMs = 300, log = () => {}, ...http } = options;
+  const { now = new Date(), previous = [], pauseMs = 300, log = () => {}, trace = [], ...http } = options;
   const known = new Map(previous.map((p) => [p.id, p]));
   const projects: Development[] = [];
+  const waited = new Set<string>();
   const coverage: TabsCoverage[] = [];
   const budget = searchBudget(pauseMs);
   let pages = 0;
@@ -696,6 +701,10 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     log(
       `${city} metro: ${all.rows.length} current filings, the biggest ${rows.length} kept (cap ${cap}${all.rows.length > cap && last ? `; smallest kept $${Math.round(last.EstimatedCost).toLocaleString('en-US')}` : ''})${whole ? '' : '; READ INCOMPLETE'}`
     );
+    for (const id of trace) {
+      const at = all.rows.findIndex((r) => r.ProjectNumber === id);
+      if (at >= 0) log(`trace ${id}: ${city} rank ${at + 1} of ${all.rows.length} current filings ($${Math.round(all.rows[at]!.EstimatedCost).toLocaleString('en-US')}); ${at < cap ? `within the cap of ${cap}` : `below the cap of ${cap}`}`);
+    }
     searched.push([city, rows, whole]);
   }
   log(`${budget.used} TABS searches this build`);
@@ -735,6 +744,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       } else {
         if (left <= 0) {
           waiting++;
+          waited.add(row.ProjectNumber);
           continue;
         }
         left--;
@@ -825,5 +835,14 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   const exact = projects.filter((p) => p.lat != null && !p.approximate).length;
   const near = projects.filter((p) => p.approximate).length;
   log(`read ${pages} new project pages; ${exact} placed at their address, ${near} at their ZIP code's center, ${projects.length - exact - near} not on the map`);
+  for (const id of trace) {
+    const p = projects.find((x) => x.id === id);
+    const ranked = searched.some(([, rows]) => rows.some((r) => r.ProjectNumber === id));
+    if (p) {
+      log(`trace ${id}: listed in ${p.city}; ${known.has(id) ? 'page from an earlier build' : 'page read this build'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
+    } else {
+      log(`trace ${id}: not listed (${waited.has(id) ? 'within the cap, page waits for a later build' : ranked ? 'dropped' : 'not among the current filings read'})`);
+    }
+  }
   return { asOf: now.toISOString(), projects, coverage };
 }
