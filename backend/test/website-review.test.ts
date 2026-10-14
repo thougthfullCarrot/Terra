@@ -200,17 +200,10 @@ describe('9. profile back button', () => {
 
 // ---- Fixes after the PR #75 review ----
 
-/** Date/time lines copied verbatim from the live Veramendi mixer page (read Oct 14, 2026); the surrounding markup is not the real HTML. Shaped like the real page: JSON-LD dates at midnight, times only in the visible text, office hours elsewhere. */
-const REAL_MIXER_PAGE = `<html><head>
-<script type="application/ld+json">{"@context":"http://schema.org","@type":"Event","name":"Membership Mixer: Veramendi - The Ledge","startDate":"2026-10-15T00:00:00","endDate":"2026-10-16T00:00:00","location":{"@type":"Place","name":"Veramendi - The Ledge"}}</script>
-</head><body>
-<header><p>Chamber office hours: Monday - Friday 8:00 AM - 5:00 PM</p></header>
-<h1>Membership Mixer: Veramendi - The Ledge</h1>
-<div class="gz-event-date">Thursday, October 15, 2026 (5:30 PM - 7:30 PM) (CDT ((GMT-06:00) Central Time))</div>
-<div class="gz-details-date">Date and Time</div><p>Thursday, October 15, 2026 (5:30 PM - 7:30 PM)</p><p>(CDT ((GMT-06:00) Central Time))</p>
-</body></html>`;
+/** The real Veramendi mixer page as downloaded Oct 14, 2026 (Rod's upload): JSON-LD dates only ("2026-10-15"), times in the visible text. */
+const REAL_MIXER_PAGE = readFileSync(new URL('./fixtures/veramendi-mixer.html', import.meta.url), 'utf8');
 
-describe('review: event times from the real page shape', () => {
+describe('review: event times from the real downloaded page', () => {
   it('reads 5:30-7:30 PM from the visible text when JSON-LD says midnight', () => {
     const d = parseGrowthZoneDetail(REAL_MIXER_PAGE);
     expect(d.start).toBe('2026-10-15T17:30:00-05:00');
@@ -218,10 +211,13 @@ describe('review: event times from the real page shape', () => {
     expect(d.dateOnly).toBe(false);
   });
 
-  it('never takes office hours for the event time', () => {
+  it('with the times removed from the real page, the event stays date-only', () => {
     const noTime = REAL_MIXER_PAGE.replace(/ \(5:30 PM - 7:30 PM\)/g, '');
     const d = parseGrowthZoneDetail(noTime);
     expect(d.dateOnly).toBe(true);
+    // Office hours added to the page header are not taken for the event's time.
+    const withHours = noTime.replace(/<body([^>]*)>/i, '<body$1><p>Office hours: Monday - Friday 8:00 AM - 5:00 PM</p>');
+    expect(parseGrowthZoneDetail(withHours).dateOnly).toBe(true);
     expect(d.start!.slice(0, 10)).toBe('2026-10-15');
   });
 
