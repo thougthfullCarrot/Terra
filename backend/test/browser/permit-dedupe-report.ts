@@ -72,6 +72,17 @@ for (const [name, fetch] of [
   check(`${name}: every permit shown before is still shown`, lost.length === 0, lost.slice(0, 10).join(', '));
   const folded = [...new Set(before.map((p) => p.id))].filter((id) => !afterIds.has(id));
   console.log(`Ids now shown inside another permit's site project: ${folded.length}${folded.length ? ` (${folded.join(', ')})` : ''}`);
+  // Evidence for each permit shown inside another permit's project: its rows next to the retained project's lead permit.
+  const row = (r: CityPermit) => `${r.permit} ${money(r.value)} [${r.status ?? ''}] filed ${r.issued} ${r.address ?? 'placeholder'} | ${r.name ?? ''} | ${(r.scope ?? '').slice(0, 160)}`;
+  for (const id of folded) {
+    const n = id.replace(/^CITY-\w+?-/, '');
+    const home = after.find((p) => p.permits?.includes(n));
+    const lead = home?.id.replace(/^CITY-\w+?-/, '') ?? '';
+    console.log(`  FOLDED ${n} -> ${home?.id} (${money(home?.cost ?? 0)})`);
+    for (const r of permits.get(n) ?? []) console.log(`    this:     ${row(r)}`);
+    for (const r of (permits.get(lead) ?? []).slice(0, 3)) console.log(`    retained: ${row(r)}`);
+  }
+  for (const n of ['PB26-01203']) for (const r of permits.get(n) ?? []) console.log(`  ROW ${row(r)} | parcel ${r.parcel ?? ''} | id ${r.sourceId ?? ''}`);
   if (name === 'Fort Worth') {
     // Each permit number is in exactly one project, and a project's rows are only its own permits'.
     const permitsOf = (p: Development) => p.permits ?? [p.id.replace(/^CITY-\w+?-/, '')];
