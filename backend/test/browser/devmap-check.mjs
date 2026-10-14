@@ -282,10 +282,14 @@ for (const vp of [
   }
   // A project with no pin ("Not on the map") opens its details from the list, by mouse and keyboard.
   // Run in a metro that is known from the data to have one, so the case never silently skips.
+  // A fresh tab, so switching metros never tears down a map that is still mid-animation from the steps above.
   if (offCity) {
-    await page.goto(`${base}#markets&city=${encodeURIComponent(offCity)}`);
-    await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
-    const offItem = page.locator('.dev-item:not([hidden]):has(.dev-off)').first();
+    const offPage = await ctx.newPage();
+    offPage.on('pageerror', (e) => errors.push(e.message));
+    await offPage.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+    await offPage.goto(`${base}#markets&city=${encodeURIComponent(offCity)}`);
+    await offPage.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
+    const offItem = offPage.locator('.dev-item:not([hidden]):has(.dev-off)').first();
     await offItem.scrollIntoViewIfNeeded();
     const offName = await offItem.locator('.dev-name').textContent();
     await offItem.locator('.dev-pick').click();
