@@ -262,6 +262,18 @@ describe('Austin, Fort Worth and Arlington permits', () => {
       ]);
     });
 
+    it('lists a same-value permit at the same street number in the project it repeats, not as a second project', () => {
+      const projects = permitProjects(
+        [
+          fw({ Permit_No: 'PB25-16077', Address: '245 GOLDMANE LN', Current_Status: 'Issued', CAPID: 1, Latitude: 32.5, Longitude: -97.4 }),
+          fw({ Permit_No: 'PB25-16070', Address: '245 GOLDMANE DR', Current_Status: 'Issued', CAPID: 2 })
+        ],
+        NOW
+      );
+      expect(projects).toHaveLength(1);
+      expect(projects[0]).toMatchObject({ cost: 500000000, permits: ['PB25-16077', 'PB25-16070'], sourceIds: ['1', '2'], facility: '2 building permits' });
+    });
+
     it('leaves out a permit whose only rows are placeholder addresses', () => {
       expect(permitProjects([fw({ Address: '26060016 FOR REVIEW ONLY WAY', Current_Status: 'Plan Review' })], NOW)).toEqual([]);
     });

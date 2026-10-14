@@ -320,13 +320,27 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
   // One project filed under a few addresses on the same tract (13210 Palo Alto
   // Rd and 13210 State Hwy 16) repeats its value: keep the first, preferring one with a point.
   projects.sort((a, b) => b.cost - a.cost || Number(b.lat != null) - Number(a.lat != null));
-  const seen = new Set<string>();
+  // A permit-grouped project dropped here folds its permits and references
+  // into the one kept, so the permit is still listed but its value is not repeated.
+  const seen = new Map<string, Development>();
+  const permitOf = (p: Development) => p.permits ?? [p.id.replace(/^CITY-\w+?-/, '')];
   return projects
     .filter((p) => {
       const key = `${p.cost}|${/^\d+/.exec(p.address ?? '')?.[0] ?? p.id}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+      const kept = seen.get(key);
+      if (!kept) {
+        seen.set(key, p);
+        return true;
+      }
+      if (kept.sourceIds && p.sourceIds) {
+        const join = (a?: string[], b?: string[]) => [...new Set([...(a ?? []), ...(b ?? [])])];
+        kept.permits = join(permitOf(kept), permitOf(p));
+        kept.facility = `${kept.permits.length} building permits`;
+        kept.addresses = join(kept.addresses, p.addresses);
+        kept.parcels = join(kept.parcels, p.parcels);
+        kept.sourceIds = join(kept.sourceIds, p.sourceIds);
+      }
+      return false;
     })
     .slice(0, max);
 }
