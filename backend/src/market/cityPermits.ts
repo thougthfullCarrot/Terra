@@ -219,35 +219,6 @@ export function permitStatus(group: Pick<CityPermit, 'status'>[]): string {
   return `Permit ${best.toLowerCase()}`;
 }
 
-/**
- * Permit-grouped rows (Fort Worth) joined by the site each permit is shown at,
- * as every source groups its permits: one site's building permits are one
- * project, often each carrying the whole project's value. Each permit joins
- * exactly one site, its leading row's, so no permit is shown twice. Groups
- * from sources without permit grouping pass through as they are.
- */
-function bySite(groups: Map<string, CityPermit[]>): CityPermit[][] {
-  const out: CityPermit[][] = [];
-  const sites = new Map<string, CityPermit[]>();
-  for (const group of groups.values()) {
-    const real = group.filter((p) => !p.placeholder);
-    if (group[0]?.site == null || !real.length) {
-      out.push(group);
-      continue;
-    }
-    const lead = real.reduce((best, p) => (p.value > best.value || (p.value === best.value && leadRank(p) > leadRank(best)) ? p : best));
-    const key = lead.site || lead.permit;
-    const site = sites.get(key);
-    if (site) site.push(...group);
-    else {
-      const rows = [...group];
-      sites.set(key, rows);
-      out.push(rows);
-    }
-  }
-  return out;
-}
-
 /** Every address, parcel and source row behind a permit-grouped project, the shown address first. */
 function references(rows: CityPermit[], lead: CityPermit): Pick<Development, 'addresses' | 'parcels' | 'sourceIds'> {
   const unique = (values: (string | null | undefined)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))];
@@ -267,7 +238,9 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
     groups.set(p.group, [...(groups.get(p.group) ?? []), p]);
   }
   const projects: Development[] = [];
-  for (const group of bySite(groups)) {
+  // Fort Worth groups are one permit number each and are never joined with
+  // another permit: separate permits are separate buildings or phases.
+  for (const group of groups.values()) {
     // A permit whose only rows are placeholder addresses is not on a site yet.
     if (group.every((p) => p.placeholder)) continue;
     // Each building's permit often repeats the whole project's value, so the
@@ -292,7 +265,9 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
       name,
       facility: buildings > 1 ? `${buildings} building permits` : null,
       ...(rows && buildings > 1 ? { permits: [...new Set(group.map((p) => p.permit))] } : {}),
-      status: permitStatus(group),
+      // The status of the rows the shown value comes from (PB26-01203: the
+      // $50M bridge is in plan review; only a $1.1M foundation row is issued).
+      status: permitStatus(group.filter((p) => p.value === lead.value)),
       work: lead.work,
       cost,
       registered: issued[0]!,
@@ -320,27 +295,15 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
   // One project filed under a few addresses on the same tract (13210 Palo Alto
   // Rd and 13210 State Hwy 16) repeats its value: keep the first, preferring one with a point.
   projects.sort((a, b) => b.cost - a.cost || Number(b.lat != null) - Number(a.lat != null));
-  // A permit-grouped project dropped here folds its permits and references
-  // into the one kept, so the permit is still listed but its value is not repeated.
-  const seen = new Map<string, Development>();
-  const permitOf = (p: Development) => p.permits ?? [p.id.replace(/^CITY-\w+?-/, '')];
+  // Permit-grouped projects are one permit each, so they are never dropped here.
+  const seen = new Set<string>();
   return projects
     .filter((p) => {
+      if (p.sourceIds) return true;
       const key = `${p.cost}|${/^\d+/.exec(p.address ?? '')?.[0] ?? p.id}`;
-      const kept = seen.get(key);
-      if (!kept) {
-        seen.set(key, p);
-        return true;
-      }
-      if (kept.sourceIds && p.sourceIds) {
-        const join = (a?: string[], b?: string[]) => [...new Set([...(a ?? []), ...(b ?? [])])];
-        kept.permits = join(permitOf(kept), permitOf(p));
-        kept.facility = `${kept.permits.length} building permits`;
-        kept.addresses = join(kept.addresses, p.addresses);
-        kept.parcels = join(kept.parcels, p.parcels);
-        kept.sourceIds = join(kept.sourceIds, p.sourceIds);
-      }
-      return false;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     })
     .slice(0, max);
 }

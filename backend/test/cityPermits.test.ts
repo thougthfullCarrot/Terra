@@ -235,7 +235,7 @@ describe('Austin, Fort Worth and Arlington permits', () => {
       });
     });
 
-    it('joins two permits shown at one site as one project, as every source does, listing both', () => {
+    it('keeps two permits at one site as two projects, never combining permit numbers', () => {
       const projects = permitProjects(
         [
           fw({ Permit_No: 'PB26-1', Address: '2000 EAGLE PKWY', Current_Status: 'Issued', Latitude: 33, Longitude: -97.31 }),
@@ -243,8 +243,7 @@ describe('Austin, Fort Worth and Arlington permits', () => {
         ],
         NOW
       );
-      expect(projects).toHaveLength(1);
-      expect(projects[0]).toMatchObject({ cost: 500000000, facility: '2 building permits', permits: ['PB26-1', 'PB26-2'], status: 'City permit issued' });
+      expect(projects.map((p) => p.id).sort()).toEqual(['CITY-FortWorth-PB26-1', 'CITY-FortWorth-PB26-2']);
     });
 
     it('shows a permit listed at two sites once, at the site its leading row names', () => {
@@ -262,16 +261,16 @@ describe('Austin, Fort Worth and Arlington permits', () => {
       ]);
     });
 
-    it('lists a same-value permit at the same street number in the project it repeats, not as a second project', () => {
-      const projects = permitProjects(
+    it('shows the status of the rows its value comes from (PB26-01203: $50M bridge in review, $1.1M foundation issued)', () => {
+      const [project] = permitProjects(
         [
-          fw({ Permit_No: 'PB25-16077', Address: '245 GOLDMANE LN', Current_Status: 'Issued', CAPID: 1, Latitude: 32.5, Longitude: -97.4 }),
-          fw({ Permit_No: 'PB25-16070', Address: '245 GOLDMANE DR', Current_Status: 'Issued', CAPID: 2 })
+          fw({ Permit_No: 'PB26-01203', Address: '14700 BLUE MOUND RD', Current_Status: 'Plan Review', JobValue: 50000000, Latitude: 33, Longitude: -97.3 }),
+          fw({ Permit_No: 'PB26-01203', Address: '14636 BLUE MOUND RD', Current_Status: 'Issued', JobValue: 1100000 })
         ],
         NOW
       );
-      expect(projects).toHaveLength(1);
-      expect(projects[0]).toMatchObject({ cost: 500000000, permits: ['PB25-16077', 'PB25-16070'], sourceIds: ['1', '2'], facility: '2 building permits' });
+      expect(project).toMatchObject({ cost: 50000000, status: 'Permit plan review' });
+      expect(project!.addresses).toHaveLength(2);
     });
 
     it('leaves out a permit whose only rows are placeholder addresses', () => {
