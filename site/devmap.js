@@ -405,6 +405,8 @@ function popup(project) {
   if (project.place && !project.address) box.append(el('span', 'dev-pop-line muted', project.place));
   if (project.address) box.append(el('span', 'dev-pop-line muted', project.address));
   if (project.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
+  else if (project.locatedFrom) box.append(el('span', 'dev-pop-line muted', `Pin is the site's location from ${project.locatedFrom.replace(/^City/, 'a city')}, not the building's own point.`));
+  if (project.aliases?.length) box.append(el('span', 'dev-pop-line muted', `Also filed as ${project.aliases.slice(0, 4).join(', ')}`));
   const facts = [money(project.cost), project.work, project.squareFeet ? `${project.squareFeet.toLocaleString('en-US')} sq ft` : ''].filter(Boolean);
   box.append(el('span', 'dev-pop-line', facts.join(' · ')));
   const status = project.status === 'Unknown status' && project.statusCode != null ? `Unknown status (TABS code ${project.statusCode})` : project.status;

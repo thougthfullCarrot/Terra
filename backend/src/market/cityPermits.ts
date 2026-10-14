@@ -1,6 +1,6 @@
 import { fetchJson, type FetchJsonOptions } from '../lib/http.js';
 import type { City } from '../types.js';
-import { developerLink } from './developers.js';
+import { developerLink, isAddressName } from './developers.js';
 import type { Development } from './developments.js';
 
 /**
@@ -198,9 +198,13 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
     const issued = group.map((p) => p.issued).sort();
     const buildings = new Set(group.map((p) => p.permit)).size;
     const squareFeet = Math.round(group.reduce((sum, p) => sum + p.squareFeet, 0));
-    const name = group.map((p) => p.name).find(Boolean) ?? lead.address?.split(',')[0] ?? 'Building permit';
+    const named = group.map((p) => p.name).find(Boolean) ?? null;
+    const name = named ?? lead.address?.split(',')[0] ?? 'Building permit';
     const owner = group.map((p) => p.owner).find(Boolean) ?? null;
+    // A name made from the street ("5734 Utsa Blvd") names no public owner.
+    const said = named && !isAddressName(named) ? named : '';
     const link = developerLink(owner, name, lead.market);
+    const permitNumbers = [...new Set(group.map((p) => p.permit))].filter((n) => n !== lead.permit);
     projects.push({
       id: `CITY-${lead.place.replace(/\W+/g, '')}-${lead.permit}`,
       city: lead.market,
@@ -221,14 +225,15 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
       contractor: group.map((p) => p.contractor).find(Boolean) ?? null,
       scope: lead.scope,
       squareFeet: squareFeet > 0 ? squareFeet : null,
-      isPublic: group.some((p) => PUBLIC.test(p.text)) || PUBLIC.test(name) || PUBLIC.test(owner ?? ''),
+      isPublic: group.some((p) => PUBLIC.test(p.text)) || PUBLIC.test(said) || PUBLIC.test(owner ?? ''),
       lat: at?.lat ?? null,
       lng: at?.lng ?? null,
       approximate: false,
       developerUrl: link.url,
       developerDirect: link.direct,
       url: lead.url,
-      source: 'city'
+      source: 'city',
+      aliases: [lead.permit, ...permitNumbers]
     });
   }
   // One project filed under a few addresses on the same tract (13210 Palo Alto
@@ -544,16 +549,78 @@ export async function fetchArlington(now: Date, options: FetchJsonOptions = {}):
   return features.map((f) => arlingtonPermit(f.attributes, f.geometry)).filter((p): p is CityPermit => p !== null);
 }
 
+// --- Site locations from related permits. ---
+
+/** A point another permit at the same street address carries, and what that permit was called. */
+export interface SitePoint {
+  lat: number;
+  lng: number;
+  permit: string;
+  names: string[];
+}
+
+/**
+ * San Antonio shell permits often carry no point, while a retaining-wall or
+ * finish-out permit at the same address does (and sometimes the project's
+ * name: "Merc Retail Development"). Those permit types are not projects on
+ * the map, but their point is the site's. Reads every permit at the wanted
+ * street numbers, a few numbers a query, and keeps the ones on the same street.
+ */
+export async function locateSanAntonio(sites: Map<string, string>, now: Date, options: FetchJsonOptions = {}): Promise<Map<string, SitePoint>> {
+  const out = new Map<string, SitePoint>();
+  const numbers = [...new Set([...sites.keys()].map((k) => /^\d+/.exec(k)?.[0]).filter((n): n is string => !!n))];
+  for (let i = 0; i < numbers.length; i += 25) {
+    const like = numbers
+      .slice(i, i + 25)
+      .map((n) => `"ADDRESS" LIKE '${n} %'`)
+      .join(' OR ');
+    const sql = `SELECT "PERMIT #","PERMIT TYPE","PROJECT NAME","ADDRESS","X_COORD","Y_COORD","DATE ISSUED" FROM "${COSA_PERMITS_RESOURCE}" WHERE "DATE ISSUED" >= '${permitCutoff(now)}' AND (${like}) ORDER BY "DATE ISSUED" DESC LIMIT 1000`;
+    const data = await fetchJson<CkanResponse>(`${COSA_CKAN}/datastore_search_sql?sql=${encodeURIComponent(sql)}`, {
+      timeoutMs: 120_000,
+      ...options,
+      headers: { ...BROWSERISH, ...options.headers }
+    });
+    if (data.success === false) throw new Error('the permit search was refused');
+    for (const row of data.result?.records ?? []) {
+      const key = siteKey(row.ADDRESS);
+      if (!sites.has(key)) continue;
+      const name = projectName(row['PROJECT NAME']);
+      const found = out.get(key);
+      const at = permitPoint(row);
+      if (found) {
+        if (name && !isAddressName(name) && !found.names.includes(name)) found.names.push(name);
+        continue;
+      }
+      if (!at) continue;
+      out.set(key, { lat: at[0], lng: at[1], permit: row['PERMIT #'] ?? '', names: name && !isAddressName(name) ? [name] : [] });
+    }
+  }
+  return out;
+}
+
+/** Add names to a project's aliases, each once, never its own name. */
+export function addAliases(project: Development, names: (string | null | undefined)[]): void {
+  const have = new Set([project.name, ...(project.aliases ?? [])].filter(Boolean).map((n) => n.toLowerCase()));
+  for (const name of names) {
+    const n = name?.trim();
+    if (!n || have.has(n.toLowerCase())) continue;
+    have.add(n.toLowerCase());
+    (project.aliases ??= []).push(n);
+  }
+}
+
 // --- All sources. ---
 
 export interface PermitSource {
   name: string;
   market: City;
   fetch: (now: Date, options: FetchJsonOptions) => Promise<CityPermit[]>;
+  /** Points other permits give for street addresses (siteKey → address), for projects without their own. */
+  locate?: (sites: Map<string, string>, now: Date, options: FetchJsonOptions) => Promise<Map<string, SitePoint>>;
 }
 
 export const PERMIT_SOURCES: PermitSource[] = [
-  { name: 'San Antonio', market: 'San Antonio', fetch: fetchSanAntonio },
+  { name: 'San Antonio', market: 'San Antonio', fetch: fetchSanAntonio, locate: locateSanAntonio },
   { name: 'Austin', market: 'Austin', fetch: fetchAustin },
   { name: 'Fort Worth', market: 'Fort Worth', fetch: fetchFortWorth },
   { name: 'Arlington', market: 'Fort Worth', fetch: fetchArlington }
@@ -561,28 +628,69 @@ export const PERMIT_SOURCES: PermitSource[] = [
 
 /**
  * Each covered market's city-permit projects that the TABS list does not
- * already have (matched by street address). A source that fails is logged
- * and skipped; the map keeps its TABS projects.
+ * already have (matched by street address). A TABS project that matches
+ * keeps the city's permit numbers and names as aliases, so a search finds it
+ * either way. Projects with no point, or only a ZIP-center one, take the
+ * point another permit at the same address carries, when the source has one
+ * and it lies inside the metro. A source that fails is logged and skipped;
+ * the map keeps its TABS projects.
  */
 export async function fetchCityPermitProjects(
   cities: readonly City[],
   now: Date,
   tabs: Development[],
-  options: FetchJsonOptions & { log?: (line: string) => void; sources?: PermitSource[] } = {}
+  options: FetchJsonOptions & {
+    log?: (line: string) => void;
+    sources?: PermitSource[];
+    /** Whether a point is inside the market's metro; anything else is a wrong match. */
+    inMetro?: (city: City, at: [number, number]) => boolean;
+  } = {}
 ): Promise<Development[]> {
-  const { log = () => {}, sources = PERMIT_SOURCES, ...http } = options;
+  const { log = () => {}, sources = PERMIT_SOURCES, inMetro = () => true, ...http } = options;
   const out: Development[] = [];
   for (const source of sources) {
     if (!cities.includes(source.market)) continue;
+    let projects: Development[] = [];
+    const here = tabs.filter((p) => p.city === source.market);
     try {
-      const known = new Set([...tabs, ...out].filter((p) => p.city === source.market).map((p) => siteKey(p.address)));
-      const projects = permitProjects(await source.fetch(now, http), now, CITY_MAX + known.size)
-        .filter((p) => !known.has(siteKey(p.address)))
-        .slice(0, CITY_MAX);
+      const bySite = new Map(here.filter((p) => (p.source ?? 'tabs') === 'tabs').map((p) => [siteKey(p.address), p]));
+      const known = new Set([...here, ...out.filter((p) => p.city === source.market)].map((p) => siteKey(p.address)));
+      const all = permitProjects(await source.fetch(now, http), now, CITY_MAX + known.size);
+      for (const city of all) {
+        const filing = bySite.get(siteKey(city.address));
+        if (!filing) continue;
+        addAliases(filing, [...(city.aliases ?? []), isAddressName(city.name) ? null : city.name]);
+        if ((filing.lat == null || filing.approximate) && city.lat != null && city.lng != null && !city.approximate && inMetro(filing.city, [city.lat, city.lng])) {
+          [filing.lat, filing.lng] = [city.lat, city.lng];
+          filing.approximate = false;
+          filing.locatedFrom = `City permit ${city.aliases?.[0] ?? city.id} at this address`;
+        }
+      }
+      projects = all.filter((p) => !known.has(siteKey(p.address))).slice(0, CITY_MAX);
       out.push(...projects);
       log(`${source.name} city permits: ${projects.length} more projects`);
     } catch (error) {
       log(`${source.name} city permits: not read (${error instanceof Error ? error.message : String(error)})`);
+    }
+    if (!source.locate) continue;
+    const need = [...here, ...projects].filter((p) => (p.lat == null || p.approximate) && /^\d/.test(siteKey(p.address)));
+    if (!need.length) continue;
+    try {
+      const points = await source.locate(new Map(need.map((p) => [siteKey(p.address), p.address ?? ''])), now, http);
+      let placed = 0;
+      for (const p of need) {
+        const point = points.get(siteKey(p.address));
+        if (!point) continue;
+        addAliases(p, point.names);
+        if (!inMetro(p.city, [point.lat, point.lng])) continue;
+        [p.lat, p.lng] = [point.lat, point.lng];
+        p.approximate = false;
+        p.locatedFrom = `City permit ${point.permit} at this address`;
+        placed++;
+      }
+      log(`${source.name} site points: ${placed} of ${need.length} unplaced projects placed from other permits at their address`);
+    } catch (error) {
+      log(`${source.name} site points: not read (${error instanceof Error ? error.message : String(error)})`);
     }
   }
   return out;

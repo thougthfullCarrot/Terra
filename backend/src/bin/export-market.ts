@@ -30,7 +30,7 @@ import { fetchApartmentList } from '../market/apartmentList.js';
 import type { AppraisalFile } from '../market/appraisal.js';
 import { fetchBls } from '../market/bls.js';
 import { fetchBids } from '../market/bids.js';
-import { fetchDevelopments } from '../market/developments.js';
+import { fetchDevelopments, tabsCoverageLine } from '../market/developments.js';
 import { coverageLine, fetchRegistrations } from '../market/registrations.js';
 import { fetchRates } from '../market/fred.js';
 import { fetchOpportunityZones } from '../market/opportunityZones.js';
@@ -166,6 +166,8 @@ async function main(): Promise<void> {
   const developments = await attempt('TDLR TABS', () =>
     fetchDevelopments(cities, { now, previous: previous?.developments?.projects, log: (line) => console.log(`TDLR TABS: ${line}`) })
   );
+  const shortCounties = developments?.coverage?.filter((c) => !c.complete) ?? [];
+  if (shortCounties.length) partial('TDLR TABS', `county reads incomplete: ${tabsCoverageLine(shortCounties)}`);
 
   // Every recent filing, uncapped, for watchlist alerts; each county's read is checked against TABS's own count.
   const registrations = await attempt('TDLR TABS new registrations', () => fetchRegistrations(cities, { now }));

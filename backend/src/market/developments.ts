@@ -191,11 +191,21 @@ export interface Development {
   contact?: string | null;
   /** The general contractor named on the city permit, where the city publishes it. */
   contractor?: string | null;
+  /**
+   * Other names and numbers the same site is filed under (city permit numbers,
+   * a related permit's project name like "Merc Retail Development"), so a
+   * search finds it either way.
+   */
+  aliases?: string[];
+  /** When the pin came from another city permit at the same address: the site, not the building's own point. */
+  locatedFrom?: string;
 }
 
 export interface DevelopmentsResult {
   asOf: string;
   projects: Development[];
+  /** How each county's TABS read went; a map built from an incomplete read says so. */
+  coverage?: TabsCoverage[];
 }
 
 /**
@@ -220,14 +230,14 @@ export const METRO_CAP: Partial<Record<City, number>> = {
 };
 export const DEFAULT_CAP = 150;
 export const capFor = (city: City) => METRO_CAP[city] ?? DEFAULT_CAP;
-/** Rows read per county search, biggest first: enough to fill the cap after filtering. */
-const SEARCH_LENGTH = 1000;
 /**
  * New project pages read per build. A page and a geocode take about a second,
  * so 400 is about seven minutes and a first build fills the maps over a few days; later builds read only new
  * filings.
  */
 export const MAX_NEW_PAGES = 400;
+/** Earlier projects whose pin missed or sits at a ZIP center get one more geocode try, up to this many a build. */
+export const GEOCODE_RETRIES = 60;
 /** Filings above this are typos (a $20 billion school), not projects. */
 const MAX_COST = 5e9;
 
@@ -432,16 +442,122 @@ export interface FetchDevelopmentsOptions extends FetchJsonOptions {
   log?: (line: string) => void;
 }
 
-/** Search one county, last two years, biggest first. */
-export async function searchCounty(county: string, now: Date, options: FetchJsonOptions = {}): Promise<TabsRow[]> {
-  const since = new Date(now.getTime() - LOOKBACK_DAYS * 86_400_000);
-  const data = await fetchJson<{ data?: TabsRow[] }>(TABS_SEARCH_URL, {
-    timeoutMs: 120_000,
-    ...options,
-    form: searchForm(county, since, now, SEARCH_LENGTH),
-    headers: { 'x-requested-with': 'XMLHttpRequest', referer: `${TABS}/Search/` }
-  });
-  return data.data ?? [];
+/**
+ * TABS serves at most 100 rows a search, ignores the page offset (a second
+ * page repeats the first), and reports the true match count in
+ * recordsFiltered. Bexar County's two years came back as 100 of 3,006, the
+ * biggest 100, so every smaller project (The Merc at 5734/5730 UTSA Blvd) was
+ * missing. So a county is read in registration-date windows small enough to
+ * come back whole: a window reporting more rows than it returned is split
+ * into smaller ones until each is complete, never paged.
+ */
+export const SEARCH_PAGE = 100;
+/** Searches per build across every county, so a strange day can't turn into thousands of requests. */
+export const MAX_SEARCH_REQUESTS = 800;
+/** Aim each split window at this many rows, so most windows come back whole the first time. */
+const SPLIT_TARGET = 80;
+const DAY_MS = 86_400_000;
+
+/** The searches left this build, shared by every county, and the pause between them. */
+export interface SearchBudget {
+  left: number;
+  used: number;
+  pauseMs: number;
+}
+export const searchBudget = (pauseMs = 300, left = MAX_SEARCH_REQUESTS): SearchBudget => ({ left, used: 0, pauseMs });
+
+/** How one county's read went: complete only when every window came back whole. */
+export interface TabsCoverage {
+  county: string;
+  city: City;
+  /** TABS's own count of matches for the whole period, when it gave one. */
+  reported: number | null;
+  read: number;
+  searches: number;
+  complete: boolean;
+  /** Windows that stayed short (a single day above 100 rows, or the budget ran out). */
+  short?: string[];
+  /** Windows not split further because every row they still held cost less than the map's smallest kept project. */
+  skipped?: number;
+  error?: string;
+}
+
+interface SearchPage {
+  data?: TabsRow[];
+  recordsFiltered?: number;
+}
+
+/** Search one county, last two years, splitting date windows until each is complete. */
+export async function searchCounty(
+  county: string,
+  now: Date,
+  options: FetchJsonOptions & {
+    budget?: SearchBudget;
+    /**
+     * The smallest cost the map can still keep. Rows come biggest first, so
+     * every row a short window held back costs no more than its last row; when
+     * that is below the floor, none of them could make the map and the window
+     * is not split.
+     */
+    floor?: (soFar: TabsRow[]) => number;
+  } = {}
+): Promise<{ rows: TabsRow[]; reported: number | null; searches: number; complete: boolean; short: string[]; skipped: number }> {
+  const { budget = searchBudget(0), floor = () => 0, ...http } = options;
+  const rows = new Map<string, TabsRow>();
+  const short: string[] = [];
+  let searches = 0;
+  let skipped = 0;
+  let reported: number | null = null;
+
+  const read = async (since: Date, until: Date, top: boolean): Promise<boolean> => {
+    if (budget.left <= 0) {
+      short.push(`${usDate(since)}–${usDate(until)} (search budget used up)`);
+      return false;
+    }
+    budget.left--;
+    if (budget.used++ && budget.pauseMs) await pause(budget.pauseMs);
+    searches++;
+    const page = await fetchJson<SearchPage>(TABS_SEARCH_URL, {
+      timeoutMs: 120_000,
+      ...http,
+      form: searchForm(county, since, until, SEARCH_PAGE),
+      headers: { 'x-requested-with': 'XMLHttpRequest', referer: `${TABS}/Search/` }
+    });
+    if (!Array.isArray(page.data)) throw new Error('TABS answered without a result list');
+    const data = page.data;
+    const total = typeof page.recordsFiltered === 'number' ? page.recordsFiltered : null;
+    if (top) reported = total;
+    for (const row of data) rows.set(row.ProjectNumber, row);
+    // Whole when every match came back; with no count, a page short of the limit is whole.
+    if (total != null ? data.length >= total : data.length < SEARCH_PAGE) return true;
+    const smallest = Math.min(...data.map((r) => r.EstimatedCost));
+    if (data.length && smallest < floor([...rows.values()])) {
+      skipped++;
+      return true;
+    }
+    const days = Math.round((until.getTime() - since.getTime()) / DAY_MS);
+    if (days <= 1) {
+      short.push(`${usDate(since)} (${data.length} of ${total ?? `${SEARCH_PAGE}+`})`);
+      return false;
+    }
+    // Split by the reported count, so a busy window takes one round, not a halving per level.
+    const pieces = Math.min(days, Math.max(2, Math.ceil((total ?? SEARCH_PAGE * 2) / SPLIT_TARGET)));
+    let whole = true;
+    for (let i = 0; i < pieces; i++) {
+      // Each window ends on the day the next begins, in case TABS reads the end
+      // date as midnight; rows in both are kept once.
+      const from = new Date(since.getTime() + Math.round((i * days) / pieces) * DAY_MS);
+      const to = i === pieces - 1 ? until : new Date(since.getTime() + Math.round(((i + 1) * days) / pieces) * DAY_MS);
+      whole = (await read(from, to, false)) && whole;
+    }
+    return whole;
+  };
+
+  const since = new Date(now.getTime() - LOOKBACK_DAYS * DAY_MS);
+  let complete = await read(since, now, true);
+  // A count above what was read means a gap somewhere, whatever the windows said.
+  if (!skipped && reported != null && rows.size < reported) complete = false;
+  return { rows: [...rows.values()], reported, searches, complete, short, skipped };
 }
 
 /**
@@ -460,15 +576,59 @@ export async function searchProject(number: string, options: FetchJsonOptions = 
   return data.data.find((r) => r.ProjectNumber === number) ?? null;
 }
 
-/** A metro's biggest current projects across its counties, each project once. */
-export async function searchMetro(city: City, now: Date, options: FetchJsonOptions = {}): Promise<TabsRow[]> {
+/** A metro's current projects across its counties, each project once, biggest first, uncapped. */
+export async function searchMetroAll(
+  city: City,
+  now: Date,
+  options: FetchJsonOptions & { budget?: SearchBudget; cap?: number } = {}
+): Promise<{ rows: TabsRow[]; coverage: TabsCoverage[] }> {
+  const { cap = capFor(city), ...rest } = options;
   const seen = new Map<string, TabsRow>();
+  const coverage: TabsCoverage[] = [];
+  // The cap-th biggest current filing seen so far: a lower bound on the true
+  // cutoff, so a window skipped below it can only hold projects the map drops anyway.
+  const floor = (soFar: TabsRow[]) => {
+    const all = new Map(seen);
+    for (const row of currentDevelopments(soFar, now)) all.set(row.ProjectNumber, row);
+    if (all.size < cap) return 0;
+    return [...all.values()].map((r) => r.EstimatedCost).sort((a, b) => b - a)[cap - 1]!;
+  };
   for (const county of METRO_COUNTIES[city] ?? []) {
-    for (const row of currentDevelopments(await searchCounty(county, now, options), now)) {
-      if (!seen.has(row.ProjectNumber)) seen.set(row.ProjectNumber, row);
+    try {
+      const read = await searchCounty(county, now, { ...rest, floor });
+      coverage.push({
+        county,
+        city,
+        reported: read.reported,
+        read: read.rows.length,
+        searches: read.searches,
+        complete: read.complete,
+        ...(read.short.length ? { short: read.short } : {}),
+        ...(read.skipped ? { skipped: read.skipped } : {})
+      });
+      for (const row of currentDevelopments(read.rows, now)) if (!seen.has(row.ProjectNumber)) seen.set(row.ProjectNumber, row);
+    } catch (error) {
+      coverage.push({ county, city, reported: null, read: 0, searches: 0, complete: false, error: error instanceof Error ? error.message : String(error) });
     }
   }
-  return [...seen.values()].sort((a, b) => b.EstimatedCost - a.EstimatedCost).slice(0, capFor(city));
+  return { rows: [...seen.values()].sort((a, b) => b.EstimatedCost - a.EstimatedCost), coverage };
+}
+
+/** A metro's biggest current projects across its counties, each project once. */
+export async function searchMetro(city: City, now: Date, options: FetchJsonOptions & { budget?: SearchBudget } = {}): Promise<TabsRow[]> {
+  return (await searchMetroAll(city, now, options)).rows.slice(0, capFor(city));
+}
+
+/** One line per county for the build log: "Bexar 3,006 of 3,006 in 41 searches". */
+export function tabsCoverageLine(coverage: TabsCoverage[]): string {
+  const n = (v: number) => v.toLocaleString('en-US');
+  return coverage
+    .map((c) =>
+      c.error
+        ? `${c.county} not read (${c.error})`
+        : `${c.county} ${n(c.read)} of ${c.reported == null ? '?' : n(c.reported)} in ${c.searches} search${c.searches === 1 ? '' : 'es'}${c.skipped ? ` (${c.skipped} window${c.skipped === 1 ? '' : 's'} below the map's cutoff left unsplit)` : ''}${c.complete ? '' : ` INCOMPLETE${c.short?.length ? `: ${c.short.slice(0, 5).join(', ')}${c.short.length > 5 ? ` and ${c.short.length - 5} more` : ''}` : ''}`}`
+    )
+    .join('; ');
 }
 
 /**
@@ -509,7 +669,10 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   const { now = new Date(), previous = [], pauseMs = 300, log = () => {}, ...http } = options;
   const known = new Map(previous.map((p) => [p.id, p]));
   const projects: Development[] = [];
+  const coverage: TabsCoverage[] = [];
+  const budget = searchBudget(pauseMs);
   let pages = 0;
+  let retries = GEOCODE_RETRIES;
 
   // City names for each row's city id; the address tail is the fallback.
   const places = await fetchText(`${TABS}/Search`, { timeoutMs: 60_000, ...http })
@@ -517,20 +680,32 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     .catch(() => new Map<number, string>());
 
   // Search every metro first, so the page budget can be shared fairly.
-  const searched: [City, TabsRow[]][] = [];
+  const searched: [City, TabsRow[], boolean][] = [];
   for (const city of cities) {
     if (!METRO_COUNTIES[city]) {
       log(`${city}: no TABS counties yet; skipped.`);
       continue;
     }
-    searched.push([city, await searchMetro(city, now, http)]);
+    const all = await searchMetroAll(city, now, { ...http, budget });
+    const cap = capFor(city);
+    const rows = all.rows.slice(0, cap);
+    const whole = all.coverage.every((c) => c.complete);
+    coverage.push(...all.coverage);
+    log(`${city} counties: ${tabsCoverageLine(all.coverage)}`);
+    const last = rows[rows.length - 1];
+    log(
+      `${city} metro: ${all.rows.length} current filings, the biggest ${rows.length} kept (cap ${cap}${all.rows.length > cap && last ? `; smallest kept $${Math.round(last.EstimatedCost).toLocaleString('en-US')}` : ''})${whole ? '' : '; READ INCOMPLETE'}`
+    );
+    searched.push([city, rows, whole]);
   }
+  log(`${budget.used} TABS searches this build`);
   const allowance = shareBudget(
     new Map(searched.map(([city, rows]) => [city, rows.filter((r) => !known.has(r.ProjectNumber)).length])),
     MAX_NEW_PAGES
   );
 
-  for (const [city, rows] of searched) {
+  const finished = new Date(now.getTime() - FINISHED_DAYS * DAY_MS).toISOString().slice(0, 10);
+  for (const [city, rows, whole] of searched) {
     let left = allowance.get(city) ?? 0;
     let waiting = 0;
     for (const row of rows) {
@@ -539,8 +714,24 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       let lat = old?.lat ?? null;
       let lng = old?.lng ?? null;
       let approximate = old?.approximate ?? false;
+      let locatedFrom = old?.locatedFrom;
       if (old) {
         details = old;
+        // A pin that missed or sits at the ZIP center gets another try: the
+        // geocoder learns new streets, and a ZIP center should not stick forever.
+        const address = (lat == null || approximate) && !locatedFrom ? geocodable(details.address) : null;
+        if (address && retries > 0) {
+          retries--;
+          const at = await geocode(address, city, http).catch(() => null);
+          if (at) {
+            [lat, lng] = at;
+            approximate = false;
+          } else if (approximate) {
+            // Placed again at its ZIP center below, with this build's spread.
+            lat = lng = null;
+            approximate = false;
+          }
+        }
       } else {
         if (left <= 0) {
           waiting++;
@@ -579,16 +770,38 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
         lat,
         lng,
         approximate,
+        ...(locatedFrom ? { locatedFrom } : {}),
         developerUrl: link.url,
         developerDirect: link.direct,
         url: tabsPermalink(row.ProjectNumber)
       });
     }
-    log(`${city} metro: ${rows.length - waiting} projects${waiting ? `; ${waiting} more wait for a later build` : ''}`);
+    // A short read must not quietly shrink the map: earlier projects this read
+    // could not see stay, until their end date passes, while the cap has room.
+    let kept = 0;
+    if (!whole) {
+      const have = new Set(projects.map((p) => p.id));
+      const room = capFor(city) - rows.length + waiting;
+      const earlier = previous
+        .filter((p) => p.city === city && (p.source ?? 'tabs') === 'tabs' && !have.has(p.id) && !(p.end && p.end < finished))
+        .sort((x, y) => y.cost - x.cost)
+        .slice(0, Math.max(0, room));
+      projects.push(...earlier.map((p) => ({ ...p })));
+      kept = earlier.length;
+    }
+    log(
+      `${city} metro: ${rows.length - waiting} projects${waiting ? `; ${waiting} more wait for a later build` : ''}${kept ? `; ${kept} kept from the last build because the read was incomplete` : ''}`
+    );
   }
 
   // Cities that publish their building permits catch what TABS misses.
-  projects.push(...(await fetchCityPermitProjects(cities, now, projects, { ...http, log })));
+  projects.push(
+    ...(await fetchCityPermitProjects(cities, now, projects, {
+      ...http,
+      log,
+      inMetro: (city, at) => distanceKm(at, CITY_CENTERS[city]) <= METRO_RADIUS_KM[city]
+    }))
+  );
 
   // Whatever the geocoder could not place goes at its ZIP code's center.
   const missing = projects.filter((p) => p.lat == null && zipOf(p.address));
@@ -612,5 +825,5 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   const exact = projects.filter((p) => p.lat != null && !p.approximate).length;
   const near = projects.filter((p) => p.approximate).length;
   log(`read ${pages} new project pages; ${exact} placed at their address, ${near} at their ZIP code's center, ${projects.length - exact - near} not on the map`);
-  return { asOf: now.toISOString(), projects };
+  return { asOf: now.toISOString(), projects, coverage };
 }

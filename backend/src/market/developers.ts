@@ -92,13 +92,21 @@ export interface DeveloperLink {
 }
 
 /**
+ * A name that is only a street address ("5734 Utsa Blvd"): it says where, not
+ * who, so a street named for a university is not evidence the university builds there.
+ */
+export const isAddressName = (name: string | null | undefined) =>
+  /^\d+[A-Z]?\s+\S/i.test((name ?? '').trim()) && !/\s-\s/.test(name ?? '');
+
+/**
  * The developer's website: the listed site when the owner or project name
  * matches, else DuckDuckGo's "first result" search for the owner, which lands
  * on the owner's own site for most named firms.
  */
 export function developerLink(owner: string | null, project: string, city: string): DeveloperLink {
   for (const text of [owner, project]) {
-    if (!text) continue;
+    // "5734 Utsa Blvd" says where, not who: UTSA is not building on every UTSA Blvd lot.
+    if (!text || (text === project && isAddressName(text))) continue;
     const found = DEVELOPERS.find((d) => d.match.test(text));
     if (found) return { url: found.url, direct: true, name: found.name };
   }
