@@ -85,7 +85,35 @@ export interface Development {
   isPublic: boolean;
   lat: number | null;
   lng: number | null;
+  place?: string | null;
+  facility?: string | null;
+  address?: string | null;
+  addresses?: string[];
+  work?: string;
+  status?: string;
+  registered?: string;
 }
+export interface DevFilters {
+  query: string;
+  place: string;
+  work: string;
+  publicInvolvement: string;
+  cost: string;
+  status: string;
+  filed: string;
+}
+export const COST_BANDS: { key: string; label: string; min: number; max: number }[];
+export const FILED_WINDOWS: { key: string; label: string; days: number }[];
+export const PUBLIC_INVOLVEMENT: { key: string; label: string }[];
+export const EMPTY_DEV_FILTERS: Readonly<DevFilters>;
+export function projectSearchText(project: Partial<Development>): string;
+export function activeFilterCount(filters: Partial<DevFilters> | null | undefined): number;
+export function filterProjects<T extends Partial<Development>>(projects: T[] | null | undefined, filters?: Partial<DevFilters>, asOf?: string): T[];
+export function filterChoices(projects: Partial<Development>[] | null | undefined): {
+  places: { value: string; count: number }[];
+  works: { value: string; count: number }[];
+  statuses: { value: string; count: number }[];
+};
 export function cityProjects<T extends Pick<Development, 'city' | 'cost' | 'isPublic'>>(
   projects: T[] | null | undefined,
   city: string,

@@ -127,6 +127,9 @@ export const STATUS: Record<number, string> = {
   3009: 'Plans reviewed',
   3010: 'Plan review pending'
 };
+/** A TABS status code as words; a code not in STATUS says so rather than passing for a known stage. */
+export const statusLabel = (code: number) => STATUS[code] ?? 'Unknown status';
+
 /** Finished or closed: no longer a current development. */
 export const DONE = new Set([3001, 3007]);
 
@@ -157,6 +160,8 @@ export interface Development {
   name: string;
   facility: string | null;
   status: string;
+  /** The raw TABS status code behind `status`, kept for diagnosing an "Unknown status". Absent on city permits. */
+  statusCode?: number;
   work: string;
   cost: number;
   /** YYYY-MM-DD the project registered. */
@@ -186,6 +191,14 @@ export interface Development {
   contact?: string | null;
   /** The general contractor named on the city permit, where the city publishes it. */
   contractor?: string | null;
+  /** Every address the city lists for this permit, the shown one first (Fort Worth). */
+  addresses?: string[];
+  /** Every lot, block and legal description on the permit. */
+  parcels?: string[];
+  /** The permit numbers behind a project of several building permits at one site (Fort Worth). */
+  permits?: string[];
+  /** The city's own row ids behind the project (Fort Worth CAPIDs). */
+  sourceIds?: string[];
 }
 
 export interface DevelopmentsResult {
@@ -557,7 +570,8 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
         place: places.get(row.City) ?? placeOf(details.address),
         name: row.ProjectName.trim(),
         facility: row.FacilityName && row.FacilityName.trim() !== row.ProjectName.trim() ? row.FacilityName.trim() : null,
-        status: STATUS[row.ProjectStatus] ?? 'Registered',
+        status: statusLabel(row.ProjectStatus),
+        statusCode: row.ProjectStatus,
         work: WORK[row.TypeOfWork] ?? 'New construction',
         cost: Math.round(row.EstimatedCost),
         registered: isoDate(row.ProjectCreatedOn) ?? '',
