@@ -78,9 +78,14 @@ export function loadLeaflet() {
 
 /** Remove the map on screen, before the section redraws or signs out. */
 export function disposeMap() {
-  // Stop a pan or zoom still running, or its last frame reads panes remove() just deleted.
-  liveMap?.stop();
-  liveMap?.remove();
+  // Stop a pan or zoom still running. Leaflet 1.9 ends a zoom animation with
+  // an untracked 250 ms timer that reads the map's panes; once remove() has
+  // deleted them that timer throws, unless the map no longer counts as zooming.
+  if (liveMap) {
+    liveMap.stop();
+    liveMap._animatingZoom = false;
+    liveMap.remove();
+  }
   liveMap = null;
 }
 
