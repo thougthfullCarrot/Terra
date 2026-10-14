@@ -78,6 +78,8 @@ export function loadLeaflet() {
 
 /** Remove the map on screen, before the section redraws or signs out. */
 export function disposeMap() {
+  // Stop a pan or zoom still running, or its last frame reads panes remove() just deleted.
+  liveMap?.stop();
   liveMap?.remove();
   liveMap = null;
 }
@@ -339,6 +341,9 @@ async function drawMap(node, list, projects, city) {
   let viewed = false;
   return {
     show(ids) {
+      // A debounced search or filter from a card that has since been replaced
+      // (the city changed) must not move the removed map.
+      if (map !== liveMap) return;
       const key = projects.map((p) => (ids.has(p) ? 1 : 0)).join('');
       if (key === last) return;
       last = key;

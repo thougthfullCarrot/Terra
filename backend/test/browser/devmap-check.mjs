@@ -114,7 +114,10 @@ for (const vp of [
   const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.mobile, hasTouch: !!vp.mobile, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => {
+    errors.push(e.message);
+    console.log(`  ${vp.name} page error: ${e.stack ?? e.message}`);
+  });
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const city = biggest;
   await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
