@@ -339,3 +339,49 @@ describe('map helpers on the site', async () => {
     expect(projectDates(null, null)).toBe('');
   });
 });
+
+describe('development map filters on the site', async () => {
+  const { activeFilterCount, filterChoices, filterProjects } = await import('../../site/market.js');
+  const asOf = '2026-10-14T06:00:00Z';
+  const projects = [
+    { id: 'TABS2025026208', city: 'San Antonio', place: 'San Antonio', name: 'Roadrunner Way Housing', facility: null, address: '1 UTSA Cir, San Antonio, TX 78249', cost: 80e6, isPublic: true, work: 'New construction', status: 'Plan review', registered: '2025-02-01', lat: 1, lng: 1 },
+    { id: 'TABS2026011111', city: 'San Antonio', place: 'Boerne', name: 'Hill Country Retail', facility: 'Shops at Boerne', address: '400 Main St, Boerne, TX', cost: 4e6, isPublic: false, work: 'Addition', status: 'Registered', registered: '2026-09-30', lat: 2, lng: 2 },
+    { id: 'CITY-SanAntonio-12', city: 'San Antonio', place: 'San Antonio', name: 'Pearl Office Tower', facility: null, address: null, cost: 150e6, isPublic: false, work: 'New construction', status: 'City permit issued', registered: '2026-08-01', lat: null, lng: null },
+    { id: 'TABS2026022222', city: 'San Antonio', place: null, name: 'Mystery Warehouse', facility: null, address: null, cost: 0, isPublic: false, work: 'New construction', status: 'Registered', registered: '', lat: 3, lng: 3 }
+  ];
+  const ids = (f: Record<string, string>) => filterProjects(projects, f, asOf).map((p) => p.id);
+
+  it('searches names, facilities, project numbers and addresses', () => {
+    expect(ids({ query: 'roadrunner' })).toEqual(['TABS2025026208']);
+    expect(ids({ query: 'tabs2025-026208' })).toEqual(['TABS2025026208']);
+    expect(ids({ query: '78249' })).toEqual(['TABS2025026208']);
+    expect(ids({ query: 'shops boerne' })).toEqual(['TABS2026011111']);
+    expect(ids({ query: '   ' })).toHaveLength(4);
+  });
+
+  it('filters by town, work, ownership, cost, status and filing date', () => {
+    expect(ids({ place: 'Boerne' })).toEqual(['TABS2026011111']);
+    expect(ids({ work: 'Addition' })).toEqual(['TABS2026011111']);
+    expect(ids({ ownership: 'public' })).toEqual(['TABS2025026208']);
+    expect(ids({ ownership: 'private' })).toHaveLength(3);
+    expect(ids({ cost: 'under5' })).toEqual(['TABS2026011111']); // a $0 cost is unknown, not under $5M
+    expect(ids({ cost: '25to100' })).toEqual(['TABS2025026208']);
+    expect(ids({ cost: 'over100' })).toEqual(['CITY-SanAntonio-12']);
+    expect(ids({ status: 'Registered' })).toEqual(['TABS2026011111', 'TABS2026022222']);
+    expect(ids({ filed: '30' })).toEqual(['TABS2026011111']); // no date never matches a date filter
+    expect(ids({ filed: '90' })).toEqual(['TABS2026011111', 'CITY-SanAntonio-12']);
+  });
+
+  it('combines filters and counts the ones set', () => {
+    expect(ids({ place: 'San Antonio', ownership: 'private', filed: '365' })).toEqual(['CITY-SanAntonio-12']);
+    expect(ids({ work: 'Addition', cost: 'over100' })).toEqual([]);
+    expect(activeFilterCount({ query: ' ', place: 'Boerne', cost: 'over100' })).toBe(2);
+  });
+
+  it('offers only the values the data carries', () => {
+    const choices = filterChoices(projects);
+    expect(choices.places).toEqual([{ value: 'San Antonio', count: 2 }, { value: 'Boerne', count: 1 }]);
+    expect(choices.works.map((w) => w.value)).toEqual(['New construction', 'Addition']);
+    expect(choices.statuses[0]).toEqual({ value: 'Registered', count: 2 });
+  });
+});

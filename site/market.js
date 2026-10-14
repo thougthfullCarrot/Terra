@@ -306,6 +306,96 @@ export function cityProjects(projects, city, { privateOnly = false } = {}) {
     .sort((a, b) => b.cost - a.cost);
 }
 
+/**
+ * Development map filters. Each one reads a field the build fills from the
+ * source itself (backend/src/market/developments.ts, cityPermits.ts), so a
+ * filter never stands in for data that isn't there: a project with no cost,
+ * town or filing date simply doesn't match a filter on that field.
+ */
+export const COST_BANDS = [
+  { key: 'under5', label: 'Under $5M', min: 0, max: 5e6 },
+  { key: '5to25', label: '$5M – $25M', min: 5e6, max: 25e6 },
+  { key: '25to100', label: '$25M – $100M', min: 25e6, max: 100e6 },
+  { key: 'over100', label: '$100M and up', min: 100e6, max: Infinity }
+];
+
+/** Filing windows, in days back from the data's own date. */
+export const FILED_WINDOWS = [
+  { key: '30', label: 'Last 30 days', days: 30 },
+  { key: '90', label: 'Last 90 days', days: 90 },
+  { key: '180', label: 'Last 6 months', days: 182 },
+  { key: '365', label: 'Last 12 months', days: 365 }
+];
+
+export const OWNERSHIP = [
+  { key: 'private', label: 'Private' },
+  { key: 'public', label: 'Public (schools, cities, universities)' }
+];
+
+export const EMPTY_DEV_FILTERS = Object.freeze({ query: '', place: '', work: '', ownership: '', cost: '', status: '', filed: '' });
+
+/** Lowercase, accents and punctuation folded, so "TABS2025-026208" finds "TABS2025026208". */
+const fold = (text) =>
+  String(text ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** The text a search reads: name, facility, project or permit number, address and town. */
+export function projectSearchText(p) {
+  const text = fold([p.name, p.facility, p.id, p.address, p.place].filter(Boolean).join(' '));
+  // Also the words run together, so a project number typed with or without dashes matches.
+  return `${text} ${text.replace(/ /g, '')}`;
+}
+
+const searchText = new WeakMap();
+
+function matchesQuery(p, words) {
+  if (!words.length) return true;
+  let text = searchText.get(p);
+  if (text == null) searchText.set(p, (text = projectSearchText(p)));
+  return words.every((w) => text.includes(w));
+}
+
+/** How many filters are set (the search counts as one). */
+export function activeFilterCount(filters) {
+  return Object.keys(EMPTY_DEV_FILTERS).filter((k) => String(filters?.[k] ?? '').trim()).length;
+}
+
+/**
+ * The projects that pass every filter that is set. `asOf` is the data's date,
+ * so "last 30 days" means the 30 days before the filings were read.
+ */
+export function filterProjects(projects, filters = EMPTY_DEV_FILTERS, asOf = new Date().toISOString()) {
+  const f = { ...EMPTY_DEV_FILTERS, ...filters };
+  const words = fold(f.query).split(' ').filter(Boolean);
+  const band = COST_BANDS.find((b) => b.key === f.cost);
+  const window = FILED_WINDOWS.find((w) => w.key === f.filed);
+  const since = window ? new Date(new Date(asOf).getTime() - window.days * 86_400_000).toISOString().slice(0, 10) : null;
+  return (projects ?? []).filter(
+    (p) =>
+      matchesQuery(p, words) &&
+      (!f.place || p.place === f.place) &&
+      (!f.work || p.work === f.work) &&
+      (!f.ownership || (f.ownership === 'public') === Boolean(p.isPublic)) &&
+      (!band || (p.cost > 0 && p.cost >= band.min && p.cost < band.max)) &&
+      (!f.status || p.status === f.status) &&
+      (!since || (/^\d{4}-\d{2}-\d{2}/.test(p.registered ?? '') && p.registered.slice(0, 10) >= since))
+  );
+}
+
+/** The values a metro's projects actually carry, most common first, for the filter menus. */
+export function filterChoices(projects) {
+  const count = (key) => {
+    const tally = new Map();
+    for (const p of projects ?? []) if (p[key]) tally.set(p[key], (tally.get(p[key]) ?? 0) + 1);
+    return [...tally].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]))).map(([value, n]) => ({ value, count: n }));
+  };
+  return { places: count('place'), works: count('work'), statuses: count('status') };
+}
+
 /** A map pin's radius in pixels: area grows with cost, from 6 for the smallest to 20 for the biggest. */
 export function markerRadius(cost, maxCost) {
   if (!(cost > 0) || !(maxCost > 0)) return 6;
