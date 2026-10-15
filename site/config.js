@@ -16,5 +16,7 @@ export const CONFIG = {
   paymentLink: '',
   billingPortalLink: '',
   // Shown next to the subscribe button, e.g. "$9/month". Set in Stripe; this is only the label.
-  priceLabel: ''
+  priceLabel: '',
+  // Development reports (migration 0019): the map's "Report a development" form. Off until it is applied.
+  developmentReports: false
 };

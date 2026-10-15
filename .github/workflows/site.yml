@@ -184,7 +184,7 @@ jobs:
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
           HUD_API_TOKEN: ${{ secrets.HUD_API_TOKEN }}
           # Projects whose rank, page and pin the log reports (The Merc, Rod's report of 2026-10-14).
-          TABS_TRACE_IDS: TABS2025017471,TABS2025017477
+          TABS_TRACE_IDS: TABS2025017471,TABS2025017477,TABS2026006871
         run: |
           set -o pipefail
           npm run --silent export:market 2>&1 | tee /tmp/market.log
@@ -420,6 +420,7 @@ jobs:
           STRIPE_BILLING_PORTAL_LINK: ${{ vars.STRIPE_BILLING_PORTAL_LINK }}
           PRICE_LABEL: ${{ vars.PRICE_LABEL }}
           WATCHLISTS_ENABLED: ${{ vars.WATCHLISTS_ENABLED }}
+          DEVELOPMENT_REPORTS_ENABLED: ${{ vars.DEVELOPMENT_REPORTS_ENABLED }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
             echo "Accounts not configured; publishing the open site."
@@ -434,7 +435,8 @@ jobs:
               paymentLink: process.env.STRIPE_PAYMENT_LINK || "",
               billingPortalLink: process.env.STRIPE_BILLING_PORTAL_LINK || "",
               priceLabel: process.env.PRICE_LABEL || "",
-              watchlists: process.env.WATCHLISTS_ENABLED === "true"
+              watchlists: process.env.WATCHLISTS_ENABLED === "true",
+              developmentReports: process.env.DEVELOPMENT_REPORTS_ENABLED === "true"
             };
             require("fs").writeFileSync("../site/config.js",
               "// Written by site.yml from the repository variables.\nexport const CONFIG = " + JSON.stringify(config, null, 2) + ";\n");

@@ -214,6 +214,59 @@ export interface DevelopmentsResult {
   projects: Development[];
   /** How each county's TABS read went; a map built from an incomplete read says so. */
   coverage?: TabsCoverage[];
+  /** Per metro: what the map shows against what TABS holds, for the coverage note. */
+  metros?: MetroCoverage[];
+  /** Current filings below each metro's cap that this build saw, listed without pins (no page read). */
+  smaller?: SmallerFiling[];
+}
+
+export interface MetroCoverage {
+  city: City;
+  /** Current TABS filings the build read for the metro. */
+  filings: number;
+  /** The most the map pins for the metro (capFor). */
+  cap: number;
+  /** The smallest kept filing's cost when the cap cut anything, else null. */
+  cutoff: number | null;
+  /** False when a county read came back short, so even the counts above are low. */
+  complete: boolean;
+}
+
+/** A filing too small for the map's pins: what the search row says, nothing more. */
+export interface SmallerFiling {
+  id: string;
+  city: City;
+  place: string | null;
+  name: string;
+  status: string;
+  work: string;
+  cost: number;
+  registered: string;
+  end: string | null;
+  url: string;
+}
+
+/**
+ * Smaller filings listed per metro. Below the cutoff TABS windows are not
+ * split further, so this list is what the search happened to return, not every
+ * small filing; the coverage note says so.
+ */
+export const MAX_SMALLER = 600;
+
+/** The below-cap rows as list entries, biggest first. */
+export function smallerFilings(city: City, rows: TabsRow[], places: Map<number, string> = new Map(), max = MAX_SMALLER): SmallerFiling[] {
+  return rows.slice(capFor(city), capFor(city) + max).map((r) => ({
+    id: r.ProjectNumber,
+    city,
+    place: places.get(r.City) ?? null,
+    name: r.ProjectName.trim(),
+    status: statusLabel(r.ProjectStatus),
+    work: WORK[r.TypeOfWork] ?? 'New construction',
+    cost: Math.round(r.EstimatedCost),
+    registered: isoDate(r.ProjectCreatedOn) ?? '',
+    end: isoDate(r.EstimatedEndDate),
+    url: tabsPermalink(r.ProjectNumber)
+  }));
 }
 
 /**
@@ -694,6 +747,8 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
 
   // Search every metro first, so the page budget can be shared fairly.
   const searched: [City, TabsRow[], boolean][] = [];
+  const metros: MetroCoverage[] = [];
+  const smaller: SmallerFiling[] = [];
   for (const city of cities) {
     if (!METRO_COUNTIES[city]) {
       log(`${city}: no TABS counties yet; skipped.`);
@@ -706,6 +761,8 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     coverage.push(...all.coverage);
     log(`${city} counties: ${tabsCoverageLine(all.coverage)}`);
     const last = rows[rows.length - 1];
+    metros.push({ city, filings: all.rows.length, cap, cutoff: all.rows.length > cap && last ? Math.round(last.EstimatedCost) : null, complete: whole });
+    smaller.push(...smallerFilings(city, all.rows, places));
     log(
       `${city} metro: ${all.rows.length} current filings, the biggest ${rows.length} kept (cap ${cap}${all.rows.length > cap && last ? `; smallest kept $${Math.round(last.EstimatedCost).toLocaleString('en-US')}` : ''})${whole ? '' : '; READ INCOMPLETE'}`
     );
@@ -855,5 +912,9 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       log(`trace ${id}: not listed (${waited.has(id) ? 'within the cap, page waits for a later build' : ranked ? 'dropped' : 'not among the current filings read'})`);
     }
   }
-  return { asOf: now.toISOString(), projects, coverage };
+  for (const id of trace) {
+    const s = smaller.find((x) => x.id === id);
+    if (s) log(`trace ${id}: in the ${s.city} smaller-filings list ($${s.cost.toLocaleString('en-US')}), no pin`);
+  }
+  return { asOf: now.toISOString(), projects, coverage, metros, smaller };
 }

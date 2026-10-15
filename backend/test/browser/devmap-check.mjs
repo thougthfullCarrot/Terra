@@ -349,6 +349,21 @@ for (const vp of [
       log(`${v}: San Antonio search "${query}" lists what the data holds`, JSON.stringify([...listed].sort()) === JSON.stringify([...want].sort()), `${listed.length}: ${listed.slice(0, 4).join(' | ')}`);
     }
     await page.locator('.dev-search input').fill('');
+    // Coverage note and smaller filings (PDL Club, TABS2026006871, $1.2M, is below San Antonio's cutoff).
+    const metro = data.metros?.find((m) => m.city === 'San Antonio');
+    const note = await page.locator('.dev-coverage').textContent();
+    log(`${v}: San Antonio coverage note says the map is not complete`, /not a complete list/.test(note ?? ''), note?.slice(0, 160));
+    if (metro?.cutoff != null) log(`${v}: coverage note gives the cap of ${metro.cap}`, (note ?? '').includes(`pins the ${metro.cap} biggest`));
+    const small = (data.smaller ?? []).filter((s) => s.city === 'San Antonio');
+    console.log(`  San Antonio metro: ${metro ? `${metro.filings} filings, cap ${metro.cap}, cutoff ${metro.cutoff}` : 'no coverage row'}; ${small.length} smaller filings`);
+    const pdl = small.find((s) => s.id === 'TABS2026006871') ?? sa.find((p) => p.id === 'TABS2026006871');
+    console.log(`  PDL Club TABS2026006871: ${pdl ? `${small.includes(pdl) ? 'smaller filings list' : 'pinned map'} $${pdl.cost}` : 'not in this build'}`);
+    if (small.length) {
+      await page.locator('.dev-smaller summary').click();
+      await page.locator('.dev-smaller-search').fill(small[0].id);
+      const found = await page.$$eval('.dev-smaller-list .dev-name', (ns) => ns.map((n) => n.textContent));
+      log(`${v}: smaller filings search finds ${small[0].id}`, found.includes(small[0].name), found.slice(0, 3).join(' | '));
+    }
   }
   log(`${v}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();
