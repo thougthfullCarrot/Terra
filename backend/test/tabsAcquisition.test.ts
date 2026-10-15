@@ -368,3 +368,27 @@ describe('city permits at the Merc', () => {
     expect(p.aliases).toEqual(['X']);
   });
 });
+
+describe('the development page queue', () => {
+  it('reports how many capped projects still wait for their page, and none once they are read', async () => {
+    const bexar = filler(900);
+    const harris = filler(900, 2101, 'TABSH');
+    const first = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, fetchImpl: fakeTabs({ '2015': bexar, '2101': harris }, { forms: [] }) });
+    const placed = first.projects.length;
+    expect(first.waiting).toBeGreaterThan(0);
+    expect(placed + first.waiting!).toBe(300 + 400);
+    // The next build starts from that snapshot and reads the rest.
+    const second = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, previous: first.projects, fetchImpl: fakeTabs({ '2015': bexar, '2101': harris }, { forms: [] }) });
+    expect(second.waiting).toBe(0);
+    expect(second.projects).toHaveLength(700);
+  });
+
+  it('keeps the queue moving between builds the same day: a one-off cache key while pages wait', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const yml = await readFile(new URL('../../.github/workflows/site.yml', import.meta.url), 'utf8');
+    const save = yml.slice(yml.indexOf('- name: Cache market data for the day'), yml.indexOf('- name: Restore the last headlines'));
+    expect(save).toMatch(/steps\.market\.outputs\.pages_waiting != '0' && format\('-queue-\{0\}', github\.run_id\)/);
+    const restore = yml.slice(yml.indexOf('- name: Restore market data'), yml.indexOf('- name: Export market data'));
+    expect(restore).toContain('restore-keys: market-');
+  });
+});

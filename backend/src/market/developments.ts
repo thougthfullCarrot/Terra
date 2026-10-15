@@ -214,6 +214,8 @@ export interface DevelopmentsResult {
   projects: Development[];
   /** How each county's TABS read went; a map built from an incomplete read says so. */
   coverage?: TabsCoverage[];
+  /** Projects inside a map's cap whose page waits for a later build (MAX_NEW_PAGES ran out). */
+  waiting?: number;
   /** Per metro: what the map shows against what TABS holds, for the coverage note. */
   metros?: MetroCoverage[];
   /** Current filings below each metro's cap that this build saw, listed without pins (no page read). */
@@ -930,5 +932,5 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     const s = smaller.find((x) => x.id === id);
     if (s) log(`trace ${id}: in the ${s.city} smaller-filings list ($${s.cost.toLocaleString('en-US')}), no pin`);
   }
-  return { asOf: now.toISOString(), projects, coverage, metros, smaller };
+  return { asOf: now.toISOString(), projects, coverage, metros, smaller, waiting: waited.size };
 }

@@ -20,7 +20,7 @@ import {
 } from '../../site/property.js';
 import { analyzeDeal } from '../../site/deal.js';
 import { candidates, dealType, readOverride, readPrice, readPricePerSqft, readSize, texasPlace, weekOf, ASSUMED_CAP_RATES } from '../src/property/dealOfWeek.js';
-import { isCompany, readDelinquent, readSale, statusLabel, taxDueField } from '../src/property/distress.js';
+import { fetchTaxSales, isCompany, readDelinquent, readSale, statusLabel, taxDueField } from '../src/property/distress.js';
 import { joinTracts, latestLodesYear, parseAcsTracts, parseGazetteer, parseLodes } from '../src/property/driveTime.js';
 import { buildOutCandidates, companyName, edgarDocUrl, leaseSentences, readBuildOut } from '../src/property/leaseRadar.js';
 import { parseProjectPage, type TabsRow } from '../src/market/developments.js';
@@ -359,5 +359,32 @@ describe('statewide record cleanup', () => {
     const p = readStatewide({ SITUS_ADDR: '500 W TEXAS AV,, TX 000000', OWNER_NAME: 'TALL CITY TOWERS LLC', NAME_CARE: 'TALL CITY TOWERS LLC', COUNTY: 'MIDLAND' });
     expect(p.address).toBe('500 W TEXAS AV');
     expect(p.owner).toBe('TALL CITY TOWERS LLC');
+  });
+});
+
+describe('tax sale outage', () => {
+  it('stops asking once the site refuses three counties in a row', async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof fetch;
+    const lines: string[] = [];
+    const { sales } = await fetchTaxSales(undefined, { fetchImpl, retries: 0, baseDelayMs: 0, log: (l) => lines.push(l) });
+    expect(sales).toEqual([]);
+    expect(calls).toBe(3);
+    expect(lines.filter((l) => l.includes('skipped')).length).toBeGreaterThan(0);
+  });
+
+  it('keeps going when a failure is followed by a county that answers', async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      if (calls % 2) throw new TypeError('fetch failed');
+      return new Response(JSON.stringify({ count: 0, results: [], next: null }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    const lines: string[] = [];
+    await fetchTaxSales(undefined, { fetchImpl, retries: 0, baseDelayMs: 0, log: (l) => lines.push(l) });
+    expect(lines.some((l) => l.includes('skipped'))).toBe(false);
   });
 });

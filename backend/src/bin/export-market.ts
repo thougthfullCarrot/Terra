@@ -18,7 +18,7 @@
  *
  * In GitHub Actions it writes complete=true|false to the step outputs: true
  * when every source answered, which is when site.yml caches the file for the
- * day.
+ * day; and pages_waiting, the development pages left for a later build.
  */
 import type { LihtcCount } from '../market/lihtc.js';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -265,7 +265,12 @@ async function main(): Promise<void> {
   const complete = Boolean(
     bls?.size && acs?.current.size && zillow?.homeValue.size && zillow.rent.size && apartmentList?.rent.size && permits?.current.size
   );
-  if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `complete=${complete}\n`);
+  if (process.env.GITHUB_OUTPUT) {
+    // Development pages still queued: site.yml then saves the file under a
+    // one-off key, so the next build the same day reads it and keeps going
+    // instead of reusing the day's cache and leaving the queue where it is.
+    await appendFile(process.env.GITHUB_OUTPUT, `complete=${complete}\npages_waiting=${developments?.waiting ?? 0}\n`);
+  }
 
   if (filledCount(snapshot) === 0) {
     console.error('No source answered and there is no earlier copy; not writing a blank market file.');
