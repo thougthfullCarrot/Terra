@@ -194,7 +194,11 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: site/market.json
-          key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json', 'salaries.json') }}-${{ steps.today.outputs.date }}
+          # While development pages are still queued the key is one-off, so the
+          # next build misses the day's key, restores this newest file through
+          # restore-keys and reads the next pages; once none wait, the day's key
+          # is saved and later builds reuse it as before.
+          key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json', 'salaries.json') }}-${{ steps.today.outputs.date }}${{ steps.market.outputs.pages_waiting != '0' && format('-queue-{0}', github.run_id) || '' }}
 
       # Headlines change through the day, so they are fetched every run; a
       # city whose feed fails keeps the headlines the last deploy published.

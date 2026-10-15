@@ -214,6 +214,8 @@ export interface DevelopmentsResult {
   projects: Development[];
   /** How each county's TABS read went; a map built from an incomplete read says so. */
   coverage?: TabsCoverage[];
+  /** Projects inside a map's cap whose page waits for a later build (MAX_NEW_PAGES ran out). */
+  waiting?: number;
 }
 
 /**
@@ -855,5 +857,5 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       log(`trace ${id}: not listed (${waited.has(id) ? 'within the cap, page waits for a later build' : ranked ? 'dropped' : 'not among the current filings read'})`);
     }
   }
-  return { asOf: now.toISOString(), projects, coverage };
+  return { asOf: now.toISOString(), projects, coverage, waiting: waited.size };
 }
