@@ -357,13 +357,30 @@ for (const vp of [
     const small = (data.smaller ?? []).filter((s) => s.city === 'San Antonio');
     console.log(`  San Antonio metro: ${metro ? `${metro.filings} filings, cap ${metro.cap}, cutoff ${metro.cutoff}` : 'no coverage row'}; ${small.length} smaller filings`);
     const pdl = small.find((s) => s.id === 'TABS2026006871') ?? sa.find((p) => p.id === 'TABS2026006871');
-    console.log(`  PDL Club TABS2026006871: ${pdl ? `${small.includes(pdl) ? 'smaller filings list' : 'pinned map'} $${pdl.cost}` : 'not in this build'}`);
+    console.log(`  PDL Club TABS2026006871: ${pdl ? `${small.includes(pdl) ? 'smaller filings list' : 'pinned map'} $${pdl.cost}${pdl.address ? ` at ${pdl.address}` : ''}` : 'not in this build'}`);
+    log(`${v}: PDL Club (TABS2026006871) is in the build`, Boolean(pdl));
+    if (pdl) {
+      const queries = ['PDL Club', 'TABS2026006871', ...(pdl.address ? ['13735 IH-10'] : [])];
+      for (const query of queries) {
+        await page.locator('.dev-search input').fill(query);
+        await page.waitForTimeout(300);
+        const pinned = await page.$$eval('.dev-list .dev-item:not([hidden]) .dev-name', (ns) => ns.map((n) => n.textContent));
+        const hint = await page.locator('.dev-smaller-hint').evaluate((b) => (b.hidden ? '' : b.textContent));
+        const listed = await page.$$eval('.dev-smaller-list .dev-name', (ns) => ns.map((n) => n.textContent));
+        const found = small.includes(pdl) ? Boolean(hint) && listed.includes(pdl.name) : pinned.includes(pdl.name);
+        log(`${v}: map search "${query}" finds PDL Club`, found, small.includes(pdl) ? `hint "${hint}"` : `${pinned.length} listed`);
+      }
+      await page.locator('.dev-search input').fill('');
+      if (small.includes(pdl)) console.log('  PDL Club address search: smaller filings carry no address (no page read), so an address search cannot find it');
+    }
     if (small.length) {
-      await page.locator('.dev-smaller summary').click();
+      if (!(await page.locator('.dev-smaller').evaluate((d) => d.open))) await page.locator('.dev-smaller summary').click();
       await page.locator('.dev-smaller-search').fill(small[0].id);
       const found = await page.$$eval('.dev-smaller-list .dev-name', (ns) => ns.map((n) => n.textContent));
       log(`${v}: smaller filings search finds ${small[0].id}`, found.includes(small[0].name), found.slice(0, 3).join(' | '));
     }
+    // Reporting is off until migration 0019 and DEVELOPMENT_REPORTS_ENABLED: no form, the map works as before.
+    log(`${v}: no report form while reporting is off`, (await page.locator('.dev-report').count()) === 0);
   }
   log(`${v}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();

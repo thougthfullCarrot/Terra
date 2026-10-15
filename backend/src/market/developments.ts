@@ -230,6 +230,10 @@ export interface MetroCoverage {
   cutoff: number | null;
   /** False when a county read came back short, so even the counts above are low. */
   complete: boolean;
+  /** TABS's own count of every filing in the metro's counties over the lookback (all statuses), when each county gave one. */
+  reported?: number | null;
+  /** Date windows left unsplit because they held only filings below the cutoff: their smaller filings were never fetched. */
+  skippedWindows?: number;
 }
 
 /** A filing too small for the map's pins: what the search row says, nothing more. */
@@ -761,13 +765,23 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     coverage.push(...all.coverage);
     log(`${city} counties: ${tabsCoverageLine(all.coverage)}`);
     const last = rows[rows.length - 1];
-    metros.push({ city, filings: all.rows.length, cap, cutoff: all.rows.length > cap && last ? Math.round(last.EstimatedCost) : null, complete: whole });
+    const counts = all.coverage.map((c) => c.reported);
+    metros.push({
+      city,
+      filings: all.rows.length,
+      cap,
+      cutoff: all.rows.length > cap && last ? Math.round(last.EstimatedCost) : null,
+      complete: whole,
+      reported: counts.every((n) => n != null) ? counts.reduce<number>((a, n) => a + n!, 0) : null,
+      skippedWindows: all.coverage.reduce((a, c) => a + (c.skipped ?? 0), 0)
+    });
     smaller.push(...smallerFilings(city, all.rows, places));
     log(
       `${city} metro: ${all.rows.length} current filings, the biggest ${rows.length} kept (cap ${cap}${all.rows.length > cap && last ? `; smallest kept $${Math.round(last.EstimatedCost).toLocaleString('en-US')}` : ''})${whole ? '' : '; READ INCOMPLETE'}`
     );
     for (const id of trace) {
       const at = all.rows.findIndex((r) => r.ProjectNumber === id);
+      if (at >= 0) log(`trace ${id}: search row ${JSON.stringify(all.rows[at])}`);
       if (at >= 0) log(`trace ${id}: ${city} rank ${at + 1} of ${all.rows.length} current filings ($${Math.round(all.rows[at]!.EstimatedCost).toLocaleString('en-US')}); ${at < cap ? `within the cap of ${cap}` : `below the cap of ${cap}`}`);
     }
     searched.push([city, rows, whole]);

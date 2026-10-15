@@ -38,6 +38,11 @@ const report = (fields: string, values: string) =>
 describe.skipIf(!conn)('development reports on a real database', () => {
   beforeAll(() => {
     execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-c', `
+      -- Supabase grants the API roles the storage schema; the stub does not.
+      grant usage on schema storage to authenticated, service_role;
+      grant select, insert on storage.objects to authenticated;
+      grant select on storage.buckets to service_role;
+      delete from storage.objects where bucket_id = 'development-report-photos';
       delete from auth.users where id in ('${ids.ana}', '${ids.ben}', '${ids.cal}');
       insert into auth.users (id, email, email_confirmed_at) values
         ('${ids.ana}', 'ana@utsa.edu', now()), ('${ids.ben}', 'ben@gmail.com', now()), ('${ids.cal}', 'cal@rice.edu', now());
@@ -89,5 +94,26 @@ describe.skipIf(!conn)('development reports on a real database', () => {
     expect(anon(`select name || '|' || (verified_at is not null) from published_development_reports where name = 'PDL Club'`)).toBe('PDL Club|true');
     expect(() => anon(`select user_id from published_development_reports`)).toThrow(/user_id/);
     expect(as(ids.ana)(`select status from development_reports where name = 'PDL Club'`)).toBe('approved');
+  });
+
+  it('never makes two pins for one place', () => {
+    // Ben's report of the same address waits as a flagged duplicate; approving it is refused.
+    expect(() => admin(`update development_reports set status = 'approved' where user_id = '${ids.ben}' and address like '13735%'`)).toThrow(/already covers this place/);
+    admin(`update development_reports set status = 'duplicate' where user_id = '${ids.ben}' and address like '13735%'`);
+    expect(anon(`select count(*) from published_development_reports where address like '13735%' or address like '13735%'`)).toBe('1');
+  });
+
+  it('keeps the public view read-only and the review fields out of members\' hands', () => {
+    expect(() => as(ids.ana)(`insert into published_development_reports (city, description, lat, lng) values ('Austin', 'Fake pin here ok', 30.2, -97.7)`)).toThrow(/permission denied/);
+    expect(() => as(ids.ana)(`update development_reports set review_note = 'ok'`)).toThrow(/permission denied/);
+    expect(() => as(ids.ana)(`select development_report_match('x', 29.58, -98.62)`)).not.toThrow();
+  });
+
+  it('keeps report photos private to their sender', () => {
+    as(ids.ana)(`insert into storage.objects (bucket_id, name) values ('development-report-photos', '${ids.ana}/site.jpg')`);
+    expect(() => as(ids.ben)(`insert into storage.objects (bucket_id, name) values ('development-report-photos', '${ids.ana}/fake.jpg')`)).toThrow(/row-level security/);
+    expect(as(ids.ben)(`select count(*) from storage.objects where bucket_id = 'development-report-photos'`)).toBe('0');
+    expect(as(ids.ana)(`select count(*) from storage.objects where bucket_id = 'development-report-photos'`)).toBe('1');
+    expect(admin(`select public from storage.buckets where id = 'development-report-photos'`)).toBe('f');
   });
 });

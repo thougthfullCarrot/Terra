@@ -37,7 +37,8 @@ export function reportsSection({ city, data, permits }) {
   const note = el('p', 'dev-coverage');
   note.textContent = coverageNote({ metro, smaller: smaller.length, permits, reports: publishedReports(city).length });
   box.append(note);
-  if (smaller.length) box.append(smallerList(city, smaller));
+  const small = smaller.length ? smallerList(city, smaller) : null;
+  if (small) box.append(small.node);
 
   const holder = el('div', 'dev-report-holder');
   box.append(holder);
@@ -50,6 +51,8 @@ export function reportsSection({ city, data, permits }) {
 
   return {
     node: box,
+    /** The map search, run on the smaller filings too: how many match (the list opens on them). */
+    searchSmaller: (query) => small?.search(query) ?? 0,
     /** Whether a map click should drop the report pin. */
     picking: () => state.picking,
     pick(latlng) {
@@ -84,12 +87,18 @@ function smallerList(city, all) {
   };
   search.addEventListener('input', draw);
   draw();
+  const node = box;
+  const searchFrom = (query) => {
+    search.value = query;
+    draw();
+    return query.trim() ? matchSmaller(all, city, query).length : 0;
+  };
   box.append(
     el('p', 'dev-meta', 'Below the map cutoff, from the same state search. The state search is not read in full below the cutoff, so some smaller filings are missing here too.'),
     search,
     list
   );
-  return box;
+  return { node, search: searchFrom };
 }
 
 function reportForm(city, state) {

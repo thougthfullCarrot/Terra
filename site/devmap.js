@@ -151,7 +151,17 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     panel.sync();
     apply();
   });
-  results.append(count, clear, legend);
+  const smallerHint = el('button', 'link dev-smaller-hint');
+  smallerHint.type = 'button';
+  smallerHint.hidden = true;
+  smallerHint.addEventListener('click', () => {
+    const details = box.querySelector('.dev-smaller');
+    if (details) {
+      details.open = true;
+      details.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  });
+  results.append(count, smallerHint, clear, legend);
   box.append(results);
 
   const layout = el('div', 'dev-layout');
@@ -204,6 +214,10 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       ` ${active ? `of ${all.length.toLocaleString('en-US')} ` : ''}${shown.length === 1 ? 'project' : 'projects'}`,
       el('span', 'dev-count-pins', ` · ${pins.toLocaleString('en-US')} ${pins === 1 ? 'pin' : 'pins'} on the map`)
     );
+    // A search also looks through the smaller filings, which have no pin.
+    const more = filters.query ? reports.searchSmaller(filters.query) : 0;
+    smallerHint.hidden = !more;
+    smallerHint.textContent = more ? `${more.toLocaleString('en-US')} more in Smaller filings below the map` : '';
     clear.hidden = !active;
     panel.badge(active);
     mapNode.dataset.matches = String(shown.length);

@@ -44,10 +44,16 @@ describe('the report form', () => {
 describe('the coverage note', () => {
   it('names the cap, the cutoff and what the map leaves out', () => {
     const text = coverageNote({ metro: { city: 'San Antonio', filings: 2984, cap: 300, cutoff: 2_769_500, complete: true }, smaller: 600, permits: 'City of San Antonio' });
-    expect(text).toMatch(/pins the 300 biggest of 2,984 current state TABS filings/);
-    expect(text).toMatch(/under about \$2\.8M get no pin; 600 of them are in the smaller filings list/);
+    expect(text).toMatch(/pins the 300 biggest of the 2,984 current state TABS filings collected/);
+    expect(text).toMatch(/under about \$2\.8M get no pin\. The smaller filings list below holds the other 600\./);
     expect(text).toMatch(/City of San Antonio building permits/);
     expect(text).toMatch(/not a complete list/);
+  });
+
+  it('says the smaller list is partial when windows below the cutoff were skipped', () => {
+    const text = coverageNote({ metro: { filings: 2984, cap: 300, cutoff: 2_769_500, complete: true, reported: 3006, skippedWindows: 12 }, smaller: 600 });
+    expect(text).toMatch(/TABS lists 3,006 filings of every status/);
+    expect(text).toMatch(/holds only the 600 smaller ones collected along the way: .*12 search windows .* were not read in full, so it is partial/);
   });
 
   it('still warns on an old snapshot and on a short read', () => {

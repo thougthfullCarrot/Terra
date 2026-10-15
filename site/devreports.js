@@ -76,12 +76,20 @@ const money = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `$
  */
 export function coverageNote({ metro, smaller = 0, permits = null, reports = 0 }) {
   const parts = [];
+  const n = (x) => x.toLocaleString('en-US');
   if (metro?.cutoff != null) {
     parts.push(
-      `This map pins the ${metro.cap.toLocaleString('en-US')} biggest of ${metro.filings.toLocaleString('en-US')} current state TABS filings in the metro, so filings under about ${money(metro.cutoff)} get no pin${smaller ? `; ${smaller.toLocaleString('en-US')} of them ${smaller === 1 ? 'is' : 'are'} in the smaller filings list below` : ''}.`
+      `This map pins the ${n(metro.cap)} biggest of the ${n(metro.filings)} current state TABS filings collected for the metro${metro.reported != null ? ` (TABS lists ${n(metro.reported)} filings of every status in its counties over two years)` : ''}, so filings under about ${money(metro.cutoff)} get no pin.`
     );
+    if (smaller) {
+      parts.push(
+        metro.skippedWindows
+          ? `The smaller filings list below holds only the ${n(smaller)} smaller ones collected along the way: to save requests, ${n(metro.skippedWindows)} search ${metro.skippedWindows === 1 ? 'window' : 'windows'} holding only filings under the cutoff ${metro.skippedWindows === 1 ? 'was' : 'were'} not read in full, so it is partial.`
+          : `The smaller filings list below holds the other ${n(smaller)}.`
+      );
+    }
   } else if (metro) {
-    parts.push(`This map shows all ${metro.filings.toLocaleString('en-US')} current state TABS filings the build read for the metro.`);
+    parts.push(`This map shows all ${n(metro.filings)} current state TABS filings the build read for the metro.`);
   }
   if (metro && !metro.complete) parts.push('Part of the latest state read came back short, so even those counts are low.');
   parts.push(

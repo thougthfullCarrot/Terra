@@ -124,8 +124,19 @@ create trigger development_reports_before_insert before insert on public.develop
 
 create or replace function public.development_report_reviewed() returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
+  -- One pin per place: approving a second report of a place already on the
+  -- map is refused, so the reviewer marks it 'duplicate' instead.
+  if new.status = 'approved' and old.status is distinct from 'approved' and exists (
+    select 1 from development_reports r
+    where r.id <> new.id and r.status = 'approved'
+      and (r.dedupe_key = new.dedupe_key
+           or (new.lat is not null and r.lat is not null and abs(r.lat - new.lat) < 0.00135 and abs(r.lng - new.lng) < 0.0016))
+  ) then
+    raise exception 'Another approved report already covers this place; mark this one duplicate.' using errcode = '23505';
+  end if;
   if new.status is distinct from old.status then
     new.reviewed_at := case when new.status = 'pending' then null else now() end;
   end if;
