@@ -5942,3 +5942,20 @@ svg.bars text {
   padding: 8px 12px 12px;
   border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25));
 }
+
+/* Coverage note, smaller filings and "Report a development" under the map (devreports-view.js). */
+.dev-reports { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
+.dev-coverage { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.dev-smaller summary, .dev-report summary { cursor: pointer; font-weight: 600; }
+.dev-report summary.chip { display: inline-flex; list-style: none; }
+.dev-report summary::-webkit-details-marker { display: none; }
+.dev-smaller-search { width: 100%; max-width: 24rem; margin: 0.5rem 0; }
+.dev-smaller-list { list-style: none; margin: 0; padding: 0; max-height: 22rem; overflow-y: auto; display: grid; gap: 0.4rem; }
+.dev-smaller-list .dev-item { display: grid; gap: 0.1rem; }
+.dev-report-form { display: grid; gap: 0.6rem; max-width: 32rem; margin-top: 0.6rem; }
+.dev-report-field { display: grid; gap: 0.25rem; font-size: 0.9rem; }
+.dev-report-field input, .dev-report-field textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.dev-report-pin { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.dev-report-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.report-approved { color: var(--green, #2e7d4f); }
+.report-rejected, .report-duplicate { color: var(--muted); }

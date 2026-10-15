@@ -30,6 +30,7 @@ import { updatedLabel } from './feed.js';
 import { closePitch, showPitchOnce } from './pitch.js';
 import { DEFAULT_FREQUENCY, digestRow } from './watch.js';
 import { drawWatchList, onWatchChange, setWatchStore, watchOn } from './watch-view.js';
+import { setReportStore } from './devreports-view.js';
 import { metricName } from './markets-view.js';
 
 const $ = (id) => document.getElementById(id);
@@ -170,6 +171,8 @@ async function loadFeed() {
   // tester. The database enforces the same rule on every read and write.
   await setWatchStore(CONFIG.watchlists && (await watchAllowed()) ? watchStore() : null);
   fillWatch();
+  // Development reports (migration 0019) stay off until site.yml switches them on.
+  await setReportStore(CONFIG.developmentReports ? reportStore() : null);
   // Market data sits in the same members-only table, one row of its own.
   app.setMarketLoader(async () => {
     const market = await supabase.from('site_snapshots').select('data').eq('id', 'market').maybeSingle();
@@ -211,6 +214,39 @@ function watchStore() {
     list: async () => check(await table().select('*').eq('user_id', user.id).order('created_at')) ?? [],
     add: async (item) => check(await table().insert({ user_id: user.id, ...item }).select('*').single()),
     remove: async (id) => check(await table().delete().eq('user_id', user.id).eq('id', id))
+  };
+}
+
+/** The member's development reports and the verified ones, migration 0019. Each call throws on error. */
+function reportStore() {
+  const check = ({ data, error }) => {
+    if (error) throw new Error(error.message);
+    return data;
+  };
+  return {
+    list: async () =>
+      check(
+        await supabase
+          .from('development_reports')
+          .select('id, city, name, address, lat, lng, status, review_note, possible_duplicate_of, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+      ) ?? [],
+    published: async () => check(await supabase.from('published_development_reports').select('*').limit(2000)) ?? [],
+    submit: async (row, photo) => {
+      let photo_path = null;
+      if (photo) {
+        photo_path = `${user.id}/${crypto.randomUUID()}.${photo.type.split('/')[1]}`;
+        check(await supabase.storage.from('development-report-photos').upload(photo_path, photo, { contentType: photo.type }));
+      }
+      return check(
+        await supabase
+          .from('development_reports')
+          .insert({ ...row, photo_path })
+          .select('id, city, name, address, lat, lng, status, review_note, possible_duplicate_of, created_at')
+          .single()
+      );
+    }
   };
 }
 
