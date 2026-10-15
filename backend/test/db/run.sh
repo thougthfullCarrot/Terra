@@ -30,4 +30,4 @@ for f in "$backend"/supabase/migrations/*.sql "$backend"/supabase/pending/*.sql;
   psql -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>"$dir/err" || { echo "Migration $(basename "$f") failed:" >&2; cat "$dir/err" >&2; exit 1; }
 done
 cd "$backend"
-TERRA_TEST_PG="host=$dir port=$port user=postgres dbname=postgres" npx vitest run test/db "$@"
+TERRA_TEST_PG="host=$dir port=$port user=postgres dbname=postgres" npx vitest run --no-file-parallelism test/db "$@"

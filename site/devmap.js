@@ -23,6 +23,7 @@ import {
 } from './market.js';
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 import { stateBox } from './labels.js';
+import { publishedReports, reportPopup, reportsSection } from './devreports-view.js';
 
 export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
@@ -150,7 +151,17 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     panel.sync();
     apply();
   });
-  results.append(count, clear, legend);
+  const smallerHint = el('button', 'link dev-smaller-hint');
+  smallerHint.type = 'button';
+  smallerHint.hidden = true;
+  smallerHint.addEventListener('click', () => {
+    const details = box.querySelector('.dev-smaller');
+    if (details) {
+      details.open = true;
+      details.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  });
+  results.append(count, smallerHint, clear, legend);
   box.append(results);
 
   const layout = el('div', 'dev-layout');
@@ -170,7 +181,9 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   empty.append(el('strong', '', 'No projects match these filters.'), hint);
   layout.append(mapNode, list);
   const note = el('p', 'dev-note');
-  box.append(layout, note);
+  // What the map leaves out, smaller filings, and "Report a development" (migration 0019).
+  const reports = reportsSection({ city, data, permits: PERMIT_CITIES[city] ?? null });
+  box.append(layout, note, reports.node);
   const bidList = bidsSection(bids, city);
   if (bidList) box.append(bidList);
 
@@ -201,6 +214,10 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       ` ${active ? `of ${all.length.toLocaleString('en-US')} ` : ''}${shown.length === 1 ? 'project' : 'projects'}`,
       el('span', 'dev-count-pins', ` · ${pins.toLocaleString('en-US')} ${pins === 1 ? 'pin' : 'pins'} on the map`)
     );
+    // A search also looks through the smaller filings, which have no pin.
+    const more = filters.query ? reports.searchSmaller(filters.query) : 0;
+    smallerHint.hidden = !more;
+    smallerHint.textContent = more ? `${more.toLocaleString('en-US')} more in Smaller filings below the map` : '';
     clear.hidden = !active;
     panel.badge(active);
     mapNode.dataset.matches = String(shown.length);
@@ -209,7 +226,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   apply();
   // After the card is on the page: Leaflet measures its container.
   queueMicrotask(() =>
-    drawMap(mapNode, list, all, city)
+    drawMap(mapNode, list, all, city, reports)
       .then((drawn) => {
         if (!drawn) return;
         map = drawn;
@@ -310,7 +327,7 @@ const markers = new Map();
  * filters change, so filtering never rebuilds the map. Null when the card
  * left the page while Leaflet loaded.
  */
-async function drawMap(node, list, projects, city) {
+async function drawMap(node, list, projects, city, reports = null) {
   const L = await loadLeaflet();
   if (!node.isConnected) return null;
   disposeMap();
@@ -342,6 +359,20 @@ async function drawMap(node, list, projects, city) {
     marker.on('popupopen', () => highlight(list, project));
     markers.set(project, marker);
   }
+  // Verified community reports: a square-ish ringed pin of their own, always shown.
+  for (const report of publishedReports(city)) {
+    L.circleMarker([report.lat, report.lng], { radius: 6, color: fills.private, weight: 2.5, fillColor: '#ffffff', fillOpacity: 0.95 })
+      .bindPopup(() => reportPopup(report), { maxWidth: 300 })
+      .bindTooltip(`${report.name || 'Community report'} (verified report)`, { direction: 'top', offset: [0, -6] })
+      .addTo(map);
+  }
+  let dropped = null;
+  map.on('click', (event) => {
+    if (!reports?.picking()) return;
+    reports.pick(event.latlng);
+    dropped?.remove();
+    dropped = L.circleMarker(event.latlng, { radius: 8, color: fills.public, weight: 3, fillOpacity: 0.2, dashArray: '4 3' }).bindTooltip('Your report pin').addTo(map);
+  });
   const center = () => map.setView(CENTERS[city] ?? [31, -99], 9);
   let last = null;
   let viewed = false;
