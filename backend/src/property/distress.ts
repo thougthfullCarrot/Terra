@@ -150,15 +150,22 @@ export interface DistressOptions extends FetchJsonOptions {
   log?: (line: string) => void;
   /** Most listings read per county. */
   maxPerCounty?: number;
+  /** Counties in a row that may fail before the rest are skipped (the site blocks some networks outright). */
+  maxFailuresInRow?: number;
 }
 
 /** Every market county's listings, paged. A county the firm doesn't collect for answers with none. */
 export async function fetchTaxSales(cities: readonly City[] = CITIES, options: DistressOptions = {}): Promise<{ sales: TaxSale[]; counties: DistressFile['counties'] }> {
-  const { log = () => {}, maxPerCounty = 1000, ...http } = options;
+  const { log = () => {}, maxPerCounty = 1000, maxFailuresInRow = 3, ...http } = options;
   const sales: TaxSale[] = [];
   const counties: DistressFile['counties'] = {};
+  let failures = 0;
   for (const city of cities) {
     for (const county of METRO_COUNTIES[city] ?? []) {
+      if (failures >= maxFailuresInRow) {
+        log(`${county} County: skipped, the last ${failures} counties failed.`);
+        continue;
+      }
       let read = 0;
       let kept = 0;
       try {
@@ -175,7 +182,9 @@ export async function fetchTaxSales(cities: readonly City[] = CITIES, options: D
           }
           if (!body.next) break;
         }
+        failures = 0;
       } catch (error) {
+        failures++;
         log(`${county} County: ${error instanceof Error ? error.message : error}`);
       }
       if (read) (counties[city] ??= []).push(county);
