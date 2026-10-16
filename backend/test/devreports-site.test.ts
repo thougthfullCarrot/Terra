@@ -72,3 +72,12 @@ describe('smaller filings search', () => {
     expect(matchSmaller(list, 'San Antonio', '6871')).toHaveLength(1);
   });
 });
+
+describe('smaller filings with a page read', () => {
+  it('are found by address and owner, and the note counts their pins', () => {
+    const list = [{ id: 'TABS2026006871', city: 'San Antonio', name: 'PDL Club', place: 'San Antonio', cost: 1_200_000, address: '13735 IH-10 W, San Antonio, TX 78249', owner: 'PDL Partners LLC' }];
+    expect(matchSmaller(list, 'San Antonio', '13735 IH-10')).toHaveLength(1);
+    expect(matchSmaller(list, 'San Antonio', 'pdl partners')).toHaveLength(1);
+    expect(coverageNote({ metro: { filings: 800, cap: 300, cutoff: 2_769_500, complete: true }, smaller: 500, pinned: 120 })).toMatch(/120 of the smaller filings have a small pin/);
+  });
+});

@@ -35,9 +35,10 @@ export function reportsSection({ city, data, permits }) {
   const metro = data?.metros?.find((m) => m.city === city);
   const smaller = matchSmaller(data?.smaller, city);
   const note = el('p', 'dev-coverage');
-  note.textContent = coverageNote({ metro, smaller: smaller.length, permits, reports: publishedReports(city).length });
+  note.textContent = coverageNote({ metro, smaller: smaller.length, pinned: smaller.filter((f) => f.lat != null).length, permits, reports: publishedReports(city).length });
   box.append(note);
-  const small = smaller.length ? smallerList(city, smaller) : null;
+  const opener = { open: () => false };
+  const small = smaller.length ? smallerList(city, smaller, opener) : null;
   if (small) box.append(small.node);
 
   const holder = el('div', 'dev-report-holder');
@@ -53,6 +54,8 @@ export function reportsSection({ city, data, permits }) {
     node: box,
     /** The map search, run on the smaller filings too: how many match (the list opens on them). */
     searchSmaller: (query) => small?.search(query) ?? 0,
+    /** The map's way to open a smaller filing's pin, once the map is drawn. */
+    setOpenSmall: (open) => (opener.open = open),
     /** Whether a map click should drop the report pin. */
     picking: () => state.picking,
     pick(latlng) {
@@ -63,7 +66,7 @@ export function reportsSection({ city, data, permits }) {
   };
 }
 
-function smallerList(city, all) {
+function smallerList(city, all, opener) {
   const box = el('details', 'dev-smaller');
   box.append(el('summary', '', `Smaller filings (${all.length.toLocaleString('en-US')}, no pins)`));
   const search = el('input', 'dev-smaller-search');
@@ -80,7 +83,15 @@ function smallerList(city, all) {
         link.href = s.url;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        item.append(link, el('span', 'dev-meta', [s.place, `$${s.cost.toLocaleString('en-US')}`, s.work, s.status].filter(Boolean).join(' · ')));
+        item.append(link, el('span', 'dev-meta', [s.address ?? s.place, `$${s.cost.toLocaleString('en-US')}`, s.work, s.status].filter(Boolean).join(' · ')));
+        if (s.lat != null) {
+          const show = el('button', 'link dev-smaller-show', 'Show on map');
+          show.type = 'button';
+          show.addEventListener('click', () => {
+            if (opener.open(s.id)) document.querySelector('.dev-map')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          });
+          item.append(show);
+        }
         return item;
       })
     );
@@ -94,7 +105,7 @@ function smallerList(city, all) {
     return query.trim() ? matchSmaller(all, city, query).length : 0;
   };
   box.append(
-    el('p', 'dev-meta', 'Below the map cutoff, from the same state search. The state search is not read in full below the cutoff, so some smaller filings are missing here too.'),
+    el('p', 'dev-meta', 'Below the map cutoff, from the same state search. Those with "Show on map" have a small pin. The state search is not read in full below the cutoff, so some smaller filings are missing here too.'),
     search,
     list
   );

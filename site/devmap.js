@@ -24,6 +24,7 @@ import {
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 import { stateBox } from './labels.js';
 import { publishedReports, reportPopup, reportsSection } from './devreports-view.js';
+import { matchSmaller } from './devreports.js';
 
 export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
@@ -130,6 +131,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   }
   const legend = el('span', 'dev-legend');
   legend.append(el('i', 'dot private'), 'Public involvement not indicated ', el('i', 'dot public'), 'Public involvement indicated');
+  if (smallerOf(data, city).length) legend.append(el('i', 'dot small'), 'Smaller filing');
   box.append(controls);
 
   if (filtersCity !== city) {
@@ -214,8 +216,10 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       ` ${active ? `of ${all.length.toLocaleString('en-US')} ` : ''}${shown.length === 1 ? 'project' : 'projects'}`,
       el('span', 'dev-count-pins', ` · ${pins.toLocaleString('en-US')} ${pins === 1 ? 'pin' : 'pins'} on the map`)
     );
-    // A search also looks through the smaller filings, which have no pin.
+    // A search also looks through the smaller filings.
     const more = filters.query ? reports.searchSmaller(filters.query) : 0;
+    const onlyQuery = active === (filters.query ? 1 : 0);
+    map?.showSmall(onlyQuery ? new Set(matchSmaller(data?.smaller, city, filters.query).map((f) => f.id)) : null);
     smallerHint.hidden = !more;
     smallerHint.textContent = more ? `${more.toLocaleString('en-US')} more in Smaller filings below the map` : '';
     clear.hidden = !active;
@@ -226,10 +230,11 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   apply();
   // After the card is on the page: Leaflet measures its container.
   queueMicrotask(() =>
-    drawMap(mapNode, list, all, city, reports)
+    drawMap(mapNode, list, all, city, reports, smallerOf(data, city))
       .then((drawn) => {
         if (!drawn) return;
         map = drawn;
+        reports.setOpenSmall((id) => drawn.openSmall(id));
         apply();
       })
       .catch((error) => {
@@ -327,7 +332,7 @@ const markers = new Map();
  * filters change, so filtering never rebuilds the map. Null when the card
  * left the page while Leaflet loaded.
  */
-async function drawMap(node, list, projects, city, reports = null) {
+async function drawMap(node, list, projects, city, reports = null, small = []) {
   const L = await loadLeaflet();
   if (!node.isConnected) return null;
   disposeMap();
@@ -359,6 +364,26 @@ async function drawMap(node, list, projects, city, reports = null) {
     marker.on('popupopen', () => highlight(list, project));
     markers.set(project, marker);
   }
+  // Smaller filings (below the cap) with a pin from a spare page read: small,
+  // hollow and under the main pins. Shown while no filter but the search is on.
+  const smallLayer = L.featureGroup().addTo(map);
+  const smallMarkers = new Map();
+  for (const filing of small) {
+    const marker = L.circleMarker([filing.lat, filing.lng], {
+      radius: 3.5,
+      color: fills.private,
+      weight: 1.5,
+      fillColor: '#ffffff',
+      fillOpacity: 0.9,
+      dashArray: filing.approximate ? '2 2' : null,
+      className: 'dev-small-pin'
+    });
+    marker.bindPopup(() => smallPopup(filing), { maxWidth: 300 });
+    marker.bindTooltip(`${filing.name} (smaller filing)`, { direction: 'top', offset: [0, -4] });
+    smallMarkers.set(filing.id, marker);
+    smallLayer.addLayer(marker);
+  }
+  smallLayer.bringToBack();
   // Verified community reports: a square-ish ringed pin of their own, always shown.
   for (const report of publishedReports(city)) {
     L.circleMarker([report.lat, report.lng], { radius: 6, color: fills.private, weight: 2.5, fillColor: '#ffffff', fillOpacity: 0.95 })
@@ -377,6 +402,24 @@ async function drawMap(node, list, projects, city, reports = null) {
   let last = null;
   let viewed = false;
   return {
+    /** Smaller pins to show: a set of filing ids, or null for none. */
+    showSmall(ids) {
+      if (map !== liveMap) return;
+      for (const [id, marker] of smallMarkers) {
+        const on = Boolean(ids?.has(id));
+        if (on !== smallLayer.hasLayer(marker)) on ? smallLayer.addLayer(marker) : smallLayer.removeLayer(marker);
+      }
+      node.dataset.smallPins = String(ids ? [...smallMarkers.keys()].filter((id) => ids.has(id)).length : 0);
+    },
+    /** Opens a smaller filing's pin, from the Smaller filings list. */
+    openSmall(id) {
+      const marker = smallMarkers.get(id);
+      if (!marker || map !== liveMap) return false;
+      if (!smallLayer.hasLayer(marker)) smallLayer.addLayer(marker);
+      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.6 });
+      map.once('moveend', () => marker.openPopup());
+      return true;
+    },
     show(ids) {
       // A debounced search or filter from a card that has since been replaced
       // (the city changed) must not move the removed map.
@@ -432,6 +475,23 @@ function drawList(list, projects) {
     })
   );
   return items;
+}
+
+/** A metro's smaller filings that have a pin. */
+function smallerOf(data, city) {
+  return (data?.smaller ?? []).filter((f) => f.city === city && f.lat != null && f.lng != null);
+}
+
+function smallPopup(filing) {
+  const box = el('div', 'dev-pop');
+  box.append(el('strong', 'dev-pop-title', filing.name));
+  if (filing.address) box.append(el('span', 'dev-pop-line muted', filing.address));
+  if (filing.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
+  box.append(el('span', 'dev-pop-line', [money(filing.cost), filing.work].filter(Boolean).join(' · ')));
+  box.append(el('span', 'dev-pop-line muted', [filing.status, filing.owner ? `Owner: ${filing.owner}` : ''].filter(Boolean).join(' · ')));
+  box.append(el('span', 'dev-pop-line muted', 'Smaller filing, below the map cutoff'));
+  box.append(link(filing.url, 'State filing (TDLR)'));
+  return box;
 }
 
 /** Opens or closes a project's details under its list item, for projects without a pin. */
