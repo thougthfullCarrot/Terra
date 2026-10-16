@@ -30,7 +30,8 @@
     "sync:sheets": "tsx src/bin/sync-sheets.ts",
     "test-users": "tsx src/bin/test-users.ts",
     "send:alerts": "tsx src/bin/send-alerts.ts",
-    "store:history": "tsx src/bin/store-history.ts"
+    "store:history": "tsx src/bin/store-history.ts",
+    "audit:developments": "tsx src/bin/audit-developments.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

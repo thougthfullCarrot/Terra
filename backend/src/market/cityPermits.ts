@@ -26,6 +26,9 @@ import type { Development } from './developments.js';
 
 /** Smaller projects are mostly sheds, canopies and kiosks. */
 export const MIN_VALUE = 1_000_000;
+/** A source's fetch options, plus the smallest permit value to read (MIN_VALUE unless an audit asks for less). */
+export type PermitFetchOptions = FetchJsonOptions & { minValue?: number };
+
 /** How many city-permit projects each source adds to its map. */
 export const CITY_MAX = 150;
 /** Building permits stay open while the work goes on; older than this is most likely finished. */
@@ -230,7 +233,7 @@ function references(rows: CityPermit[], lead: CityPermit): Pick<Development, 'ad
 }
 
 /** Group one source's permits into projects, biggest first. */
-export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX): Development[] {
+export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX, minValue = MIN_VALUE): Development[] {
   const cutoff = permitCutoff(now);
   const groups = new Map<string, CityPermit[]>();
   for (const p of permits) {
@@ -248,7 +251,7 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX)
     // address with a point and the furthest-along status leads.
     const lead = group.reduce((best, p) => (p.value > best.value || (p.value === best.value && leadRank(p) > leadRank(best)) ? p : best));
     const cost = Math.round(lead.value);
-    if (cost < MIN_VALUE || cost > 3e9) continue;
+    if (cost < minValue || cost > 3e9) continue;
     const pinned = (p: CityPermit) => p.lat != null && p.lng != null;
     const at = lead.site != null && pinned(lead) ? lead : group.find((p) => pinned(p) && !p.placeholder);
     const rows = lead.site != null ? group : null;
@@ -373,7 +376,8 @@ interface CkanResponse {
   result?: { records?: PermitRow[] };
 }
 
-export async function fetchSanAntonio(now: Date, options: FetchJsonOptions = {}): Promise<CityPermit[]> {
+export async function fetchSanAntonio(now: Date, { minValue: _minValue, ...options }: PermitFetchOptions = {}): Promise<CityPermit[]> {
+  // Every value comes back here; permitProjects applies the value floor.
   const rows: PermitRow[] = [];
   // The portal's read-only SQL takes plain comparisons (no functions); its
   // datastore_search filters answer 502.
@@ -455,8 +459,8 @@ export function austinPermit(row: AustinRow): CityPermit | null {
   };
 }
 
-export async function fetchAustin(now: Date, options: FetchJsonOptions = {}): Promise<CityPermit[]> {
-  const where = `permittype='BP' AND permit_class_mapped='Commercial' AND work_class in('New','Shell','Addition') AND issue_date>='${permitCutoff(now)}' AND total_job_valuation>=${MIN_VALUE}`;
+export async function fetchAustin(now: Date, { minValue = MIN_VALUE, ...options }: PermitFetchOptions = {}): Promise<CityPermit[]> {
+  const where = `permittype='BP' AND permit_class_mapped='Commercial' AND work_class in('New','Shell','Addition') AND issue_date>='${permitCutoff(now)}' AND total_job_valuation>=${minValue}`;
   const rows: AustinRow[] = [];
   for (let offset = 0; offset < 20_000; offset += 1000) {
     const url = `${AUSTIN_PERMITS_URL}?$where=${encodeURIComponent(where)}&$order=${encodeURIComponent('permit_number')}&$limit=1000&$offset=${offset}`;
@@ -568,8 +572,8 @@ export function fortWorthPermit(row: FortWorthRow, geometry?: { x?: number; y?: 
   };
 }
 
-export async function fetchFortWorth(now: Date, options: FetchJsonOptions = {}): Promise<CityPermit[]> {
-  const where = `Permit_Type = 'Commercial Building Permit' AND Permit_SubType IN ('New','Addition') AND File_Date >= ${arcgisDate(permitCutoff(now))} AND JobValue >= ${MIN_VALUE}`;
+export async function fetchFortWorth(now: Date, { minValue = MIN_VALUE, ...options }: PermitFetchOptions = {}): Promise<CityPermit[]> {
+  const where = `Permit_Type = 'Commercial Building Permit' AND Permit_SubType IN ('New','Addition') AND File_Date >= ${arcgisDate(permitCutoff(now))} AND JobValue >= ${minValue}`;
   const features = await arcgisAll<FortWorthRow>(FORT_WORTH_LAYER, where, '*', options);
   return features.map((f) => fortWorthPermit(f.attributes, f.geometry)).filter((p): p is CityPermit => p !== null);
 }
@@ -619,8 +623,8 @@ export function arlingtonPermit(row: ArlingtonRow, geometry?: { x?: number; y?: 
   };
 }
 
-export async function fetchArlington(now: Date, options: FetchJsonOptions = {}): Promise<CityPermit[]> {
-  const where = `FOLDERTYPE = 'CP' AND WORKDESC IN ('New Construction','Addition') AND ISSUEDATE >= ${arcgisDate(permitCutoff(now))} AND ConstructionValuationDeclared >= ${MIN_VALUE}`;
+export async function fetchArlington(now: Date, { minValue = MIN_VALUE, ...options }: PermitFetchOptions = {}): Promise<CityPermit[]> {
+  const where = `FOLDERTYPE = 'CP' AND WORKDESC IN ('New Construction','Addition') AND ISSUEDATE >= ${arcgisDate(permitCutoff(now))} AND ConstructionValuationDeclared >= ${minValue}`;
   const fields = 'FOLDERYEAR,FOLDERSEQUENCE,STATUSDESC,ISSUEDATE,SUBDESC,WORKDESC,FOLDERNAME,ConstructionValuationDeclared,NameofBusiness,MainUse';
   const features = await arcgisAll<ArlingtonRow>(ARLINGTON_LAYER, where, fields, options);
   return features.map((f) => arlingtonPermit(f.attributes, f.geometry)).filter((p): p is CityPermit => p !== null);
@@ -691,7 +695,7 @@ export function addAliases(project: Development, names: (string | null | undefin
 export interface PermitSource {
   name: string;
   market: City;
-  fetch: (now: Date, options: FetchJsonOptions) => Promise<CityPermit[]>;
+  fetch: (now: Date, options: PermitFetchOptions) => Promise<CityPermit[]>;
   /** Points other permits give for street addresses (siteKey → address), for projects without their own. */
   locate?: (sites: Map<string, string>, now: Date, options: FetchJsonOptions) => Promise<Map<string, SitePoint>>;
 }
