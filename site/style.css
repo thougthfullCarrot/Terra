@@ -5959,3 +5959,6 @@ svg.bars text {
 .dev-report-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .report-approved { color: var(--green, #2e7d4f); }
 .report-rejected, .report-duplicate { color: var(--muted); }
+
+.dot.small { background: var(--card, #fff); border: 1.5px solid var(--accent); width: 7px; height: 7px; }
+.dev-smaller-show { justify-self: start; font-size: 0.8rem; }

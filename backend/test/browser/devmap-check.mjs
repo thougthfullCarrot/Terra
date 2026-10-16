@@ -147,7 +147,7 @@ for (const vp of [
       pinsText: Number(/(\d[\d,]*) pins?/.exec(document.querySelector('.dev-count').textContent)?.[1].replace(/,/g, '')),
       items: document.querySelectorAll('.dev-list .dev-item:not([hidden])').length,
       offMap: document.querySelectorAll('.dev-list .dev-item:not([hidden]) .dev-off').length,
-      markers: document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive').length,
+      markers: document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive:not(.dev-small-pin)').length,
       empty: !document.querySelector('.dev-empty').hidden
     }));
   const setF = async (f) => {
@@ -361,6 +361,7 @@ for (const vp of [
     log(`${v}: PDL Club (TABS2026006871) is in the build`, Boolean(pdl));
     if (pdl) {
       const queries = ['PDL Club', 'TABS2026006871', ...(pdl.address ? ['13735 IH-10'] : [])];
+      if (small.includes(pdl)) console.log(`  PDL Club pin: ${pdl.lat != null ? `${pdl.lat},${pdl.lng}${pdl.approximate ? ' (ZIP center)' : ''}` : pdl.paged ? 'page read, address not placed' : 'page not read yet'}`);
       for (const query of queries) {
         await page.locator('.dev-search input').fill(query);
         await page.waitForTimeout(300);
@@ -370,14 +371,43 @@ for (const vp of [
         const found = small.includes(pdl) ? Boolean(hint) && listed.includes(pdl.name) : pinned.includes(pdl.name);
         log(`${v}: map search "${query}" finds PDL Club`, found, small.includes(pdl) ? `hint "${hint}"` : `${pinned.length} listed`);
       }
+      if (small.includes(pdl) && pdl.lat != null) {
+        await page.locator('.dev-search input').fill('PDL Club');
+        await page.waitForTimeout(300);
+        log(`${v}: PDL Club search shows its small pin`, (await page.locator('.dev-map').getAttribute('data-small-pins')) === '1');
+      }
       await page.locator('.dev-search input').fill('');
-      if (small.includes(pdl)) console.log('  PDL Club address search: smaller filings carry no address (no page read), so an address search cannot find it');
+      if (small.includes(pdl) && !pdl.address) console.log('  PDL Club address search: its page has not been read yet, so it has no address');
     }
     if (small.length) {
       if (!(await page.locator('.dev-smaller').evaluate((d) => d.open))) await page.locator('.dev-smaller summary').click();
       await page.locator('.dev-smaller-search').fill(small[0].id);
       const found = await page.$$eval('.dev-smaller-list .dev-name', (ns) => ns.map((n) => n.textContent));
       log(`${v}: smaller filings search finds ${small[0].id}`, found.includes(small[0].name), found.slice(0, 3).join(' | '));
+    }
+    // Smaller pins: every smaller filing with coordinates is drawn while no filter is on, and a filter hides them.
+    await page.waitForTimeout(300);
+    const wantSmall = small.filter((s) => s.lat != null).length;
+    log(`${v}: ${wantSmall} smaller-filing pins drawn`, (await page.locator('.dev-map').getAttribute('data-small-pins')) === String(wantSmall));
+    if (wantSmall) {
+      const withPin = small.find((s) => s.lat != null);
+      if (!(await page.locator('.dev-smaller').evaluate((d) => d.open))) await page.locator('.dev-smaller summary').click();
+      await page.locator('.dev-smaller-search').fill(withPin.id);
+      await page.locator('.dev-smaller-show').first().click();
+      await page.waitForTimeout(1200);
+      const popup = await page.locator('.leaflet-popup-content').textContent().catch(() => '');
+      log(`${v}: "Show on map" opens ${withPin.id}'s pin`, (popup ?? '').includes(withPin.name), popup?.slice(0, 80));
+      await page.locator('.dev-smaller-search').fill('');
+    }
+    if (wantSmall) {
+      const label = page.locator('.dev-filter-grid label', { hasText: 'Type of work' }).locator('select');
+      if (await label.count()) {
+        if (vp.mobile && !(await page.locator('.dev-filters').evaluate((d) => d.open))) await page.locator('.dev-filters-summary').click();
+        await label.selectOption({ index: 1 });
+        await page.waitForTimeout(300);
+        log(`${v}: a filter hides the smaller-filing pins`, (await page.locator('.dev-map').getAttribute('data-small-pins')) === '0');
+        await label.selectOption('');
+      }
     }
     // Reporting is off until migration 0019 and DEVELOPMENT_REPORTS_ENABLED: no form, the map works as before.
     log(`${v}: no report form while reporting is off`, (await page.locator('.dev-report').count()) === 0);

@@ -250,7 +250,25 @@ export interface SmallerFiling {
   registered: string;
   end: string | null;
   url: string;
+  /** Filled once its project page has been read with spare page budget (smallerPins); absent until then. */
+  address?: string | null;
+  owner?: string | null;
+  isPublic?: boolean;
+  lat?: number | null;
+  lng?: number | null;
+  approximate?: boolean;
+  /** True once the page was read, so a later build reuses it instead of reading it again. */
+  paged?: boolean;
 }
+
+/**
+ * Smaller filings get a pin only from page reads the map's own projects left
+ * unused (MAX_NEW_PAGES minus what they needed), and only once no project
+ * inside a cap is still waiting for its page, so they can never slow the main
+ * map. The phase also stops after this long, to keep the build well inside
+ * its 30 minutes.
+ */
+export const SMALLER_PAGE_MS = 8 * 60_000;
 
 /**
  * Smaller filings listed per metro. Below the cutoff TABS windows are not
@@ -509,6 +527,10 @@ export interface FetchDevelopmentsOptions extends FetchJsonOptions {
   log?: (line: string) => void;
   /** TABS ids to report on in the log: rank, cap, page read and final pin. */
   trace?: string[];
+  /** The last build's smaller filings, whose page details and pins carry over. */
+  previousSmaller?: SmallerFiling[];
+  /** The clock, for the smaller-pin phase's time limit (tests pass a fake). */
+  clock?: () => number;
 }
 
 /**
@@ -736,8 +758,75 @@ export function placeOf(address: string | null): string | null {
   return match?.[1]?.trim() || null;
 }
 
+/**
+ * Give smaller filings their page details and a pin: earlier builds' first,
+ * then new page reads with whatever page budget is left (`spare`), biggest
+ * first, taking turns across metros. Changes the list in place.
+ */
+export async function pinSmaller(
+  smaller: SmallerFiling[],
+  previous: SmallerFiling[],
+  spare: number,
+  options: { http?: FetchJsonOptions; pauseMs?: number; clock?: () => number; log?: (line: string) => void; paused?: boolean } = {}
+): Promise<{ read: number; reused: number }> {
+  const { http = {}, pauseMs = 300, clock = Date.now, log = () => {}, paused = false } = options;
+  const before = new Map(previous.filter((s) => s.paged).map((s) => [s.id, s]));
+  let reused = 0;
+  for (const s of smaller) {
+    const old = before.get(s.id);
+    if (!old) continue;
+    Object.assign(s, { address: old.address ?? null, owner: old.owner ?? null, isPublic: old.isPublic ?? false, lat: old.lat ?? null, lng: old.lng ?? null, approximate: old.approximate ?? false, paged: true });
+    reused++;
+  }
+  // Biggest first within each metro, one metro after another in turn.
+  const queues = new Map<City, SmallerFiling[]>();
+  for (const s of smaller) if (!s.paged) (queues.get(s.city) ?? queues.set(s.city, []).get(s.city)!).push(s);
+  for (const q of queues.values()) q.sort((a, b) => b.cost - a.cost);
+  const order: SmallerFiling[] = [];
+  for (let i = 0; [...queues.values()].some((q) => q.length > i); i++) for (const q of queues.values()) if (q[i]) order.push(q[i]!);
+  const started = clock();
+  let read = 0;
+  let stopped = '';
+  for (const s of order) {
+    if (read >= spare) break;
+    if (clock() - started > SMALLER_PAGE_MS) {
+      stopped = ' (time limit reached)';
+      break;
+    }
+    if (read || paused) await pause(pauseMs);
+    let details: ProjectDetails;
+    try {
+      details = projectDetails(parseProjectPage(await fetchText(tabsProjectUrl(s.id), { timeoutMs: 60_000, ...http })));
+    } catch {
+      continue;
+    }
+    read++;
+    const address = geocodable(details.address);
+    const at = address ? await geocode(address, s.city, http).catch(() => null) : null;
+    Object.assign(s, { address: details.address, owner: details.owner, isPublic: details.isPublic, lat: at?.[0] ?? null, lng: at?.[1] ?? null, approximate: false, paged: true });
+  }
+  // ZIP centers for the ones the geocoder missed, like the main map's.
+  const missing = smaller.filter((s) => s.paged && s.lat == null && zipOf(s.address ?? null));
+  if (missing.length) {
+    const centers = await fetchZipCenters(new Date(), http).catch(() => new Map<string, [number, number]>());
+    const perZip = new Map<string, number>();
+    for (const s of missing) {
+      const zip = zipOf(s.address ?? null)!;
+      const center = centers.get(zip);
+      if (!center) continue;
+      const index = perZip.get(zip) ?? 0;
+      perZip.set(zip, index + 1);
+      [s.lat, s.lng] = spread(center, index + 40);
+      s.approximate = true;
+    }
+  }
+  const pinned = smaller.filter((s) => s.lat != null).length;
+  log(`smaller filings: ${smaller.length} listed, ${pinned} with a pin; ${read} pages read this build from ${Math.max(0, spare)} spare, ${reused} from earlier builds${stopped}`);
+  return { read, reused };
+}
+
 export async function fetchDevelopments(cities: readonly City[], options: FetchDevelopmentsOptions = {}): Promise<DevelopmentsResult> {
-  const { now = new Date(), previous = [], pauseMs = 300, log = () => {}, trace = [], ...http } = options;
+  const { now = new Date(), previous = [], previousSmaller = [], clock = Date.now, pauseMs = 300, log = () => {}, trace = [], ...http } = options;
   const known = new Map(previous.map((p) => [p.id, p]));
   const projects: Development[] = [];
   const waited = new Set<string>();
@@ -885,6 +974,14 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     );
   }
 
+  await pinSmaller(smaller, previousSmaller, waited.size ? 0 : MAX_NEW_PAGES - pages, {
+    http,
+    pauseMs,
+    clock,
+    log,
+    paused: pages > 0
+  });
+
   // Cities that publish their building permits catch what TABS misses.
   projects.push(
     ...(await fetchCityPermitProjects(cities, now, projects, {
@@ -930,7 +1027,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   }
   for (const id of trace) {
     const s = smaller.find((x) => x.id === id);
-    if (s) log(`trace ${id}: in the ${s.city} smaller-filings list ($${s.cost.toLocaleString('en-US')}), no pin`);
+    if (s) log(`trace ${id}: in the ${s.city} smaller-filings list ($${s.cost.toLocaleString('en-US')}); ${s.lat != null ? `pin ${s.lat},${s.lng} ${s.approximate ? '(ZIP center)' : '(geocoded address)'}` : s.paged ? 'page read, no pin (address not placed)' : 'page not read yet, no pin'}${s.address ? `; address ${s.address}` : ''}`);
   }
   return { asOf: now.toISOString(), projects, coverage, metros, smaller, waiting: waited.size };
 }

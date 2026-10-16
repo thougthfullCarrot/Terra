@@ -74,7 +74,7 @@ const money = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `$
  * What the map covers and what it doesn't, in a sentence or three. `metro` is
  * the build's MetroCoverage row (absent on snapshots older than this note).
  */
-export function coverageNote({ metro, smaller = 0, permits = null, reports = 0 }) {
+export function coverageNote({ metro, smaller = 0, pinned = 0, permits = null, reports = 0 }) {
   const parts = [];
   const n = (x) => x.toLocaleString('en-US');
   if (metro?.cutoff != null) {
@@ -91,6 +91,7 @@ export function coverageNote({ metro, smaller = 0, permits = null, reports = 0 }
   } else if (metro) {
     parts.push(`This map shows all ${n(metro.filings)} current state TABS filings the build read for the metro.`);
   }
+  if (pinned) parts.push(`${n(pinned)} of the smaller filings have a small pin of their own so far; more get one as later builds have spare time.`);
   if (metro && !metro.complete) parts.push('Part of the latest state read came back short, so even those counts are low.');
   parts.push(
     `TABS only lists projects that file for state accessibility review (generally $50,000 or more of commercial or public work)${permits ? `, and ${permits} building permits fill in some of the rest` : ''}. Single-family homes, unfiled projects and most private work in other cities are not here, so the map is not a complete list.`
@@ -103,6 +104,6 @@ export function coverageNote({ metro, smaller = 0, permits = null, reports = 0 }
 export function matchSmaller(list, city, query = '') {
   const q = query.trim().toLowerCase();
   return (list ?? [])
-    .filter((s) => s.city === city && (!q || `${s.name} ${s.place ?? ''} ${s.id}`.toLowerCase().includes(q)))
+    .filter((s) => s.city === city && (!q || `${s.name} ${s.place ?? ''} ${s.id} ${s.address ?? ''} ${s.owner ?? ''}`.toLowerCase().replace(/\s+/g, ' ').includes(q.replace(/\s+/g, ' '))))
     .sort((a, b) => b.cost - a.cost);
 }

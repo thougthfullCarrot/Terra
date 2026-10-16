@@ -167,6 +167,7 @@ async function main(): Promise<void> {
     fetchDevelopments(cities, {
       now,
       previous: previous?.developments?.projects,
+      previousSmaller: previous?.developments?.smaller,
       log: (line) => console.log(`TDLR TABS: ${line}`),
       trace: (process.env.TABS_TRACE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean)
     })

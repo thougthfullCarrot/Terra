@@ -24,6 +24,8 @@ export interface SmallerFiling {
   name: string;
   place: string | null;
   cost: number;
+  address?: string | null;
+  owner?: string | null;
   [key: string]: unknown;
 }
 export const LIMITS: { name: number; address: number; description: number; minDescription: number; url: number; photoBytes: number; perDay: number };
@@ -35,6 +37,7 @@ export function reportStatus(report: { status: string; possible_duplicate_of?: s
 export function coverageNote(options: {
   metro?: { filings: number; cap: number; cutoff: number | null; complete: boolean; city?: string; reported?: number | null; skippedWindows?: number };
   smaller?: number;
+  pinned?: number;
   permits?: string | null;
   reports?: number;
 }): string;

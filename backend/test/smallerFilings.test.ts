@@ -53,7 +53,7 @@ describe('filings below the map cap', () => {
 });
 
 describe('the build result', () => {
-  it('reports each metro’s filings, cap and cutoff, and reads no page for the smaller list', async () => {
+  it('reports each metro’s filings, cap and cutoff, and reads smaller pages only after the 300 inside the cap', async () => {
     const pages: string[] = [];
     const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
@@ -73,6 +73,8 @@ describe('the build result', () => {
     const sa = result.metros?.find((m) => m.city === 'San Antonio');
     expect(sa).toMatchObject({ cap: 300, filings: 302, cutoff: 2_770_500 });
     expect(result.smaller?.map((s) => s.id)).toContain('TABS2026006871');
-    expect(pages.some((u) => u.includes('TABS2026006871'))).toBe(false);
+    // The 300 inside the cap come first; PDL and the $900K filing only get the spare pages after them.
+    expect(pages.findIndex((u) => u.includes('TABS2026006871'))).toBe(300);
+    expect(result.projects.map((p) => p.id)).not.toContain('TABS2026006871');
   });
 });
