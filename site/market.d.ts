@@ -94,6 +94,9 @@ export interface Development {
   work?: string;
   status?: string;
   registered?: string;
+  owner?: string | null;
+  scope?: string | null;
+  end?: string | null;
 }
 export interface DevFilters {
   query: string;
@@ -103,7 +106,18 @@ export interface DevFilters {
   cost: string;
   status: string;
   filed: string;
+  /** YYYY-MM from the filing chart: filed in that month or later. */
+  since: string;
+  /** Category keys hidden from the legend. */
+  off: readonly string[];
 }
+export interface DevCategory { key: string; label: string; color: string; words?: RegExp }
+export const DEV_CATEGORIES: DevCategory[];
+export const OTHER_CATEGORY: DevCategory;
+export function projectCategory(project: Partial<Development>): string;
+export function categoryList(): DevCategory[];
+export function sortProjects<T extends Partial<Development>>(projects: T[] | null | undefined, sort?: string): T[];
+export function filingsByMonth(projects: Partial<Development>[] | null | undefined, asOf: string, months?: number): { month: string; count: number }[];
 export const COST_BANDS: { key: string; label: string; min: number; max: number }[];
 export const FILED_WINDOWS: { key: string; label: string; days: number }[];
 export const PUBLIC_INVOLVEMENT: { key: string; label: string }[];
