@@ -96,6 +96,9 @@ export function disposeMap() {
  * The map card. With several cities it shows a city switcher and calls
  * onCity when one is picked; on a city's own page, cities is just that one.
  */
+/** Rows put in the list before the first paint after a filter change. */
+const FIRST_ROWS = 300;
+
 export function developmentMap({ data, cities, city, bids, onCity }) {
   const box = el('section', 'card dev-card');
   box.setAttribute('aria-labelledby', 'dev-title');
@@ -203,11 +206,28 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   list.append(empty);
   let map = null;
 
+  let listTurn = 0;
   const apply = () => {
     const shown = filterProjects(all, filters, asOf);
     // Keyed by the project itself: city permit ids can repeat in a metro.
     const ids = new Set(shown);
-    for (const [project, item] of items) item.hidden = !ids.has(project);
+    // Only matching rows stay in the list: hiding thousands of rows costs far
+    // more layout than detaching them, on a market's full list.
+    // The first rows go in at once and the rest right after the paint.
+    const rows = [];
+    for (const [project, item] of items) if (ids.has(project)) rows.push(item);
+    const turn = ++listTurn;
+    list.textContent = '';
+    list.append(...rows.slice(0, FIRST_ROWS), empty);
+    if (rows.length > FIRST_ROWS)
+      requestAnimationFrame(() =>
+        setTimeout(() => {
+          if (turn !== listTurn) return;
+          const rest = document.createDocumentFragment();
+          rest.append(...rows.slice(FIRST_ROWS));
+          list.insertBefore(rest, empty);
+        }, 0)
+      );
     empty.hidden = shown.length > 0 || !all.length;
     const active = activeFilterCount(filters);
     const pins = shown.filter((p) => p.lat != null && p.lng != null).length;
@@ -457,7 +477,8 @@ function drawList(list, projects) {
         el('span', 'dev-meta', meta),
         el('span', 'dev-meta', project.owner ? `Owner: ${project.owner}` : project.source === 'city' ? 'City building permit' : 'Owner not listed')
       );
-      if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
+      if (project.awaiting) button.append(el('span', 'dev-off', 'Details pending from the state'));
+      else if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
       button.addEventListener('click', () => {
         const marker = markers.get(project);
         // No pin (no coordinates, or the map library failed to load): show the details in the list instead.

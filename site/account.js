@@ -178,6 +178,11 @@ async function loadFeed() {
     const market = await supabase.from('site_snapshots').select('data').eq('id', 'market').maybeSingle();
     if (market.error) throw new Error(market.error.message);
     return market.data?.data ?? null;
+  }, async (path) => {
+    // Each market's full development list is its own row, "developments/<market>.json" as on the open site.
+    const row = await supabase.from('site_snapshots').select('data').eq('id', path).maybeSingle();
+    if (row.error) throw new Error(row.error.message);
+    return row.data?.data ?? null;
   });
 }
 

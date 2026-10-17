@@ -48,12 +48,28 @@ let state = null;
 let bound = false;
 /** The city the all-markets development map shows. */
 let mapCity = null;
+/** Each market's full development list (developments/<market>.json): city -> 'loading' | 'done' | 'failed'. */
+const devFiles = new Map();
 
-/** Set where the data comes from. null (signed out) hides any data already drawn. */
-export function setMarketLoader(next) {
+/** A market's development file from the open site. */
+async function fetchDevFile(path) {
+  const response = await fetch(path, { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  return response.json();
+}
+/** Where each market's development file comes from: the site, or the members-only row. */
+let devLoader = fetchDevFile;
+
+/**
+ * Set where the data comes from. null (signed out) hides any data already drawn.
+ * devFileLoader(path) reads one market's development list; the site's own file by default.
+ */
+export function setMarketLoader(next, devFileLoader = null) {
   loader = next;
+  devLoader = devFileLoader ?? fetchDevFile;
   snapshot = null;
   loading = null;
+  devFiles.clear();
   disposeMap();
   $('m-body').replaceChildren();
   $('m-chart').replaceChildren();
@@ -684,8 +700,10 @@ function devMap(city) {
   const cities = snapshot.markets.map((m) => m.city).filter((c) => data.projects.some((p) => p.city === c));
   // On a city's page the switcher moves to that city's page, so changing
   // areas never means backing out to All markets first.
+  if (city) loadDevFile(data, city);
   if (city) return cities.includes(city) ? developmentMap({ data, cities, city, bids: snapshot.bids, onCity: (next) => update({ city: next }) }) : '';
   if (!cities.includes(mapCity)) mapCity = cities[0];
+  loadDevFile(data, mapCity);
   return developmentMap({
     data,
     cities,
@@ -696,6 +714,26 @@ function devMap(city) {
       render();
     }
   });
+}
+
+/**
+ * market.json carries each market's biggest projects; the full list for the
+ * market being looked at is its own file, downloaded once on open. The map
+ * draws from the biggest ones meanwhile, and keeps them if the file fails.
+ */
+function loadDevFile(data, city) {
+  const path = data.files?.[city];
+  if (!path || devFiles.has(city)) return;
+  devFiles.set(city, 'loading');
+  const shown = snapshot;
+  devLoader(path)
+    .then((file) => {
+      if (snapshot !== shown || !Array.isArray(file?.projects)) return;
+      data.projects = [...data.projects.filter((p) => p.city !== city), ...file.projects];
+      devFiles.set(city, 'done');
+      render();
+    })
+    .catch(() => devFiles.set(city, 'failed'));
 }
 
 /** The Texas counties that added the most people, on the migration view. */
