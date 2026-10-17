@@ -13,6 +13,7 @@
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { chromium } from 'playwright-core';
 
 const siteDir = resolve(process.argv[2] ?? '../site');
@@ -109,8 +110,14 @@ const server = createServer(async (req, res) => {
   const raw = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const path = raw.endsWith('/') ? `${raw}index.html` : raw;
   try {
-    const body = await readFile(join(siteDir, path));
-    res.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream' }).end(body);
+    let body = await readFile(join(siteDir, path));
+    const headers = { 'content-type': types[extname(path)] ?? 'application/octet-stream' };
+    // Compressed as GitHub Pages serves it, for the slow-phone timing.
+    if (/gzip/.test(req.headers['accept-encoding'] ?? '') && /\.(json|js|css|html|mjs|svg)$/.test(path)) {
+      body = gzipSync(body);
+      headers['content-encoding'] = 'gzip';
+    }
+    res.writeHead(200, headers).end(body);
   } catch {
     res.writeHead(404).end();
   }
@@ -440,6 +447,33 @@ for (const vp of [
   log(`${v}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// A mid-range phone on a slow connection: Lighthouse's "Slow 4G" (150 ms, 1.6 Mbps down) and a 4x slower CPU.
+console.log('\nSlow phone (Slow 4G 1.6 Mbps / 150 ms, CPU 4x slower), gzip as GitHub Pages serves it:');
+console.log('| Market | market.json (gzip) | Market file (gzip) | Downloaded | Map ready | Full list |');
+console.log('|---|---:|---:|---:|---:|---:|');
+const gz = async (path) => (gzipSync(await readFile(join(siteDir, path))).length / 1e6).toFixed(2);
+for (const city of ['San Antonio', 'Houston'].filter((c) => byCity.has(c))) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 150, downloadThroughput: (1.6e6 / 8) * 0.9, uploadThroughput: (750e3 / 8) * 0.9 });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  let bytes = 0;
+  cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength));
+  const t0 = Date.now();
+  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 180000 });
+  const map = Date.now() - t0;
+  const want = data.projects.filter((p) => p.city === city).length;
+  await page.waitForFunction((n) => document.querySelectorAll('.dev-list .dev-item').length === n, want, { timeout: 180000 }).catch(() => null);
+  const full = Date.now() - t0;
+  const file = data.files?.[city];
+  console.log(`| ${city} | ${await gz('market.json')} MB | ${file ? `${await gz(file)} MB` : '-'} | ${(bytes / 1e6).toFixed(1)} MB | ${(map / 1000).toFixed(1)} s | ${(full / 1000).toFixed(1)} s |`);
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 const failed = results.filter((r) => !r.ok).length;
