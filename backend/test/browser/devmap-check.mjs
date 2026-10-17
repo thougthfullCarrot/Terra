@@ -360,7 +360,8 @@ for (const vp of [
     console.log(`  PDL Club TABS2026006871: ${pdl ? `${small.includes(pdl) ? 'smaller filings list' : 'pinned map'} $${pdl.cost}${pdl.address ? ` at ${pdl.address}` : ''}` : 'not in this build'}`);
     log(`${v}: PDL Club (TABS2026006871) is in the build`, Boolean(pdl));
     if (pdl) {
-      const queries = ['PDL Club', 'TABS2026006871', ...(pdl.address ? ['13735 IH-10'] : [])];
+      const queries = ['PDL Club', 'TABS2026006871', ...(pdl.address ? [pdl.address.split(',')[0].trim()] : [])];
+      // TDLR files the street as "13735 IH 10 W" (no hyphen), so search the address as filed.
       if (small.includes(pdl)) console.log(`  PDL Club pin: ${pdl.lat != null ? `${pdl.lat},${pdl.lng}${pdl.approximate ? ' (ZIP center)' : ''}` : pdl.paged ? 'page read, address not placed' : 'page not read yet'}`);
       for (const query of queries) {
         await page.locator('.dev-search input').fill(query);
