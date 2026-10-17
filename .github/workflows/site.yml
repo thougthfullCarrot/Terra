@@ -170,9 +170,19 @@ jobs:
         id: market-cache
         uses: actions/cache/restore@v4
         with:
-          path: site/market.json
+          path: |
+            site/market.json
+            site/developments
           key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json', 'salaries.json') }}-${{ steps.today.outputs.date }}
           restore-keys: market-
+
+      - name: Restore development pages from an interrupted export
+        if: steps.market-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: dev-pages.json
+          key: dev-pages-none
+          restore-keys: dev-pages-
 
       - name: Export market data
         id: market
@@ -193,12 +203,23 @@ jobs:
         if: steps.market.outputs.complete == 'true'
         uses: actions/cache/save@v4
         with:
-          path: site/market.json
+          path: |
+            site/market.json
+            site/developments
           # While development pages are still queued the key is one-off, so the
           # next build misses the day's key, restores this newest file through
           # restore-keys and reads the next pages; once none wait, the day's key
           # is saved and later builds reuse it as before.
           key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json', 'salaries.json') }}-${{ steps.today.outputs.date }}${{ steps.market.outputs.pages_waiting != '0' && format('-queue-{0}', github.run_id) || '' }}
+
+      # A build stopped mid-export (timeout, cancel) keeps the development pages
+      # it read: the checkpoint is cached and the next build resumes from it.
+      - name: Keep development pages from an interrupted export
+        if: always() && steps.market-cache.outputs.cache-hit != 'true' && hashFiles('dev-pages.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: dev-pages.json
+          key: dev-pages-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Headlines change through the day, so they are fetched every run; a
       # city whose feed fails keeps the headlines the last deploy published.
@@ -473,6 +494,18 @@ jobs:
               --data-binary @/tmp/market-row.json
             echo "Market data stored in Supabase."
           fi
+          # Each market's full development list, one row per market keyed by its
+          # site path (developments/<market>.json), read when a member opens it.
+          for f in ../site/developments/*.json; do
+            [ -f "$f" ] || continue
+            jq -c --arg id "developments/$(basename "$f")" '{id: $id, data: ., updated_at: (now | todate)}' "$f" > /tmp/dev-row.json
+            curl -fsS -X POST "${SUPABASE_URL%/}/rest/v1/site_snapshots?on_conflict=id" \
+              -H "apikey: $SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: resolution=merge-duplicates,return=minimal" \
+              --data-binary @/tmp/dev-row.json
+          done
 
       # Watchlist digests (migration 0017) compare days, so each day's market
       # figures are kept for 90 days. Off until the WATCHLISTS_ENABLED variable
@@ -520,7 +553,7 @@ jobs:
       # With accounts on, the feed is members-only: it must not also sit at a public URL.
       - name: Keep the feed out of the public site
         if: steps.accounts.outputs.enabled == 'true'
-        run: rm -f ../site/postings.json ../site/market.json
+        run: rm -rf ../site/postings.json ../site/market.json ../site/developments
 
       - name: Package the site
         uses: actions/upload-pages-artifact@v3

@@ -53,7 +53,7 @@ describe('filings below the map cap', () => {
 });
 
 describe('the build result', () => {
-  it('reports each metro’s filings, cap and cutoff, and reads smaller pages only after the 300 inside the cap', async () => {
+  it('lists every filing, reading the 300 biggest pages before smaller ones like PDL Club', async () => {
     const pages: string[] = [];
     const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
@@ -71,10 +71,13 @@ describe('the build result', () => {
     }) as typeof fetch;
     const result = await fetchDevelopments(['San Antonio'], { now: NOW, pauseMs: 0, retries: 0, fetchImpl });
     const sa = result.metros?.find((m) => m.city === 'San Antonio');
-    expect(sa).toMatchObject({ cap: 300, filings: 302, cutoff: 2_770_500 });
-    expect(result.smaller?.map((s) => s.id)).toContain('TABS2026006871');
-    // The 300 inside the cap come first; PDL and the $900K filing only get the spare pages after them.
+    expect(sa).toMatchObject({ cap: 300, filings: 302, cutoff: null, listed: 302 });
+    expect(result.smaller).toEqual([]);
+    // The 300 headline pages come first; PDL and the $900K filing get the reads left after them.
     expect(pages.findIndex((u) => u.includes('TABS2026006871'))).toBe(300);
-    expect(result.projects.map((p) => p.id)).not.toContain('TABS2026006871');
+    const pdl = result.projects.find((p) => p.id === 'TABS2026006871');
+    expect(pdl).toMatchObject({ name: 'PDL Club' });
+    expect(pdl?.headline).toBeUndefined();
+    expect(pdl?.awaiting).toBeUndefined();
   });
 });

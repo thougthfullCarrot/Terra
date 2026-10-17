@@ -112,17 +112,17 @@ describe('the build', () => {
   const PDL = row(9999, 1_200_000, { ProjectNumber: 'TABS2026006871', ProjectName: 'PDL Club' });
   const ROWS = [...Array.from({ length: 300 }, (_, i) => row(i, 3e6 + i)), PDL];
 
-  it('pins smaller filings only after every project inside the cap has its page, and keeps them out of projects', async () => {
+  it('reads smaller filings\' pages only after every headline project has its page, and lists them with their pins', async () => {
     const pages: string[] = [];
     const result = await fetchDevelopments(['San Antonio'], { now: NOW, pauseMs: 0, retries: 0, fetchImpl: fakeTabs(ROWS, pages) });
     expect(pages.filter((p) => p !== 'TABS2026006871')).toHaveLength(300);
     expect(pages).toContain('TABS2026006871');
     expect(pages.length).toBeLessThanOrEqual(MAX_NEW_PAGES);
-    expect(result.projects.map((p) => p.id)).not.toContain('TABS2026006871');
-    expect(result.smaller?.find((s) => s.id === 'TABS2026006871')).toMatchObject({ lat: 29.58, paged: true });
+    expect(result.projects.find((p) => p.id === 'TABS2026006871')).toMatchObject({ lat: 29.58, approximate: false });
+    expect(result.projects.find((p) => p.id === 'TABS2026006871')?.awaiting).toBeUndefined();
   });
 
-  it('reads no smaller page while a project inside the cap still waits for its page', async () => {
+  it('reads no smaller page while a headline project still waits, and lists the smaller one as awaiting', async () => {
     const pages: string[] = [];
     const big = [...Array.from({ length: 300 }, (_, i) => row(i, 3e6 + i)), ...Array.from({ length: 300 }, (_, i) => row(1000 + i, 4e6 + i, { County: 2015 })), PDL];
     // Two metros' worth in one: Houston gets the same rows so the 400 pages run out.
@@ -143,6 +143,6 @@ describe('the build', () => {
     });
     expect(result.waiting).toBeGreaterThan(0);
     expect(pages).not.toContain('TABS2026006871');
-    expect(result.smaller?.every((s) => !s.paged)).toBe(true);
+    expect(result.projects.find((p) => p.id === 'TABS2026006871')).toMatchObject({ awaiting: true, address: null, lat: null });
   });
 });

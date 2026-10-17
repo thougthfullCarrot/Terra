@@ -457,7 +457,8 @@ function drawList(list, projects) {
         el('span', 'dev-meta', meta),
         el('span', 'dev-meta', project.owner ? `Owner: ${project.owner}` : project.source === 'city' ? 'City building permit' : 'Owner not listed')
       );
-      if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
+      if (project.awaiting) button.append(el('span', 'dev-off', 'Details pending from the state'));
+      else if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
       button.addEventListener('click', () => {
         const marker = markers.get(project);
         // No pin (no coordinates, or the map library failed to load): show the details in the list instead.

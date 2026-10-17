@@ -31,6 +31,7 @@ import type { AppraisalFile } from '../market/appraisal.js';
 import { fetchBls } from '../market/bls.js';
 import { fetchBids } from '../market/bids.js';
 import { fetchDevelopments, tabsCoverageLine } from '../market/developments.js';
+import { DEV_DIR, fileCheckpoint, previousProjects, readMarketFiles, splitDevelopments, writeMarketFiles } from '../market/devFiles.js';
 import { coverageLine, fetchRegistrations } from '../market/registrations.js';
 import { fetchRates } from '../market/fred.js';
 import { fetchOpportunityZones } from '../market/opportunityZones.js';
@@ -163,10 +164,17 @@ async function main(): Promise<void> {
 
   // Last so a slow TDLR day cannot hold up the other sources; projects read on
   // an earlier build keep their page and map point.
+  // Every market's full list from the last build (developments/*.json next to
+  // market.json) plus page details a cut-short build checkpointed.
+  const devDir = resolve(dirname(out), DEV_DIR);
+  // The checkpoint sits outside site/ so it is never published.
+  const checkpoint = fileCheckpoint(resolve(flag('--checkpoint') ?? resolve(dirname(out), '../dev-pages.json')));
+  const carried = previousProjects(await readMarketFiles(devDir), previous?.developments?.projects);
   const developments = await attempt('TDLR TABS', () =>
     fetchDevelopments(cities, {
       now,
-      previous: previous?.developments?.projects,
+      previous: carried,
+      checkpoint,
       previousSmaller: previous?.developments?.smaller,
       log: (line) => console.log(`TDLR TABS: ${line}`),
       trace: (process.env.TABS_TRACE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean)
@@ -231,7 +239,13 @@ async function main(): Promise<void> {
     }),
     previous
   );
-  if (developments?.projects.length) snapshot.developments = developments;
+  if (developments?.projects.length) {
+    const { headline, files } = splitDevelopments(developments);
+    await writeMarketFiles(devDir, files);
+    await checkpoint.clear();
+    snapshot.developments = headline;
+    console.log(`TDLR TABS: wrote ${files.map((f) => `${f.city} ${f.projects.length}`).join(', ')} to ${DEV_DIR}/; market.json keeps ${headline.projects.length} headline projects.`);
+  }
   if (registrations) snapshot.registrations = registrations;
   if (bids) snapshot.bids = bids;
   const keptResearch = research ? keepResearch(research, previous?.research) : previous?.research;

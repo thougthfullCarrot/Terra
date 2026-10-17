@@ -23,6 +23,17 @@ if (!data?.projects?.length) {
   console.log('FAIL  market.json has no development projects');
   process.exit(1);
 }
+// Each market's full list is its own file (developments/<market>.json), which
+// the map downloads when the market opens; check against what it will show.
+const headlineCount = data.projects.length;
+for (const [city, path] of Object.entries(data.files ?? {})) {
+  const file = JSON.parse(await readFile(join(siteDir, path), 'utf8'));
+  data.projects = [...data.projects.filter((p) => p.city !== city), ...file.projects];
+}
+console.log(`market.json: ${headlineCount} headline projects; ${Object.keys(data.files ?? {}).length} market files, ${data.projects.length} projects in all`);
+/** Waits until the map has swapped in the market's full file. */
+const waitFull = (page, city) =>
+  page.waitForFunction((n) => document.querySelectorAll('.dev-list .dev-item').length === n, data.projects.filter((p) => p.city === city).length, { timeout: 30000 });
 
 const results = [];
 const log = (name, ok, detail = '') => {
@@ -125,6 +136,7 @@ for (const vp of [
   const t0 = Date.now();
   await page.waitForSelector('.dev-map.leaflet-container', { timeout: 30000 });
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
+  await waitFull(page, city);
   const firstDraw = Date.now() - t0;
   const all = byCity.get(city);
   const v = vp.name;
@@ -306,6 +318,7 @@ for (const vp of [
     await offPage.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
     await offPage.goto(`${base}#markets&city=${encodeURIComponent(offCity)}`);
     await offPage.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
+    await waitFull(offPage, offCity);
     const offItem = offPage.locator('.dev-item:not([hidden]):has(.dev-off)').first();
     await offItem.scrollIntoViewIfNeeded();
     const offName = await offItem.locator('.dev-name').textContent();
@@ -327,6 +340,8 @@ for (const vp of [
   if (sa.length) {
     await page.goto(`${base}#markets&city=San%20Antonio`);
     await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
+    await waitFull(page, 'San Antonio');
+  await waitFull(page, city);
     if (vp.mobile && !(await page.locator('.dev-filters').evaluate((d) => d.open))) await page.locator('.dev-filters-summary').click();
     const merc = ['TABS2025017471', 'TABS2025017477'].map((id) => sa.find((p) => p.id === id));
     for (const p of merc.filter(Boolean)) {
@@ -353,7 +368,12 @@ for (const vp of [
     const metro = data.metros?.find((m) => m.city === 'San Antonio');
     const note = await page.locator('.dev-coverage').textContent();
     log(`${v}: San Antonio coverage note says the map is not complete`, /not a complete list/.test(note ?? ''), note?.slice(0, 160));
-    if (metro?.cutoff != null) log(`${v}: coverage note gives the cap of ${metro.cap}`, (note ?? '').includes(`pins the ${metro.cap} biggest`));
+    if (metro?.listed != null) {
+      log(`${v}: coverage note lists all ${metro.listed} collected`, (note ?? '').includes(`lists all ${metro.listed.toLocaleString('en-US')}`));
+      if (metro.approximate) log(`${v}: coverage note counts ${metro.approximate} approximate`, (note ?? '').includes(`${metro.approximate.toLocaleString('en-US')} near their ZIP code center`));
+      if (metro.awaiting) log(`${v}: coverage note counts ${metro.awaiting} awaiting details`, (note ?? '').includes(`${metro.awaiting.toLocaleString('en-US')} still await`));
+      if (metro.unlocated) log(`${v}: coverage note counts ${metro.unlocated} unlocated`, (note ?? '').includes(`${metro.unlocated.toLocaleString('en-US')} have no point yet`));
+    } else if (metro?.cutoff != null) log(`${v}: coverage note gives the cap of ${metro.cap}`, (note ?? '').includes(`pins the ${metro.cap} biggest`));
     const small = (data.smaller ?? []).filter((s) => s.city === 'San Antonio');
     console.log(`  San Antonio metro: ${metro ? `${metro.filings} filings, cap ${metro.cap}, cutoff ${metro.cutoff}` : 'no coverage row'}; ${small.length} smaller filings`);
     const pdl = small.find((s) => s.id === 'TABS2026006871') ?? sa.find((p) => p.id === 'TABS2026006871');

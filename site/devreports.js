@@ -77,7 +77,18 @@ const money = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `$
 export function coverageNote({ metro, smaller = 0, pinned = 0, permits = null, reports = 0 }) {
   const parts = [];
   const n = (x) => x.toLocaleString('en-US');
-  if (metro?.cutoff != null) {
+  if (metro?.listed != null) {
+    parts.push(
+      `This map lists all ${n(metro.listed)} current state TABS filings and city permits collected for the metro${metro.reported != null ? ` (TABS lists ${n(metro.reported)} filings of every status in its counties over two years)` : ''}, with no cost cutoff.`
+    );
+    const where = [];
+    if (metro.exact) where.push(`${n(metro.exact)} are pinned at the filed address`);
+    if (metro.site) where.push(`${n(metro.site)} at a point from another permit at the same site`);
+    if (metro.approximate) where.push(`${n(metro.approximate)} near their ZIP code center (approximate, drawn dashed)`);
+    if (metro.unlocated) where.push(`${n(metro.unlocated)} have no point yet and are only in the list`);
+    if (where.length) parts.push(`Of those, ${where.join(', ')}.`);
+    if (metro.awaiting) parts.push(`${n(metro.awaiting)} still await their project details from the state, so they show a name and cost without an address; later updates fill them in.`);
+  } else if (metro?.cutoff != null) {
     parts.push(
       `This map pins the ${n(metro.cap)} biggest of the ${n(metro.filings)} current state TABS filings collected for the metro${metro.reported != null ? ` (TABS lists ${n(metro.reported)} filings of every status in its counties over two years)` : ''}, so filings under about ${money(metro.cutoff)} get no pin.`
     );
