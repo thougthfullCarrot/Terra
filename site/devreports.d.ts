@@ -35,7 +35,7 @@ export function reportRow(input: ReportInput, city: string): { errors: string[];
 export function reportError(message?: string): string;
 export function reportStatus(report: { status: string; possible_duplicate_of?: string | null }): string;
 export function coverageNote(options: {
-  metro?: { filings: number; cap: number; cutoff: number | null; complete: boolean; city?: string; reported?: number | null; skippedWindows?: number };
+  metro?: { filings: number; cap: number; cutoff: number | null; complete: boolean; city?: string; reported?: number | null; skippedWindows?: number; listed?: number; exact?: number; site?: number; approximate?: number; awaiting?: number; unlocated?: number };
   smaller?: number;
   pinned?: number;
   permits?: string | null;
