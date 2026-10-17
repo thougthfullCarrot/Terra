@@ -2554,6 +2554,9 @@ th[aria-sort] .sort-button {
 .dev-item {
   padding: 10px 12px;
   border-bottom: 1px solid var(--divider);
+  /* A market's full list runs to thousands of rows: rows scrolled out of view skip layout and paint. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
 }
 
 .dev-item:last-child {

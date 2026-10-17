@@ -207,7 +207,11 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     const shown = filterProjects(all, filters, asOf);
     // Keyed by the project itself: city permit ids can repeat in a metro.
     const ids = new Set(shown);
-    for (const [project, item] of items) item.hidden = !ids.has(project);
+    // Only matching rows stay in the list: hiding thousands of rows costs far
+    // more layout than detaching them, on a market's full list.
+    const rows = [];
+    for (const [project, item] of items) if (ids.has(project)) rows.push(item);
+    list.replaceChildren(...rows, empty);
     empty.hidden = shown.length > 0 || !all.length;
     const active = activeFilterCount(filters);
     const pins = shown.filter((p) => p.lat != null && p.lng != null).length;
@@ -457,7 +461,8 @@ function drawList(list, projects) {
         el('span', 'dev-meta', meta),
         el('span', 'dev-meta', project.owner ? `Owner: ${project.owner}` : project.source === 'city' ? 'City building permit' : 'Owner not listed')
       );
-      if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
+      if (project.awaiting) button.append(el('span', 'dev-off', 'Details pending from the state'));
+      else if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
       button.addEventListener('click', () => {
         const marker = markers.get(project);
         // No pin (no coordinates, or the map library failed to load): show the details in the list instead.

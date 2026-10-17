@@ -725,18 +725,24 @@ export async function fetchCityPermitProjects(
     sources?: PermitSource[];
     /** Whether a point is inside the market's metro; anything else is a wrong match. */
     inMetro?: (city: City, at: [number, number]) => boolean;
+    /** The smallest permit value read (MIN_VALUE by default). */
+    minValue?: number;
+    /** Projects added per source (CITY_MAX by default); the first CITY_MAX are marked headline. */
+    max?: number;
   } = {}
 ): Promise<Development[]> {
-  const { log = () => {}, sources = PERMIT_SOURCES, inMetro = () => true, ...http } = options;
+  const { log = () => {}, sources = PERMIT_SOURCES, inMetro = () => true, minValue = MIN_VALUE, max = CITY_MAX, ...http } = options;
+  // Only a street address joins two records; a filing still waiting for its page has none.
+  const keyed = (address: string | null) => (/^\d/.test(siteKey(address)) ? siteKey(address) : null);
   const out: Development[] = [];
   for (const source of sources) {
     if (!cities.includes(source.market)) continue;
     let projects: Development[] = [];
     const here = tabs.filter((p) => p.city === source.market);
     try {
-      const bySite = new Map(here.filter((p) => (p.source ?? 'tabs') === 'tabs').map((p) => [siteKey(p.address), p]));
-      const known = new Set([...here, ...out.filter((p) => p.city === source.market)].map((p) => siteKey(p.address)));
-      const all = permitProjects(await source.fetch(now, http), now, CITY_MAX + known.size);
+      const bySite = new Map(here.filter((p) => (p.source ?? 'tabs') === 'tabs' && keyed(p.address)).map((p) => [keyed(p.address)!, p]));
+      const known = new Set([...here, ...out.filter((p) => p.city === source.market)].map((p) => keyed(p.address)).filter((k): k is string => k != null));
+      const all = permitProjects(await source.fetch(now, { ...http, minValue }), now, max + known.size, minValue);
       for (const city of all) {
         const filing = bySite.get(siteKey(city.address));
         if (!filing) continue;
@@ -747,7 +753,8 @@ export async function fetchCityPermitProjects(
           filing.locatedFrom = `City permit ${city.aliases?.[0] ?? city.id} at this address`;
         }
       }
-      projects = all.filter((p) => !(p.addresses ?? [p.address]).some((a) => known.has(siteKey(a)))).slice(0, CITY_MAX);
+      projects = all.filter((p) => !(p.addresses ?? [p.address]).some((a) => known.has(siteKey(a)))).slice(0, max);
+      if (max !== CITY_MAX) projects.forEach((p, i) => i < CITY_MAX && (p.headline = true));
       out.push(...projects);
       log(`${source.name} city permits: ${projects.length} more projects`);
     } catch (error) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addAliases, fetchCityPermitProjects, permitProjects, sanAntonioPermit, type PermitRow } from '../src/market/cityPermits.js';
 import { developerLink } from '../src/market/developers.js';
 import {
@@ -9,9 +9,13 @@ import {
   searchMetroAll,
   statusLabel,
   tabsCoverageLine,
+  locationCounts,
   type Development,
+  type PageCheckpoint,
+  type PageDetails,
   type TabsRow
 } from '../src/market/developments.js';
+import { previousProjects, splitDevelopments } from '../src/market/devFiles.js';
 
 /**
  * The Merc (Rod's report, 2026-10-14): Bexar's two-year search returned 100 of
@@ -370,17 +374,22 @@ describe('city permits at the Merc', () => {
 });
 
 describe('the development page queue', () => {
-  it('reports how many capped projects still wait for their page, and none once they are read', async () => {
+  it('lists every filing from the first build and works through the waiting pages 400 a build', async () => {
     const bexar = filler(900);
     const harris = filler(900, 2101, 'TABSH');
-    const first = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, fetchImpl: fakeTabs({ '2015': bexar, '2101': harris }, { forms: [] }) });
-    const placed = first.projects.length;
-    expect(first.waiting).toBeGreaterThan(0);
-    expect(placed + first.waiting!).toBe(300 + 400);
-    // The next build starts from that snapshot and reads the rest.
-    const second = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, previous: first.projects, fetchImpl: fakeTabs({ '2015': bexar, '2101': harris }, { forms: [] }) });
-    expect(second.waiting).toBe(0);
-    expect(second.projects).toHaveLength(700);
+    const web = () => fakeTabs({ '2015': bexar, '2101': harris }, { forms: [] });
+    const first = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, fetchImpl: web() });
+    const listed = first.projects.length;
+    expect(listed).toBe(1200);
+    expect(first.waiting).toBe(listed - 400);
+    expect(first.projects.filter((p) => p.awaiting)).toHaveLength(listed - 400);
+    // Each next build starts from the last snapshot, keeps every project and reads 400 more pages.
+    const second = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, previous: first.projects, fetchImpl: web() });
+    expect(second.projects).toHaveLength(listed);
+    expect(second.waiting).toBe(listed - 800);
+    const third = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, previous: second.projects, fetchImpl: web() });
+    expect(third.waiting).toBe(0);
+    expect(third.projects.filter((p) => p.awaiting)).toHaveLength(0);
   });
 
   it('keeps the queue moving between builds the same day: a one-off cache key while pages wait', async () => {
@@ -390,5 +399,79 @@ describe('the development page queue', () => {
     expect(save).toMatch(/steps\.market\.outputs\.pages_waiting != '0' && format\('-queue-\{0\}', github\.run_id\)/);
     const restore = yml.slice(yml.indexOf('- name: Restore market data'), yml.indexOf('- name: Export market data'));
     expect(restore).toContain('restore-keys: market-');
+  });
+});
+
+describe('full coverage across builds', () => {
+  const memory = () => {
+    let saved = new Map<string, PageDetails>();
+    const cp: PageCheckpoint & { saved: () => Map<string, PageDetails> } = {
+      load: async () => new Map(saved),
+      save: async (pages) => {
+        saved = new Map(pages);
+      },
+      saved: () => saved
+    };
+    return cp;
+  };
+
+  it('resumes from the checkpoint after a build is killed mid-read, without reading those pages again', async () => {
+    const bexar = filler(900);
+    const checkpoint = memory();
+    let pageReads = 0;
+    const hang = fakeTabs({ '2015': bexar }, { forms: [] });
+    // The first build is killed after 60 page reads: the 61st never answers.
+    const killed = ((input: string | URL, init?: RequestInit) => {
+      if (String(input).includes('/Search/Project/') && ++pageReads > 60) return new Promise<Response>(() => {});
+      return hang(input, init);
+    }) as typeof fetch;
+    void fetchDevelopments(['San Antonio'], { now: NOW, pauseMs: 0, checkpoint, fetchImpl: killed });
+    await vi.waitFor(() => expect(pageReads).toBeGreaterThan(60), { timeout: 5000 });
+    const kept = checkpoint.saved();
+    expect(kept.size).toBe(50);
+
+    // No market.json was written, so the next build only has the checkpoint.
+    const asked: string[] = [];
+    const web = fakeTabs({ '2015': bexar }, { forms: [] });
+    const resumed = await fetchDevelopments(['San Antonio'], {
+      now: NOW,
+      pauseMs: 0,
+      checkpoint,
+      fetchImpl: ((input: string | URL, init?: RequestInit) => {
+        if (String(input).includes('/Search/Project/')) asked.push(String(input));
+        return web(input, init);
+      }) as typeof fetch
+    });
+    for (const id of kept.keys()) expect(asked.some((u) => u.includes(id))).toBe(false);
+    const enriched = resumed.projects.filter((p) => !p.awaiting).length;
+    expect(enriched).toBe(50 + asked.length);
+    expect(resumed.waiting).toBe(resumed.projects.length - enriched);
+  });
+
+  it('a build with no earlier data at all lists every filing and enriches 400 of them', async () => {
+    const result = await fetchDevelopments(['San Antonio'], { now: NOW, pauseMs: 0, fetchImpl: fakeTabs({ '2015': filler(900) }, { forms: [] }) });
+    // filler(900) holds 600 current filings; every one is listed.
+    expect(result.projects).toHaveLength(600);
+    expect(result.projects.filter((p) => !p.awaiting)).toHaveLength(400);
+    expect(result.projects.filter((p) => p.headline)).toHaveLength(300);
+    const counts = locationCounts(result.projects);
+    expect(counts).toMatchObject({ listed: 600, awaiting: 200 });
+    expect(counts.exact + counts.site + counts.approximate + counts.unlocated + counts.awaiting).toBe(600);
+    expect(result.metros?.find((m) => m.city === 'San Antonio')).toMatchObject({ listed: 600, awaiting: 200, cutoff: null });
+  });
+
+  it('splits by market: market.json keeps the headline projects, each market file has every one', async () => {
+    const result = await fetchDevelopments(['San Antonio', 'Houston'], { now: NOW, pauseMs: 0, fetchImpl: fakeTabs({ '2015': filler(500), '2101': filler(50, 2101, 'TABSH') }, { forms: [] }) });
+    const { headline, files } = splitDevelopments(result);
+    expect(headline.projects.every((p) => p.headline)).toBe(true);
+    expect(headline.files).toEqual({ 'San Antonio': 'developments/san-antonio.json', Houston: 'developments/houston.json' });
+    const sa = files.find((f) => f.city === 'San Antonio')!.projects;
+    const hou = files.find((f) => f.city === 'Houston')!.projects;
+    expect(sa.length + hou.length).toBe(result.projects.length);
+    expect(sa.filter((p) => !p.headline).length).toBeGreaterThan(0);
+    expect(headline.projects).toHaveLength(result.projects.filter((p) => p.headline).length);
+    // The next build starts from the files, not just market.json's headline list: nothing is dropped.
+    const carried = previousProjects(files.flatMap((f) => f.projects), headline.projects);
+    expect(carried).toHaveLength(result.projects.length);
   });
 });

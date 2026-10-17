@@ -207,6 +207,14 @@ export interface Development {
   permits?: string[];
   /** The city's own row ids behind the project (Fort Worth CAPIDs). */
   sourceIds?: string[];
+  /** True while the project's TABS page has not been read: listed by name, number and cost, with no address or pin yet. */
+  awaiting?: boolean;
+  /**
+   * One of the metro's biggest (the TABS cap, or a city source's first CITY_MAX):
+   * the set market.json carries for the other views. Every project, headline or
+   * not, is in the market's own developments file.
+   */
+  headline?: boolean;
 }
 
 export interface DevelopmentsResult {
@@ -218,8 +226,10 @@ export interface DevelopmentsResult {
   waiting?: number;
   /** Per metro: what the map shows against what TABS holds, for the coverage note. */
   metros?: MetroCoverage[];
-  /** Current filings below each metro's cap that this build saw, listed without pins (no page read). */
+  /** Current filings below each metro's cap that this build saw, listed without pins (no page read). Empty since every filing is in projects. */
   smaller?: SmallerFiling[];
+  /** Per market, the file holding every one of its projects (relative to market.json), when the build split them out. */
+  files?: Partial<Record<City, string>>;
 }
 
 export interface MetroCoverage {
@@ -236,6 +246,18 @@ export interface MetroCoverage {
   reported?: number | null;
   /** Date windows left unsplit because they held only filings below the cutoff: their smaller filings were never fetched. */
   skippedWindows?: number;
+  /** Every project the market lists (TABS filings and city permits), and how each is located. */
+  listed?: number;
+  /** Placed at its own address or permit point. */
+  exact?: number;
+  /** Placed at another permit's point at the same address. */
+  site?: number;
+  /** At its ZIP code's center. */
+  approximate?: number;
+  /** Page not read yet: listed with no address. */
+  awaiting?: number;
+  /** Page read, but no reliable point. */
+  unlocated?: number;
 }
 
 /** A filing too small for the map's pins: what the search row says, nothing more. */
@@ -525,12 +547,28 @@ export interface FetchDevelopmentsOptions extends FetchJsonOptions {
   /** Wait between project page reads, to stay a light visitor. */
   pauseMs?: number;
   log?: (line: string) => void;
-  /** TABS ids to report on in the log: rank, cap, page read and final pin. */
+  /** TABS ids to report on in the log: rank, page read and final pin. */
   trace?: string[];
-  /** The last build's smaller filings, whose page details and pins carry over. */
+  /** The last build's smaller filings, whose page details and pins carry over (builds before every filing was listed). */
   previousSmaller?: SmallerFiling[];
-  /** The clock, for the smaller-pin phase's time limit (tests pass a fake). */
+  /** The clock, for the page-reading time limit (tests pass a fake). */
   clock?: () => number;
+  /**
+   * Page details read so far, saved while the build runs, so a build killed
+   * mid-way loses none of its page reads: load() at the start, save() every
+   * few pages.
+   */
+  checkpoint?: PageCheckpoint;
+  /** No new page read starts after this long from the start of the build's TABS work. */
+  pageTimeMs?: number;
+}
+
+/** One project's page details and point, as a checkpoint keeps them. */
+export type PageDetails = ProjectDetails & { lat: number | null; lng: number | null; approximate: boolean };
+
+export interface PageCheckpoint {
+  load(): Promise<Map<string, PageDetails>>;
+  save(pages: Map<string, PageDetails>): Promise<void>;
 }
 
 /**
@@ -628,7 +666,25 @@ export async function searchCounty(
     }
     const days = Math.round((until.getTime() - since.getTime()) / DAY_MS);
     if (days <= 1) {
-      short.push(`${usDate(since)} (${data.length} of ${total ?? `${SEARCH_PAGE}+`})`);
+      // A day can't be split further; reading it smallest first reaches the other end (up to 200 rows).
+      let got = data.length;
+      if (budget.left > 0 && total != null) {
+        budget.left--;
+        if (budget.pauseMs) await pause(budget.pauseMs);
+        budget.used++;
+        searches++;
+        const form = searchForm(county, since, until, SEARCH_PAGE);
+        form['order[0][dir]'] = 'asc';
+        const low = await fetchJson<SearchPage>(TABS_SEARCH_URL, { timeoutMs: 120_000, ...http, form, headers: { 'x-requested-with': 'XMLHttpRequest', referer: `${TABS}/Search/` } });
+        const ids = new Set(data.map((r) => r.ProjectNumber));
+        for (const row of low.data ?? []) {
+          rows.set(row.ProjectNumber, row);
+          ids.add(row.ProjectNumber);
+        }
+        got = ids.size;
+        if (got >= total) return true;
+      }
+      short.push(`${usDate(since)} (${got} of ${total ?? `${SEARCH_PAGE}+`})`);
       return false;
     }
     // Split by the reported count, so a busy window takes one round, not a halving per level.
@@ -673,14 +729,16 @@ export async function searchProject(number: string, options: FetchJsonOptions = 
 export async function searchMetroAll(
   city: City,
   now: Date,
-  options: FetchJsonOptions & { budget?: SearchBudget; cap?: number } = {}
+  options: FetchJsonOptions & { budget?: SearchBudget; cap?: number; uncapped?: boolean } = {}
 ): Promise<{ rows: TabsRow[]; coverage: TabsCoverage[] }> {
-  const { cap = capFor(city), ...rest } = options;
+  const { cap = capFor(city), uncapped = false, ...rest } = options;
   const seen = new Map<string, TabsRow>();
   const coverage: TabsCoverage[] = [];
   // The cap-th biggest current filing seen so far: a lower bound on the true
   // cutoff, so a window skipped below it can only hold projects the map drops anyway.
   const floor = (soFar: TabsRow[]) => {
+    // Collecting every filing: no window is skipped for being small.
+    if (uncapped) return 0;
     const all = new Map(seen);
     for (const row of currentDevelopments(soFar, now)) all.set(row.ProjectNumber, row);
     if (all.size < cap) return 0;
@@ -825,11 +883,36 @@ export async function pinSmaller(
   return { read, reused };
 }
 
+/**
+ * Every new page read stops after this long into the build's TABS work, so the
+ * whole Website job stays inside its 30 minutes; what is left waits, listed,
+ * for the next build.
+ */
+export const PAGE_TIME_MS = 11 * 60_000;
+/** Save the checkpoint after this many new page reads. */
+const CHECKPOINT_EVERY = 25;
+
+/**
+ * Every current new building and addition in each market's counties, with no
+ * cost cut. The biggest (the metro's cap) are read first, as before, and stay
+ * the headline set market.json carries; every other filing is listed too, and
+ * gets its page, address and pin from the page reads left over, biggest first,
+ * taking turns across metros. A filing whose page hasn't been read yet is
+ * listed by name, number and cost (awaiting). Pages read on any earlier build,
+ * or saved to the checkpoint by a build that was cut short, are never read again.
+ */
 export async function fetchDevelopments(cities: readonly City[], options: FetchDevelopmentsOptions = {}): Promise<DevelopmentsResult> {
-  const { now = new Date(), previous = [], previousSmaller = [], clock = Date.now, pauseMs = 300, log = () => {}, trace = [], ...http } = options;
-  const known = new Map(previous.map((p) => [p.id, p]));
-  const projects: Development[] = [];
-  const waited = new Set<string>();
+  const { now = new Date(), previous = [], previousSmaller = [], clock = Date.now, pauseMs = 300, log = () => {}, trace = [], checkpoint, pageTimeMs = PAGE_TIME_MS, ...http } = options;
+  const started = clock();
+  const known = new Map<string, PageDetails>();
+  for (const s of previousSmaller)
+    if (s.paged) known.set(s.id, { address: s.address ?? null, owner: s.owner ?? null, tenant: null, designFirm: null, scope: null, squareFeet: null, isPublic: s.isPublic ?? false, lat: s.lat ?? null, lng: s.lng ?? null, approximate: s.approximate ?? false });
+  const before = new Map(previous.filter((p) => (p.source ?? 'tabs') === 'tabs' && !p.awaiting).map((p) => [p.id, p]));
+  for (const p of before.values()) known.set(p.id, p);
+  const saved = checkpoint ? await checkpoint.load().catch(() => new Map<string, PageDetails>()) : new Map<string, PageDetails>();
+  for (const [id, d] of saved) if (!known.has(id)) known.set(id, d);
+  if (saved.size) log(`checkpoint: ${saved.size} page details from a build that was cut short`);
+  const fresh = new Map<string, PageDetails>(saved);
   const coverage: TabsCoverage[] = [];
   const budget = searchBudget(pauseMs);
   let pages = 0;
@@ -843,63 +926,102 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   // Search every metro first, so the page budget can be shared fairly.
   const searched: [City, TabsRow[], boolean][] = [];
   const metros: MetroCoverage[] = [];
-  const smaller: SmallerFiling[] = [];
   for (const city of cities) {
     if (!METRO_COUNTIES[city]) {
       log(`${city}: no TABS counties yet; skipped.`);
       continue;
     }
-    const all = await searchMetroAll(city, now, { ...http, budget });
-    const cap = capFor(city);
-    const rows = all.rows.slice(0, cap);
+    const all = await searchMetroAll(city, now, { ...http, budget, uncapped: true });
     const whole = all.coverage.every((c) => c.complete);
     coverage.push(...all.coverage);
     log(`${city} counties: ${tabsCoverageLine(all.coverage)}`);
-    const last = rows[rows.length - 1];
     const counts = all.coverage.map((c) => c.reported);
     metros.push({
       city,
       filings: all.rows.length,
-      cap,
-      cutoff: all.rows.length > cap && last ? Math.round(last.EstimatedCost) : null,
+      cap: capFor(city),
+      cutoff: null,
       complete: whole,
       reported: counts.every((n) => n != null) ? counts.reduce<number>((a, n) => a + n!, 0) : null,
-      skippedWindows: all.coverage.reduce((a, c) => a + (c.skipped ?? 0), 0)
+      skippedWindows: 0
     });
-    smaller.push(...smallerFilings(city, all.rows, places));
-    log(
-      `${city} metro: ${all.rows.length} current filings, the biggest ${rows.length} kept (cap ${cap}${all.rows.length > cap && last ? `; smallest kept $${Math.round(last.EstimatedCost).toLocaleString('en-US')}` : ''})${whole ? '' : '; READ INCOMPLETE'}`
-    );
+    log(`${city} metro: ${all.rows.length} current filings collected${whole ? '' : '; READ INCOMPLETE'}`);
     for (const id of trace) {
       const at = all.rows.findIndex((r) => r.ProjectNumber === id);
-      if (at >= 0) log(`trace ${id}: search row ${JSON.stringify(all.rows[at])}`);
-      if (at >= 0) log(`trace ${id}: ${city} rank ${at + 1} of ${all.rows.length} current filings ($${Math.round(all.rows[at]!.EstimatedCost).toLocaleString('en-US')}); ${at < cap ? `within the cap of ${cap}` : `below the cap of ${cap}`}`);
+      if (at >= 0) log(`trace ${id}: ${city} rank ${at + 1} of ${all.rows.length} current filings ($${Math.round(all.rows[at]!.EstimatedCost).toLocaleString('en-US')}); ${at < capFor(city) ? 'headline' : 'below the headline cap, listed in full'}`);
     }
-    searched.push([city, rows, whole]);
+    searched.push([city, all.rows, whole]);
   }
   log(`${budget.used} TABS searches this build`);
+
+  const timeLeft = () => clock() - started < pageTimeMs;
+  const failed = new Set<string>();
+  const readPage = async (row: TabsRow, city: City): Promise<boolean> => {
+    if (pages++) await pause(pauseMs);
+    try {
+      const details = projectDetails(parseProjectPage(await fetchText(tabsProjectUrl(row.ProjectNumber), { timeoutMs: 60_000, ...http })));
+      const address = geocodable(details.address);
+      const at = address ? await geocode(address, city, http).catch(() => null) : null;
+      const got: PageDetails = { ...details, lat: at?.[0] ?? null, lng: at?.[1] ?? null, approximate: false };
+      known.set(row.ProjectNumber, got);
+      fresh.set(row.ProjectNumber, got);
+      if (checkpoint && fresh.size % CHECKPOINT_EVERY === 0) await checkpoint.save(fresh).catch(() => {});
+      return true;
+    } catch {
+      failed.add(row.ProjectNumber);
+      return false;
+    }
+  };
+
+  // Headline pages first: each metro's biggest, the budget shared by need.
   const allowance = shareBudget(
-    new Map(searched.map(([city, rows]) => [city, rows.filter((r) => !known.has(r.ProjectNumber)).length])),
+    new Map(searched.map(([city, rows]) => [city, rows.slice(0, capFor(city)).filter((r) => !known.has(r.ProjectNumber)).length])),
     MAX_NEW_PAGES
   );
+  let stopped = '';
+  for (const [city, rows] of searched) {
+    let left = allowance.get(city) ?? 0;
+    for (const row of rows.slice(0, capFor(city))) {
+      if (known.has(row.ProjectNumber) || left <= 0) continue;
+      if (!timeLeft()) {
+        stopped = ' (time limit reached)';
+        break;
+      }
+      left--;
+      await readPage(row, city);
+    }
+  }
+  // Then every other filing with the reads left: traced ids, then biggest first, metros in turn.
+  const queues = searched.map(([city, rows]) => rows.slice(capFor(city)).filter((r) => !known.has(r.ProjectNumber)).map((r) => [city, r] as const));
+  for (const q of queues) q.sort((a, b) => Number(trace.includes(b[1].ProjectNumber)) - Number(trace.includes(a[1].ProjectNumber)));
+  const order: (readonly [City, TabsRow])[] = [];
+  for (let i = 0; queues.some((q) => q.length > i); i++) for (const q of queues) if (q[i]) order.push(q[i]!);
+  for (const [city, row] of order) {
+    if (pages >= MAX_NEW_PAGES) break;
+    if (!timeLeft()) {
+      stopped = ' (time limit reached)';
+      break;
+    }
+    await readPage(row, city);
+  }
+  if (checkpoint && fresh.size) await checkpoint.save(fresh).catch(() => {});
 
   const finished = new Date(now.getTime() - FINISHED_DAYS * DAY_MS).toISOString().slice(0, 10);
+  const projects: Development[] = [];
   for (const [city, rows, whole] of searched) {
-    let left = allowance.get(city) ?? 0;
-    let waiting = 0;
-    for (const row of rows) {
-      const old = known.get(row.ProjectNumber);
-      let details: ProjectDetails;
-      let lat = old?.lat ?? null;
-      let lng = old?.lng ?? null;
-      let approximate = old?.approximate ?? false;
-      let locatedFrom = old?.locatedFrom;
-      if (old) {
-        details = old;
-        // A pin that missed or sits at the ZIP center gets another try: the
-        // geocoder learns new streets, and a ZIP center should not stick forever.
-        const address = (lat == null || approximate) && !locatedFrom ? geocodable(details.address) : null;
-        if (address && retries > 0) {
+    const cap = capFor(city);
+    for (const [i, row] of rows.entries()) {
+      const old = before.get(row.ProjectNumber);
+      const d = known.get(row.ProjectNumber);
+      let lat = d?.lat ?? null;
+      let lng = d?.lng ?? null;
+      let approximate = d?.approximate ?? false;
+      const locatedFrom = old?.locatedFrom;
+      // A pin that missed or sits at the ZIP center gets another try: the
+      // geocoder learns new streets, and a ZIP center should not stick forever.
+      if (d && !fresh.has(row.ProjectNumber) && (lat == null || approximate) && !locatedFrom && retries > 0) {
+        const address = geocodable(d.address);
+        if (address) {
           retries--;
           const at = await geocode(address, city, http).catch(() => null);
           if (at) {
@@ -911,26 +1033,12 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
             approximate = false;
           }
         }
-      } else {
-        if (left <= 0) {
-          waiting++;
-          waited.add(row.ProjectNumber);
-          continue;
-        }
-        left--;
-        if (pages++) await pause(pauseMs);
-        details = projectDetails(parseProjectPage(await fetchText(tabsProjectUrl(row.ProjectNumber), { timeoutMs: 60_000, ...http })));
-        const address = geocodable(details.address);
-        if (address) {
-          const at = await geocode(address, city, http).catch(() => null);
-          if (at) [lat, lng] = at;
-        }
       }
-      const link = developerLink(details.owner, row.ProjectName, city);
+      const link = developerLink(d?.owner ?? null, row.ProjectName, city);
       projects.push({
         id: row.ProjectNumber,
         city,
-        place: places.get(row.City) ?? placeOf(details.address),
+        place: places.get(row.City) ?? placeOf(d?.address ?? null),
         name: row.ProjectName.trim(),
         facility: row.FacilityName && row.FacilityName.trim() !== row.ProjectName.trim() ? row.FacilityName.trim() : null,
         status: statusLabel(row.ProjectStatus),
@@ -940,53 +1048,45 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
         registered: isoDate(row.ProjectCreatedOn) ?? '',
         start: isoDate(row.EstimatedStartDate),
         end: isoDate(row.EstimatedEndDate),
-        address: details.address,
-        owner: details.owner,
-        tenant: details.tenant,
-        designFirm: details.designFirm,
-        scope: details.scope,
-        squareFeet: details.squareFeet,
-        isPublic: details.isPublic,
+        address: d?.address ?? null,
+        owner: d?.owner ?? null,
+        tenant: d?.tenant ?? null,
+        designFirm: d?.designFirm ?? null,
+        scope: d?.scope ?? null,
+        squareFeet: d?.squareFeet ?? null,
+        isPublic: d?.isPublic ?? false,
         lat,
         lng,
         approximate,
         ...(locatedFrom ? { locatedFrom } : {}),
+        ...(old?.aliases?.length ? { aliases: [...old.aliases] } : {}),
         developerUrl: link.url,
         developerDirect: link.direct,
-        url: tabsPermalink(row.ProjectNumber)
+        url: tabsPermalink(row.ProjectNumber),
+        ...(d ? {} : { awaiting: true }),
+        ...(i < cap ? { headline: true } : {})
       });
     }
     // A short read must not quietly shrink the map: earlier projects this read
-    // could not see stay, until their end date passes, while the cap has room.
-    let kept = 0;
+    // could not see stay, until their end date passes.
     if (!whole) {
       const have = new Set(projects.map((p) => p.id));
-      const room = capFor(city) - rows.length + waiting;
-      const earlier = previous
-        .filter((p) => p.city === city && (p.source ?? 'tabs') === 'tabs' && !have.has(p.id) && !(p.end && p.end < finished))
-        .sort((x, y) => y.cost - x.cost)
-        .slice(0, Math.max(0, room));
+      const earlier = previous.filter((p) => p.city === city && (p.source ?? 'tabs') === 'tabs' && !have.has(p.id) && !(p.end && p.end < finished));
       projects.push(...earlier.map((p) => ({ ...p })));
-      kept = earlier.length;
+      if (earlier.length) log(`${city} metro: ${earlier.length} kept from the last build because the read was incomplete`);
     }
-    log(
-      `${city} metro: ${rows.length - waiting} projects${waiting ? `; ${waiting} more wait for a later build` : ''}${kept ? `; ${kept} kept from the last build because the read was incomplete` : ''}`
-    );
   }
+  const awaitingCount = projects.filter((p) => p.awaiting).length;
+  log(`read ${pages} new project pages${stopped}; ${awaitingCount} filings still wait for their page${failed.size ? ` (${failed.size} pages failed this build)` : ''}`);
 
-  await pinSmaller(smaller, previousSmaller, waited.size ? 0 : MAX_NEW_PAGES - pages, {
-    http,
-    pauseMs,
-    clock,
-    log,
-    paused: pages > 0
-  });
-
-  // Cities that publish their building permits catch what TABS misses.
+  // Cities that publish their building permits catch what TABS misses: every
+  // permit of $50,000 or more (TABS's own floor), the biggest CITY_MAX headline.
   projects.push(
     ...(await fetchCityPermitProjects(cities, now, projects, {
       ...http,
       log,
+      minValue: 50_000,
+      max: Number.POSITIVE_INFINITY,
       inMetro: (city, at) => distanceKm(at, CITY_CENTERS[city]) <= METRO_RADIUS_KM[city]
     }))
   );
@@ -1010,24 +1110,33 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       p.approximate = true;
     }
   }
+  for (const m of metros) Object.assign(m, locationCounts(projects.filter((p) => p.city === m.city)));
   const exact = projects.filter((p) => p.lat != null && !p.approximate).length;
   const near = projects.filter((p) => p.approximate).length;
-  log(`read ${pages} new project pages; ${exact} placed at their address, ${near} at their ZIP code's center, ${projects.length - exact - near} not on the map`);
+  log(`${projects.length} projects listed; ${exact} placed at their address or site, ${near} at their ZIP code's center, ${awaitingCount} awaiting their page, ${projects.length - exact - near - awaitingCount} read but not placed`);
   for (const id of trace) {
     const p = projects.find((x) => x.id === id);
-    const ranked = searched.some(([, rows]) => rows.some((r) => r.ProjectNumber === id));
-    if (p) {
-      const street = (p.address ?? '').split(',')[0]!.toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-      const twins = projects.filter((x) => x !== p && x.city === p.city && x.source === 'city' && street && (x.address ?? '').split(',')[0]!.toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim() === street);
-      log(`trace ${id}: city entries at the same street address: ${twins.length ? twins.map((x) => `${x.id} "${x.name}"`).join(', ') : 'none (city fallback replaced)'}`);
-      log(`trace ${id}: listed in ${p.city}; ${known.has(id) ? 'page from an earlier build' : 'page read this build'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
-    } else {
-      log(`trace ${id}: not listed (${waited.has(id) ? 'within the cap, page waits for a later build' : ranked ? 'dropped' : 'not among the current filings read'})`);
+    if (!p) {
+      log(`trace ${id}: not listed (not among the current filings read)`);
+      continue;
     }
+    log(`trace ${id}: listed in ${p.city}${p.headline ? ' (headline)' : ''}; ${p.awaiting ? 'page not read yet' : before.has(id) ? 'page from an earlier build' : saved.has(id) ? 'page from the checkpoint' : 'page read this build'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
   }
-  for (const id of trace) {
-    const s = smaller.find((x) => x.id === id);
-    if (s) log(`trace ${id}: in the ${s.city} smaller-filings list ($${s.cost.toLocaleString('en-US')}); ${s.lat != null ? `pin ${s.lat},${s.lng} ${s.approximate ? '(ZIP center)' : '(geocoded address)'}` : s.paged ? 'page read, no pin (address not placed)' : 'page not read yet, no pin'}${s.address ? `; address ${s.address}` : ''}`);
-  }
-  return { asOf: now.toISOString(), projects, coverage, metros, smaller, waiting: waited.size };
+  // Builds keep going while pages wait; a page that failed this build is tried next time but doesn't hold the cache open.
+  const waiting = projects.filter((p) => p.awaiting && !failed.has(p.id)).length;
+  return { asOf: now.toISOString(), projects, coverage, metros, smaller: [], waiting };
+}
+
+/** How a market's projects are located, for the coverage note. */
+export function locationCounts(projects: Development[]): Required<Pick<MetroCoverage, 'listed' | 'exact' | 'site' | 'approximate' | 'awaiting' | 'unlocated'>> {
+  const placed = projects.filter((p) => p.lat != null && p.lng != null);
+  const awaiting = projects.filter((p) => p.awaiting).length;
+  return {
+    listed: projects.length,
+    exact: placed.filter((p) => !p.approximate && !p.locatedFrom).length,
+    site: placed.filter((p) => !p.approximate && p.locatedFrom).length,
+    approximate: placed.filter((p) => p.approximate).length,
+    awaiting,
+    unlocated: projects.filter((p) => (p.lat == null || p.lng == null) && !p.awaiting).length
+  };
 }
