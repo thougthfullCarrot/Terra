@@ -548,6 +548,8 @@ function fillProfile() {
   for (const box of form.querySelectorAll('input[name="alertKinds"]')) box.checked = (profile?.alert_kinds ?? []).includes(box.value);
   form.goodMatchesOnly.checked = (profile?.alert_min_match ?? 0) >= ALERT_GOOD_MATCH;
 
+  // The saved name heads the page once there is one.
+  $('profile-title').textContent = profile?.name?.trim() || 'Your profile';
   $('profile-email').textContent = user.email;
   drawSchool(user.email);
   $('profile-access').textContent =

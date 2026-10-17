@@ -141,8 +141,11 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
     sponsors: sponsorFile
   });
 
+  // The brief on the left, the title decoder beside it for the roles the firm is hiring.
+  const layout = el('div', 'brief-layout');
+  const main = el('div', 'brief-main');
   const head = el('section', 'compare-block brief-head');
-  head.append(el('h3', 'group-title', b.firm));
+  head.append(el('p', 'eyebrow', 'Interview brief'), el('h2', 'brief-firm', b.firm));
   head.append(el('p', 'dev-meta', [b.sector, b.cities.join(', '), `${b.jobs.length} open on Terra`].filter(Boolean).join(' · ')));
   const actions = el('div', 'brief-actions');
   const jobsLink = el('a', 'secondary', 'See its jobs');
@@ -152,16 +155,16 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
   print.addEventListener('click', () => window.print());
   actions.append(jobsLink, print);
   head.append(actions);
-  frag.append(head);
+  main.append(head);
 
   const points = section('Talking points');
   if (b.points.length) points.append(list(b.points));
   else points.append(el('p', 'group-blurb', `Terra has no projects, headlines or zoning cases that name ${b.firm} yet. Start from its own website and recent press releases.`));
-  frag.append(points);
+  main.append(points);
 
   const ask = section('Questions to ask');
   ask.append(list(b.questions));
-  frag.append(ask);
+  main.append(ask);
 
   if (b.projects.length) {
     const s = section(`Projects (${b.projects.length})`, 'State construction filings (TDLR TABS) and city permits that name the firm.');
@@ -173,7 +176,7 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
     }
     if (b.projects.length > 8) ul.append(el('li', 'dev-meta', `and ${b.projects.length - 8} more`));
     s.append(ul);
-    frag.append(s);
+    main.append(s);
   }
   if (b.headlines.length) {
     const s = section('In the news');
@@ -184,7 +187,7 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
       ul.append(li);
     }
     s.append(ul);
-    frag.append(s);
+    main.append(s);
   }
   if (b.cases.length) {
     const s = section('On zoning agendas');
@@ -195,7 +198,7 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
       ul.append(li);
     }
     s.append(ul);
-    frag.append(s);
+    main.append(s);
   }
   if (b.pay.length) {
     const s = section('What it has offered', 'Pay on its H-1B visa filings with the Labor Department: real offers, though only for visa hires.');
@@ -206,7 +209,7 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
       ul.append(li);
     }
     s.append(ul);
-    frag.append(s);
+    main.append(s);
   }
   const s = section('Open roles');
   const ul = el('ul', 'growth-projects');
@@ -218,9 +221,32 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
     ul.append(li);
   }
   s.append(ul);
-  frag.append(s);
-  frag.append(el('p', 'market-asof', 'Matched by company name. Projects often sit under a one-off LLC, so a firm can be doing more than shows here.'));
+  main.append(s);
+  main.append(el('p', 'market-asof', 'Matched by company name. Projects often sit under a one-off LLC, so a firm can be doing more than shows here.'));
+  layout.append(main, briefDecoder(jobs, market));
+  frag.append(layout);
   return frag;
+}
+
+/** The title decoder in short, beside a brief: what each title means and how many are open. */
+function briefDecoder(jobs, market) {
+  const aside = el('aside', 'card brief-decoder');
+  aside.setAttribute('aria-labelledby', 'brief-decoder-title');
+  const title = el('h3', 'eyebrow', 'Title decoder');
+  title.id = 'brief-decoder-title';
+  aside.append(title, el('p', 'brief-decoder-note', 'What the job title usually means at Texas firms.'));
+  const ul = el('ul', 'brief-decoder-list');
+  for (const row of titleRows(jobs, market?.salaries, '').slice(0, 6)) {
+    const li = el('li');
+    const top = el('div', 'brief-decoder-top');
+    top.append(el('b', '', row.title), el('span', 'dev-meta', row.jobs.length ? `${row.jobs.length} open` : 'none open'));
+    li.append(top, el('p', '', row.does));
+    ul.append(li);
+  }
+  const more = el('a', 'link', 'Open the title decoder →');
+  more.href = writeCareerHash({ ...state, tool: 'titles' });
+  aside.append(ul, more);
+  return aside;
 }
 
 /* ------------------------------------------------------------ Title decoder */

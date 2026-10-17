@@ -175,7 +175,14 @@ function ownerView(body) {
     update({ q }, { redraw: false });
     search(q, results);
   });
-  body.replaceChildren(form, results);
+  const main = el('div', 'owner-main');
+  main.append(form, results);
+  const aside = el('aside', 'owner-aside');
+  aside.setAttribute('aria-label', 'Elsewhere in Property');
+  const layout = el('div', 'owner-layout');
+  layout.append(main, aside);
+  body.replaceChildren(layout);
+  companion(aside);
   if (ownerResults && ownerResults.q === state.q) results.replaceChildren(...ownerResults.nodes);
   else if (state.q) search(state.q, results);
   $('p-sources').replaceChildren(
@@ -342,19 +349,41 @@ function parcelTable(parcels, results) {
 }
 
 async function parcelDetail(parcel) {
-  const card = el('section', 'card owner-card');
-  card.append(el('h3', 'group-title', parcel.address || `Account ${parcel.account}`));
+  const card = el('section', 'card owner-card parcel-hero');
+  // The parcel at a glance: account, address and class on the left, the appraised value on the right.
+  const top = el('div', 'parcel-top');
+  const who = el('div', 'parcel-who');
+  who.append(
+    el('p', 'parcel-account', `${parcel.source.county} County · account ${parcel.account}`),
+    el('h3', 'group-title parcel-address', parcel.address || `Account ${parcel.account}`)
+  );
+  const line = [parcel.code, parcel.use, parcel.built ? `built ${parcel.built}` : ''].filter(Boolean).join(' · ');
+  if (line) who.append(el('p', 'parcel-line', line));
+  top.append(who);
+  if (parcel.value) {
+    const value = el('div', 'parcel-value');
+    value.append(el('span', '', 'Appraised value'), el('b', '', money(parcel.value)));
+    top.append(value);
+  }
+  card.append(top);
+  const tiles = el('dl', 'parcel-tiles');
+  for (const [label, value] of [
+    ['Land', parcel.landSqft ? `${(parcel.landSqft / 43560).toFixed(2)} acres` : null],
+    ['Building', parcel.buildingSqft ? `${Math.round(parcel.buildingSqft).toLocaleString('en-US')} sq ft` : null],
+    ['Built', parcel.built ? String(parcel.built) : null],
+    ['Owner since', parcel.acquired ? longDate(parcel.acquired) : null]
+  ]) {
+    if (!value) continue;
+    const d = el('div');
+    d.append(el('dt', '', label), el('dd', '', value));
+    tiles.append(d);
+  }
+  if (tiles.childElementCount) card.append(tiles);
   const facts = el('dl', 'owner-facts');
   for (const [label, value] of [
     ['Owner of record', parcel.owner],
     ['Tax bill goes to', parcel.mail],
-    ['Appraised value', parcel.value ? money(parcel.value) : null],
-    ['Property class', [parcel.code, parcel.use].filter(Boolean).join(' · ')],
-    ['Land', parcel.landSqft ? `${Math.round(parcel.landSqft).toLocaleString('en-US')} sq ft (${(parcel.landSqft / 43560).toFixed(2)} acres)` : null],
-    ['Building', parcel.buildingSqft ? `${Math.round(parcel.buildingSqft).toLocaleString('en-US')} sq ft` : null],
-    ['Built', parcel.built ? String(parcel.built) : null],
-    ['Owner since', parcel.acquired ? longDate(parcel.acquired) : null],
-    ['County', `${parcel.source.county} · account ${parcel.account}`]
+    ['Land', parcel.landSqft ? `${Math.round(parcel.landSqft).toLocaleString('en-US')} sq ft (${(parcel.landSqft / 43560).toFixed(2)} acres)` : null]
   ]) {
     if (!value) continue;
     facts.append(el('dt', '', label), el('dd', '', value));
@@ -365,11 +394,57 @@ async function parcelDetail(parcel) {
   if (parcel.address) row.append(link('Map ↗', `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${parcel.address}, TX`)}`));
   card.append(row);
 
-  const nodes = [card];
-  if (isEntity(parcel.owner)) nodes.push(await entityCard(parcel.owner));
-  else if (parcel.owner) nodes.push(note('The owner of record reads as a person, so there is no company record to follow.'));
-  nodes.push(await portfolioCard(parcel));
-  return nodes;
+  // The owner and their other parcels side by side.
+  const pair = el('div', 'owner-pair');
+  if (isEntity(parcel.owner)) pair.append(await entityCard(parcel.owner));
+  else if (parcel.owner) pair.append(note('The owner of record reads as a person, so there is no company record to follow.'));
+  pair.append(await portfolioCard(parcel));
+  return [card, pair];
+}
+
+/**
+ * Beside the lookup: this week's deal and the next tax sales, from the same
+ * files their own tools read; nothing shows for a file this build lacks.
+ */
+async function companion(aside) {
+  const [deal, distress] = await Promise.all([load('deal').catch(() => null), load('distress').catch(() => null)]);
+  const nodes = [];
+  if (deal?.deal) {
+    const d = deal.deal;
+    const steps = dealSteps(d, deal, analyzeDeal);
+    const card = el('section', 'card owner-side-card');
+    card.append(el('p', 'eyebrow', 'Deal of the week'));
+    card.append(el('h3', 'owner-side-title', d.title));
+    const facts = el('dl', 'owner-side-facts');
+    for (const [label, value] of [
+      ['Price', steps.price ? money(steps.price) : null],
+      [steps.capKnown ? 'Cap rate' : 'Cap rate (typical)', steps.cap != null ? `${Number(steps.cap).toFixed(2)}%` : null],
+      ['Where', d.place]
+    ]) {
+      if (value) facts.append(el('dt', '', label), el('dd', '', value));
+    }
+    const more = el('a', 'link', 'Walk through the math →');
+    more.href = writePropertyHash({ ...state, tool: 'deal' });
+    card.append(facts, more);
+    nodes.push(card);
+  }
+  const sales = distress?.sales ? filterSales(distress.sales, { city: state.city, scheduledOnly: true }).slice(0, 3) : [];
+  if (sales.length) {
+    const card = el('section', 'owner-side-list');
+    card.append(el('p', 'eyebrow', `Next tax sales${state.city ? `, ${state.city} area` : ''}`));
+    const list = el('ul');
+    for (const sale of sales) {
+      const li = el('li');
+      li.append(el('span', 'owner-side-addr', sale.address), el('span', 'owner-side-meta', [sale.saleDate ? longDate(sale.saleDate) : '', `${sale.county} County`].filter(Boolean).join(' · ')), el('b', '', money(sale.value)));
+      list.append(li);
+    }
+    const more = el('a', 'link', 'Open the distress list →');
+    more.href = writePropertyHash({ ...state, tool: 'distress' });
+    card.append(list, more);
+    nodes.push(card);
+  }
+  aside.replaceChildren(...nodes);
+  aside.hidden = !nodes.length;
 }
 
 async function entityCard(owner) {

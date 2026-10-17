@@ -9067,3 +9067,338 @@ body[data-workspace='map'] .devx-body {
     text-align: left;
   }
 }
+
+/* Profile, redesign v3: the picture is changed from the identity block; resume and skill gaps sit side by side. */
+.avatar-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 10px;
+}
+
+.avatar-upload .file-button.small span {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.avatar-upload .hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+.profile .profile-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.profile .profile-cards > .card {
+  margin: 0;
+  padding: 20px;
+}
+
+.profile .skill-gaps .gap-row {
+  grid-template-columns: minmax(90px, auto) 1fr auto;
+}
+
+.prof-meter-head {
+  white-space: nowrap;
+}
+
+/* Property owner lookup, redesign v3: the parcel up top, the owner beside their other parcels, a companion column. */
+.owner-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 28px;
+  align-items: start;
+}
+
+.owner-aside[hidden] {
+  display: none;
+}
+
+.owner-layout:has(.owner-aside[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.parcel-hero {
+  padding: 0;
+  overflow: hidden;
+}
+
+.parcel-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 22px 24px;
+}
+
+.parcel-account {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.parcel-hero .parcel-address {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.parcel-line {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.parcel-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+
+.parcel-value span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.parcel-value b {
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.parcel-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+.parcel-tiles > div {
+  padding: 14px 24px;
+  border-right: 1px solid var(--line);
+}
+
+.parcel-tiles > div:last-child {
+  border-right: 0;
+}
+
+.parcel-tiles dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.parcel-tiles dd {
+  margin: 4px 0 0;
+  font-size: 17px;
+}
+
+.parcel-hero .owner-facts {
+  margin: 0;
+  padding: 16px 24px 4px;
+  border-top: 1px solid var(--line);
+}
+
+.parcel-hero > .dev-links {
+  padding: 0 24px 18px;
+}
+
+.owner-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.owner-pair > .card {
+  margin: 0;
+}
+
+.owner-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 84px;
+}
+
+.owner-side-card {
+  padding: 22px;
+  background: var(--sunk);
+  border-color: transparent;
+}
+
+.owner-side-title {
+  margin: 6px 0 12px;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.owner-side-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  margin: 0 0 14px;
+}
+
+.owner-side-facts dt,
+.owner-side-facts dd {
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.owner-side-facts dt {
+  color: var(--muted);
+}
+
+.owner-side-facts dd {
+  text-align: right;
+}
+
+.owner-side-list ul {
+  margin: 8px 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.owner-side-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.owner-side-addr {
+  font-size: 14px;
+}
+
+.owner-side-meta {
+  grid-column: 1;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.owner-side-list li b {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 500;
+  color: var(--danger, #b4412f);
+}
+
+@media (max-width: 1060px) {
+  .owner-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .owner-aside {
+    position: static;
+  }
+
+  .parcel-value {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+.owner-main > .owner-results:not(:empty) {
+  margin-top: 16px;
+}
+
+/* Career interview brief, redesign v3: the brief beside a short title decoder. */
+.brief-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 32px;
+  align-items: start;
+  margin-top: 8px;
+}
+
+.brief-firm {
+  margin: 4px 0 6px;
+  font-size: clamp(30px, 3.6vw, 44px);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.brief-main > .compare-block:first-child {
+  padding-top: 0;
+}
+
+.brief-main .compare-block:nth-child(2) li {
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.brief-decoder {
+  position: sticky;
+  top: 84px;
+  padding: 22px 24px;
+}
+
+.brief-decoder-note {
+  margin: 4px 0 8px;
+  color: var(--ink2);
+  font-size: 14px;
+}
+
+.brief-decoder-list {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.brief-decoder-list li {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.brief-decoder-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brief-decoder-top b {
+  font-weight: 500;
+}
+
+.brief-decoder-list p {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--ink2);
+}
+
+@media (max-width: 1060px) {
+  .brief-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief-decoder {
+    position: static;
+  }
+}
+
+/* Review pass: phones lead with the newest headline and with event rows, the calendar follows. */
+@media (max-width: 959px) {
+  #n-list > .news-item:first-child { padding-block: 8px 24px; border-bottom: 2px solid var(--ink); margin-bottom: 8px; }
+  #n-list > .news-item:first-child .news-title { font-size: 1.75rem; line-height: 1.15; letter-spacing: -0.02em; }
+}
+@media (max-width: 900px) {
+  .events-side { order: 1; }
+  .events-side .cal { padding: 12px 14px; }
+  .events-side .cal-grid { gap: 2px; }
+  .events-side .cal-grid > * { min-height: 30px; font-size: 12.5px; }
+}

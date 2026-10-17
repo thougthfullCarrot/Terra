@@ -256,6 +256,13 @@
             <p class="muted" id="profile-email"></p>
             <p class="school-line" id="profile-school" hidden></p>
             <p class="badge" id="profile-access"></p>
+            <div class="avatar-upload">
+              <label class="file-button small">
+                <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp,image/gif" />
+                <span>Change picture</span>
+              </label>
+              <span class="hint">JPG, PNG, WebP or GIF, up to 2 MB.</span>
+            </div>
           </div>
           <button type="button" class="link close" id="profile-close">Back</button>
         </div>
@@ -275,16 +282,8 @@
         </div>
         <div class="profile-main">
 
-        <div class="uploads">
-          <div class="upload">
-            <span class="eyebrow">Profile picture</span>
-            <label class="file-button">
-              <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp,image/gif" />
-              <span>Choose a picture</span>
-            </label>
-            <p class="hint">JPG, PNG, WebP or GIF, up to 2 MB.</p>
-          </div>
-          <div class="upload">
+        <div class="uploads profile-cards">
+          <div class="upload card">
             <span class="eyebrow">Resume</span>
             <label class="file-button">
               <input
@@ -299,15 +298,15 @@
             <ul class="chips found" id="resume-skills"></ul>
             <button type="button" class="link" id="resume-remove" hidden>Remove resume</button>
           </div>
+          <!-- Skills open jobs ask for that the resume doesn't show (account.js drawGaps). -->
+          <section class="card skill-gaps" id="skill-gaps" aria-labelledby="gaps-title" hidden>
+            <div class="gaps-head"><h3 id="gaps-title" class="group-title">Skill gaps</h3><span class="meta" id="gaps-count"></span></div>
+            <p class="hint">Skills open Texas postings ask for most that aren't on your resume yet.</p>
+            <div class="gaps" id="gaps"></div>
+          </section>
         </div>
         <p class="notice" id="upload-status" aria-live="polite" hidden></p>
 
-        <!-- Skills open jobs ask for that the resume doesn't show (account.js drawGaps). -->
-        <section class="card skill-gaps" id="skill-gaps" aria-labelledby="gaps-title" hidden>
-          <div class="gaps-head"><h3 id="gaps-title" class="group-title">Skill gaps</h3><span class="meta" id="gaps-count"></span></div>
-          <p class="hint">Skills open Texas postings ask for most that aren't on your resume yet.</p>
-          <div class="gaps" id="gaps"></div>
-        </section>
 
         <form id="profile-form" class="profile-form" novalidate>
           <h2 class="section-title">About you</h2>
