@@ -1,0 +1,113 @@
+name: Development audit (dry run)
+
+# Reads public sources (TDLR TABS, Census geocoder and ZIP centers, city open
+# data) and writes reports as a workflow artifact (and prints them in the log). No secrets, no Supabase, no
+# Sheet, no site deploy. Runs by hand, and on pushes to the audit branch.
+on:
+  workflow_dispatch:
+    inputs:
+      markets:
+        description: Comma-separated markets (blank = every configured market)
+        required: false
+      max_minutes:
+        description: Stop starting new reads after this many minutes (resume on the next run)
+        required: false
+        default: '160'
+  push:
+    branches: ['claude/dev-collection-audit-*']
+    paths:
+      - backend/src/market/devAudit.ts
+      - backend/src/bin/audit-developments.ts
+      - backend/test/browser/audit-preview-check.mjs
+      - .github/workflows/dev-audit.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 190
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      # Searches, pages and geocodes from earlier runs, so an interrupted run resumes.
+      - name: Restore audit cache
+        uses: actions/cache/restore@v4
+        with:
+          path: dev-audit-cache
+          key: dev-audit-${{ github.run_id }}
+          restore-keys: dev-audit-
+
+      # The site build's last market data (its day cache from the default branch):
+      # project pages it already read are reused, not fetched again.
+      - name: Restore the site's market data
+        uses: actions/cache/restore@v4
+        with:
+          path: site/market.json
+          key: market-none
+          restore-keys: market-
+
+      - name: Use it as the previous build
+        run: |
+          if [ -f ../site/market.json ]; then cp ../site/market.json /tmp/market.json
+          else curl -fsSL --max-time 120 -o /tmp/market.json https://thougthfullcarrot.github.io/Terra/market.json || echo "no previous build"; fi
+
+      - name: Run the audit
+        env:
+          MARKETS: ${{ inputs.markets }}
+          MAX_MINUTES: ${{ inputs.max_minutes || '160' }}
+        run: |
+          set -o pipefail
+          args=(--refresh search,city --preview-from ../site/market.json --preview-out /tmp/preview-market.json --max-pages 9000 --max-geocodes 9000 --out ../dev-audit-output --cache ../dev-audit-cache --previous /tmp/market.json --max-minutes "$MAX_MINUTES")
+          if [ -n "$MARKETS" ]; then args+=(--markets "$MARKETS"); fi
+          /usr/bin/time -v npm run --silent audit:developments -- "${args[@]}" 2>&1 | tee /tmp/audit.log
+
+      # The real site, built with the audit's developments in place of today's map data.
+      - name: Check the preview site in a browser
+        if: always()
+        run: |
+          set -o pipefail
+          if [ ! -f /tmp/preview-market.json ]; then echo "no preview data"; exit 1; fi
+          npm run build:site > /dev/null
+          rm -rf /tmp/preview-site && cp -r ../site /tmp/preview-site
+          cp /tmp/preview-market.json /tmp/preview-site/market.json
+          npx playwright-core install --with-deps chromium > /dev/null
+          node test/browser/audit-preview-check.mjs /tmp/preview-site /tmp/preview-shots "$(pwd)/../site/market.json" 2>&1 | tee ../dev-audit-output/browser-check.txt
+
+      - name: Save audit cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: dev-audit-cache
+          key: dev-audit-${{ github.run_id }}
+
+      - name: Print reports
+        if: always()
+        run: |
+          for f in ../dev-audit-output/summary.md ../dev-audit-output/traces.md ../dev-audit-output/*.md ../dev-audit-output/browser-check.txt; do
+            [ -f "$f" ] && { echo "=====FILE $(basename "$f")====="; cat "$f"; echo; }
+          done
+          cat ../dev-audit-output/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-audit-output
+          path: |
+            dev-audit-output
+            /tmp/preview-shots
+          retention-days: 14
