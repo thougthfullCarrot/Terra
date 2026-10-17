@@ -32,8 +32,13 @@ for (const [city, path] of Object.entries(data.files ?? {})) {
 }
 console.log(`market.json: ${headlineCount} headline projects; ${Object.keys(data.files ?? {}).length} market files, ${data.projects.length} projects in all`);
 /** Waits until the map has swapped in the market's full file. */
-const waitFull = (page, city) =>
-  page.waitForFunction((n) => document.querySelectorAll('.dev-list .dev-item').length === n, data.projects.filter((p) => p.city === city).length, { timeout: 30000 });
+const waitFull = async (page, city) => {
+  const want = data.projects.filter((p) => p.city === city).length;
+  const ok = await page
+    .waitForFunction((n) => document.querySelectorAll('.dev-list .dev-item').length === n, want, { timeout: 30000 })
+    .then(() => true, () => false);
+  if (!ok) log(`${city}: the map loads the market's full file`, false, `${await page.locator('.dev-list .dev-item').count()} listed, file has ${want}; title "${await page.locator('#dev-title').textContent().catch(() => '')}"`);
+};
 
 const results = [];
 const log = (name, ok, detail = '') => {

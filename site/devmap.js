@@ -207,7 +207,10 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     const shown = filterProjects(all, filters, asOf);
     // Keyed by the project itself: city permit ids can repeat in a metro.
     const ids = new Set(shown);
-    for (const [project, item] of items) item.hidden = !ids.has(project);
+    for (const [project, item] of items) {
+      const hide = !ids.has(project);
+      if (item.hidden !== hide) item.hidden = hide;
+    }
     empty.hidden = shown.length > 0 || !all.length;
     const active = activeFilterCount(filters);
     const pins = shown.filter((p) => p.lat != null && p.lng != null).length;

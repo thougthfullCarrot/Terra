@@ -170,11 +170,18 @@ jobs:
         id: market-cache
         uses: actions/cache/restore@v4
         with:
-          path: |
-            site/market.json
-            site/developments
+          path: site/market.json
           key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json', 'salaries.json') }}-${{ steps.today.outputs.date }}
           restore-keys: market-
+
+      # Each market's full development list (site/developments/), cached on
+      # its own so the market.json cache keeps restoring older entries.
+      - name: Restore development lists
+        uses: actions/cache/restore@v4
+        with:
+          path: site/developments
+          key: devlists-none
+          restore-keys: devlists-
 
       - name: Restore development pages from an interrupted export
         if: steps.market-cache.outputs.cache-hit != 'true'
@@ -203,14 +210,19 @@ jobs:
         if: steps.market.outputs.complete == 'true'
         uses: actions/cache/save@v4
         with:
-          path: |
-            site/market.json
-            site/developments
+          path: site/market.json
           # While development pages are still queued the key is one-off, so the
           # next build misses the day's key, restores this newest file through
           # restore-keys and reads the next pages; once none wait, the day's key
           # is saved and later builds reuse it as before.
           key: market-${{ hashFiles('backend/src/market/**', 'appraisal.json', 'salaries.json') }}-${{ steps.today.outputs.date }}${{ steps.market.outputs.pages_waiting != '0' && format('-queue-{0}', github.run_id) || '' }}
+
+      - name: Cache development lists
+        if: steps.market.outputs.complete == 'true' && hashFiles('site/developments/*.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: site/developments
+          key: devlists-${{ github.run_id }}-${{ github.run_attempt }}
 
       # A build stopped mid-export (timeout, cancel) keeps the development pages
       # it read: the checkpoint is cached and the next build resumes from it.
