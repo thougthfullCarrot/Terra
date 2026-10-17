@@ -8594,3 +8594,28 @@ nav.market-tools a.chip[aria-current='page'] {
 #controls .filters select {
   field-sizing: content;
 }
+
+/* News, redesign v3: the newest headline leads on the left, the rest list on the right. */
+@media (min-width: 960px) {
+  #n-list { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 56px; align-items: start; }
+  #n-list > .news-item { grid-column: 2; }
+  #n-list > .news-item:first-child { grid-column: 1; grid-row: 1 / span 6; border-bottom: 0; position: sticky; top: 88px; }
+  #n-list > .news-item:first-child .news-title { font-size: clamp(1.8rem, 2.6vw, 2.5rem); line-height: 1.12; letter-spacing: -0.02em; font-weight: 500; }
+}
+.news-title { font-weight: 500; }
+
+/* Events, redesign v3: open date numerals instead of boxed tiles. */
+.date-block { background: none; border: 0; box-shadow: none; align-items: flex-start; text-align: left; min-width: 72px; padding: 0; }
+.date-block > :nth-child(1) { color: var(--accent); font-size: 12.5px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.date-block > :nth-child(2) { font-size: 2.4rem; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: var(--ink); }
+.date-block > :nth-child(3) { font-size: 12px; color: var(--muted); }
+
+/* Profile, redesign v3: the field styling above must not reach switches and checkboxes. */
+.profile-form input.switch { appearance: none; -webkit-appearance: none; position: relative; width: 44px; height: 26px; min-height: 0; padding: 0; flex: none; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line2); }
+.profile-form input.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 0.15s ease; }
+.profile-form input.switch:checked { background: var(--accent); border-color: var(--accent); }
+.profile-form input.switch:checked::after { transform: translateX(18px); }
+.profile-form input[type='checkbox']:not(.switch), .profile-form input[type='radio'] { width: 16px; height: 16px; min-height: 0; padding: 0; flex: none; }
+.profile-form label.check { display: inline-flex; align-items: center; gap: 10px; }
+.profile-form input.switch:not(:checked)::after { background: var(--muted); }
+.profile-form input.switch:checked::after { background: #fff; }
