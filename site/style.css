@@ -9413,3 +9413,8 @@ body[data-workspace='map'] .devx-body {
   /* Scrolling to anything stops short of the fixed bottom tabs. */
   html { scroll-padding-bottom: 76px; }
 }
+@media (max-width: 640px) {
+  /* The city chips scroll inside their row; the row never widens the page. */
+  #controls .chip-group,
+  #controls #city-chips { min-width: 0; max-width: 100%; }
+}
