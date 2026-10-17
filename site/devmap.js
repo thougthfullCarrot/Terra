@@ -484,6 +484,23 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   return box;
 }
 
+/**
+ * Phone workspace: the map fills the screen from its own top down to the
+ * bottom tabs, whatever the title row above it holds (a note, a wrapped button).
+ */
+function fitWorkspace(wrap, narrow) {
+  if (document.body.dataset.workspace !== 'map' || !narrow) {
+    wrap.style.removeProperty('height');
+    return;
+  }
+  const tabs = document.querySelector('nav.tabs');
+  const fixed = tabs && getComputedStyle(tabs).position === 'fixed';
+  const bottom = fixed ? tabs.getBoundingClientRect().top : innerHeight;
+  const top = wrap.getBoundingClientRect().top + scrollY;
+  const height = Math.max(320, Math.floor(bottom - top - 8));
+  if (wrap.style.height !== `${height}px`) wrap.style.height = `${height}px`;
+}
+
 function reduceMotion() {
   return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 }
@@ -731,6 +748,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   const observer = new ResizeObserver(() => {
     if (map !== liveMap) return observer.disconnect();
     wrap.classList.toggle('narrow', !wide());
+    fitWorkspace(wrap, !wide());
     map.invalidateSize({ pan: false });
     if (!fitted) fit();
   });
