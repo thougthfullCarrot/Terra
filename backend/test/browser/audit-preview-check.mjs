@@ -11,11 +11,14 @@
 // Read-only: a local server, no sign-in, outside requests blocked.
 import { createServer } from 'node:http';
 import { readFile, mkdir, stat } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
 import { extname, join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const siteDir = resolve(process.argv[2] ?? '../site');
 const shots = process.argv[3] ? resolve(process.argv[3]) : null;
+// Optional: today's market.json, timed under the same slow phone conditions for comparison.
+const baseline = process.argv[4] ? resolve(process.argv[4]) : null;
 const file = join(siteDir, 'market.json');
 const market = JSON.parse(await readFile(file, 'utf8'));
 const projects = market.developments?.projects ?? [];
@@ -38,12 +41,21 @@ log('coordinates come in pairs', projects.every((p) => (p.lat == null) === (p.ln
 log('only ZIP-center points are marked approximate, and each has a point', projects.filter((p) => p.approximate).every((p) => p.lat != null && !p.locatedFrom));
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.mjs': 'text/javascript' };
+// Gzipped like GitHub Pages serves text, so transfer sizes and timings are realistic.
+const zipped = new Map();
 const server = createServer(async (req, res) => {
-  const raw = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  const url = new URL(req.url, 'http://x');
+  const raw = decodeURIComponent(url.pathname);
   const path = raw.endsWith('/') ? `${raw}index.html` : raw;
   try {
-    const body = await readFile(join(siteDir, path));
-    res.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream' }).end(body);
+    const source = path === '/market.json' && url.searchParams.has('baseline') && baseline ? baseline : join(siteDir, path);
+    let body = await readFile(source);
+    const headers = { 'content-type': types[extname(path)] ?? 'application/octet-stream' };
+    if (/gzip/.test(req.headers['accept-encoding'] ?? '') && /\.(json|js|css|html|mjs|svg)$/.test(path)) {
+      body = zipped.get(source) ?? zipped.set(source, gzipSync(body)).get(source);
+      headers['content-encoding'] = 'gzip';
+    }
+    res.writeHead(200, headers).end(body);
   } catch {
     res.writeHead(404).end();
   }
@@ -167,6 +179,39 @@ for (const vp of [
     }
   }
   await ctx.close();
+}
+// A mid-range phone on a slow connection: Lighthouse's "Slow 4G" (150 ms, 1.6 Mbps down) and a 4x slower CPU.
+async function slowPhone(city, useBaseline) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+  if (useBaseline) await page.route(/\/market\.json(\?|$)/, (r) => r.continue({ url: `${base}market.json?baseline=1` }));
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 150, downloadThroughput: (1.6e6 / 8) * 0.9, uploadThroughput: (750e3 / 8) * 0.9 });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  let bytes = 0;
+  cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength));
+  const t0 = Date.now();
+  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.waitForSelector('.dev-list .dev-item', { timeout: 180000 });
+  const list = Date.now() - t0;
+  await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 180000 });
+  const map = Date.now() - t0;
+  if (!(await page.locator('.dev-filters-body').isVisible())) await page.locator('.dev-filters-summary').click();
+  const typed = (await search(page, 'build')) - 250;
+  await ctx.close();
+  return { list, map, typed, mb: bytes / 1e6 };
+}
+console.log('\nSlow phone (Slow 4G 1.6 Mbps / 150 ms, CPU 4x slower), gzip as GitHub Pages serves it:');
+console.log('| Market | Data | Downloaded | List shown | Map ready | Search keystroke |');
+console.log('|---|---|---:|---:|---:|---:|');
+for (const city of ['San Antonio', 'Houston']) {
+  for (const useBaseline of baseline ? [true, false] : [false]) {
+    const r = await slowPhone(city, useBaseline);
+    console.log(`| ${city} | ${useBaseline ? "today's market.json" : 'audit preview'} | ${r.mb.toFixed(1)} MB | ${(r.list / 1000).toFixed(1)} s | ${(r.map / 1000).toFixed(1)} s | ${r.typed} ms |`);
+    if (!useBaseline) log(`slow phone: ${city} map ready within 30 s`, r.map < 30000, `${(r.map / 1000).toFixed(1)} s`);
+  }
 }
 await browser.close();
 server.close();

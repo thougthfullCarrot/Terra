@@ -86,7 +86,7 @@ jobs:
           rm -rf /tmp/preview-site && cp -r ../site /tmp/preview-site
           cp /tmp/preview-market.json /tmp/preview-site/market.json
           npx playwright-core install --with-deps chromium > /dev/null
-          node test/browser/audit-preview-check.mjs /tmp/preview-site /tmp/preview-shots 2>&1 | tee ../dev-audit-output/browser-check.txt
+          node test/browser/audit-preview-check.mjs /tmp/preview-site /tmp/preview-shots "$(pwd)/../site/market.json" 2>&1 | tee ../dev-audit-output/browser-check.txt
 
       - name: Save audit cache
         if: always()
