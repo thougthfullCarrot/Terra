@@ -146,7 +146,7 @@ for (const vp of [
   });
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const city = biggest;
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   const t0 = Date.now();
   await page.waitForSelector('.dev-map.leaflet-container', { timeout: 30000 });
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
@@ -155,6 +155,18 @@ for (const vp of [
   const all = byCity.get(city);
   const v = vp.name;
   console.log(`\n[${v}] ${city}: ${all.length} projects, ${pinsOf(all)} with coordinates`);
+
+  // The workspace: the map starts on screen under the header, with the market controls out of the way.
+  const ws = await page.evaluate(() => {
+    const map = document.querySelector('.devx-mapwrap').getBoundingClientRect();
+    const head = document.querySelector('.appbar').getBoundingClientRect();
+    const title = document.querySelector('#dev-title').getBoundingClientRect();
+    const tabs = document.querySelector('nav.tabs');
+    const fixedTabs = tabs && getComputedStyle(tabs).position === 'fixed' ? tabs.getBoundingClientRect().top : innerHeight;
+    return { mapTop: map.top, mapBottom: map.bottom, title: title.top, head: head.bottom, controls: document.querySelector('#market-controls').offsetParent !== null, fixedTabs, vh: innerHeight };
+  });
+  log(`${v}: the map workspace starts under the header with the map on screen`, !ws.controls && ws.title >= ws.head && ws.mapTop < ws.vh * 0.4, JSON.stringify(ws));
+  log(`${v}: the map ends above the bottom tabs, so its controls and attribution show`, ws.mapBottom <= ws.fixedTabs + 1, `map bottom ${Math.round(ws.mapBottom)}, tabs at ${Math.round(ws.fixedTabs)}`);
 
   // Cost, work and funding float over the map; town, status and filed sit under More, folded at first.
   const pillsShown = await page.locator('.devx-filters select[aria-label="Estimated cost"]').isVisible();
@@ -444,7 +456,7 @@ for (const vp of [
     const offPage = await ctx.newPage();
     offPage.on('pageerror', (e) => errors.push(e.message));
     await offPage.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
-    await offPage.goto(`${base}#markets&city=${encodeURIComponent(offCity)}`);
+    await offPage.goto(`${base}#markets&tool=map&city=${encodeURIComponent(offCity)}`);
     await offPage.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
     await waitFull(offPage, offCity);
     const offItem = offPage.locator('.dev-item:not([hidden]):has(.dev-off)').first();
@@ -468,7 +480,7 @@ for (const vp of [
   // each query must list exactly what the generated data says it should.
   const sa = byCity.get('San Antonio') ?? [];
   if (sa.length) {
-    await page.goto(`${base}#markets&city=San%20Antonio`);
+    await page.goto(`${base}#markets&tool=map&city=San%20Antonio`);
     await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
     await waitFull(page, 'San Antonio');
     const merc = ['TABS2025017471', 'TABS2025017477'].map((id) => sa.find((p) => p.id === id));
@@ -560,6 +572,24 @@ for (const vp of [
     // Reporting is off until migration 0019 and DEVELOPMENT_REPORTS_ENABLED: no form, the map works as before.
     log(`${v}: no report form while reporting is off`, (await page.locator('.dev-report').count()) === 0);
   }
+  // The market pages link into the workspace, and the city menu moves it to another metro.
+  const other = [...byCity.keys()].find((c) => c !== biggest);
+  await page.goto(`${base}#markets&city=${encodeURIComponent(biggest)}`);
+  const teaser = page.locator('.devx-teaser-open');
+  const teaserOk = await teaser.waitFor({ timeout: 15000 }).then(() => true, () => false);
+  if (teaserOk) {
+    await teaser.click();
+    await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
+  }
+  log(`${v}: a city's market page opens its development map workspace`, teaserOk && /tool=map/.test(await page.evaluate(() => location.hash)) && (await page.locator('#dev-title').textContent()).includes(biggest));
+  if (other) {
+    const menu = page.locator('.devx-city-menu select');
+    const chips = page.locator('.devx-cities .chip', { hasText: other });
+    if (await menu.isVisible()) await menu.selectOption(other);
+    else await chips.first().click();
+    await page.waitForFunction((c) => document.querySelector('#dev-title')?.textContent.includes(c), other, { timeout: 15000 }).catch(() => null);
+    log(`${v}: the city ${(await menu.isVisible()) ? 'menu' : 'chips'} switch the map to ${other}`, (await page.locator('#dev-title').textContent()).includes(other) && (await page.evaluate(() => new URLSearchParams(location.hash.slice(1)).get('city'))) === other);
+  }
   log(`${v}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
@@ -579,7 +609,7 @@ for (const city of ['San Antonio', 'Houston'].filter((c) => byCity.has(c))) {
   let bytes = 0;
   cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength));
   const t0 = Date.now();
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 180000 });
   const map = Date.now() - t0;
   const want = data.projects.filter((p) => p.city === city).length;

@@ -71,7 +71,7 @@ async function open(ctx, city) {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const t0 = Date.now();
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForSelector('.dev-map.leaflet-container', { timeout: 60000 });
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 60000 });
   return { page, errors, ms: Date.now() - t0 };
@@ -147,7 +147,7 @@ for (const vp of [
   // A project without coordinates: still found, marked, details in the list.
   const off = (byCity.get('San Antonio') ?? []).find((p) => p.lat == null) ?? projects.find((p) => p.lat == null);
   if (off) {
-    if (off.city !== 'San Antonio') await page.goto(`${base}#markets&city=${encodeURIComponent(off.city)}`), await page.waitForSelector('.dev-map.leaflet-container');
+    if (off.city !== 'San Antonio') await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(off.city)}`), await page.waitForSelector('.dev-map.leaflet-container');
     await search(page, off.id);
     const names = await visibleNames(page);
     log(`${v}: no-coordinate project ${off.id} (${off.city}) is searchable`, names.includes(off.name));
@@ -190,7 +190,7 @@ async function slowPhone(city, useBaseline) {
   let bytes = 0;
   cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength));
   const t0 = Date.now();
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForSelector('.dev-list .dev-item', { timeout: 180000 });
   const list = Date.now() - t0;
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 180000 });

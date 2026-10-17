@@ -113,7 +113,7 @@ let hiringOnly = false;
  * switcher and calls onCity when one is picked; on a city's own page, cities
  * is just that one.
  */
-export function developmentMap({ data, cities, city, bids, onCity }) {
+export function developmentMap({ data, cities, city, bids, onCity, back = null }) {
   const box = el('section', 'card dev-card devx');
   box.setAttribute('aria-labelledby', 'dev-title');
 
@@ -121,7 +121,9 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   const head = el('div', 'devx-head');
   const titles = el('div', 'devx-titles');
   const crumbs = el('p', 'devx-crumbs');
-  crumbs.append(el('span', '', 'Markets'), el('span', 'devx-sep', '/'), el('span', '', 'Development map'));
+  const home = back ? el('a', 'link', 'Market data') : el('span', '', 'Markets');
+  if (back) home.href = back;
+  crumbs.append(home, el('span', 'devx-sep', '/'), el('span', '', 'Development map'));
   const title = el('h2', 'devx-title', `What's being built in ${city}`);
   title.id = 'dev-title';
   titles.append(crumbs, title);
@@ -137,7 +139,16 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       chip.addEventListener('click', () => onCity(name));
       pick.append(chip);
     }
-    actions.append(pick);
+    // Narrow screens: the same choice as one menu, so no city is hidden off the edge of a chip row.
+    const menu = el('label', 'devx-city-menu');
+    const select = el('select');
+    select.setAttribute('aria-label', 'City');
+    for (const name of cities) select.append(new Option(name, name));
+    select.value = city;
+    select.addEventListener('change', () => onCity(select.value));
+    menu.append(el('span', 'devx-pill-label', 'City'), select);
+    actions.append(pick, menu);
+    if (cities.length > 6) actions.classList.add('many');
   }
   // Watchlists (migration 0017): new filings in this metro by email. Null while they're off.
   const followArea = followButton(areaItem(city), 'Follow new filings');
@@ -289,7 +300,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     ? `${parts.join('; ')}. From ${sources}${updated ? `, updated ${updated}` : ''}. Costs are the owner's estimate. The filing date is the TABS registration date, or the permit's issue date for city permits. Categories come from the words in each filing's name; filings whose names don't say are Other / unclassified. Single-family homes are not included${PERMIT_CITIES[city] ? '' : ", and this metro's cities do not publish their permits, so smaller projects may be missing"}.`
     : 'No projects to show yet.';
 
-  const items = drawList(all, catOf, hiringFor, (project) => select(project, { fly: true }), (project, on) => map?.hover(on ? project : null));
+  const items = drawList(all, catOf, hiringFor, (project) => select(project, { fly: true, reveal: true }), (project, on) => map?.hover(on ? project : null));
   let map = null;
   /** The projects on screen in list order, for the panel's previous and next. */
   let order = [];
@@ -390,7 +401,7 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   };
 
   /** Opens a project in the panel: from a row, a pin, or the panel's own previous and next. */
-  function select(project, { fly = false, focus = false } = {}) {
+  function select(project, { fly = false, focus = false, reveal = false } = {}) {
     selected = project;
     for (const [p, item] of items) {
       const on = p === project;
@@ -407,6 +418,8 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     panel.hidden = false;
     mapWrap.classList.add('panel-open');
     map?.select(project, fly);
+    // Stacked layout: the list sits under the map, so a row's pick brings the map and its panel back into view.
+    if (reveal && mapWrap.classList.contains('narrow') && mapWrap.getBoundingClientRect().top < 0) mapWrap.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' });
     if (focus) panel.focus({ preventScroll: true });
   }
 
