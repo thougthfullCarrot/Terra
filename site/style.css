@@ -9402,3 +9402,14 @@ body[data-workspace='map'] .devx-body {
   .events-side .cal-grid { gap: 2px; }
   .events-side .cal-grid > * { min-height: 30px; font-size: 12.5px; }
 }
+
+/* Phone map: the button that jumps to search, categories and the project list. */
+.devx-to-list { display: none; }
+@media (max-width: 900px) {
+  .devx-to-list { display: inline-flex; }
+  .devx-side { scroll-margin-top: 64px; }
+}
+@media (max-width: 900px) {
+  /* Scrolling to anything stops short of the fixed bottom tabs. */
+  html { scroll-padding-bottom: 76px; }
+}

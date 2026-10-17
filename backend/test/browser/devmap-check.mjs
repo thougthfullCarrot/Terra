@@ -483,6 +483,39 @@ for (const vp of [
     await page.goto(`${base}#markets&tool=map&city=San%20Antonio`);
     await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
     await waitFull(page, 'San Antonio');
+    if (vp.mobile) {
+      // Phones: the list sits under the full-height map, so reach it through the visible control, not fill() on a hidden field.
+      const open = page.locator('.devx-to-list');
+      log(`${v}: a visible "Search & project list" control is on the map`, await open.isVisible());
+      await open.click();
+      await page.waitForTimeout(700);
+      const side = await page.evaluate(() => {
+        const r = document.querySelector('.devx-side').getBoundingClientRect();
+        const tabs = document.querySelector('nav.tabs')?.getBoundingClientRect();
+        const legend = document.querySelector('.devx-legend')?.getBoundingClientRect();
+        return { top: r.top, focused: document.activeElement?.closest('.devx-search') != null, legendShown: legend ? legend.height > 0 : false, tabsTop: tabs?.top ?? innerHeight, vh: innerHeight };
+      });
+      log(`${v}: it scrolls the search and list into view and focuses search`, side.top >= 0 && side.top < side.vh / 2 && side.focused, JSON.stringify(side));
+      log(`${v}: the category legend is shown with the list`, side.legendShown);
+      const firstName = await page.locator('.dev-list .dev-item .dev-name').first().textContent();
+      const before = await page.$$eval('.dev-list .dev-item:not([hidden])', (r) => r.length);
+      await page.keyboard.type(firstName);
+      await page.waitForTimeout(400);
+      const typed = await page.$$eval('.dev-list .dev-item:not([hidden]) .dev-name', (ns) => ns.length);
+      log(`${v}: typing in that search filters the list`, typed > 0 && typed < before, `${before} -> ${typed} listed`);
+      await page.locator('.dev-search input').fill('');
+      await page.waitForTimeout(300);
+      // The filter pill row scrolls sideways: every pill can be reached and used, and the page itself never scrolls sideways.
+      const pills = await page.evaluate(() => {
+        const row = document.querySelector('.devx-filters');
+        return { scrolls: row.scrollWidth > row.clientWidth, overflowX: getComputedStyle(row).overflowX, pageWide: document.documentElement.scrollWidth > innerWidth, n: row.querySelectorAll('select').length };
+      });
+      log(`${v}: the filter pill row scrolls sideways when it overflows; the page doesn't`, (!pills.scrolls || /auto|scroll/.test(pills.overflowX)) && !pills.pageWide, JSON.stringify(pills));
+      const last = page.locator('.devx-filters select').last();
+      await last.scrollIntoViewIfNeeded();
+      const lastBox = await last.boundingBox();
+      log(`${v}: the last filter pill can be scrolled into view`, lastBox != null && lastBox.x >= 0 && lastBox.x + lastBox.width <= vp.width + 1, JSON.stringify(lastBox));
+    }
     const merc = ['TABS2025017471', 'TABS2025017477'].map((id) => sa.find((p) => p.id === id));
     for (const p of merc.filter(Boolean)) {
       console.log(`  Merc in data: ${p.id} "${p.name}" $${p.cost} at ${p.address ?? 'no address'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(site point: ${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);

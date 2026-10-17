@@ -153,6 +153,11 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   // Watchlists (migration 0017): new filings in this metro by email. Null while they're off.
   const followArea = followButton(areaItem(city), 'Follow new filings');
   if (followArea) actions.append(followArea);
+  // Narrow screens: the list sits under the full-height map, so a visible control opens it.
+  const toList = el('button', 'secondary sm devx-to-list', 'Search & project list');
+  toList.type = 'button';
+  toList.setAttribute('aria-controls', 'devx-side');
+  actions.append(toList);
   head.append(titles, actions);
   box.append(head);
 
@@ -173,6 +178,9 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
 
   const body = el('div', 'devx-body');
   const side = el('div', 'devx-side');
+  side.id = 'devx-side';
+  side.setAttribute('aria-label', 'Projects');
+  side.setAttribute('role', 'region');
   const mapWrap = el('div', 'devx-mapwrap');
   body.append(side, mapWrap);
   box.append(body);
@@ -187,6 +195,10 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   input.enterKeyHint = 'search';
   search.insertAdjacentHTML('beforeend', '<svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>');
   search.append(input);
+  toList.addEventListener('click', () => {
+    side.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' });
+    input.focus({ preventScroll: true });
+  });
   let typing = 0;
   input.addEventListener('input', () => {
     // The query is kept at once, so a menu changed within the debounce never drops it.
