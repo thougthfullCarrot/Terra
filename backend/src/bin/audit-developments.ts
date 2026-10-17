@@ -12,10 +12,10 @@
  * again the same day; pages and geocodes carry over across days.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AUDIT_MARKETS, auditBudget, auditMarket, marketReport, summaryReport, traceLines, type AuditCache, type MarketAudit } from '../market/devAudit.js';
+import { AUDIT_MARKETS, auditBudget, auditMarket, marketReport, summaryReport, toDevelopments, traceLines, type AuditCache, type MarketAudit, type RefreshKind } from '../market/devAudit.js';
 import { fetchZipCenters, type DevelopmentsResult } from '../market/developments.js';
 import type { City } from '../types.js';
 
@@ -45,7 +45,16 @@ export function fileCache(dir: string): AuditCache {
     async set(key, value) {
       const file = path(key);
       await mkdir(dirname(file), { recursive: true });
-      await writeFile(file, JSON.stringify({ key, value }));
+      await writeFile(file, JSON.stringify({ key, value, savedAt: new Date().toISOString() }));
+    },
+    async savedAt(key) {
+      // Entries written before savedAt was recorded fall back to the file's time, which actions/cache keeps.
+      try {
+        const entry = JSON.parse(await readFile(path(key), 'utf8')) as { savedAt?: string };
+        return entry.savedAt ?? (await stat(path(key))).mtime.toISOString();
+      } catch {
+        return undefined;
+      }
     }
   };
 }
@@ -58,6 +67,8 @@ async function main(): Promise<void> {
   const cache = fileCache(resolve(flag('--cache') ?? join(out, '.cache')));
   const markets = (flag('--markets')?.split(',').map((m) => m.trim()) ?? AUDIT_MARKETS) as City[];
   const trace = flag('--trace')?.split(',') ?? DEFAULT_TRACE;
+  // --refresh search,city re-asks TDLR and the cities instead of using cached answers (a fresh verification run).
+  const refresh = (flag('--refresh')?.split(',').filter(Boolean) ?? []) as RefreshKind[];
   // The day the run started, so a resumed run asks TABS for the same windows.
   const now = new Date(`${new Date().toISOString().slice(0, 10)}T12:00:00Z`);
   const budget = auditBudget({
@@ -93,7 +104,7 @@ async function main(): Promise<void> {
     const pagesLeft = budget.pages;
     budget.pages = Math.floor(pagesLeft / (markets.length - i));
     const share = budget.pages;
-    const a = await auditMarket(market, { now, cache, budget, trace, previous: { projects: previous?.projects, smaller: previous?.smaller }, zipCenters, log: (l) => console.log(l) });
+    const a = await auditMarket(market, { now, cache, budget, trace, refresh, previous: { projects: previous?.projects, smaller: previous?.smaller }, zipCenters, log: (l) => console.log(l) });
     budget.pages = pagesLeft - (share - budget.pages);
     if (!a.counties.length) {
       console.log(`${market}: no TABS counties configured; skipped`);
@@ -111,6 +122,27 @@ async function main(): Promise<void> {
   await writeFile(join(out, 'traces.md'), traces);
   await writeFile(join(out, 'summary.md'), summaryReport(audits, { asOf, budget, minutes, markets }));
   await writeFile(join(out, 'run.json'), JSON.stringify({ asOf, minutes, used: budget.used, left: { searches: budget.searches, pages: budget.pages, geocodes: budget.geocodes } }, null, 1));
+  // A copy of the site's market.json with the map's developments replaced by the audit's, for a preview build.
+  const previewFrom = flag('--preview-from');
+  if (previewFrom) {
+    try {
+      const market = JSON.parse(await readFile(resolve(previewFrom), 'utf8')) as { developments?: DevelopmentsResult };
+      const projects = audits.flatMap(toDevelopments);
+      market.developments = {
+        ...(market.developments ?? {}),
+        asOf: now.toISOString(),
+        projects,
+        smaller: [],
+        waiting: 0,
+        metros: audits.map((a) => ({ city: a.market, filings: a.eligible, cap: a.records.length, cutoff: null, complete: a.complete, reported: a.reported, skippedWindows: 0 }))
+      };
+      const target = resolve(flag('--preview-out') ?? join(out, 'market-preview.json'));
+      await writeFile(target, JSON.stringify(market));
+      console.log(`preview market data: ${projects.length} developments -> ${target}`);
+    } catch (error) {
+      console.log(`preview not written (${error instanceof Error ? error.message : String(error)})`);
+    }
+  }
   console.log(`wrote ${out} in ${minutes.toFixed(1)} min`);
 }
 

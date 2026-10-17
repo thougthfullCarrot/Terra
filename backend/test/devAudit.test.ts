@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { permitProjects, type CityPermit, type PermitSource } from '../src/market/cityPermits.js';
-import { auditBudget, auditCounty, auditMarket, exclusionReason, marketReport, memoryCache, traceLines } from '../src/market/devAudit.js';
+import { auditBudget, auditCounty, auditMarket, exclusionReason, marketReport, memoryCache, toDevelopments, traceLines } from '../src/market/devAudit.js';
 import { currentDevelopments, type TabsRow } from '../src/market/developments.js';
 
 /**
@@ -201,7 +201,9 @@ describe('a market: merge, locate, report', () => {
         cityPermit({ permit: 'COM-PRJ-25-1', group: '5734 UTSA BLVD', address: '5734 Utsa Blvd, San Antonio, TX 78249', lat: MERC_PERMIT_POINT[0], lng: MERC_PERMIT_POINT[1], name: 'Merc Retail Development' }),
         cityPermit({ permit: 'COM-PRJ-26-9', group: '900 BROADWAY', address: '900 Broadway, San Antonio, TX 78215', lat: 29.44, lng: -98.48, value: 300_000, name: 'Small Cafe' })
       ];
-    }
+    },
+    // A finish-out permit at PDL's address carries the site's point; it is not a project permit.
+    locate: async (sites) => new Map([...sites.keys()].filter((k) => k.startsWith('13735')).map((k) => [k, { lat: 29.5772, lng: -98.5943, permit: 'COM-BLG-PMT26-40200329', names: [] }]))
   };
 
   async function run(extra: TabsRow[] = []) {
@@ -222,7 +224,6 @@ describe('a market: merge, locate, report', () => {
         addresses: SA_ADDRESSES,
         geocodes: {
           // PDL's address matches; the Merc's brand-new addresses don't; a wrong match lands in El Paso.
-          '13735 IH-10 W, San Antonio, TX 78249': [29.5641, -98.5857],
           '100 Main St, El Paso, TX 79901': [31.7587, -106.4869],
           '200 Commerce St, San Antonio, TX 78205': [29.4246, -98.4896]
         }
@@ -249,8 +250,10 @@ describe('a market: merge, locate, report', () => {
     const pdl = audit.records.find((r) => r.key === 'TABS2026006871')!;
     expect(pdl.current).toBe('not shown');
     expect(pdl.rank).toBeGreaterThan(300 + 600);
-    expect(pdl.location).toBe('exact-geocode');
-    expect(pdl.lat).toBeCloseTo(29.5641);
+    // Its address doesn't geocode; a supporting permit at the same address gives the site point.
+    expect(pdl.location).toBe('site');
+    expect(pdl.pointPermit).toEqual({ permit: 'COM-BLG-PMT26-40200329', merged: false });
+    expect(pdl.sources.map((s) => s.kind)).toEqual(['tabs']);
   });
 
   it('reads traced pages first, even with a small page budget', async () => {
@@ -264,7 +267,8 @@ describe('a market: merge, locate, report', () => {
     expect(merc.sources.map((s) => s.id)).toEqual(['TABS2025017471', 'CITY-SanAntonio-COM-PRJ-25-1']);
     expect(merc.sources.map((s) => s.url)).toEqual(['https://www.tdlr.texas.gov/TABS/Projects/TABS2025017471', 'https://data.sanantonio.gov/dataset/building-permits']);
     expect(merc.location).toBe('site');
-    expect(merc.locatedBy).toBe('Borrowed from city permit COM-PRJ-25-1 at the same address');
+    expect(merc.locatedBy).toBe('Borrowed from merged city permit COM-PRJ-25-1 at the same address');
+    expect(merc.pointPermit).toEqual({ permit: 'COM-PRJ-25-1', merged: true });
     expect([merc.lat, merc.lng]).toEqual(MERC_PERMIT_POINT);
     // Not counted twice: no separate city record at 5734 UTSA Blvd.
     expect(audit.records.filter((r) => /5734 utsa/i.test(r.address ?? ''))).toHaveLength(1);
@@ -313,8 +317,30 @@ describe('a market: merge, locate, report', () => {
     expect(md).toMatch(/No coordinates \(listed and searchable, not on the map\) \| \d+/);
     expect(md).toMatch(/### TABS2026006871/);
     const trace = traceLines('TABS2026006871', [audit], NOW).join('\n');
-    for (const stage of ['Collected', 'Eligibility', "Today's production rules", 'Project page', 'City permits', 'Location', 'Proposed list and map']) expect(trace).toContain(stage);
+    for (const stage of ['Collected', 'Eligibility', "Today's production rules", 'Project page', 'Merged city permits', 'Location', 'Proposed list and map']) expect(trace).toContain(stage);
     expect(trace).toMatch(/not shown/);
+    expect(trace).toContain('no qualifying building permit merged');
+    expect(trace).toContain('A supporting permit (COM-BLG-PMT26-40200329) at the same street address supplied the site coordinates only; it is not a project permit and was not merged.');
+  });
+
+  it('separates fresh searches from cached ones, with when TDLR answered', async () => {
+    const { audit } = await run();
+    const md = marketReport(audit, { asOf: '2026-10-16', now: NOW });
+    expect(md).toMatch(/\| Bexar \| \d+ \| \d+ \| 0 \| \d{4}-\d\d-\d\d \d\d:\d\d UTC/);
+    expect(audit.reads[0]!.windows.every((w) => !w.cached && w.fetchedAt)).toBe(true);
+    expect(md).toMatch(/Awaiting enrichment \(page not read yet; listed by name, id and cost only\) \| [1-9]/);
+    expect(md).toMatch(/Taken from the site's last build \(market.json\) \| 960 \|/);
+  });
+
+  it('turns records into map projects: approximate flagged, borrowed points labelled, no-point projects kept', async () => {
+    const { audit } = await run();
+    const devs = toDevelopments(audit);
+    expect(devs).toHaveLength(audit.records.length);
+    const by = (id: string) => devs.find((d) => d.id === id)!;
+    expect(by('TABS2025017477')).toMatchObject({ approximate: true });
+    expect(by('TABS2026006871')).toMatchObject({ approximate: false, locatedFrom: 'City permit COM-BLG-PMT26-40200329 at this address' });
+    expect(by('TABS2025017471').aliases).toContain('COM-PRJ-25-1');
+    expect(by('TABSNOPAGE')).toMatchObject({ lat: null, lng: null, approximate: false });
   });
 });
 

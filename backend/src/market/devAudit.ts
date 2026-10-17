@@ -1,5 +1,6 @@
 import { fetchJson, fetchText, type FetchJsonOptions } from '../lib/http.js';
 import { CITIES, type City } from '../types.js';
+import { developerLink } from './developers.js';
 import { CITY_MAX, MIN_VALUE, PERMIT_SOURCES, permitProjects, siteKey, type PermitSource } from './cityPermits.js';
 import {
   CITY_CENTERS,
@@ -17,6 +18,7 @@ import {
   geocodable,
   geocodeUrl,
   parseProjectPage,
+  placeOf,
   projectDetails,
   searchForm,
   statusLabel,
@@ -67,14 +69,24 @@ const pause = (ms: number) => (ms > 0 ? new Promise((resolve) => setTimeout(reso
 export interface AuditCache {
   get<T>(key: string): Promise<T | undefined>;
   set(key: string, value: unknown): Promise<void>;
+  /** When the entry was written (ISO), so a report can tell an earlier run's answer from this run's. */
+  savedAt?(key: string): Promise<string | undefined>;
 }
+
+/** Cache kinds a run reads fresh even when cached: a verification run passes ['search', 'city']. */
+export type RefreshKind = 'search' | 'city';
 
 export function memoryCache(): AuditCache & { map: Map<string, unknown> } {
   const map = new Map<string, unknown>();
+  const saved = new Map<string, string>();
   return {
     map,
     get: async <T>(key: string) => map.get(key) as T | undefined,
-    set: async (key, value) => void map.set(key, value)
+    set: async (key, value) => {
+      map.set(key, value);
+      saved.set(key, new Date().toISOString());
+    },
+    savedAt: async (key) => saved.get(key)
   };
 }
 
@@ -135,6 +147,8 @@ export interface WindowRead {
   /** How it was read: one search, or a busy day read from both ends. */
   how: 'search' | 'both ends' | 'budget';
   cached: boolean;
+  /** When TDLR answered this window's search (ISO): this run, or the earlier run whose cached answer was used. */
+  fetchedAt?: string;
 }
 
 export interface CountyRead {
@@ -164,13 +178,13 @@ async function search(
   since: Date,
   until: Date,
   dir: 'desc' | 'asc',
-  ctx: { http: FetchJsonOptions; cache: AuditCache; budget: AuditBudget; clock: () => number }
-): Promise<{ page: SearchPage; cached: boolean } | null> {
+  ctx: { http: FetchJsonOptions; cache: AuditCache; budget: AuditBudget; clock: () => number; fresh: boolean }
+): Promise<{ page: SearchPage; cached: boolean; fetchedAt?: string } | null> {
   const key = `search/${county}/${day(since)}_${day(until)}_${dir}`;
-  const hit = await ctx.cache.get<SearchPage>(key);
+  const hit = ctx.fresh ? undefined : await ctx.cache.get<SearchPage>(key);
   if (hit) {
     ctx.budget.used.cached++;
-    return { page: hit, cached: true };
+    return { page: hit, cached: true, fetchedAt: await ctx.cache.savedAt?.(key) };
   }
   if (ctx.budget.searches <= 0 || ctx.clock() > ctx.budget.deadline) return null;
   ctx.budget.searches--;
@@ -186,7 +200,7 @@ async function search(
   if (!Array.isArray(page.data)) throw new Error('TABS answered without a result list');
   const keep: SearchPage = { data: page.data, ...(typeof page.recordsFiltered === 'number' ? { recordsFiltered: page.recordsFiltered } : {}) };
   await ctx.cache.set(key, keep);
-  return { page: keep, cached: false };
+  return { page: keep, cached: false, fetchedAt: new Date(ctx.clock()).toISOString() };
 }
 
 /**
@@ -200,9 +214,9 @@ export async function auditCounty(
   county: string,
   city: City,
   now: Date,
-  ctx: { http?: FetchJsonOptions; cache: AuditCache; budget: AuditBudget; clock?: () => number }
+  ctx: { http?: FetchJsonOptions; cache: AuditCache; budget: AuditBudget; clock?: () => number; fresh?: boolean }
 ): Promise<CountyRead> {
-  const c = { http: ctx.http ?? {}, cache: ctx.cache, budget: ctx.budget, clock: ctx.clock ?? Date.now };
+  const c = { http: ctx.http ?? {}, cache: ctx.cache, budget: ctx.budget, clock: ctx.clock ?? Date.now, fresh: ctx.fresh ?? false };
   const rows = new Map<string, TabsRow>();
   const foundIn = new Map<string, string>();
   const windows: WindowRead[] = [];
@@ -228,7 +242,7 @@ export async function auditCounty(
     const whole = total != null ? data.length >= total : data.length < SEARCH_PAGE;
     const days = Math.round((until.getTime() - since.getTime()) / DAY_MS);
     if (whole) {
-      windows.push({ window, reported: total, returned: data.length, whole: true, how: 'search', cached: got.cached });
+      windows.push({ window, reported: total, returned: data.length, whole: true, how: 'search', cached: got.cached, fetchedAt: got.fetchedAt });
       return;
     }
     if (days <= 1) {
@@ -239,10 +253,10 @@ export async function auditCounty(
         add(low.page.data ?? [], window);
         for (const r of low.page.data ?? []) ids.add(r.ProjectNumber);
       }
-      windows.push({ window, reported: total, returned: ids.size, whole: total != null && ids.size >= total, how: low ? 'both ends' : 'budget', cached: got.cached && !!low?.cached });
+      windows.push({ window, reported: total, returned: ids.size, whole: total != null && ids.size >= total, how: low ? 'both ends' : 'budget', cached: got.cached && !!low?.cached, fetchedAt: low?.fetchedAt && got.fetchedAt && low.fetchedAt > got.fetchedAt ? low.fetchedAt : got.fetchedAt });
       return;
     }
-    windows.push({ window, reported: total, returned: data.length, whole: false, how: 'search', cached: got.cached });
+    windows.push({ window, reported: total, returned: data.length, whole: false, how: 'search', cached: got.cached, fetchedAt: got.fetchedAt });
     const pieces = Math.min(days, Math.max(2, Math.ceil((total ?? SEARCH_PAGE * 2) / 80)));
     for (let i = 0; i < pieces; i++) {
       const from = new Date(since.getTime() + Math.round((i * days) / pieces) * DAY_MS);
@@ -303,6 +317,20 @@ export interface AuditRecord {
   /** TABS rank by cost among the market's eligible filings. */
   rank?: number;
   pageRead: 'cache' | 'previous build' | 'fetched' | 'not read' | 'failed' | 'n/a';
+  /** When the cached page was read (ISO), for pageRead 'cache'. */
+  pageFetchedAt?: string;
+  /** The permit whose point placed a 'site' record, and whether that permit is one of the record's merged sources. */
+  pointPermit?: { permit: string; merged: boolean };
+  start?: string | null;
+  end?: string | null;
+  owner?: string | null;
+  tenant?: string | null;
+  designFirm?: string | null;
+  scope?: string | null;
+  squareFeet?: number | null;
+  isPublic?: boolean;
+  facility?: string | null;
+  contractor?: string | null;
 }
 
 export interface Duplicate {
@@ -320,7 +348,7 @@ export interface MarketAudit {
   read: number;
   exclusions: Record<string, number>;
   eligible: number;
-  cityReads: { source: string; permits: number; projects: number; error?: string }[];
+  cityReads: { source: string; permits: number; projects: number; error?: string; cached?: boolean; fetchedAt?: string }[];
   records: AuditRecord[];
   duplicates: Duplicate[];
   pages: { needed: number; done: number; waiting: number };
@@ -332,10 +360,12 @@ export interface MarketAudit {
 export const inMetro = (city: City, at: [number, number]) => distanceKm(at, CITY_CENTERS[city]) <= METRO_RADIUS_KM[city];
 
 /** Details a previous build already read, by TABS id (main map and paged smaller filings). */
-export function previousPages(projects: Development[] = [], smaller: SmallerFiling[] = []): Map<string, Pick<ProjectDetails, 'address'> & { owner: string | null }> {
-  const out = new Map<string, { address: string | null; owner: string | null }>();
-  for (const p of projects) if ((p.source ?? 'tabs') === 'tabs') out.set(p.id, { address: p.address, owner: p.owner });
-  for (const s of smaller) if (s.paged) out.set(s.id, { address: s.address ?? null, owner: s.owner ?? null });
+export function previousPages(projects: Development[] = [], smaller: SmallerFiling[] = []): Map<string, Partial<ProjectDetails> & { address: string | null }> {
+  const out = new Map<string, Partial<ProjectDetails> & { address: string | null }>();
+  for (const p of projects)
+    if ((p.source ?? 'tabs') === 'tabs')
+      out.set(p.id, { address: p.address, owner: p.owner, tenant: p.tenant, designFirm: p.designFirm, scope: p.scope, squareFeet: p.squareFeet, isPublic: p.isPublic });
+  for (const s of smaller) if (s.paged) out.set(s.id, { address: s.address ?? null, owner: s.owner ?? null, isPublic: s.isPublic ?? false });
   return out;
 }
 
@@ -350,6 +380,8 @@ export interface AuditOptions {
   trace?: string[];
   previous?: { projects?: Development[]; smaller?: SmallerFiling[] };
   sources?: PermitSource[];
+  /** Read these kinds fresh even when cached (verification). */
+  refresh?: RefreshKind[];
   /** ZIP → center; loaded once by the caller (Census gazetteer). */
   zipCenters?: Map<string, [number, number]>;
 }
@@ -390,7 +422,7 @@ async function geocodeCached(address: string, city: City, o: Required<Pick<Audit
 
 /** Audit one market: collect, merge, locate, and classify every development. */
 export async function auditMarket(market: City, opts: AuditOptions): Promise<MarketAudit> {
-  const { now, cache, http = {}, clock = Date.now, log = () => {}, trace = [], sources = PERMIT_SOURCES, zipCenters = new Map() } = opts;
+  const { now, cache, http = {}, clock = Date.now, log = () => {}, trace = [], sources = PERMIT_SOURCES, zipCenters = new Map(), refresh = [] } = opts;
   const budget = opts.budget ?? auditBudget();
   const counties = METRO_COUNTIES[market] ?? [];
   const reads: CountyRead[] = [];
@@ -401,7 +433,7 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
       reads.push({ county, city: market, reported: null, rows: [], windows: [], complete: false, missing: 0, error: 'no TABS county id configured', foundIn: new Map() });
       continue;
     }
-    const r = await auditCounty(county, market, now, { http, cache, budget, clock });
+    const r = await auditCounty(county, market, now, { http, cache, budget, clock, fresh: refresh.includes('search') });
     reads.push(r);
     for (const row of r.rows) {
       const had = seen.get(row.ProjectNumber);
@@ -423,23 +455,24 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
 
   // Project pages for addresses: earlier builds, the cache, then new reads (traced ids first).
   const prior = previousPages(opts.previous?.projects, opts.previous?.smaller);
-  const details = new Map<string, { address: string | null; from: AuditRecord['pageRead'] }>();
+  type Got = Partial<ProjectDetails> & { address: string | null; from: AuditRecord['pageRead']; at?: string };
+  const details = new Map<string, Got>();
   const order = [...eligible].sort((a, b) => Number(trace.includes(b.ProjectNumber)) - Number(trace.includes(a.ProjectNumber)) || b.EstimatedCost - a.EstimatedCost);
   const pages = { needed: eligible.length, done: 0, waiting: 0 };
   for (const row of order) {
     const id = row.ProjectNumber;
     const cached = await cache.get<ProjectDetails>(`page/${id}`);
     if (cached) {
-      details.set(id, { address: cached.address, from: 'cache' });
+      details.set(id, { ...cached, from: 'cache', at: await cache.savedAt?.(`page/${id}`) });
     } else if (prior.has(id)) {
-      details.set(id, { address: prior.get(id)!.address, from: 'previous build' });
+      details.set(id, { ...prior.get(id)!, from: 'previous build' });
     } else if (budget.pages > 0 && clock() <= budget.deadline) {
       budget.pages--;
       if (budget.used.pages++) await pause(budget.pauseMs);
       try {
         const d = projectDetails(parseProjectPage(await fetchText(tabsProjectUrl(id), { timeoutMs: 60_000, ...http })));
         await cache.set(`page/${id}`, d);
-        details.set(id, { address: d.address, from: 'fetched' });
+        details.set(id, { ...d, from: 'fetched', at: new Date(clock()).toISOString() });
       } catch {
         details.set(id, { address: null, from: 'failed' });
         pages.waiting++;
@@ -472,7 +505,17 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
       locatedBy: null,
       current: i < cap ? 'map' : i < cap + MAX_SMALLER ? 'smaller list' : 'not shown',
       rank: i + 1,
-      pageRead: d.from
+      pageRead: d.from,
+      ...(d.at && d.from === 'cache' ? { pageFetchedAt: d.at } : {}),
+      start: isoDate(row.EstimatedStartDate),
+      end: isoDate(row.EstimatedEndDate),
+      owner: d.owner ?? null,
+      tenant: d.tenant ?? null,
+      designFirm: d.designFirm ?? null,
+      scope: d.scope ?? null,
+      squareFeet: d.squareFeet ?? null,
+      isPublic: d.isPublic ?? false,
+      facility: row.FacilityName && row.FacilityName.trim() !== row.ProjectName.trim() ? row.FacilityName.trim() : null
     };
   });
 
@@ -487,8 +530,9 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
   for (const source of sources.filter((s) => s.market === market)) {
     const key = `city/${source.name}/${day(now)}`;
     try {
-      let projects = await cache.get<Development[]>(key);
+      let projects = refresh.includes('city') ? undefined : await cache.get<Development[]>(key);
       let permits = -1;
+      const cachedRead = Boolean(projects);
       if (!projects) {
         if (clock() > budget.deadline) throw new Error('run time used up; read on the next run');
         budget.used.cityReads++;
@@ -497,7 +541,7 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
         projects = permitProjects(raw, now, Number.POSITIVE_INFINITY, AUDIT_MIN_VALUE);
         await cache.set(key, projects);
       }
-      cityReads.push({ source: source.name, permits, projects: projects.length });
+      cityReads.push({ source: source.name, permits, projects: projects.length, cached: cachedRead, fetchedAt: cachedRead ? await cache.savedAt?.(key) : new Date(clock()).toISOString() });
       // Today's build adds a source's biggest CITY_MAX unmatched projects of MIN_VALUE or more.
       let shown = 0;
       for (const p of projects) {
@@ -526,7 +570,14 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
           location: 'none',
           locatedBy: null,
           current: p.cost >= MIN_VALUE && shown++ < CITY_MAX ? 'map' : 'not shown',
-          pageRead: 'n/a'
+          pageRead: 'n/a',
+          owner: p.owner,
+          isPublic: p.isPublic,
+          squareFeet: p.squareFeet,
+          scope: p.scope,
+          contractor: p.contractor ?? null,
+          start: p.start,
+          end: p.end
         };
         if (own) {
           if (inMetro(market, own)) [rec.lat, rec.lng, rec.location, rec.locatedBy] = [own[0], own[1], 'exact-permit', `City permit ${ref.permits?.[0] ?? p.id}'s own point`];
@@ -563,7 +614,8 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
     const site = cityPoints.get(r);
     if (site) {
       if (inMetro(market, site.at)) {
-        [r.lat, r.lng, r.location, r.locatedBy] = [site.at[0], site.at[1], 'site', `Borrowed from city permit ${site.permit} at the same address`];
+        [r.lat, r.lng, r.location, r.locatedBy] = [site.at[0], site.at[1], 'site', `Borrowed from merged city permit ${site.permit} at the same address`];
+        r.pointPermit = { permit: site.permit, merged: true };
         continue;
       }
       rejectedPoints.push(`${r.key}: city permit ${site.permit} point outside the metro, not used`);
@@ -592,7 +644,8 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
           rejectedPoints.push(`${r.key}: site point from permit ${p.permit} outside the metro, not used`);
           continue;
         }
-        [r.lat, r.lng, r.location, r.locatedBy] = [p.lat, p.lng, 'site', `Borrowed from city permit ${p.permit} at the same address`];
+        [r.lat, r.lng, r.location, r.locatedBy] = [p.lat, p.lng, 'site', `Borrowed from supporting city permit ${p.permit} at the same address (not merged)`];
+        r.pointPermit = { permit: p.permit, merged: false };
         delete r.noPointReason;
       }
     } catch (error) {
@@ -660,10 +713,11 @@ export function traceLines(id: string, audits: MarketAudit[], now: Date): string
     }
     out.push(`2. **Eligibility**: current new construction or addition; rank ${rec.rank} of ${a.eligible} by cost in ${a.market}.`);
     out.push(`3. **Today's production rules**: ${rec.current === 'map' ? `inside the ${capFor(a.market)}-project cap, on the main map` : rec.current === 'smaller list' ? `below the ${capFor(a.market)}-project cap: smaller-filings list only, pinned only when spare page reads reach it` : 'outside both the cap and the smaller list: not shown'}.`);
-    out.push(`4. **Project page**: ${rec.pageRead}${rec.address ? `; address "${rec.address}"` : '; no address yet'}.`);
+    out.push(`4. **Project page**: ${rec.pageRead === 'cache' ? `read by an earlier audit run${rec.pageFetchedAt ? ` at ${rec.pageFetchedAt}` : ''}` : rec.pageRead === 'previous build' ? "taken from the site's last build (market.json)" : rec.pageRead === 'fetched' ? 'read from TDLR in this run' : rec.pageRead}${rec.address ? `; address "${rec.address}"` : '; no address yet'}.`);
     const city = rec.sources.filter((s) => s.kind === 'city');
-    out.push(`5. **City permits**: ${city.length ? city.map((s) => `${s.id} (${s.permits?.join(', ') || 'no number'}) ${s.url}`).join('; ') + ' merged into this record' : 'none matched at this street address'}.`);
-    out.push(`6. **Location**: ${rec.location}${rec.locatedBy ? ` (${rec.locatedBy})` : ''}${rec.lat != null ? ` at ${rec.lat.toFixed(6)}, ${rec.lng!.toFixed(6)}` : ''}${rec.noPointReason ? `; no point: ${rec.noPointReason}` : ''}.`);
+    out.push(`5. **Merged city permits**: ${city.length ? city.map((s) => `${s.id} (${s.permits?.join(', ') || 'no number'}) ${s.url}`).join('; ') + ' merged into this record as qualifying new-building, shell or addition permits' : 'no qualifying building permit merged (no new-building, shell or addition permit of $50,000+ at this street address)'}.`);
+    const support = rec.pointPermit && !rec.pointPermit.merged ? ` A supporting permit (${rec.pointPermit.permit}) at the same street address supplied the site coordinates only; it is not a project permit and was not merged.` : rec.pointPermit?.merged ? ` The point is the merged permit ${rec.pointPermit.permit}'s.` : '';
+    out.push(`6. **Location**: ${rec.location}${rec.locatedBy ? ` (${rec.locatedBy})` : ''}${rec.lat != null ? ` at ${rec.lat.toFixed(6)}, ${rec.lng!.toFixed(6)}` : ''}${rec.noPointReason ? `; no point: ${rec.noPointReason}` : ''}.${support}`);
     out.push(`7. **Proposed list and map**: listed and searchable by name, id${city.length ? ', city permit numbers' : ''}${rec.address ? ' and address' : ''}; ${rec.lat != null ? `map-eligible (${rec.location === 'approximate' ? 'dashed approximate pin' : 'pin'}); whether it is drawn at a given zoom is the browser's display limit, not collection` : 'not on the map until a reliable point exists'}.`, '');
   }
   if (out.length === 4) out.push('Not returned by any market county read in this run.', '');
@@ -671,6 +725,47 @@ export function traceLines(id: string, audits: MarketAudit[], now: Date): string
 }
 
 const n = (v: number) => v.toLocaleString('en-US');
+
+const span = (times: (string | undefined)[]) => {
+  const t = times.filter((x): x is string => Boolean(x)).sort();
+  if (!t.length) return 'time not recorded';
+  const f = (x: string) => x.slice(0, 16).replace('T', ' ') + ' UTC';
+  return t[0]!.slice(0, 16) === t.at(-1)!.slice(0, 16) ? f(t[0]!) : `${f(t[0]!)} to ${f(t.at(-1)!)}`;
+};
+
+/** Per county: fresh searches against cached ones, and when TDLR answered; then how each record got its page. */
+export function provenance(a: MarketAudit): string[] {
+  const lines = [
+    '| County | Windows | Searched fresh this run | From an earlier run\'s cache | TDLR answered | Reported | Read | Complete |',
+    '|---|---:|---:|---:|---|---:|---:|---|',
+    ...a.reads.map((r) => {
+      const fresh = r.windows.filter((w) => !w.cached && w.how !== 'budget').length;
+      const cached = r.windows.filter((w) => w.cached).length;
+      return `| ${r.county} | ${r.windows.length} | ${fresh} | ${cached} | ${span(r.windows.map((w) => w.fetchedAt))} | ${r.reported == null ? '?' : n(r.reported)} | ${n(r.rows.length)} | ${r.complete ? 'yes' : 'NO'} |`;
+    }),
+    '',
+    ...(a.cityReads.length
+      ? ['City records: ' + a.cityReads.map((c) => `${c.source} ${c.error ? `not read (${c.error})` : `${c.cached ? 'from an earlier run\'s cache' : 'read fresh this run'}, collected ${span([c.fetchedAt])}`}`).join('; ') + '.', '']
+      : []),
+    'How the records were assembled (project pages give the address; city records come whole from the city):',
+    '',
+    '| Page source | Records |',
+    '|---|---:|'
+  ];
+  const tabs = a.records.filter((r) => r.pageRead !== 'n/a');
+  const by = (k: AuditRecord['pageRead']) => tabs.filter((r) => r.pageRead === k);
+  const cached = by('cache');
+  lines.push(
+    `| Read from TDLR in this run | ${n(by('fetched').length)} |`,
+    `| Read by an earlier audit run (cache; ${span(cached.map((r) => r.pageFetchedAt))}) | ${n(cached.length)} |`,
+    `| Taken from the site's last build (market.json) | ${n(by('previous build').length)} |`,
+    `| Awaiting enrichment (page not read yet; listed by name, id and cost only) | ${n(by('not read').length + by('failed').length)} |`,
+    `| City permit records (no TDLR page needed) | ${n(a.records.length - tabs.length)} |`,
+    `| **Total records** | **${n(a.records.length)}** |`,
+    ''
+  );
+  return lines;
+}
 
 export function marketReport(a: MarketAudit, ctx: { asOf: string; now: Date; traces?: string[] }): string {
   const loc = (c: LocationClass) => a.records.filter((r) => r.location === c).length;
@@ -696,6 +791,9 @@ export function marketReport(a: MarketAudit, ctx: { asOf: string; now: Date; tra
     '',
     `Project pages: ${n(a.pages.done)} of ${n(a.pages.needed)} eligible filings have their page${a.pages.waiting ? `; ${n(a.pages.waiting)} wait for a later run (resumes from cache)` : ''}. Geocodes: ${n(a.geocodes.tried)} addresses checked, ${n(a.geocodes.matched)} matched, ${n(a.geocodes.outsideMetro)} rejected outside the metro${a.geocodes.waiting ? `, ${n(a.geocodes.waiting)} waiting` : ''}.`,
     '',
+    '## Where each answer came from',
+    '',
+    ...provenance(a),
     '## Exclusions by reason',
     '',
     '| Reason | Filings |',
@@ -766,6 +864,45 @@ export function summaryReport(audits: MarketAudit[], ctx: { asOf: string; budget
     `Run: ${ctx.minutes.toFixed(1)} minutes; ${n(ctx.budget.used.searches)} TABS searches, ${n(ctx.budget.used.pages)} project pages, ${n(ctx.budget.used.geocodes)} geocodes, ${n(ctx.budget.used.cityReads)} city reads, ${n(ctx.budget.used.cached)} answers from cache. Service cost: $0 (TDLR, Census and city open data are free with no key).`,
     ''
   ].join('\n');
+}
+
+/** The audit's records in the website's development shape, for a preview build of the map. */
+export function toDevelopments(a: MarketAudit): Development[] {
+  return a.records.map((r) => {
+    const tabs = r.sources.find((x) => x.kind === 'tabs');
+    const permits = r.sources.filter((x) => x.kind === 'city').flatMap((x) => x.permits ?? []);
+    const link = developerLink(r.owner ?? null, r.name, r.market);
+    return {
+      id: r.key,
+      city: r.market,
+      place: r.place ?? placeOf(r.address),
+      name: r.name,
+      facility: r.facility ?? null,
+      status: r.status,
+      work: r.work,
+      cost: r.cost,
+      registered: r.registered,
+      start: r.start ?? null,
+      end: r.end ?? null,
+      address: r.address,
+      owner: r.owner ?? null,
+      tenant: r.tenant ?? null,
+      designFirm: r.designFirm ?? null,
+      scope: r.scope ?? null,
+      squareFeet: r.squareFeet ?? null,
+      isPublic: r.isPublic ?? false,
+      lat: r.lat,
+      lng: r.lng,
+      approximate: r.location === 'approximate',
+      ...(r.location === 'site' && r.pointPermit ? { locatedFrom: `City permit ${r.pointPermit.permit} at this address` } : {}),
+      developerUrl: link.url,
+      developerDirect: link.direct,
+      url: (tabs ?? r.sources[0]!).url,
+      source: tabs ? 'tabs' : 'city',
+      ...(r.contractor ? { contractor: r.contractor } : {}),
+      ...(permits.length ? { aliases: [...new Set(permits)] } : {})
+    } satisfies Development;
+  });
 }
 
 export const AUDIT_MARKETS: readonly City[] = CITIES;

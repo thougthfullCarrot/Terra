@@ -18,6 +18,7 @@ on:
     paths:
       - backend/src/market/devAudit.ts
       - backend/src/bin/audit-developments.ts
+      - backend/test/browser/audit-preview-check.mjs
       - .github/workflows/dev-audit.yml
 
 permissions:
@@ -71,9 +72,21 @@ jobs:
           MAX_MINUTES: ${{ inputs.max_minutes || '160' }}
         run: |
           set -o pipefail
-          args=(--max-pages 9000 --max-geocodes 9000 --out ../dev-audit-output --cache ../dev-audit-cache --previous /tmp/market.json --max-minutes "$MAX_MINUTES")
+          args=(--refresh search,city --preview-from ../site/market.json --preview-out /tmp/preview-market.json --max-pages 9000 --max-geocodes 9000 --out ../dev-audit-output --cache ../dev-audit-cache --previous /tmp/market.json --max-minutes "$MAX_MINUTES")
           if [ -n "$MARKETS" ]; then args+=(--markets "$MARKETS"); fi
           /usr/bin/time -v npm run --silent audit:developments -- "${args[@]}" 2>&1 | tee /tmp/audit.log
+
+      # The real site, built with the audit's developments in place of today's map data.
+      - name: Check the preview site in a browser
+        if: always()
+        run: |
+          set -o pipefail
+          if [ ! -f /tmp/preview-market.json ]; then echo "no preview data"; exit 1; fi
+          npm run build:site > /dev/null
+          rm -rf /tmp/preview-site && cp -r ../site /tmp/preview-site
+          cp /tmp/preview-market.json /tmp/preview-site/market.json
+          npx playwright-core install --with-deps chromium > /dev/null
+          node test/browser/audit-preview-check.mjs /tmp/preview-site /tmp/preview-shots 2>&1 | tee ../dev-audit-output/browser-check.txt
 
       - name: Save audit cache
         if: always()
@@ -85,7 +98,7 @@ jobs:
       - name: Print reports
         if: always()
         run: |
-          for f in ../dev-audit-output/summary.md ../dev-audit-output/traces.md ../dev-audit-output/*.md; do
+          for f in ../dev-audit-output/summary.md ../dev-audit-output/traces.md ../dev-audit-output/*.md ../dev-audit-output/browser-check.txt; do
             [ -f "$f" ] && { echo "=====FILE $(basename "$f")====="; cat "$f"; echo; }
           done
           cat ../dev-audit-output/summary.md >> "$GITHUB_STEP_SUMMARY" || true
@@ -94,5 +107,7 @@ jobs:
         if: always()
         with:
           name: dev-audit-output
-          path: dev-audit-output
+          path: |
+            dev-audit-output
+            /tmp/preview-shots
           retention-days: 14
