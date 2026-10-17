@@ -346,7 +346,6 @@ for (const vp of [
     await page.goto(`${base}#markets&city=San%20Antonio`);
     await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
     await waitFull(page, 'San Antonio');
-  await waitFull(page, city);
     if (vp.mobile && !(await page.locator('.dev-filters').evaluate((d) => d.open))) await page.locator('.dev-filters-summary').click();
     const merc = ['TABS2025017471', 'TABS2025017477'].map((id) => sa.find((p) => p.id === id));
     for (const p of merc.filter(Boolean)) {

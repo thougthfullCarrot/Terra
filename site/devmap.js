@@ -207,10 +207,11 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     const shown = filterProjects(all, filters, asOf);
     // Keyed by the project itself: city permit ids can repeat in a metro.
     const ids = new Set(shown);
-    for (const [project, item] of items) {
-      const hide = !ids.has(project);
-      if (item.hidden !== hide) item.hidden = hide;
-    }
+    // Only matching rows stay in the list: hiding thousands of rows costs far
+    // more layout than detaching them, on a market's full list.
+    const rows = [];
+    for (const [project, item] of items) if (ids.has(project)) rows.push(item);
+    list.replaceChildren(...rows, empty);
     empty.hidden = shown.length > 0 || !all.length;
     const active = activeFilterCount(filters);
     const pins = shown.filter((p) => p.lat != null && p.lng != null).length;
