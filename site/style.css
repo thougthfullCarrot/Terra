@@ -8807,3 +8807,263 @@ body[data-workspace='map'] .devx-body {
 .devx-mapwrap {
   scroll-margin-top: 64px;
 }
+
+/* Market data overview, redesign v3: the comparison table beside the picked city's panel. */
+.market-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 28px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+
+.market-overview .market-table tr.pickable {
+  cursor: pointer;
+}
+
+.market-overview .market-table tr.me > * {
+  background: var(--tint);
+}
+
+.market-pick {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+}
+
+.market-pick[aria-pressed='true'] {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.market-side {
+  position: sticky;
+  top: 84px;
+  padding: 24px;
+  background: var(--sunk);
+  border-color: transparent;
+}
+
+.market-side-city {
+  margin: 0;
+  font-size: clamp(32px, 3.4vw, 48px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.market-side-metro {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.market-side .kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 20px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.market-side .kpi {
+  padding: 14px 12px 14px 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.market-side .kpi:nth-child(odd) {
+  padding-right: 14px;
+  border-right: 1px solid var(--line);
+}
+
+.market-side .kpi:nth-child(even) {
+  padding-left: 14px;
+}
+
+.market-side .kpi b {
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.market-side-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.market-side-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.market-side-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  text-decoration: none;
+}
+
+.chart-fold {
+  margin: 0 0 24px;
+}
+
+.chart-fold-summary {
+  cursor: pointer;
+  margin-bottom: 12px;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+@media (max-width: 1060px) {
+  .market-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .market-side {
+    position: static;
+    min-width: 0;
+  }
+
+  .market-overview > * {
+    min-width: 0;
+  }
+}
+
+/* The panel picker is for keyboards and screen readers; a row's click does the same for a mouse. */
+.market-pick:not(:focus-visible) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Phones: the market tool chips scroll in one row, and the menus sit two by two. */
+@media (max-width: 640px) {
+  #market-controls .market-tools,
+  #property-controls .market-tools {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 0 16px 4px;
+  }
+
+  #market-controls .market-tools .chip,
+  #property-controls .market-tools .chip {
+    flex: none;
+  }
+
+  #m-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  #m-filters label,
+  #m-filters select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Jobs, redesign v3: the day's counts as one compact row of links, so the roles lead. */
+.today {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+#today .today-stat,
+#today .today-stat.card {
+  display: inline-flex;
+  flex-direction: row;
+  width: auto;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: none;
+  text-align: left;
+}
+
+.today-stat b {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.today-stat small {
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+.today-stat em {
+  display: none;
+}
+
+/* The filter block: type, cities and menus in as few rows as fit. */
+#controls {
+  gap: 10px 12px;
+  padding-bottom: 14px;
+}
+
+@media (max-width: 640px) {
+  .today {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -16px 12px;
+    padding: 0 16px;
+  }
+
+  .today-stat {
+    flex: none;
+  }
+
+  #controls #city-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-right: -16px;
+    padding-right: 16px;
+  }
+
+  #controls #city-chips .chip {
+    flex: none;
+  }
+}
+
+/* Tracker on phones: the stages stack, each one a full-width list, with an empty stage folded to its heading. */
+@media (max-width: 640px) {
+  .board {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+    overflow: visible;
+  }
+
+  .board-col {
+    min-height: 0;
+    width: auto;
+    min-width: 0;
+  }
+
+  .board-col:has(.board-empty) .board-empty {
+    padding: 6px 8px 8px;
+    text-align: left;
+  }
+}

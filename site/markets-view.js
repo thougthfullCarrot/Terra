@@ -207,8 +207,9 @@ function render() {
   $('m-focus').value = state.focus;
   // Sorting means nothing with one market on screen, or in the tools.
   const tool = state.tool;
-  $('m-sort-label').hidden = Boolean(state.city) || Boolean(tool);
-  $('m-order-label').hidden = Boolean(state.city) || Boolean(tool);
+  // The overview's table sorts from its own column headers.
+  $('m-sort-label').hidden = true;
+  $('m-order-label').hidden = true;
   // The comparison picks its own cities; the calculator brings its own inputs; the topic means nothing to the broker views.
   $('m-city-label').hidden = tool === 'compare';
   $('m-focus-label').hidden = ['leases', 'reports', 'sites', ...INSIGHTS].includes(tool);
@@ -244,8 +245,9 @@ function render() {
 
   $('m-blurb').textContent = group.blurb ?? '';
   $('m-rates').replaceChildren(rates());
-  $('m-chart').replaceChildren(...(state.city ? [] : group.key === 'development' ? [devTeaser(), chart(group)] : [chart(group)]));
-  $('m-body').replaceChildren(state.city ? cityView(state.city, group) : table(group));
+  // All markets: the comparison table beside the picked city's panel, the map's entry and the chart under it.
+  $('m-chart').replaceChildren();
+  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [overview(group), ...(group.key === 'development' ? [devTeaser()] : []), chartFold(group)]));
   if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
 }
@@ -277,7 +279,58 @@ function toolView(tool) {
   return sitesView(snapshot, state.city);
 }
 
-function table(group, me = '') {
+/** The city the all-markets panel shows; a table row's click picks it. */
+let sideCity = null;
+
+/** All markets: the comparison table with the picked city's figures beside it. */
+function overview(group) {
+  const box = el('div', 'market-overview');
+  const markets = sortMarkets(snapshot.markets, state.sort, state.order);
+  if (!markets.some((m) => m.city === sideCity)) sideCity = markets[0]?.city ?? null;
+  const tableBox = table(group, sideCity, (city) => {
+    sideCity = city;
+    render();
+  });
+  const side = el('aside', 'card market-side');
+  side.setAttribute('aria-live', 'polite');
+  const market = snapshot.markets.find((m) => m.city === sideCity);
+  if (market) {
+    side.setAttribute('aria-label', `${market.city} at a glance`);
+    const head = el('div', 'market-side-head');
+    head.append(el('h2', 'market-side-city', market.city), el('p', 'market-side-metro', market.metro ?? ''));
+    const follow = watchControls(market.city);
+    if (follow) head.append(follow);
+    side.append(head, kpis(market, group));
+    const missing = group.metrics.slice(0, 4).filter((key) => market.values[key] == null).length;
+    if (missing) side.append(el('p', 'market-side-note', `${missing === 1 ? 'One figure has' : `${missing} figures have`} no published value for ${market.city} yet.`));
+    const links = el('div', 'market-side-links');
+    const open = el('a', 'primary', `Open ${market.city}'s page`);
+    open.href = writeMarketHash({ ...state, city: market.city });
+    links.append(open);
+    if (snapshot.developments?.projects?.some((p) => p.city === market.city)) {
+      const map = el('a', 'secondary', 'Development map');
+      map.href = writeMarketHash({ ...state, tool: 'map', city: market.city });
+      links.append(map);
+    }
+    side.append(links);
+  }
+  const main = el('div', 'market-overview-main');
+  main.append(tableBox);
+  box.append(main, side);
+  return box;
+}
+
+/** The metric chart, folded under the table: the same figures as bars. */
+function chartFold(group) {
+  const fold = el('details', 'chart-fold');
+  fold.open = chartOpen;
+  fold.addEventListener('toggle', () => (chartOpen = fold.open));
+  fold.append(el('summary', 'chart-fold-summary', 'Show the figures as a chart'), chart(group));
+  return fold;
+}
+let chartOpen = false;
+
+function table(group, me = '', onPick = null) {
   const metrics = group.metrics.map(metricFor).filter(Boolean);
   const markets = sortMarkets(snapshot.markets, state.sort, state.order);
   const sorted = metricFor(state.sort);
@@ -294,12 +347,27 @@ function table(group, me = '') {
   for (const market of markets) {
     const row = el('tr', market.city === me ? 'me' : '');
     if (market.city === me) row.setAttribute('aria-current', 'true');
+    // The overview picks a city for its side panel; the city's name still opens its own page.
+    if (onPick) {
+      row.classList.add('pickable');
+      row.addEventListener('click', (event) => {
+        if (!event.target.closest('a, button')) onPick(market.city);
+      });
+    }
     const name = el('th', 'city-col');
     name.scope = 'row';
     if (placeFor?.has(market.city)) name.append(el('span', 'rank', String(placeFor.get(market.city))));
     const link = el('a', 'city-link', market.city);
     link.href = writeMarketHash({ ...state, city: market.city });
     name.append(link, el('span', 'metro', market.metro ?? ''));
+    if (onPick) {
+      const pick = el('button', 'link market-pick', market.city === me ? 'Shown' : 'Show');
+      pick.type = 'button';
+      pick.setAttribute('aria-label', `Show ${market.city} in the side panel`);
+      pick.setAttribute('aria-pressed', String(market.city === me));
+      pick.addEventListener('click', () => onPick(market.city));
+      name.append(pick);
+    }
     row.append(name);
 
     for (const metric of metrics) {
