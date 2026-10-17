@@ -1,7 +1,7 @@
 name: Development audit (dry run)
 
 # Reads public sources (TDLR TABS, Census geocoder and ZIP centers, city open
-# data) and writes reports as a workflow artifact. No secrets, no Supabase, no
+# data) and writes reports as a workflow artifact (and prints them in the log). No secrets, no Supabase, no
 # Sheet, no site deploy. Runs by hand, and on pushes to the audit branch.
 on:
   workflow_dispatch:
