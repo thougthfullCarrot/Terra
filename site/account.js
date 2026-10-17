@@ -86,6 +86,7 @@ function show(view) {
   for (const id of ['gate', 'paywall', 'profile', 'feed']) $(id).hidden = id !== view;
   $('welcome').hidden = view !== 'gate';
   $('account-button').hidden = !user || view === 'profile';
+  $('signin-jump').hidden = view !== 'gate';
 }
 
 function signedOut() {
@@ -125,7 +126,7 @@ async function showTeaser() {
   const names = (stats.topFirms ?? []).slice(0, 3);
   const including = names.length ? `, including ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]}` : '';
   const updated = stats.generatedAt ? ` · ${updatedLabel(stats.generatedAt)}` : '';
-  $('meta').textContent = `${stats.roles} open ${stats.roles === 1 ? 'role' : 'roles'} at ${firms} right now${including}${updated}`;
+  $('teaser').textContent = `${stats.roles} open ${stats.roles === 1 ? 'role' : 'roles'} at ${firms} right now${including}${updated}`;
 }
 
 async function signedIn(next) {
@@ -330,6 +331,7 @@ function clearCheckoutFlag() {
 let pendingEmail = '';
 
 function bindSignIn() {
+  $('signin-jump').addEventListener('click', () => $('welcome-start').click());
   $('welcome-start').addEventListener('click', () => {
     $('gate').scrollIntoView({ behavior: 'smooth', block: 'center' });
     ($('verify').hidden ? $('signin-email') : $('verify-code')).focus({ preventScroll: true });

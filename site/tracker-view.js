@@ -254,7 +254,7 @@ function item(row, now) {
   for (const value of STAGES) stage.append(new Option(value, value));
   stage.value = row.stage;
   stage.addEventListener('change', () => track(job, { stage: stage.value }));
-  stageLabel.append(el('span', 'eyebrow', 'STAGE'), stage);
+  stageLabel.append(el('span', 'eyebrow', 'Stage'), stage);
 
   const dateLabel = el('label');
   const date = document.createElement('input');
@@ -262,7 +262,7 @@ function item(row, now) {
   date.value = row.follow_up ?? '';
   date.setAttribute('aria-label', `Follow-up date for ${job.role}`);
   date.addEventListener('change', () => track(job, { followUp: date.value || null }));
-  dateLabel.append(el('span', 'eyebrow', 'FOLLOW UP'), date);
+  dateLabel.append(el('span', 'eyebrow', 'Follow up'), date);
   controls.append(stageLabel, dateLabel);
 
   const noteLabel = el('label', 'track-note');
@@ -273,7 +273,7 @@ function item(row, now) {
   note.value = row.note ?? '';
   // Saved without a redraw so typing isn't interrupted; the card's note preview catches up on the next one.
   note.addEventListener('change', () => track(job, { note: note.value }, { redraw: false }));
-  noteLabel.append(el('span', 'eyebrow', 'NOTES'), note);
+  noteLabel.append(el('span', 'eyebrow', 'Notes'), note);
 
   const foot = el('div', 'track-foot');
   const href = safeUrl(job.applyUrl ?? '');

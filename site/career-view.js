@@ -121,7 +121,7 @@ function briefView({ jobs, market, news: newsFile, sponsors: sponsorFile }) {
   if (!jobs.length) return noJobs();
   const firms = briefFirms(jobs);
   const pick = el('label', 'career-pick');
-  pick.append(el('span', 'eyebrow', 'FIRM'));
+  pick.append(el('span', 'eyebrow', 'Firm'));
   const select = el('select');
   select.append(new Option('Pick a firm…', ''), ...firms.map((f) => new Option(`${f.firm} (${f.jobs})`, f.firm)));
   select.value = state.firm;
@@ -239,7 +239,7 @@ function titlesView({ jobs, market }) {
     fact(facts, 'Open now', row.jobs.length ? `${row.jobs.length} on Terra${state.city ? ` in ${state.city}` : ''}` : 'none right now');
     fact(facts, 'Leads to', row.next.join(' · '));
     card.append(facts);
-    card.append(el('p', 'eyebrow', 'A TYPICAL WEEK'));
+    card.append(el('p', 'eyebrow', 'A typical week'));
     card.append(list(row.day));
     const tags = el('div', 'title-skills');
     for (const key of row.skills) tags.append(el('span', 'badge', SKILL_LABELS[key] ?? key));
@@ -352,7 +352,7 @@ function sponsorsView({ sponsors: file }) {
 function campusView({ jobs, market }) {
   const frag = document.createDocumentFragment();
   const pick = el('label', 'career-pick');
-  pick.append(el('span', 'eyebrow', 'SCHOOL'));
+  pick.append(el('span', 'eyebrow', 'School'));
   const select = el('select');
   select.append(new Option('Pick your school…', ''), ...CAMPUSES.map((c) => new Option(`${c.name} (${c.city})`, c.key)));
   select.value = state.campus;

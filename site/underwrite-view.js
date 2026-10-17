@@ -54,7 +54,7 @@ export function underwriteView(snapshot) {
   taxSelect.append(new Option('None (include it in expenses)', ''));
   for (const city of taxCities) taxSelect.append(new Option(`${city}: ${formatValue(taxFor(city), 'taxRate')}`, city));
   taxSelect.value = uw.city;
-  const taxEyebrow = el('span', 'eyebrow', 'PROPERTY TAX FROM CITY');
+  const taxEyebrow = el('span', 'eyebrow', 'Property tax from city');
   taxLabel.append(taxEyebrow, taxSelect);
   form.append(taxLabel);
   card.append(form);

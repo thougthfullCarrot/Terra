@@ -146,7 +146,7 @@ let ownerResults = null;
 function ownerView(body) {
   const form = el('form', 'card owner-form');
   const label = el('label', 'calc-field owner-field');
-  label.append(el('span', 'eyebrow', 'ADDRESS OR OWNER NAME'));
+  label.append(el('span', 'eyebrow', 'Address or owner name'));
   const box = el('span', 'calc-input');
   const input = el('input');
   input.type = 'search';

@@ -96,6 +96,8 @@ function hideFeed(message) {
   $('meta').textContent = message ?? '';
   $('list').replaceChildren();
   $('count').textContent = '';
+  $('jobs-total').textContent = '';
+  $('tab-jobs-count').textContent = '';
   $('stats').hidden = true;
   $('today').hidden = true;
   if ($('job-panel').open) $('job-panel').close();
@@ -216,6 +218,7 @@ function drawChips() {
 function bind() {
   let timer;
   $('q').addEventListener('input', (event) => {
+    if ($('jobs-view').hidden) location.hash = '';
     clearTimeout(timer);
     timer = setTimeout(() => update({ q: event.target.value.trim() }), 120);
   });
@@ -235,8 +238,10 @@ function bind() {
     if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target;
     if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
-    if ($('jobs-view').hidden || isModal()) return;
+    if (isModal()) return;
     event.preventDefault();
+    // The search sits in the header on every section; it searches the jobs.
+    if ($('jobs-view').hidden) location.hash = '';
     $('q').focus();
     $('q').select();
   });
@@ -272,6 +277,8 @@ function render() {
     strong ? ` · ${strong} best ${strong === 1 ? 'match' : 'matches'} for you` : ''
   }`;
   $('clear').hidden = !filtered;
+  $('jobs-total').textContent = String(shown.length);
+  $('tab-jobs-count').textContent = String(jobs.length);
   drawSavedToggle();
 
   if (!jobs.length) {
@@ -813,6 +820,7 @@ function startTheme() {
     const dark = current() === 'dark';
     $('theme-toggle').setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} mode`);
     $('theme-toggle').dataset.mode = dark ? 'dark' : 'light';
+    $('theme-toggle').textContent = dark ? 'Light' : 'Dark';
   };
   $('theme-toggle').addEventListener('click', () => {
     const next = current() === 'dark' ? 'light' : 'dark';
