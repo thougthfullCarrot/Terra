@@ -86,9 +86,15 @@ async function main(): Promise<void> {
 
   await mkdir(out, { recursive: true });
   const audits: MarketAudit[] = [];
-  for (const market of markets) {
+  for (const [i, market] of markets.entries()) {
     const t = Date.now();
+    // Each market gets an equal share of the pages still left, so the first big metro can't use them all;
+    // what it leaves unused goes on to the next.
+    const pagesLeft = budget.pages;
+    budget.pages = Math.floor(pagesLeft / (markets.length - i));
+    const share = budget.pages;
     const a = await auditMarket(market, { now, cache, budget, trace, previous: { projects: previous?.projects, smaller: previous?.smaller }, zipCenters, log: (l) => console.log(l) });
+    budget.pages = pagesLeft - (share - budget.pages);
     if (!a.counties.length) {
       console.log(`${market}: no TABS counties configured; skipped`);
       continue;

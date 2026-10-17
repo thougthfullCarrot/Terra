@@ -12,7 +12,7 @@ on:
       max_minutes:
         description: Stop starting new reads after this many minutes (resume on the next run)
         required: false
-        default: '150'
+        default: '160'
   push:
     branches: ['claude/dev-collection-audit-*']
     paths:
@@ -30,7 +30,7 @@ concurrency:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 190
     defaults:
       run:
         working-directory: backend
@@ -51,17 +51,27 @@ jobs:
           key: dev-audit-${{ github.run_id }}
           restore-keys: dev-audit-
 
-      # The live site's last build: pages it already read are reused, not fetched again.
-      - name: Fetch the published market data
-        run: curl -fsSL --max-time 120 -o /tmp/market.json https://thougthfullcarrot.github.io/Terra/market.json || echo "no previous build"
+      # The site build's last market data (its day cache from the default branch):
+      # project pages it already read are reused, not fetched again.
+      - name: Restore the site's market data
+        uses: actions/cache/restore@v4
+        with:
+          path: site/market.json
+          key: market-none
+          restore-keys: market-
+
+      - name: Use it as the previous build
+        run: |
+          if [ -f ../site/market.json ]; then cp ../site/market.json /tmp/market.json
+          else curl -fsSL --max-time 120 -o /tmp/market.json https://thougthfullcarrot.github.io/Terra/market.json || echo "no previous build"; fi
 
       - name: Run the audit
         env:
           MARKETS: ${{ inputs.markets }}
-          MAX_MINUTES: ${{ inputs.max_minutes || '150' }}
+          MAX_MINUTES: ${{ inputs.max_minutes || '160' }}
         run: |
           set -o pipefail
-          args=(--out ../dev-audit-output --cache ../dev-audit-cache --previous /tmp/market.json --max-minutes "$MAX_MINUTES")
+          args=(--max-pages 9000 --max-geocodes 9000 --out ../dev-audit-output --cache ../dev-audit-cache --previous /tmp/market.json --max-minutes "$MAX_MINUTES")
           if [ -n "$MARKETS" ]; then args+=(--markets "$MARKETS"); fi
           /usr/bin/time -v npm run --silent audit:developments -- "${args[@]}" 2>&1 | tee /tmp/audit.log
 
