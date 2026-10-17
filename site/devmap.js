@@ -178,11 +178,10 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   search.append(input);
   let typing = 0;
   input.addEventListener('input', () => {
+    // The query is kept at once, so a menu changed within the debounce never drops it.
+    filters = { ...filters, query: input.value };
     clearTimeout(typing);
-    typing = setTimeout(() => {
-      filters = { ...filters, query: input.value };
-      apply();
-    }, 120);
+    typing = setTimeout(apply, 120);
   });
 
   const summary = el('div', 'devx-summary');
@@ -432,8 +431,9 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
     if (was && panel.contains(document.activeElement)) items.get(was)?.querySelector('.dev-pick')?.focus({ preventScroll: true });
   }
 
-  panel.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
+  // Escape anywhere in the card (the panel, a row, the map) closes an open panel.
+  box.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && selected && !event.target.closest?.('.devx-more')) {
       event.preventDefault();
       const was = selected;
       close();
@@ -788,7 +788,7 @@ function locationNote(project) {
   if (project.awaiting) return 'Details pending from the state: listed by name, number and cost until its TABS page is read.';
   if (project.lat == null || project.lng == null) return 'Not on the map: no reliable location for this filing yet.';
   if (project.approximate) return 'Approximate: the pin is near the ZIP code center, not the exact site.';
-  if (project.locatedFrom) return `Site point: the pin is the site's location from ${project.locatedFrom.replace(/^City/, 'a city')}, not the building's own point.`;
+  if (project.locatedFrom) return `Site point: the pin is the site's location from a city permit at the same address (${project.locatedFrom}), not the building's own point.`;
   return project.source === 'city' ? "Pin at the permit's location." : "Pin at the filing's address.";
 }
 
@@ -797,6 +797,8 @@ function drawList(projects, catOf, hiringFor, onPick, onHover) {
   const items = new Map();
   for (const project of projects) {
     const item = el('li', 'dev-item');
+    item.dataset.category = projectCategory(project);
+    item.dataset.id = project.id;
     const button = el('button', 'dev-pick');
     button.type = 'button';
     const dot = el('i', 'devx-dot');
