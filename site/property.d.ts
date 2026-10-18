@@ -64,3 +64,6 @@ export function readStatewide(attributes: Record<string, unknown>): Record<strin
 export function pickStatewide(body: unknown, address: string): ReturnType<typeof readStatewide>[];
 export function isFullAddress(text: string): boolean;
 export function geocodeText(address: string, city?: string): string;
+export function dealWeek(iso: string): string | null;
+export function pickDeal(file: any, city: string): { status: 'statewide' | 'local' | 'older' | 'none' | 'pending'; deal: any; week: string | null };
+export function pastDeals(file: any, city: string, shown: any): any[];

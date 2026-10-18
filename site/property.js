@@ -745,3 +745,44 @@ export const DEAL_TYPE_LABELS = {
   land: 'Land',
   other: 'Commercial property'
 };
+
+/** Monday of the week an ISO date or timestamp falls in, as YYYY-MM-DD (the backend's weekOf). */
+export function dealWeek(iso) {
+  const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? `${iso}T12:00:00Z` : String(iso));
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t);
+  const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day.toISOString().slice(0, 10);
+}
+
+/**
+ * Which deal to show for a market, from deal.json. The market is where the
+ * property is (deal.city), never the buyer's or the paper's home, and a
+ * market never borrows another market's deal.
+ *
+ *   statewide  All markets: the week's Texas pick.
+ *   local      This week's pick in the market.
+ *   older      No local sale this week; the market's most recent earlier pick, shown with its own date.
+ *   none       Nothing local this week or in the kept history.
+ *   pending    All markets, and this week's pick isn't made yet.
+ */
+export function pickDeal(file, city) {
+  const week = (file?.generatedAt && dealWeek(file.generatedAt)) || file?.deal?.week || null;
+  if (!city) return file?.deal ? { status: 'statewide', deal: file.deal, week } : { status: 'pending', deal: null, week };
+  const all = [...Object.values(file?.markets ?? {}), file?.deal, ...(file?.history ?? []), ...(file?.past ?? [])].filter((d) => d && d.city === city && d.week);
+  const local = all.find((d) => d.week === week);
+  if (local) return { status: 'local', deal: local, week };
+  const older = all.filter((d) => d.week < week).sort((a, b) => b.week.localeCompare(a.week) || String(b.publishedAt ?? '').localeCompare(String(a.publishedAt ?? '')))[0];
+  return older ? { status: 'older', deal: older, week } : { status: 'none', deal: null, week };
+}
+
+/** Earlier local deals for a market (or the statewide picks for All markets), newest first, without the one on show. */
+export function pastDeals(file, city, shown) {
+  const pool = city ? [...(file?.history ?? []), ...(file?.past ?? []), ...Object.values(file?.markets ?? {})].filter((d) => d && d.city === city) : file?.past ?? [];
+  const seen = new Set(shown ? [shown.url] : []);
+  return pool
+    .filter((d) => d.week && !seen.has(d.url) && (seen.add(d.url), true))
+    .filter((d) => !shown || d.week <= shown.week)
+    .sort((a, b) => b.week.localeCompare(a.week));
+}

@@ -498,6 +498,9 @@ function card(job, now, index) {
       badge.textContent = `Best match · ${match.note}`;
       badge.hidden = false;
     }
+  } else if (scores.size) {
+    // Kept empty so this row's dates line up with the rows that have a score.
+    scoreNode.textContent = '';
   } else {
     scoreNode.remove();
   }

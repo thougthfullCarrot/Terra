@@ -49,10 +49,15 @@ async function previous<T extends { generatedAt: string }>(name: string): Promis
 }
 
 /** Rebuild one file when it is due; keep the old one when the build fails or comes back empty. */
-async function step<T extends { generatedAt: string }>(name: string, build: (old: T | null) => Promise<T>, empty: (file: T) => boolean): Promise<boolean> {
+async function step<T extends { generatedAt: string }>(
+  name: string,
+  build: (old: T | null) => Promise<T>,
+  empty: (file: T) => boolean,
+  outdated: (old: T) => boolean = () => false
+): Promise<boolean> {
   if (only && !only.includes(name)) return true;
   const old = await previous<T>(name);
-  if (old && !fresh && now.getTime() - Date.parse(old.generatedAt) < MAX_AGE[name]!) {
+  if (old && !fresh && !outdated(old) && now.getTime() - Date.parse(old.generatedAt) < MAX_AGE[name]!) {
     console.log(`${name}: keeping the file from ${old.generatedAt.slice(0, 16)}.`);
     return true;
   }
@@ -109,7 +114,9 @@ async function main(): Promise<void> {
     await step<DealFile>(
       'deal',
       (old) => buildDealFile({ now, previous: old, overridePath: resolve(here, '../../data/deal-of-week.json'), log: log('deal') }),
-      (f) => !f.deal
+      (f) => !f.deal,
+      // A file from before per-market picks is rebuilt at once, not left for a day.
+      (old) => !old.markets
     )
   ];
   if (results.every((ok) => !ok)) process.exitCode = 1;

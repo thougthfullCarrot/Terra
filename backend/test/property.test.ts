@@ -3,6 +3,9 @@ import {
   addressWhere,
   circle,
   dealSteps,
+  dealWeek,
+  pastDeals,
+  pickDeal,
   entityName,
   filterSales,
   franchiseUrl,
@@ -19,7 +22,7 @@ import {
   writePropertyHash
 } from '../../site/property.js';
 import { analyzeDeal } from '../../site/deal.js';
-import { candidates, dealType, readOverride, readPrice, readPricePerSqft, readSize, texasPlace, weekOf, ASSUMED_CAP_RATES } from '../src/property/dealOfWeek.js';
+import { candidates, dealType, marketPicks, toDeal, readOverride, readPrice, readPricePerSqft, readSize, texasPlace, weekOf, ASSUMED_CAP_RATES } from '../src/property/dealOfWeek.js';
 import { fetchTaxSales, isCompany, readDelinquent, readSale, statusLabel, taxDueField } from '../src/property/distress.js';
 import { joinTracts, latestLodesYear, parseAcsTracts, parseGazetteer, parseLodes } from '../src/property/driveTime.js';
 import { buildOutCandidates, companyName, edgarDocUrl, leaseSentences, readBuildOut } from '../src/property/leaseRadar.js';
@@ -213,6 +216,14 @@ describe('deal of the week', () => {
     expect(texasPlace('Kohler spends $14 million on Wedgewood-Houston warehouse')).toBeNull();
   });
 
+  it("uses the property's location when the buyer or seller is from another market", () => {
+    expect(texasPlace("Houston's Hines buys San Antonio apartment complex for $48 million")?.city).toBe('San Antonio');
+    expect(texasPlace('Dallas investor acquires San Antonio office tower for $90 million')?.city).toBe('San Antonio');
+    expect(texasPlace('Austin REIT sells Dallas office tower for $120 million')?.city).toBe('Dallas');
+    expect(texasPlace('Dallas office tower sells to Austin buyer for $120 million')?.city).toBe('Dallas');
+    expect(texasPlace('Blackstone buys Texas warehouse portfolio in El Paso for $70 million')?.city).toBe('El Paso');
+  });
+
   it('keeps priced Texas sales, biggest first', () => {
     const found = candidates([
       item('Downtown Austin Tower Sold for $208 Million', 'Realty News Report'),
@@ -246,6 +257,65 @@ describe('deal of the week', () => {
     const apartments = dealSteps({ ...deal, type: 'multifamily' }, file, analyzeDeal)!;
     expect(apartments.loan.leverage).toBe('negative');
     expect(dealSteps({ ...deal, type: 'land' }, file, analyzeDeal)!.noi).toBeNull();
+  });
+});
+
+describe('deal of the week by market', () => {
+  const deal = (city: string | null, week: string, url: string, extra: Record<string, unknown> = {}) =>
+    ({ week, title: `${city} office tower sells for $50 million`, url, source: 'Test', publishedAt: `${week}T12:00:00Z`, city, place: city ?? 'Texas', type: 'office', price: 50e6, pricePerSqft: null, squareFeet: null, units: null, capRate: null, noi: null, why: null, curated: false, ...extra }) as never;
+  const cand = (city: string, price: number, url: string) => ({ title: `${city} office tower sells for $${price / 1e6} million`, url, source: 'S', publishedAt: null, place: city, city, price }) as never;
+
+  it('picks each market by property location and keeps earlier picks as history', () => {
+    const previous = { deal: deal('Dallas', '2026-10-05', 'd1'), past: [], markets: { Austin: deal('Austin', '2026-10-05', 'a1') }, history: [deal('Austin', '2026-09-28', 'a0')] } as never;
+    const statewide = toDeal(cand('Dallas', 210e6, 'd2'), '2026-10-12');
+    const { markets, history } = marketPicks([cand('Dallas', 210e6, 'd2'), cand('San Antonio', 48e6, 's1'), cand('San Antonio', 20e6, 's2')], '2026-10-12', statewide, previous);
+    expect(Object.fromEntries(Object.entries(markets).map(([k, v]) => [k, v!.url]))).toEqual({ Dallas: 'd2', 'San Antonio': 's1' });
+    expect(history.map((d) => d.url)).toEqual(['a1', 'd1', 'a0']);
+  });
+
+  it('keeps a market pick made earlier in the same week', () => {
+    const previous = { deal: null, past: [], markets: { 'San Antonio': deal('San Antonio', '2026-10-12', 'kept') }, history: [] } as never;
+    const { markets } = marketPicks([cand('San Antonio', 99e6, 'bigger')], '2026-10-12', null, previous);
+    expect(markets['San Antonio']!.url).toBe('kept');
+  });
+
+  const file = {
+    generatedAt: '2026-10-18T12:00:00Z',
+    deal: deal('Dallas', '2026-10-12', 'dallas-now'),
+    past: [deal('Houston', '2026-10-05', 'houston-old')],
+    markets: { Dallas: deal('Dallas', '2026-10-12', 'dallas-now'), 'San Antonio': deal('San Antonio', '2026-10-12', 'sa-now') },
+    history: [deal('Austin', '2026-09-21', 'austin-old'), deal('San Antonio', '2026-09-28', 'sa-old')]
+  };
+
+  it('shows the selected market, never another one', () => {
+    expect(pickDeal(file, 'San Antonio')).toMatchObject({ status: 'local', deal: { url: 'sa-now' } });
+    expect(pickDeal(file, 'Dallas')).toMatchObject({ status: 'local', deal: { url: 'dallas-now' } });
+    expect(pickDeal(file, '')).toMatchObject({ status: 'statewide', deal: { url: 'dallas-now' } });
+    for (const city of ['Austin', 'Houston', 'Lubbock', 'El Paso']) expect(pickDeal(file, city).deal?.city ?? null).not.toBe('Dallas');
+  });
+
+  it("offers a market's older local deal with its own week, or says there is none", () => {
+    expect(pickDeal(file, 'Austin')).toMatchObject({ status: 'older', deal: { url: 'austin-old', week: '2026-09-21' }, week: '2026-10-12' });
+    expect(pickDeal(file, 'Houston')).toMatchObject({ status: 'older', deal: { url: 'houston-old' } });
+    expect(pickDeal(file, 'Lubbock')).toMatchObject({ status: 'none', deal: null });
+    expect(pickDeal({ ...file, deal: null }, '')).toMatchObject({ status: 'pending', deal: null });
+  });
+
+  it('reads files written before market picks existed', () => {
+    const old = { generatedAt: '2026-10-18T12:00:00Z', deal: deal('Dallas', '2026-10-12', 'dallas-now'), past: [deal('Austin', '2026-09-21', 'austin-old')] };
+    expect(pickDeal(old, 'Dallas')).toMatchObject({ status: 'local' });
+    expect(pickDeal(old, 'San Antonio')).toMatchObject({ status: 'none' });
+    expect(pickDeal(old, 'Austin')).toMatchObject({ status: 'older', deal: { url: 'austin-old' } });
+  });
+
+  it("lists only the market's earlier deals", () => {
+    expect(pastDeals(file, 'San Antonio', file.markets['San Antonio']).map((d) => d.url)).toEqual(['sa-old']);
+    expect(pastDeals(file, '', file.deal).map((d) => d.url)).toEqual(['houston-old']);
+  });
+
+  it('dates the week the way the backend does', () => {
+    expect(dealWeek('2026-10-18T12:00:00Z')).toBe(weekOf(new Date('2026-10-18T12:00:00Z')));
+    expect(dealWeek('2026-10-12')).toBe('2026-10-12');
   });
 });
 

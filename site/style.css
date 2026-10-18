@@ -9663,3 +9663,178 @@ body[data-workspace='map'] .devx-body {
   .devx-head-actions .devx-city-menu { order: -2; }
   .devx-head-actions .devx-to-list { order: -1; }
 }
+
+/* ---------------------------------------------------------------------------
+   UI fixes: button labels, dropdown menus, Jobs rows, Deal of the week notes.
+   --------------------------------------------------------------------------- */
+
+/* Pill buttons and pill links center their label both ways and wrap without
+   overlapping lines. The Career brief and tour had set them inline-block,
+   which dropped an <a>'s label to the top of its 40px pill. */
+.primary,
+.secondary,
+button.primary,
+a.primary,
+a.secondary {
+  max-width: 100%;
+  line-height: 1.25;
+  text-align: center;
+}
+
+#career-view .compare-block .primary,
+#career-view .compare-block .secondary {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.brief-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+#career-view .brief-actions .primary,
+#career-view .brief-actions .secondary {
+  margin-top: 0;
+  min-height: 44px;
+}
+
+/* Native dropdown menus: give each option a solid background and ink in the
+   active theme. Options were transparent, so Windows painted the open menu
+   white under the dark theme's light text. The OS keeps the keyboard and
+   hover highlight, which sets its own readable text color. */
+select option,
+select optgroup {
+  color: var(--ink);
+  background-color: var(--bg);
+}
+
+select option:checked {
+  color: var(--ink);
+  background-color: var(--sunk);
+}
+
+select option:disabled {
+  color: var(--muted);
+}
+
+/* Jobs rows: the bookmark gets its own column at the top right, and the
+   match score, New, posted date, deadline, flags and source sit in a fixed
+   column beside it, so every row lines up the same way whatever it has. */
+#list > .card {
+  grid-template-columns: 40px minmax(0, 1fr) 9.5rem 32px;
+  grid-template-areas:
+    'logo title meta save'
+    'logo chips meta save'
+    'logo badge meta save';
+  align-items: start;
+}
+
+#list > .card .save {
+  grid-area: save;
+  align-self: start;
+  justify-self: end;
+  margin: 0;
+}
+
+#list > .card .dates {
+  grid-area: meta;
+  align-self: start;
+  justify-content: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+#list > .card .dates > * {
+  max-width: 100%;
+}
+
+#list > .card .dates .score {
+  line-height: 1.3;
+}
+
+/* When the list has match scores, rows without one keep its line, so New and
+   the dates sit at the same height on every row. */
+#list > .card .dates .score:empty {
+  display: block;
+  min-height: 1.3em;
+}
+
+#list > .card .role,
+#list > .card .firm {
+  overflow-wrap: anywhere;
+}
+
+#list > .card .chips {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  #list > .card {
+    grid-template-columns: 36px minmax(0, 1fr) 32px;
+    grid-template-areas:
+      'logo title save'
+      'logo chips chips'
+      'logo badge badge'
+      'logo meta meta';
+  }
+
+  #list > .card .dates {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: flex-start;
+    column-gap: 10px;
+    row-gap: 2px;
+    margin-top: 4px;
+    text-align: left;
+  }
+
+  #list > .card .dates .score {
+    order: -1;
+    font-size: 14px;
+  }
+
+  #list > .card .dates .score:empty {
+    display: none;
+  }
+}
+
+/* Deal of the week: what the news reported, apart from the estimates. */
+.deal-facts {
+  margin: 14px 0 4px;
+}
+
+.deal-reported {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 6px 0 8px;
+  font-size: 14px;
+}
+
+.deal-reported dt {
+  color: var(--muted);
+}
+
+.deal-reported dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.deal-older-note {
+  margin: 8px 0;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--sunk);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+}
+
+.deal-none p {
+  margin: 0 0 10px;
+}
