@@ -1,0 +1,158 @@
+// Events tab check against a built site/events.json.
+//
+//   CHROMIUM_PATH=/opt/pw-browsers/chromium node test/browser/events-check.mjs [site dir] [screenshot dir]
+//
+// Serves the site folder, picks from events.json an evening event, an all-day
+// event, one occurrence of a repeating event and a multi-day event (any shape
+// missing from the data is reported as MISSING), and for each, on desktop and
+// phone: opens the Events tab on the event's market, finds its card, compares
+// the time line with one computed here from the raw ISO times (not with
+// site/events.js), opens "Add to calendar" and reads the downloaded .ics, and
+// reads the Google Calendar link's dates and zone. It also checks the per-market
+// empty states against the collection report and that the phone page does not
+// scroll sideways. Read-only; no network besides the local server.
+import { createServer } from 'node:http';
+import { readFile, mkdir } from 'node:fs/promises';
+import { extname, join, resolve } from 'node:path';
+import { chromium } from 'playwright-core';
+
+const siteDir = resolve(process.argv[2] ?? '../site');
+const shots = process.argv[3] ? resolve(process.argv[3]) : null;
+const file = JSON.parse(await readFile(join(siteDir, 'events.json'), 'utf8'));
+const now = Date.now();
+const all = file.cities.flatMap((c) => c.events).filter((e) => new Date(e.end ?? e.start).getTime() + 86_400_000 > now);
+const zone = (e) => e.timezone || (e.city === 'El Paso' ? 'America/Denver' : 'America/Chicago');
+const local = (iso, tz, o) => new Date(iso).toLocaleString('en-US', { timeZone: tz, ...o });
+const hour = (e) => Number(local(e.start, zone(e), { hour: 'numeric', hourCycle: 'h23' }));
+const ymd = (iso, tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(iso));
+const midnight = (iso, tz) => local(iso, tz, { hour: 'numeric', minute: '2-digit' }) === '12:00 AM';
+const multi = (e) => e.end && ymd(e.end, zone(e)) > ymd(e.start, zone(e));
+
+const picks = {
+  evening: all.find((e) => !multi(e) && !midnight(e.start, zone(e)) && hour(e) >= 17 && e.format !== 'virtual'),
+  'all-day': all.find((e) => !multi(e) && midnight(e.start, zone(e))),
+  recurring: all.find((e) => e.seriesId),
+  'multi-day': all.find((e) => multi(e))
+};
+
+/** The card's time line, worked out from the raw times. */
+function expectedWhen(e) {
+  const tz = zone(e);
+  const label = tz === 'America/Denver' ? 'MT' : 'CT';
+  const t = (iso) => local(iso, tz, { hour: 'numeric', minute: '2-digit' });
+  const d = (iso) => local(iso, tz, { month: 'short', day: 'numeric' });
+  if (multi(e)) return midnight(e.start, tz) ? `${d(e.start)} – ${d(e.end)}` : `${d(e.start)} – ${d(e.end)} · starts ${t(e.start)} ${label}`;
+  if (midnight(e.start, tz)) return e.dateOnly ? 'Time not listed' : 'All day';
+  const end = e.end && !midnight(e.end, tz) && new Date(e.end) > new Date(e.start) ? ` – ${t(e.end)}` : '';
+  return `${t(e.start)}${end} ${label}`;
+}
+
+/** DTSTART/DTEND the .ics must carry: dates for all-day (DTEND the day after the last), UTC instants otherwise. */
+function expectedIcs(e) {
+  const tz = zone(e);
+  const stamp = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  if (midnight(e.start, tz)) {
+    const last = e.end ? ymd(e.end, tz) : ymd(e.start, tz);
+    const after = new Date(`${last}T12:00:00Z`);
+    after.setUTCDate(after.getUTCDate() + 1);
+    return { start: `DTSTART;VALUE=DATE:${ymd(e.start, tz).replace(/-/g, '')}`, end: `DTEND;VALUE=DATE:${after.toISOString().slice(0, 10).replace(/-/g, '')}` };
+  }
+  const s = new Date(e.start).getTime();
+  const end = e.end && new Date(e.end).getTime() > s ? new Date(e.end).getTime() : s + 3_600_000;
+  return { start: `DTSTART:${stamp(s)}`, end: `DTEND:${stamp(end)}` };
+}
+
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const server = createServer(async (req, res) => {
+  const raw = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  const path = raw.endsWith('/') ? `${raw}index.html` : raw;
+  try {
+    const body = await readFile(join(siteDir, path));
+    res.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream' }).end(body);
+  } catch {
+    res.writeHead(404).end();
+  }
+});
+await new Promise((r) => server.listen(0, '127.0.0.1', r));
+const base = `http://127.0.0.1:${server.address().port}/`;
+
+let failed = 0;
+const pass = (m) => console.log(`PASS  ${m}`);
+const fail = (m) => {
+  failed++;
+  console.log(`FAIL  ${m}`);
+};
+const check = (ok, m) => (ok ? pass(m) : fail(m));
+
+for (const [shape, e] of Object.entries(picks)) {
+  if (!e) console.log(`MISSING  no ${shape} event in events.json`);
+  else console.log(`PICK  ${shape}: "${e.title}" (${e.organizer}, ${e.city}) ${e.start} → ${e.end ?? 'no end'} ${e.url}`);
+}
+
+const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+if (shots) await mkdir(shots, { recursive: true });
+for (const vp of [
+  { name: 'desktop', width: 1366, height: 1000 },
+  { name: 'phone', width: 390, height: 844, mobile: true }
+]) {
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.mobile, hasTouch: !!vp.mobile, acceptDownloads: true });
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  for (const [shape, e] of Object.entries(picks)) {
+    if (!e) continue;
+    const city = e.format === 'virtual' ? 'Online' : e.city;
+    await page.goto(`${base}#events&city=${encodeURIComponent(city)}`);
+    await page.waitForSelector('#e-list .event-card, #e-list .state', { timeout: 20000 });
+    const card = page.locator('.event-card', { has: page.locator('.event-title', { hasText: e.title }) }).filter({ has: page.locator(`time[datetime="${e.start}"]`) }).first();
+    if (!(await card.count())) {
+      fail(`${vp.name} ${shape}: card for "${e.title}" not shown under ${city}`);
+      continue;
+    }
+    await card.scrollIntoViewIfNeeded();
+    const where = (await card.locator('.event-where').innerText()).split(' · ');
+    const want = expectedWhen(e);
+    check(where.join(' · ').startsWith(want), `${vp.name} ${shape}: time line "${where.join(' · ')}" starts with "${want}"`);
+    const block = await card.locator('time.date-block').innerText();
+    const day = local(e.start, zone(e), { day: 'numeric' });
+    check(block.replace(/\s+/g, ' ').includes(day), `${vp.name} ${shape}: date block "${block.replace(/\s+/g, ' ')}" shows day ${day}`);
+
+    const google = new URL(await card.locator('a', { hasText: 'Google Calendar' }).getAttribute('href'));
+    const ics = expectedIcs(e);
+    const dates = google.searchParams.get('dates');
+    check(dates === `${ics.start.split(':')[1]}/${ics.end.split(':')[1]}`, `${vp.name} ${shape}: Google dates ${dates}`);
+    check(google.searchParams.get('ctz') === zone(e), `${vp.name} ${shape}: Google zone ${google.searchParams.get('ctz')}`);
+
+    const [download] = await Promise.all([page.waitForEvent('download'), card.locator('button', { hasText: 'Add to calendar' }).click()]);
+    const text = await readFile(await download.path(), 'utf8');
+    check(text.includes(`${ics.start}\r\n`) && text.includes(`${ics.end}\r\n`), `${vp.name} ${shape}: .ics has ${ics.start} and ${ics.end}`);
+    check(text.includes(`URL:${e.url.replace(/([,;])/g, '\\$1')}`), `${vp.name} ${shape}: .ics links the event page`);
+    if (shots) await card.screenshot({ path: join(shots, `${shape}-${vp.name}.png`) });
+  }
+
+  // Empty markets: the sentence must match the report (unreadable vs nothing found).
+  for (const r of file.report ?? []) {
+    if (r.state === 'events') continue;
+    await page.goto(`${base}#events&city=${encodeURIComponent(r.city)}`);
+    await page.waitForSelector('#e-list .state, #e-list .event-card', { timeout: 20000 });
+    const text = await page.locator('#e-list').innerText();
+    const ok = r.state === 'unreadable' ? /Couldn't read/.test(text) : r.state === 'no-sources' ? /can be read automatically yet/.test(text) : /No upcoming events found/.test(text);
+    check(ok, `${vp.name} ${r.city} (${r.state}): "${text.trim().slice(0, 90)}"`);
+  }
+
+  await page.goto(`${base}#events`);
+  await page.waitForSelector('#e-list .event-card', { timeout: 20000 });
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  check(overflow <= 1, `${vp.name}: no sideways scroll (${overflow}px)`);
+  await page.locator('.events-report summary').click();
+  check((await page.locator('.events-report-list li').count()) === (file.report ?? []).length, `${vp.name}: collection report lists every market`);
+  if (shots) await page.screenshot({ path: join(shots, `events-${vp.name}.png`), fullPage: false });
+  check(!errors.length, `${vp.name}: no page errors ${errors.join(' | ')}`);
+  await ctx.close();
+}
+await browser.close();
+server.close();
+console.log(failed ? `\n${failed} checks failed` : '\nAll checks passed');
+process.exit(failed ? 1 : 0);

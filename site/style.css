@@ -5085,6 +5085,59 @@ svg.bars text {
   cursor: default;
 }
 
+.event-address,
+.event-notes {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.event-notes {
+  font-weight: 600;
+}
+
+.event-tags .chip.badge-status {
+  background: var(--error-surface);
+  color: var(--error-ink);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.event-tags .chip.badge-price {
+  background: color-mix(in srgb, var(--green) 14%, var(--surface));
+  border-color: transparent;
+}
+
+.event-card.is-cancelled .event-title a,
+.event-card.is-cancelled .event-title {
+  text-decoration: line-through;
+}
+
+.events-report {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.events-report summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.events-report-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.events-report-list li {
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+}
+
+.events-report-list .report-unreadable b {
+  text-decoration: underline wavy var(--line);
+}
+
 .chip.org {
   display: inline-flex;
   align-items: center;

@@ -1,7 +1,7 @@
 import type { SheetsClient } from '../sheets/google.js';
 import { tabRange } from '../sheets/google.js';
 import { CITIES, type City } from '../types.js';
-import { centralIso, MANUAL_SOURCE, type TerraEvent } from './events.js';
+import { centralIso, MANUAL_SOURCE, zoneOf, type TerraEvent } from './events.js';
 
 /**
  * Events Rod types into the Google Sheet's "Events" tab, for chapters whose
@@ -11,6 +11,12 @@ import { centralIso, MANUAL_SOURCE, type TerraEvent } from './events.js';
 
 export const EVENTS_TAB = 'Events';
 export const EVENT_HEADERS = ['Date', 'Time', 'Title', 'City', 'Organizer', 'Venue', 'Link'] as const;
+/**
+ * Columns read when present (add them to the tab or the JSON file as needed); never required. Format is in-person,
+ * virtual or hybrid; Status is cancelled, postponed or sold out.
+ */
+export const OPTIONAL_HEADERS = ['End date', 'End time', 'Address', 'Format', 'Cost', 'Registration link', 'Status', 'Notes'] as const;
+type Header = (typeof EVENT_HEADERS)[number] | (typeof OPTIONAL_HEADERS)[number];
 export { MANUAL_SOURCE };
 
 /** "2026-10-14" or "10/14/2026" (or 10/14/26) → "2026-10-14". */
@@ -50,7 +56,7 @@ function cityOf(value: string): City | null {
 /** Rows of the Events tab → events. Past, incomplete and unknown-city rows are skipped (and logged). */
 export function parseEventTab(values: string[][], now: Date, log: (m: string) => void = console.log, idPrefix = 'manual', label = EVENTS_TAB): TerraEvent[] {
   const header = (values[0] ?? []).map((c) => c.trim().toLowerCase());
-  const at = Object.fromEntries(EVENT_HEADERS.map((h) => [h, header.indexOf(h.toLowerCase())])) as Record<(typeof EVENT_HEADERS)[number], number>;
+  const at = Object.fromEntries([...EVENT_HEADERS, ...OPTIONAL_HEADERS].map((h) => [h, header.indexOf(h.toLowerCase())])) as Record<Header, number>;
   if (at.Date < 0 || at.Title < 0 || at.City < 0) {
     if (values.length) log(`${label}: header row needs Date, Title and City; skipping it.`);
     return [];
@@ -58,7 +64,7 @@ export function parseEventTab(values: string[][], now: Date, log: (m: string) =>
   const today = now.toISOString().slice(0, 10);
   const out: TerraEvent[] = [];
   values.slice(1).forEach((cells, index) => {
-    const get = (h: (typeof EVENT_HEADERS)[number]) => (at[h] >= 0 ? (cells[at[h]] ?? '').trim() : '');
+    const get = (h: Header) => (at[h] >= 0 ? (cells[at[h]] ?? '').trim() : '');
     const row = index + 2;
     const title = get('Title');
     if (!title && !get('Date')) return;
@@ -75,18 +81,40 @@ export function parseEventTab(values: string[][], now: Date, log: (m: string) =>
       link = '';
     }
     const time = sheetTime(get('Time'));
-    const start = centralIso(time ? `${date} ${time}` : date)!;
+    const zone = zoneOf(city);
+    const start = centralIso(time ? `${date} ${time}` : date, zone)!;
+    const endDate = sheetDate(get('End date')) ?? date;
+    const endTime = sheetTime(get('End time'));
+    const end = endTime ? centralIso(`${endDate} ${endTime}`, zone) : endDate > date ? centralIso(endDate, zone) : null;
+    const format = /^(in[- ]?person|virtual|hybrid)$/i.exec(get('Format'))?.[1]?.toLowerCase().replace(/^in.?person$/, 'in-person') as TerraEvent['format'];
+    const status = /^(cancel+ed|postponed|sold ?out)$/i.exec(get('Status'))?.[1]?.toLowerCase();
+    const cost = get('Cost');
+    let registration = get('Registration link');
+    try {
+      registration = registration ? new URL(/^https?:\/\//i.test(registration) ? registration : `https://${registration}`).href : '';
+    } catch {
+      registration = '';
+    }
     out.push({
+      timezone: zone,
+      ...(format ? { format } : {}),
+      ...(status ? { status: status.startsWith('cancel') ? 'cancelled' : status === 'postponed' ? 'postponed' : 'sold-out' } : {}),
+      ...(get('Address') ? { address: get('Address') } : {}),
+      ...(registration ? { registrationUrl: registration } : {}),
+      ...(get('Notes') ? { description: get('Notes').slice(0, 300) } : {}),
+      ...(/^(free|\$0)$/i.test(cost) ? { free: true } : {}),
+      ...(time ? {} : { dateOnly: true }),
       id: `${idPrefix}-${row}-${date}`,
       title,
       url: link,
       start,
-      end: null,
+      end: end && new Date(end).getTime() > new Date(start).getTime() ? end : null,
       city,
       organizer: get('Organizer') || MANUAL_SOURCE,
       venue: get('Venue') || null,
-      cost: null,
-      source: MANUAL_SOURCE
+      cost: cost || null,
+      source: MANUAL_SOURCE,
+      sourceKey: 'manual'
     });
   });
   return out;
@@ -117,8 +145,11 @@ export async function loadSheetEvents(
 
 /** The committed hand list (backend/data/events-manual.json): the sheet's columns as JSON keys. */
 export function parseManualFile(json: { events?: Array<Record<string, string>> }, now: Date, log: (m: string) => void = console.log): TerraEvent[] {
-  const rows = (json.events ?? []).map((e) => EVENT_HEADERS.map((h) => String(e[h.toLowerCase()] ?? '')));
-  return parseEventTab([[...EVENT_HEADERS], ...rows], now, log, 'file', 'events-manual.json');
+  const headers = [...EVENT_HEADERS, ...OPTIONAL_HEADERS];
+  // JSON keys: the column names in lowercase ("end date" or "endDate"/"end_date" also work).
+  const value = (e: Record<string, string>, h: string) => e[h.toLowerCase()] ?? e[h.toLowerCase().replace(/ (\w)/g, (_, c: string) => c.toUpperCase())] ?? e[h.toLowerCase().replace(/ /g, '_')] ?? '';
+  const rows = (json.events ?? []).map((e) => headers.map((h) => String(value(e, h))));
+  return parseEventTab([headers, ...rows], now, log, 'file', 'events-manual.json');
 }
 
 /** File rows plus sheet rows; when the sheet could not be read, its rows from the last build stay. */
