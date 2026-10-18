@@ -1,0 +1,159 @@
+# County appraisal district collection and address lookup (docs/appraisal-lookup.md).
+# Reads each district into a cache that survives between runs (actions/cache),
+# so a run that times out or is cancelled resumes where it stopped, and a
+# district whose source hasn't changed is skipped. Writes nothing to the
+# website or any database; results land in the run summary and an artifact.
+name: Appraisal lookup
+
+on:
+  workflow_dispatch:
+    inputs:
+      districts:
+        description: Comma-separated district ids (blank = all)
+        default: ''
+      max_chunks:
+        description: Stop each ArcGIS district after this many requests (blank = all)
+        default: ''
+      force:
+        description: Read again even where the source hasn't changed
+        type: boolean
+        default: false
+  push:
+    branches: [claude/project-thread-84a4bw]
+    paths: ['backend/src/appraisal/**', 'backend/src/bin/appraisal-*.ts', '.github/workflows/appraisal-lookup.yml']
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: appraisal-lookup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DISTRICTS: ${{ inputs.districts || 'bexar,dallas,tarrant,travis,harris,el-paso,comal,brazos,galveston,lubbock,midland' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Restore the cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .appraisal-cache
+          key: appraisal-lookup-none
+          restore-keys: ${{ github.event_name == 'push' && 'appraisal-lookup-quick-' || 'appraisal-lookup-full-' }}
+
+      - name: Probe official sources
+        run: npm run --silent appraisal -- probe --districts "$DISTRICTS" --cache ../.appraisal-cache > /tmp/probe.log 2>&1 || true
+
+      - name: Collect
+        id: collect
+        run: |
+          set -o pipefail
+          extra=""
+          # A push runs a quick check (3 requests per district, 20k Harris lines); a manual run reads everything.
+          if [ "${{ github.event_name }}" = "push" ]; then extra="--max-chunks 3 --max-lines 20000 --restart";
+          elif [ -n "${{ inputs.max_chunks }}" ]; then extra="--max-chunks ${{ inputs.max_chunks }}"; fi
+          if [ "${{ inputs.force }}" = "true" ]; then extra="$extra --force"; fi
+          npm run --silent appraisal -- collect --districts "$DISTRICTS" --cache ../.appraisal-cache $extra 2>&1 | tee /tmp/collect.log
+
+      # The index is rebuilt each run and the downloads are fetched again only when they change,
+      # so neither is cached: the repo's caches share a 10 GB limit with the site build's.
+      - name: Drop what needn't be cached
+        if: always()
+        run: rm -rf ../.appraisal-cache/index ../.appraisal-cache/*/source.zip* ../.appraisal-cache/el-paso/*.zip*
+
+      - name: Save the cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .appraisal-cache
+          key: appraisal-lookup-${{ github.event_name == 'push' && 'quick-' || 'full-' }}${{ github.run_id }}
+
+      # Older appraisal-lookup caches are superseded by the one just saved; delete them so they don't push the
+      # site build's caches out of the 10 GB limit. Only this branch's own appraisal-lookup-quick-/full- keys are
+      # listed (--ref), so a run never touches the Website, market-, devlists- caches or another branch's copy.
+      - name: Delete older appraisal lookup caches
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF" --key appraisal-lookup- --limit 100 --json id,key,sizeInBytes,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[] | "\(.id) \(.key) \(.sizeInBytes)"' > /tmp/caches.txt || true
+          cat /tmp/caches.txt
+          kind="${{ github.event_name == 'push' && 'quick' || 'full' }}"
+          newest=$(grep " appraisal-lookup-$kind-" /tmp/caches.txt | head -1 | cut -d' ' -f1)
+          while read -r id key size; do
+            if [ -n "$newest" ] && [ "$id" != "$newest" ] && { [[ "$key" == appraisal-lookup-$kind-* ]] || [[ "$key" =~ ^appraisal-lookup-[0-9]+$ ]]; }; then
+              gh cache delete "$id" --repo "$GITHUB_REPOSITORY" && echo "deleted $key ($size bytes)"
+            fi
+          done < /tmp/caches.txt
+          echo "All caches in the repo:"; gh cache list --repo "$GITHUB_REPOSITORY" --limit 100 || true
+
+      - name: Rebuild the index and verify
+        if: always()
+        run: |
+          set -o pipefail
+          npm run --silent appraisal -- index --districts "$DISTRICTS" --cache ../.appraisal-cache 2>&1 | tee /tmp/index.log
+          du -sh ../.appraisal-cache/* ../.appraisal-cache/index/* 2>/dev/null | tee /tmp/sizes.log
+          # Per-group gzipped sizes: what a browser or server would fetch for one lookup in one district.
+          for d in ../.appraisal-cache/index/*/; do
+            find "$d" -name '*.json' -exec sh -c 'gzip -c "$1" | wc -c' _ {} \; | sort -n | awk -v d="$d" '{a[NR]=$1; t+=$1} END {print d, "groups", NR, "gz total", t, "p50", a[int(NR*0.5)+1], "p95", a[int(NR*0.95)+1], "max", a[NR]}'
+          done | tee -a /tmp/sizes.log
+          for d in ../.appraisal-cache/index/*/; do echo "$d $(ls $d | wc -l) files, gz $(tar czf - -C $d . | wc -c) bytes"; done | tee -a /tmp/sizes.log
+
+      # Verification fails the job when a required check fails. A push or a capped pilot read covers only part of
+      # each district, so it runs the quick policy (index checks only) and says so; a full manual run requires the
+      # live-layer and account-page checks too. The steps after this one still run and keep the diagnostics.
+      - name: Verify
+        if: always()
+        run: |
+          set -o pipefail
+          policy=full status=0
+          if [ "${{ github.event_name }}" = "push" ] || [ -n "${{ inputs.max_chunks }}" ]; then policy=quick; fi
+          npm run --silent appraisal -- verify --districts "$DISTRICTS" --cache ../.appraisal-cache --policy "$policy" > /tmp/verify.log 2>&1 || status=$?
+          grep -E 'PASS|FAIL' /tmp/verify.log || true
+          exit "$status"
+
+      # Real-browser timing of index lookups (headless Chromium, DevTools network throttling, local static server).
+      - name: Measure lookups in a browser
+        if: always() && github.event_name == 'workflow_dispatch'
+        run: |
+          npx playwright-core install --with-deps chromium > /dev/null
+          npx tsx src/bin/appraisal-browser-bench.ts ../.appraisal-cache/index 2>&1 | tee /tmp/bench.log || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appraisal-lookup-${{ github.run_id }}
+          path: |
+            .appraisal-cache/report.json
+            .appraisal-cache/probe.json
+            .appraisal-cache/verify.json
+            .appraisal-cache/index/manifest.json
+          retention-days: 14
+
+      - name: Summarize
+        if: always()
+        run: |
+          for f in collect index verify sizes bench probe; do echo "=== $f"; cat /tmp/$f.log 2>/dev/null | head -c 60000; done
+          {
+            echo '## Appraisal lookup'
+            echo '```'
+            cat /tmp/collect.log /tmp/index.log /tmp/sizes.log 2>/dev/null | tail -n 120
+            grep -E 'PASS|FAIL' /tmp/verify.log 2>/dev/null
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
