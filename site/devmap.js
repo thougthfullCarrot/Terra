@@ -705,6 +705,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       const icon = marker.getElement();
       icon.setAttribute('aria-label', label);
       icon.dataset.category = key;
+      icon.dataset.id = project.id;
       icon.onkeydown = pressed(() => onPick(project));
       decorate(project);
     });

@@ -351,6 +351,26 @@ for (const vp of [
   await page.locator('.dev-card').scrollIntoViewIfNeeded();
   // Click a pin that is actually on screen and on top: the first one in the
   // document can sit outside the phone's map view or under another pin.
+  // Clusters hold exactly the filtered pins, and a project inside a cluster opens from the list.
+  await setF({});
+  await page.waitForTimeout(400);
+  const grouped = await page.evaluate(() => {
+    const map = document.querySelector('.dev-map');
+    const icons = new Set([...document.querySelectorAll('.devx-pin-icon')].map((n) => n.dataset.id));
+    const inClusters = [...document.querySelectorAll('.devx-cluster')].reduce((n, c) => n + Number(c.dataset.count), 0);
+    // A located project with no icon of its own sits in a cluster (or off screen).
+    const row = [...document.querySelectorAll('.dev-list .dev-item')].find((r) => !r.querySelector('.dev-off') && !icons.has(r.dataset.id));
+    return { clusters: Number(map.dataset.clusters), inClusters, onPage: inClusters + icons.size, drawn: Number(map.dataset.drawn), id: row?.dataset.id, name: row?.querySelector('.dev-name').textContent };
+  });
+  log(`${v}: clusters and icons on the page hold no more than the ${grouped.drawn} pins`, grouped.clusters > 0 && grouped.onPage <= grouped.drawn, `${grouped.clusters} clusters holding ${grouped.inClusters}, ${grouped.onPage} on the page`);
+  if (grouped.id) {
+    await page.locator(`.dev-item[data-id="${grouped.id}"] .dev-pick`).first().click();
+    await page.waitForTimeout(1200);
+    const opened = await page.evaluate((id) => ({ title: document.querySelector('.devx-panel:not([hidden]) .dev-pop-title')?.textContent, chosen: document.querySelector('.devx-pin-icon.chosen')?.dataset.id }), grouped.id);
+    log(`${v}: picking a clustered project in the list opens it and draws its own highlighted icon`, opened.title === grouped.name && opened.chosen === grouped.id, `"${grouped.name}"`);
+    await page.locator('.devx-close').click();
+  } else log(`${v}: picking a clustered project in the list opens it and draws its own highlighted icon`, false, 'no clustered project found');
+  await setF({ cost: '25to100' });
   await page.locator('.dev-map').scrollIntoViewIfNeeded();
   // Nearby pins share a counted cluster until zoomed in, so click clusters until a project icon is on screen.
   const onTop = (selector) =>
