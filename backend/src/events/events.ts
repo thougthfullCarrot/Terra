@@ -1371,7 +1371,11 @@ export function linkSeries(events: TerraEvent[]): TerraEvent[] {
 /** A start that moved since the last build, for a source that does not say so itself. */
 function withReschedule(e: TerraEvent, before: TerraEvent | undefined): TerraEvent {
   if (!before || e.rescheduledFrom || e.seriesId || before.source === MANUAL_SOURCE) return e;
-  const from = before.start !== e.start ? before.start : before.rescheduledFrom;
+  // Only a different local day is a move: a listing that gains its clock time (midnight → 8 AM, or a course's
+  // first session read from its page) is the same event on the same day.
+  const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: e.timezone ?? zoneOf(e.city) }).format(new Date(iso));
+  const moved = (x: string | null | undefined): x is string => Boolean(x) && (day(x!) !== day(e.start) || !isMidnight(x!));
+  const from = [before.start !== e.start ? before.start : null, before.rescheduledFrom].find(moved);
   return from ? { ...e, rescheduledFrom: from, status: e.status ?? 'rescheduled' } : e;
 }
 

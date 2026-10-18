@@ -123,3 +123,24 @@ describe('course conflict wording', () => {
     expect(courseSessions(page, '2026-10-02', '2026-11-06')!.conflicts).toEqual([]);
   });
 });
+
+describe('rescheduling', () => {
+  it('a listing that gains its clock time on the same day is not "moved"; a new day is', async () => {
+    const { buildEventsFile } = await import('../src/events/events.js');
+    const src: EventSource = { key: 'ld', organizer: 'BOMA Dallas', city: 'Dallas', kind: 'jsonld', base: 'https://x.org', page: 'https://x.org/events' };
+    const page = (start: string): Fetcher => ({ json: async () => ({}), text: async () => `<script type="application/ld+json">${JSON.stringify({ '@type': 'Event', name: 'Leasing Workshop', url: 'https://x.org/e/1', startDate: start, location: { name: 'Tower' } })}</script>` });
+    const now = new Date('2026-10-18T12:00:00Z');
+    const build = (start: string, prev: Awaited<ReturnType<typeof buildEventsFile>> | null) => buildEventsFile(now, prev, { sources: [src], fetcher: page(start), log: () => {} });
+    const one = (f: Awaited<ReturnType<typeof buildEventsFile>>) => f.cities.find((c) => c.city === 'Dallas')!.events[0]!;
+    const first = await build('2026-11-02', null);
+    const timed = await build('2026-11-02T08:00:00-06:00', first);
+    expect(one(timed).rescheduledFrom).toBeUndefined();
+    expect(one(timed).status).toBeUndefined();
+    // An earlier build that marked it this way is cleared too.
+    const wrong = { ...timed, cities: timed.cities.map((c) => ({ ...c, events: c.events.map((e) => ({ ...e, rescheduledFrom: '2026-11-02T00:00:00-06:00', status: 'rescheduled' as const })) })) };
+    expect(one(await build('2026-11-02T08:00:00-06:00', wrong)).rescheduledFrom).toBeUndefined();
+    const moved = await build('2026-11-09T08:00:00-06:00', timed);
+    expect(one(moved).rescheduledFrom).toBe('2026-11-02T08:00:00-06:00');
+    expect(one(moved).status).toBe('rescheduled');
+  });
+});
