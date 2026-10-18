@@ -12,7 +12,7 @@
  * Writes <cache>/report.json with one entry per district: what was read,
  * what failed, and why. Exits non-zero only when every district asked for failed.
  */
-import { failures, label, runStatus, type CaseChecks, type Policy } from '../appraisal/verdict.js';
+import { failures, label, pageValue, runStatus, type CaseChecks, type Policy } from '../appraisal/verdict.js';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -192,16 +192,7 @@ async function officialPage(url: string, r: IndexRow): Promise<{ url: string; ok
     const ownerWord = (r.owner ?? '').toUpperCase().split(/\s+/).find((w) => w.length > 2) ?? '';
     const value = r.totalValue != null ? r.totalValue.toLocaleString('en-US') : '';
     const hasOwner = Boolean(ownerWord) && plain.includes(ownerWord);
-    // A year only counts as published when its row carries dollar figures: BCAD's page lists the next tax year
-    // with "N/A" values (and a year selector) long before that year has any values.
-    const rows = [...plain.matchAll(/\b(20[12]\d)((?:\s+(?:\$[\d,]+|N\/A))+)/g)].map((m) => ({ year: Number(m[1]), valued: /\$/.test(m[2]!), text: m[2]! }));
-    // The value is looked for in the row of the roll year TERRA holds, so a page already showing a newer year is
-    // compared like for like; a page with no year rows is searched whole.
-    const yearRow = rows.find((x) => x.year === r.taxYear && x.valued);
-    const hasValue = Boolean(value) && (yearRow ? yearRow.text.includes(value) : plain.includes(value));
-    const valued = rows.filter((x) => x.valued).map((x) => x.year);
-    const empty = rows.filter((x) => !x.valued).map((x) => x.year);
-    const years = valued.length ? `newest year with values ${Math.max(...valued)}${empty.length ? ` (${[...new Set(empty)].join(', ')} listed without values)` : ''}` : 'no value history read';
+    const { hasValue, yearRow, years } = pageValue(plain, value, r.taxYear);
     return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, value $${value} ${hasValue ? 'found' : 'NOT found'}${yearRow ? ` in the ${r.taxYear} row` : ''}, ${years}` };
   } catch (error) {
     return { url, ok: false, closed: true, note: `could not read: ${(error as Error).message}` };
@@ -306,15 +297,17 @@ async function compare(): Promise<void> {
     if (!d.layer || !d.accountUrl) continue;
     const key = d.fields!.account;
     for (const account of accounts) {
-      const where = key.map((f) => `${f}='${account.replace(/'/g, "''")}' OR ${f}=${Number(account) || 0}`).join(' OR ');
       let raw: Record<string, unknown>[] = [];
       let layerError: string | undefined;
-      try {
+      // Each candidate account field is tried alone: a layer rejects a query naming a field it lacks.
+      for (const where of key.flatMap((f) => [`${f}=${Number(account) || 0}`, `${f}='${account.replace(/'/g, "''")}'`])) try {
+        if (raw.length) break;
         const body = await fetchJson<{ features?: { attributes: Record<string, unknown> }[]; error?: unknown }>(
           `${d.layer}/query?${new URLSearchParams({ f: 'json', where, outFields: '*', returnGeometry: 'false' })}`,
           { timeoutMs: 60_000, retries: 3 }
         );
-        if (body.error) layerError = JSON.stringify(body.error);
+        if (body.error) { layerError = JSON.stringify(body.error); continue; }
+        layerError = undefined;
         raw = (body.features ?? []).map((f) => Object.fromEntries(Object.entries(f.attributes).filter(([k]) => /val|land|impr|ag_|mkt|market|yr|year|cap|exempt|appr|assess|hs|state_cd|prop|acre|edit|date/i.test(k) && !/own|name|addr|mail/i.test(k))));
       } catch (error) {
         layerError = (error as Error).message;

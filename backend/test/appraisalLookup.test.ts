@@ -499,3 +499,23 @@ describe('verification policy', async () => {
     expect(failures({ ...ok, index: { state: 'fail' } }, 'quick')).toHaveLength(1);
   });
 });
+
+describe('account page value rows', async () => {
+  const { pageValue } = await import('../src/appraisal/verdict.js');
+  // BCAD's page for account 249983, read 2026-10-18 (value rows only): the Appraised column has no "$".
+  const bcad = 'TAX YEAR: 2027 - VALUES NOT AVAILABLE 2026 2025 2024 2023 TOTAL VALUE: $129,530 YEAR IMPROVEMENTS LAND MARKET AG VALUATION APPRAISED HS CAP ASSESSED 2026 $69,430 $60,100 0 129,530 $0 $129,530 2025 $65,570 $60,100 0 125,670 $0 $125,670 2024 $71,230 $56,180 0 127,410 $0 $127,410';
+
+  it("finds a value in the whole row of TERRA's tax year, including columns printed without $", () => {
+    const got = pageValue(bcad, '125,670', 2025);
+    expect(got.hasValue).toBe(true);
+    expect(got.yearRow?.year).toBe(2025);
+    expect(got.years).toMatch(/newest year with values 2026/);
+  });
+  it('still fails a value that is only in another year', () => {
+    expect(pageValue(bcad, '129,530', 2025).hasValue).toBe(false);
+    expect(pageValue(bcad, '127,410', 2025).hasValue).toBe(false);
+  });
+  it('does not take a digit run inside a larger figure as a match', () => {
+    expect(pageValue(bcad, '25,670', 2025).hasValue).toBe(false);
+  });
+});

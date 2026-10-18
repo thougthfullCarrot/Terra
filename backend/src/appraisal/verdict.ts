@@ -45,3 +45,20 @@ export function runStatus(cases: { checks: CaseChecks }[], policy: Policy): { ex
   const head = policy === 'full' ? 'FULL verification' : 'QUICK check (index only required; not full verification)';
   return { exitCode: failed || empty ? 1 : 0, summary: `${head}: ${cases.length - failed}/${cases.length} cases pass${empty ? ', no cases ran' : ''}; ${parts.join('; ')}` };
 }
+
+/**
+ * Find TERRA's value on an account page's text. A year's roll row reads "2025 $65,570 $60,100 0 125,670 $0 $125,670"
+ * (BCAD prints some columns without "$"), so the whole row is kept, up to the next year. A year only counts as published when its row
+ * carries dollar figures: BCAD lists the next tax year with "N/A" values long before that year has any. The value
+ * is looked for in the row of the roll year TERRA holds; a page with no row for that year is searched whole.
+ */
+export function pageValue(plain: string, value: string, taxYear: number | null): { hasValue: boolean; yearRow?: { year: number; text: string }; years: string } {
+  const rows = [...plain.matchAll(/\b(20[12]\d)((?:\s+(?!20[12]\d\b)(?:\$?[\d,]+|N\/A))+)/g)].map((m) => ({ year: Number(m[1]), valued: /\$/.test(m[2]!), text: m[2]! }));
+  const valued = rows.filter((x) => x.valued).map((x) => x.year);
+  const empty = rows.filter((x) => !x.valued && /N\/A/.test(x.text)).map((x) => x.year);
+  const years = valued.length ? `newest year with values ${Math.max(...valued)}${empty.length ? ` (${[...new Set(empty)].join(', ')} listed without values)` : ''}` : 'no value history read';
+  const yearRow = rows.find((x) => x.year === taxYear && x.valued);
+  const cells = (t: string) => t.trim().split(/\s+/).map((c) => c.replace(/^\$/, ''));
+  const hasValue = Boolean(value) && (yearRow ? cells(yearRow.text).includes(value) : plain.includes(value));
+  return { hasValue, yearRow, years };
+}
