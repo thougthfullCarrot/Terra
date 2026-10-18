@@ -293,8 +293,60 @@ async function verify(): Promise<void> {
   process.exitCode = status.exitCode;
 }
 
+/**
+ * Compare named accounts field by field: the live layer's raw value fields and the district's own account page's
+ * labeled value rows, with when each was read. Prints value fields only (no owner or mailing names).
+ *   npm run appraisal -- compare --districts bexar --accounts 249983,160179
+ */
+async function compare(): Promise<void> {
+  const accounts = (arg('--accounts') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const out: Record<string, unknown>[] = [];
+  for (const id of chosen) {
+    const d = district(id);
+    if (!d.layer || !d.accountUrl) continue;
+    const key = d.fields!.account;
+    for (const account of accounts) {
+      const where = key.map((f) => `${f}='${account.replace(/'/g, "''")}' OR ${f}=${Number(account) || 0}`).join(' OR ');
+      let raw: Record<string, unknown>[] = [];
+      let layerError: string | undefined;
+      try {
+        const body = await fetchJson<{ features?: { attributes: Record<string, unknown> }[]; error?: unknown }>(
+          `${d.layer}/query?${new URLSearchParams({ f: 'json', where, outFields: '*', returnGeometry: 'false' })}`,
+          { timeoutMs: 60_000, retries: 3 }
+        );
+        if (body.error) layerError = JSON.stringify(body.error);
+        raw = (body.features ?? []).map((f) => Object.fromEntries(Object.entries(f.attributes).filter(([k]) => /val|land|impr|ag_|mkt|market|yr|year|cap|exempt|appr|assess|hs|state_cd|prop|acre|edit|date/i.test(k) && !/own|name|addr|mail/i.test(k))));
+      } catch (error) {
+        layerError = (error as Error).message;
+      }
+      const layerRead = new Date().toISOString();
+      const url = d.accountUrl.replace('{account}', account);
+      let pageRows: string[] = [];
+      let pageNote = '';
+      try {
+        const u = new URL(url);
+        const robots = await fetch(new URL('/robots.txt', u).href, { signal: AbortSignal.timeout(20_000) }).then((x) => (x.ok ? x.text() : ''));
+        if (!robotsAllow(robots, u.pathname + u.search)) throw new Error('robots.txt disallows the account page');
+        await new Promise((done) => setTimeout(done, 2000));
+        const res = await fetch(url, { headers: { 'user-agent': 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)' }, signal: AbortSignal.timeout(30_000) });
+        const html = await res.text();
+        pageNote = `HTTP ${res.status}, ${html.length} bytes`;
+        // Every table row that carries a dollar figure or names a value, with its cells kept apart by " | ".
+        pageRows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+          .map((m) => [...m[1]!.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((c) => c[1]!.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').trim()).join(' | '))
+          .filter((r) => /\$|value|appraised|assessed|cap|year/i.test(r) && !/owner|mailing|name:/i.test(r));
+      } catch (error) {
+        pageNote = `could not read: ${(error as Error).message}`;
+      }
+      out.push({ district: id, account, layer: d.layer, layerRead, layerError, raw, page: url, pageRead: new Date().toISOString(), pageNote, pageRows });
+    }
+  }
+  await writeFile(join(cacheDir, 'compare.json'), JSON.stringify(out, null, 1));
+  console.log(`COMPARE ${JSON.stringify(out)}`);
+}
+
 const command = process.argv[2];
-const commands: Record<string, () => Promise<void>> = { probe, collect, index, lookup: lookupCmd, verify };
+const commands: Record<string, () => Promise<void>> = { probe, collect, index, lookup: lookupCmd, verify, compare };
 if (!command || !commands[command]) {
   console.error(`usage: appraisal <${Object.keys(commands).join('|')}>`);
   process.exit(2);
