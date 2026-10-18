@@ -14,6 +14,10 @@ on:
       max_chunks:
         description: Stop each ArcGIS district after this many requests (blank = all)
         default: ''
+      force:
+        description: Read again even where the source hasn't changed
+        type: boolean
+        default: false
   push:
     branches: [claude/project-thread-84a4bw]
     paths: ['backend/src/appraisal/**', 'backend/src/bin/appraisal-lookup.ts', '.github/workflows/appraisal-lookup.yml']
@@ -58,6 +62,7 @@ jobs:
           # A push runs a quick check (3 requests per district, 20k Harris lines); a manual run reads everything.
           if [ "${{ github.event_name }}" = "push" ]; then extra="--max-chunks 3 --max-lines 20000 --restart";
           elif [ -n "${{ inputs.max_chunks }}" ]; then extra="--max-chunks ${{ inputs.max_chunks }}"; fi
+          if [ "${{ inputs.force }}" = "true" ]; then extra="$extra --force"; fi
           npm run --silent appraisal -- collect --districts "$DISTRICTS" --cache ../.appraisal-cache $extra 2>&1 | tee /tmp/collect.log
 
       - name: Save the cache
