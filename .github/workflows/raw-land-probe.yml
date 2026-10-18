@@ -11,11 +11,14 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+      - name: Regression tests
+        working-directory: backend/probe
+        run: node --test parcel-metrics.test.mjs arcgis-read.test.mjs
       - name: Live services
         working-directory: backend/probe
         run: npm init -y >/dev/null && npm i --no-save @turf/turf@7.1.0 >/dev/null && node raw-land-probe.mjs
