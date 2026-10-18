@@ -130,7 +130,7 @@ a `fromPage(<downloads page>)` source in `bulk.ts`.
 | Index group sizes | 17,070 groups; largest 6.9 MB raw (Harris), typical well under 1 MB; a lookup reads one group per district |
 | Service cost | $0: no paid service; every source is a free public download or layer; runs use GitHub Actions minutes (about 15 per full run) |
 
-Publishing the whole index with the website would add about 2 GB to a Pages site whose limit is 1 GB, so the next step should publish only the districts and fields Rod approves, or serve groups from free Supabase storage (1 GB free tier: tight) or keep querying ArcGIS live for Bexar.
+Publication is off (`publish.ts`): only complete, allowlisted districts could ever be published, and none are while `PUBLICATION.enabled` is false. GitHub Pages excludes commercial SaaS sites, so the proposed host for the index is Cloudflare Pages' free plan (20,000 files; the six proposed counties are 11,171 group files, 185 MB gzipped). Measurements and the reasoning are in Rod's review notes.
 
 ## Next step (not in this PR)
 
