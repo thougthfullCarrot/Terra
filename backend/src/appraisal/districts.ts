@@ -24,6 +24,10 @@ export interface FieldMap {
   mailing: string[];
   landValue?: string[];
   improvementValue?: string[];
+  /** Agricultural/timber land at market value, where the district splits it out (already inside landValue). */
+  agMarketValue?: string[];
+  /** Agricultural/timber productivity (use) value; never part of the market total. */
+  agUseValue?: string[];
   totalValue?: string[];
   taxYear?: string[];
   stateCode?: string[];
@@ -103,7 +107,11 @@ export const DISTRICTS: District[] = [
       situs: ['Situs'],
       owner: ['Owner_name', 'Owner'],
       mailing: ['Addr_line1', 'Addr_line2', 'Addr_line3', 'Addr_city', 'Addr_state', 'Zip'],
-      landValue: ['Land_hstd_val+Land_non_hstd_val'],
+      // Market_val = land (homestead + non-homestead + ag market) + improvements for all but 2 of 705,142
+      // accounts (Raw Land's full read, 2026-10-18); AG_Use_val is the productivity value and is not in it.
+      landValue: ['Land_hstd_val+Land_non_hstd_val+AG_Market'],
+      agMarketValue: ['AG_Market'],
+      agUseValue: ['AG_Use_val'],
       improvementValue: ['Imprv_hstd_val+Imprv_non_hstd_val'],
       totalValue: ['Market_val'],
       taxYear: ['Prop_yr'],

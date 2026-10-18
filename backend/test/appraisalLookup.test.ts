@@ -259,3 +259,14 @@ describe('collapse', () => {
     expect(collapse([base, { ...base, totalValue: 120 }]).conflicting).toEqual(['totalValue']);
   });
 });
+
+describe('Bexar agricultural land', () => {
+  it('counts ag market value in land, keeps productivity value apart, and reconciles to the market total', () => {
+    const r = normalizeRow(district('bexar'), {
+      Prop_id: 175721, Situs: '1 TEST RD', Land_hstd_val: 0, Land_non_hstd_val: 18430, AG_Market: 249510, AG_Use_val: 1200,
+      Imprv_hstd_val: 138060, Imprv_non_hstd_val: 0, Market_val: 406000, Prop_yr: 2025
+    }, { retrieved: 'x', dataset: 'x' })!;
+    expect(r).toMatchObject({ landValue: 267940, agMarketValue: 249510, agUseValue: 1200, improvementValue: 138060, totalValue: 406000 });
+    expect(r.landValue! + r.improvementValue!).toBe(r.totalValue);
+  });
+});

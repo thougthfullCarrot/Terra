@@ -235,7 +235,7 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
   };
 }
 
-const KEPT_SAME = ['situs', 'situsCity', 'situsZip', 'landValue', 'improvementValue', 'totalValue', 'valueBasis', 'taxYear', 'stateCode', 'landSqft', 'buildingSqft', 'yearBuilt'] as const;
+const KEPT_SAME = ['situs', 'situsCity', 'situsZip', 'landValue', 'improvementValue', 'agMarketValue', 'agUseValue', 'totalValue', 'valueBasis', 'taxYear', 'stateCode', 'landSqft', 'buildingSqft', 'yearBuilt'] as const;
 
 /** One record from an account's repeated rows: owners listed once each, and any other field that disagrees flagged. */
 export function collapse(rows: AppraisalRecord[]): AppraisalRecord {

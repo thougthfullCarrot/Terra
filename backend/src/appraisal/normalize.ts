@@ -86,6 +86,8 @@ export function normalizeRow(
     mailing,
     landValue: number(get(f.landValue)),
     improvementValue: number(get(f.improvementValue)),
+    ...(f.agMarketValue ? { agMarketValue: number(get(f.agMarketValue)) } : {}),
+    ...(f.agUseValue ? { agUseValue: number(get(f.agUseValue)) } : {}),
     totalValue: number(get(f.totalValue)),
     valueBasis: d.valueBasis ?? null,
     taxYear: year(get(f.taxYear)) ?? extra.taxYear ?? null,

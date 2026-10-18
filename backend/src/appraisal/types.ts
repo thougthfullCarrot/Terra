@@ -23,6 +23,10 @@ export interface AppraisalRecord {
   mailing: string | null;
   landValue: number | null;
   improvementValue: number | null;
+  /** Agricultural/timber land at market value, already included in landValue; null where not split out. */
+  agMarketValue?: number | null;
+  /** Agricultural/timber productivity value, the taxable basis for qualified land; not a market figure. */
+  agUseValue?: number | null;
   /** Total appraised value as the district publishes it (some only publish market value; see valueBasis). */
   totalValue: number | null;
   /** Which figure totalValue is: the district's 'appraised' value or its 'market' value. */
