@@ -176,6 +176,14 @@ for (const vp of [
   await page.locator('.devx-more-summary').click();
   const after = await page.locator('.devx-more-body').isVisible();
   log(`${v}: More starts folded and opens on ${vp.mobile ? 'tap' : 'click'}`, !moreOpen && !before && after);
+  // Every legend label and count fits inside the side column, with no clipping.
+  const legendFit = await page.evaluate(() => {
+    const side = document.querySelector('.devx-side').getBoundingClientRect();
+    return [...document.querySelectorAll('.devx-legend li:not([hidden]) :is(.devx-legend-label, .devx-legend-count)')]
+      .filter((n) => n.getBoundingClientRect().right > side.right - 4 || n.scrollWidth > n.clientWidth + 1)
+      .map((n) => n.textContent);
+  });
+  log(`${v}: every legend label and count fits`, legendFit.length === 0, legendFit.join(', '));
   if (vp.mobile) {
     const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
     log(`${v}: no sideways scrolling`, scrollW <= vp.width, `${scrollW}px`);
