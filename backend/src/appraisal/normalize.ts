@@ -57,12 +57,19 @@ export function normalizeRow(
   const mailing = f.mailing.map((name) => text(get([name]))).filter(Boolean).join(', ') || null;
   const zip = text(get(f.situsZip))?.match(/\d{5}/)?.[0] ?? null;
   const yearBuilt = year(get(f.yearBuilt));
+  const city = text(get(f.situsCity));
+  let situs = text(get(f.situs));
+  // Some rolls run the city and ZIP into the street line ("11502 TANGLEBRIAR TRL AUSTIN 78750"): cut them off.
+  if (situs && city && !situs.includes(',')) {
+    const at = situs.toUpperCase().lastIndexOf(` ${city.toUpperCase().replace(/\s*\(.*\)$/, '')}`);
+    if (at > 0) situs = situs.slice(0, at).trim();
+  }
   return {
     district: d.id,
     account,
     sourceUrl: d.accountUrl ? d.accountUrl.replace('{account}', encodeURIComponent(account)) : null,
-    situs: text(get(f.situs)),
-    situsCity: text(get(f.situsCity)),
+    situs,
+    situsCity: city && !/^no city/i.test(city) ? city : null,
     situsZip: zip,
     owner: text(get(f.owner)),
     mailing,

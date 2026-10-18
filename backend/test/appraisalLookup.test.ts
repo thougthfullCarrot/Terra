@@ -180,3 +180,47 @@ describe('collectArcgis', () => {
     expect(again.changes).toEqual({ added: 1, changed: 1, removed: 1, unchanged: 2498 });
   });
 });
+
+describe('bulk readers', async () => {
+  const { pacsRow, newestExport, PACS_PROP } = await import('../src/appraisal/bulk.js');
+  it('reads a PACS 8.0 fixed-width line', () => {
+    const line = Array(4500).fill(' ');
+    const put = (name: string, value: string) => {
+      const [start] = PACS_PROP[name]!;
+      for (let i = 0; i < value.length; i++) line[start - 1 + i] = value[i]!;
+    };
+    put('prop_id', '000000012345');
+    put('prop_type_cd', 'R');
+    put('prop_val_yr', '2026');
+    put('py_owner_name', 'EXAMPLE LP');
+    put('situs_num', '100');
+    put('situs_street_prefx', 'N');
+    put('situs_street', 'MESA');
+    put('situs_street_suffix', 'ST');
+    put('land_hstd_val', '000000000001000');
+    put('land_non_hstd_val', '000000000000500');
+    put('imprv_non_hstd_val', '000000000002000');
+    put('appraised_val', '000000000003500');
+    const row = pacsRow(line.join(''));
+    expect(row).toMatchObject({ situs: '100 N MESA ST', land_val: '1500', imprv_val: '2000', py_owner_name: 'EXAMPLE LP', prop_val_yr: '2026' });
+    const r = normalizeRow(district('el-paso'), { ...row, prop_id: '12345' }, { retrieved: 'x', dataset: 'x' })!;
+    expect(r).toMatchObject({ account: '12345', situs: '100 N MESA ST', landValue: 1500, improvementValue: 2000, totalValue: 3500, taxYear: 2026 });
+  });
+  it('picks the newest certified roll export from a downloads page', () => {
+    const page = `<a href="/files/2025 Certified Export.zip">a</a><a href="/files/2026%20Certified%20Appraisal%20Export.zip">b</a>
+      <a href="/files/2026 Supplement Export.zip">c</a><a href="/files/2026 Export Layout.zip">d</a>`;
+    expect(newestExport(page, 'https://cad.example/downloads/')).toEqual({ url: 'https://cad.example/files/2026%20Certified%20Appraisal%20Export.zip', taxYear: 2026 });
+    expect(newestExport('<a href="x.pdf">', 'https://cad.example/')).toBeNull();
+  });
+});
+
+describe('roll quirks', () => {
+  it('cuts a city run into the street line', () => {
+    const r = normalizeRow(district('bexar'), { PropID: 1, Situs: '11502 TANGLEBRIAR TRL AUSTIN 78750', SITUS_CITY: 'AUSTIN' }, { retrieved: 'x', dataset: 'x' })!;
+    expect(r.situs).toBe('11502 TANGLEBRIAR TRL');
+  });
+  it('treats a differently written city as a weaker match, not a miss', () => {
+    expect(gradeMatch(parseAddress('1200 Winding Brook Dr, Garland')!, parseAddress('1200 WINDING BROOK DR ,GARLAND (DALLAS CO), TX 75044')!)).toBe('exact');
+    expect(gradeMatch(parseAddress('1200 Winding Brook Dr, Mesquite')!, parseAddress('1200 WINDING BROOK DR, GARLAND')!)).toBe('probable');
+  });
+});

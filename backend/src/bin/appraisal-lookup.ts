@@ -16,7 +16,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAddress, streetKey, formatStreet } from '../appraisal/address.js';
-import { collectHarris } from '../appraisal/bulk.js';
+import { collectBulk } from '../appraisal/bulk.js';
 import { cachedRecords, collectArcgis, type DistrictReport } from '../appraisal/collect.js';
 import { DISTRICTS, district, type District } from '../appraisal/districts.js';
 import { lookup, shardOf, writeIndex, type IndexManifest, type IndexRow } from '../appraisal/lookup.js';
@@ -80,7 +80,7 @@ async function collectOne(d: District): Promise<DistrictReport> {
   const started = Date.now();
   try {
     if (d.access === 'arcgis') return await collectArcgis(d, opts);
-    if (d.id === 'harris') return await collectHarris(d, { ...opts, maxLines: arg('--max-lines') ? Number(arg('--max-lines')) : undefined });
+    if (d.access === 'bulk') return await collectBulk(d, { ...opts, maxLines: arg('--max-lines') ? Number(arg('--max-lines')) : undefined });
     return { district: d.id, status: 'unsupported', records: 0, totalIds: 0, chunksDone: 0, chunksTotal: 0, errors: [{ at: new Date().toISOString(), message: d.terms }], seconds: 0 };
   } catch (error) {
     log(`${d.id}: FAILED ${(error as Error).message}`);
@@ -191,7 +191,7 @@ async function verify(): Promise<void> {
       const { result, unavailable } = await lookup(c.address, [id], fileLoader);
       const got = result.status === 'match' ? result.records.map((r) => r.account) : result.status === 'ambiguous' ? result.candidates.map((x) => x.record.account) : [];
       let official: { accounts: string[]; agrees: boolean; valuesAgree?: boolean; note?: string } | undefined;
-      if (d.access === 'arcgis') {
+      if (d.access === 'arcgis' && d.layer) {
         try {
           const live = await liveByAddress(d, c.address);
           const today = new Date().toISOString().slice(0, 10);

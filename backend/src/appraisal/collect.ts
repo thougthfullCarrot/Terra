@@ -87,6 +87,9 @@ async function writeJson(path: string, value: unknown): Promise<void> {
 }
 
 interface LayerInfo {
+  name?: string;
+  description?: string;
+  copyrightText?: string;
   maxRecordCount?: number;
   editingInfo?: { lastEditDate?: number };
   fields?: { name: string }[];
@@ -145,6 +148,7 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
       errors: []
     };
     await writeJson(statePath, state);
+    log(`${d.id}: layer "${info.name}" ${JSON.stringify((info.description ?? '').slice(0, 300))} ${JSON.stringify(info.copyrightText ?? '')}`);
     log(`${d.id}: ${sorted.length} parcels, ${Math.ceil(sorted.length / chunkSize)} requests of ${chunkSize}`);
   } else {
     log(`${d.id}: resuming, ${state!.chunksDone.length} of ${Math.ceil(state!.totalIds / state!.chunkSize)} requests already read`);
@@ -154,6 +158,8 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
   const total = Math.ceil(ids.length / s.chunkSize);
   const done = new Set(s.chunksDone);
   const retrieved = now().toISOString().slice(0, 10);
+  // A layer without a tax-year field usually names its roll year in its description; null when it doesn't.
+  const layerYear = Number(`${info.name ?? ''} ${info.description ?? ''} ${info.copyrightText ?? ''}`.match(/\b(20[1-3]\d)\b/)?.[1]) || null;
   let read = 0;
   let failedInRow = 0;
   for (let n = 0; n < total; n++) {
@@ -181,7 +187,7 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
       const lines: string[] = [];
       for (const f of body.features) {
         const c = ringCenter(f.geometry);
-        const r = normalizeRow(d, f.attributes, { retrieved, dataset: layer, lat: c?.lat, lng: c?.lng });
+        const r = normalizeRow(d, f.attributes, { retrieved, dataset: layer, lat: c?.lat, lng: c?.lng, taxYear: layerYear });
         if (r) lines.push(JSON.stringify(r));
       }
       await writeFile(join(chunks, `${n}.ndjson`), lines.length ? `${lines.join('\n')}\n` : '');

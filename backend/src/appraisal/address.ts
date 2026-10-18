@@ -181,9 +181,16 @@ export function gradeMatch(typed: AddressParts, recorded: AddressParts): MatchGr
   if (typed.suffix && recorded.suffix && typed.suffix !== recorded.suffix) return 'none';
   if (typed.unit && recorded.unit && normUnit(typed.unit) !== normUnit(recorded.unit)) return 'none';
   if (typed.zip && recorded.zip && typed.zip !== recorded.zip) return 'none';
-  if (typed.city && recorded.city && typed.city !== recorded.city) return 'none';
-  const missing = (Boolean(td) !== Boolean(rd)) || (Boolean(typed.suffix) !== Boolean(recorded.suffix)) || (Boolean(typed.unit) && !recorded.unit);
+  // Rolls write cities their own way ("GARLAND (DALLAS CO)", "No City Limit"), so a different city only weakens a match.
+  const cityDiffers = Boolean(typed.city && recorded.city && !sameCity(typed.city, recorded.city));
+  const missing = cityDiffers || (Boolean(td) !== Boolean(rd)) || (Boolean(typed.suffix) !== Boolean(recorded.suffix)) || (Boolean(typed.unit) && !recorded.unit);
   return missing ? 'probable' : 'exact';
+}
+
+function sameCity(a: string, b: string): boolean {
+  const clean = (c: string) => c.replace(/\(.*?\)/g, '').replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
+  const [x, y] = [clean(a), clean(b)];
+  return x === y || x.startsWith(`${y} `) || y.startsWith(`${x} `);
 }
 
 function normUnit(u: string): string {

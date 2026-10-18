@@ -60,6 +60,22 @@ export interface District {
   notes?: string;
 }
 
+/** Field names pacsRow() gives a PACS 8.0 export line. */
+const PACS_FIELDS: FieldMap = {
+  account: ['prop_id'],
+  situs: ['situs'],
+  situsCity: ['situs_city'],
+  situsZip: ['situs_zip'],
+  owner: ['py_owner_name'],
+  mailing: ['py_addr_line1', 'py_addr_line2', 'py_addr_line3', 'py_addr_city', 'py_addr_state', 'py_addr_zip'],
+  landValue: ['land_val'],
+  improvementValue: ['imprv_val'],
+  totalValue: ['appraised_val'],
+  taxYear: ['prop_val_yr'],
+  stateCode: ['state_cd'],
+  landSqft: ['land_sqft']
+};
+
 const COMMON: Pick<FieldMap, 'situsCity' | 'situsZip' | 'taxYear'> = {
   situsCity: ['SITUS_CITY', 'SitusCity', 'site_addr_2', 'CITYNAME', 'situs_city'],
   situsZip: ['SITUS_ZIP', 'SitusZip', 'site_addr_3', 'situs_zip', 'ZIP_CODE'],
@@ -88,7 +104,6 @@ export const DISTRICTS: District[] = [
       landValue: ['LandVal'],
       improvementValue: ['ImprVal'],
       totalValue: ['TotVal', 'Market_val'],
-      taxYear: ['Roll', ...COMMON.taxYear!],
       stateCode: ['State_cd'],
       landAcres: ['Acres', 'LglAcres', 'Land_acres'],
       buildingSqft: ['TOT_GBA', 'GBA', 'Sq_ft'],
@@ -106,17 +121,17 @@ export const DISTRICTS: District[] = [
     fips: '201',
     markets: ['Houston'],
     site: 'https://hcad.org/',
-    search: 'https://hcad.org/property-search/',
+    search: 'https://hcad.org/hcad-online-services/property-tax-database',
     downloads: ['https://hcad.org/pdata/pdata-property-downloads.html'],
     access: 'bulk',
-    publisher: 'HCAD public data downloads (Real_acct_owner.zip, real_acct.txt)',
+    publisher: 'HCAD public data downloads (Real_acct_owner.zip: real_acct.txt + owners.txt)',
     fields: {
       ...COMMON,
       account: ['acct'],
       situs: ['site_addr_1'],
       situsCity: ['site_addr_2'],
       situsZip: ['site_addr_3'],
-      owner: ['mailto'],
+      owner: ['owner_name', 'mailto'],
       mailing: ['mail_addr_1', 'mail_addr_2', 'mail_city', 'mail_state', 'mail_zip'],
       landValue: ['land_val'],
       improvementValue: ['bld_val'],
@@ -129,7 +144,7 @@ export const DISTRICTS: District[] = [
     },
     valueBasis: 'appraised',
     terms: 'HCAD publishes free bulk files; the existing weekly appraisal.yml already downloads real_acct.txt.',
-    notes: 'The City of Houston Cadastral layer (used by the site today) covers the city only; the bulk file covers the county.'
+    notes: 'The City of Houston Cadastral layer (used by the site today) covers the city only; the bulk file covers the county. The file has no coordinates (HCAD publishes parcel shapes separately).'
   },
   {
     id: 'dallas',
@@ -141,25 +156,24 @@ export const DISTRICTS: District[] = [
     search: 'https://www.dallascad.org/SearchAddr.aspx',
     accountUrl: 'https://www.dallascad.org/AcctDetailCom.aspx?ID={account}',
     downloads: ['https://www.dallascad.org/DataProducts.aspx'],
-    access: 'arcgis',
-    layer: 'https://services.arcgis.com/6dxqrE38upDMg1va/arcgis/rest/services/Dallas_Co_Parcels/FeatureServer/0',
-    publisher: 'Public ArcGIS copy of the DCAD roll (already used by the site)',
+    access: 'bulk',
+    publisher: 'DCAD certified data product (DCADyyyy_CERTIFIED zip: ACCOUNT_INFO + ACCOUNT_APPRL_YEAR)',
     fields: {
-      ...COMMON,
-      account: ['Prop_ID', 'ACCOUNT_NUM'],
-      situs: ['SITUS_ADDR'],
-      owner: ['OWNER_NAME'],
-      mailing: ['MAIL_LINE1', 'MAIL_LINE2', 'MAIL_CITY', 'MAIL_STAT', 'MAIL_ZIP'],
-      landValue: ['LAND_VALUE', 'LAND_VAL'],
-      improvementValue: ['IMPR_VALUE', 'IMP_VAL', 'IMPR_VAL'],
-      totalValue: ['MKT_VALUE'],
-      stateCode: ['STAT_LAND_'],
-      landAcres: ['LEGAL_AREA'],
-      yearBuilt: ['YEAR_BUILT']
+      account: ['ACCOUNT_NUM'],
+      situs: ['SITUS'],
+      situsCity: ['PROPERTY_CITY'],
+      situsZip: ['PROPERTY_ZIPCODE'],
+      owner: ['OWNER_NAME1'],
+      mailing: ['OWNER_ADDRESS_LINE1', 'OWNER_ADDRESS_LINE2', 'OWNER_ADDRESS_LINE3', 'OWNER_ADDRESS_LINE4', 'OWNER_CITY', 'OWNER_STATE', 'OWNER_ZIPCODE'],
+      landValue: ['LAND_VAL'],
+      improvementValue: ['IMPR_VAL'],
+      totalValue: ['TOT_VAL'],
+      taxYear: ['APPRAISAL_YR'],
+      stateCode: ['SPTD_CODE']
     },
     valueBasis: 'market',
-    pauseMs: 300,
-    terms: 'DCAD offers free certified CSV data products (already read by appraisal.yml); its GIS shapefiles are free downloads too.'
+    terms: 'DCAD offers free certified CSV data products (already read by appraisal.yml); its GIS shapefiles are free downloads too.',
+    notes: 'The public ArcGIS copy the site queries (services.arcgis.com Dallas_Co_Parcels) still carries the 2025 roll, so the certified file is used here. No coordinates in the file.'
   },
   {
     id: 'tarrant',
@@ -171,27 +185,28 @@ export const DISTRICTS: District[] = [
     search: 'https://www.tad.org/property-search/',
     accountUrl: 'https://www.tad.org/property?account={account}',
     downloads: ['https://www.tad.org/resources/data-downloads'],
-    access: 'arcgis',
-    layer: 'https://services5.arcgis.com/3ddLCBXe1bRt7mzj/arcgis/rest/services/Parcels_Public_Vview/FeatureServer/0',
-    publisher: 'City of Fort Worth parcel view of the TAD roll (already used by the site)',
+    access: 'bulk',
+    publisher: 'TAD PropertyData (Delimited) download',
     fields: {
-      ...COMMON,
-      account: ['ACCOUNT', 'Account_Num'],
-      situs: ['SITUS_ADDR'],
-      situsCity: ['CITYNAME'],
-      owner: ['OWNER_NAME'],
-      mailing: ['OWNER_ADDRESS', 'OWNER_CITY_ST', 'OWNER_ZIP_CODE'],
-      landValue: ['LAND_VALUE'],
-      improvementValue: ['IMPROVEMENT_VALUE', 'IMPR_VALUE'],
-      totalValue: ['APPRAISED_VALUE', 'MARKET_VALUE'],
-      stateCode: ['STATE_USE_CODE'],
-      landSqft: ['LAND_SQFT'],
-      buildingSqft: ['LIVING_AREA'],
-      yearBuilt: ['YR_BUILT']
+      account: ['Account_Num'],
+      situs: ['Situs_Address'],
+      situsCity: ['Property_City', 'City_Name'],
+      situsZip: ['Situs_Zip', 'Property_Zip'],
+      owner: ['Owner_Name'],
+      mailing: ['Owner_Address', 'Owner_CityState', 'Owner_Zip'],
+      landValue: ['Land_Value'],
+      improvementValue: ['Improvement_Value'],
+      totalValue: ['Appraised_Value', 'Total_Value'],
+      taxYear: ['Appraisal_Year'],
+      stateCode: ['State_Use_Code'],
+      landSqft: ['Land_SqFt'],
+      landAcres: ['Land_Acres'],
+      buildingSqft: ['Living_Area'],
+      yearBuilt: ['Year_Built']
     },
     valueBasis: 'appraised',
-    pauseMs: 300,
-    terms: 'TAD publishes free PropertyData downloads (already read by appraisal.yml).'
+    terms: 'TAD publishes free PropertyData downloads (already read by appraisal.yml).',
+    notes: 'The Fort Worth parcel view the site queries carries the 2024 roll and no shapes, so the TAD file is used here. No coordinates in the file.'
   },
   {
     id: 'travis',
@@ -203,25 +218,12 @@ export const DISTRICTS: District[] = [
     search: 'https://travis.prodigycad.com/property-search',
     accountUrl: 'https://travis.prodigycad.com/property-detail/{account}',
     downloads: ['https://traviscad.org/publicinformation'],
-    access: 'arcgis',
-    layer: 'https://services1.arcgis.com/HGcSYZ5bvjRswoCb/arcgis/rest/services/TCAD_Parcels_Dec_2025/FeatureServer/0',
-    publisher: 'Public ArcGIS copy of the TCAD roll (already used by the site)',
-    fields: {
-      ...COMMON,
-      account: ['PROP_ID'],
-      situs: ['situs_address'],
-      owner: ['py_owner_name'],
-      mailing: ['py_address'],
-      landValue: ['land_value', 'land_val'],
-      improvementValue: ['imprv_value', 'improvement_value'],
-      totalValue: ['appraised_val', 'market_value'],
-      stateCode: ['land_state_cd'],
-      landAcres: ['GIS_acres', 'tcad_acres'],
-      yearBuilt: ['F1year_imprv']
-    },
-    valueBasis: 'market',
-    pauseMs: 300,
-    terms: 'TCAD publishes free PACS export files (already read by appraisal.yml).'
+    access: 'bulk',
+    publisher: 'TCAD certified appraisal export (PACS 8.0 fixed-width PROP.TXT + LAND_DET.TXT)',
+    fields: PACS_FIELDS,
+    valueBasis: 'appraised',
+    terms: 'TCAD publishes free PACS export files (already read by appraisal.yml).',
+    notes: 'The public ArcGIS copy the site queries (TCAD_Parcels_Dec_2025) has coordinates but no land or improvement split; the export is used here. Year built and building area are in IMP_DET, not read yet.'
   },
   {
     id: 'el-paso',
@@ -231,10 +233,11 @@ export const DISTRICTS: District[] = [
     markets: ['El Paso'],
     site: 'https://epcad.org/',
     search: 'https://epcad.org/Search',
-    downloads: ['https://epcad.org/OpenGovernment', 'https://export.epcad.org/datasets/REAL_ESTATE.zip', 'https://blob.epcad.org/gis/parcels2025.zip'],
+    downloads: ['https://epcad.org/OpenGovernment', 'https://export.epcad.org/datasets/2026_Certified_Export_Files.zip', 'https://propertysearch.blob.core.windows.net/abepublicfiles/Schemas.txt'],
     api: 'https://go.epcad.org/ApiPropertySearch',
     access: 'bulk',
-    publisher: 'EPCAD Open Government downloads (Property Search flat files, ~ delimited)',
+    publisher: 'EPCAD certified export files (PACS 8.0 layout, Open Government page)',
+    fields: PACS_FIELDS,
     valueBasis: 'appraised',
     terms: 'EPCAD lists its export files "for development use only" and links an Acceptable Use Policy; the documented REST API exists. Read the policy before publishing EPCAD data on the live site.'
   },
@@ -244,10 +247,10 @@ export const DISTRICTS: District[] = [
     county: 'Comal',
     fips: '091',
     markets: ['New Braunfels'],
-    site: 'https://www.comalad.org/',
+    site: 'https://comalad.org/',
     search: 'https://esearch.comalad.org/',
     access: 'none',
-    terms: 'No public bulk export or API found. The only open parcel layer (TNRIS copy, services6.arcgis.com Comal_County_Parcels) dates from January 2021 and is too old to use.'
+    terms: 'No public bulk export or API on the district site; the property search has a CAPTCHA, so it is not automated. The district GIS viewer (gis.bisclient.com/comalcad) is a map for people. The only open parcel layer (TNRIS copy, services6.arcgis.com Comal_County_Parcels) dates from January 2021. Data can be asked for under the Public Information Act (comalad.org/open-records-request).'
   },
   {
     id: 'brazos',
@@ -257,8 +260,12 @@ export const DISTRICTS: District[] = [
     markets: ['College Station'],
     site: 'https://brazoscad.org/',
     search: 'https://esearch.brazoscad.org/',
-    access: 'none',
-    terms: 'No public bulk export or API found from the district.'
+    downloads: ['https://brazoscad.org/certified-data-downloads/', 'https://brazoscad.org/tax-information/gis/'],
+    access: 'bulk',
+    publisher: 'Brazos CAD certified data downloads (appraisal export)',
+    fields: PACS_FIELDS,
+    valueBasis: 'appraised',
+    terms: 'Free certified data downloads on the district site; robots.txt allows it. The property search has a CAPTCHA and is not automated.'
   },
   {
     id: 'galveston',
@@ -267,9 +274,13 @@ export const DISTRICTS: District[] = [
     fips: '167',
     markets: ['Galveston'],
     site: 'https://galvestoncad.org/',
-    search: 'https://propaccess.trueautomation.com/clientdb/?cid=81',
-    access: 'none',
-    terms: 'No public bulk export or API found; the search is a TrueAutomation site.'
+    search: 'https://galvestoncad.org/public-data/',
+    downloads: ['https://galvestoncad.org/preliminary-and-certified-roll-export-data/', 'https://galvestoncad.org/gis-data/'],
+    access: 'bulk',
+    publisher: 'Galveston CAD certified roll export data',
+    fields: PACS_FIELDS,
+    valueBasis: 'appraised',
+    terms: 'Free preliminary and certified roll exports on the district site; robots.txt allows it.'
   },
   {
     id: 'lubbock',
@@ -280,7 +291,7 @@ export const DISTRICTS: District[] = [
     site: 'https://www.lubbockcad.org/',
     search: 'https://lubbockcad.org/property-search/',
     access: 'none',
-    terms: 'No public bulk export or API found from the district.'
+    terms: 'The site answers automated requests with 403 (bot protection), and its robots.txt sets content-signal terms for collection. Not automated; the search is linked for people.'
   },
   {
     id: 'midland',
@@ -288,10 +299,10 @@ export const DISTRICTS: District[] = [
     county: 'Midland',
     fips: '329',
     markets: ['Midland'],
-    site: 'https://www.midcad.org/',
-    search: 'https://iswdataclient.azurewebsites.net/webSearchProperty.aspx?dbkey=midlandcad',
+    site: 'https://midcad.org/',
+    search: 'https://www.southwestdatasolution.com/webindex.aspx?dbkey=MIDLANDCAD',
     access: 'none',
-    terms: 'No public bulk export or API found from the district.'
+    terms: 'No public bulk export or API on the district site; the search is a vendor site (Southwest Data Solutions) and the GIS viewer (gis.bisclient.com/midlandcad) is a map for people. Data can be asked for under the Public Information Act (midcad.org/open-records).'
   }
 ];
 
