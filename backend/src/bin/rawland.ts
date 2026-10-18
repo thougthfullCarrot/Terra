@@ -105,7 +105,8 @@ async function build(): Promise<void> {
   log('indexing zoning and city limits');
   const zoning: Poly[] = []; for await (const f of lines(join(OUT, 'raw/zoning/features.ndjson.gz'))) if (f.geometry) zoning.push(f);
   const cityField = arg('--limits-city-field') ?? 'city';
-  const limits: Poly[] = []; for await (const f of lines(join(OUT, 'raw/city-limits/features.ndjson.gz'))) if (f.geometry) limits.push({ ...f, properties: { city: f.properties[cityField] } });
+  const NOT_A_CITY = /^\s*unincorporated\s*$/i;
+  const limits: Poly[] = []; for await (const f of lines(join(OUT, 'raw/city-limits/features.ndjson.gz'))) if (f.geometry && !NOT_A_CITY.test(String(f.properties[cityField] ?? ''))) limits.push({ ...f, properties: { city: f.properties[cityField] } });
   const zi = new PolygonIndex(zoning), li = new PolygonIndex(limits);
   // Account matching only (by id): never adds or removes an account, never makes a spatial claim.
   const cityAcct = new Map<string, { acres: unknown; polygons: number }>();

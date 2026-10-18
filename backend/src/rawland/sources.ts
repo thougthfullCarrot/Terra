@@ -19,7 +19,9 @@ export const SOURCES: Record<GeometrySource['id'], GeometrySource> = {
   },
   'city-limits': {
     // D9: the boundary source must be checked (publisher, date, every Bexar city present) before a build may use it.
-    id: 'city-limits', layer: null, fields: 'OBJECTID', size: 2000, verified: false,
-    note: 'Not yet verified. Pass --limits-url and --limits-city-field after checking the source; the build refuses unverified limits.'
+    // Checked 2026-10-18 (probe run 39164852206): 32 polygons, every Bexar city plus Unincorporated and three bases;
+    // 8 of 8 city points and the unincorporated point land in the right polygon. The service publishes no edit date.
+    id: 'city-limits', layer: 'https://maps.bexar.org/arcgis/rest/services/LocalJurisdictions/MapServer/0', fields: 'OBJECTID,JURIS', size: 2000, verified: false,
+    note: 'Bexar County "Cities" layer (JURIS field). Spot checks pass; no published edit date, so --limits-verified stays a manual call. Polygons named Unincorporated are not cities.'
   }
 };
