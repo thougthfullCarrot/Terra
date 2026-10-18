@@ -30,6 +30,12 @@ export interface DistrictState {
   dataset: string;
   startedAt: string;
   completedAt: string | null;
+  /** Bulk sources: the version the finished copy holds, the version being read now, and which files hold it. */
+  finishedVersion?: string | number | null;
+  pendingVersion?: string;
+  downloaded?: Record<string, string>;
+  /** Object ids the layer confirmed no longer exist while this read ran. */
+  vanished?: number[];
   /** The layer's editingInfo.lastEditDate (or a file's Last-Modified) when this run started. */
   sourceEdited: string | number | null;
   totalIds: number;
@@ -134,12 +140,12 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
     if (state) await writeJson(statePath, { ...state, completedAt: null, sourceEdited: edited });
     await rm(chunks, { recursive: true, force: true });
     await mkdir(chunks, { recursive: true });
-    const ids = await fetchJson<{ objectIds?: number[]; error?: { message?: string } }>(
+    const ids = await fetchJson<{ objectIds?: number[]; exceededTransferLimit?: boolean; error?: { message?: string } }>(
       `${layer}/query?${new URLSearchParams({ f: 'json', where: '1=1', returnIdsOnly: 'true' })}`,
       http
     );
     if (ids.error || !ids.objectIds) throw new Error(`object ids: ${ids.error?.message ?? 'none returned'}`);
-    const sorted = [...ids.objectIds].sort((a, b) => a - b);
+    const sorted = await checkedInventory(ids, layer, http);
     await writeJson(join(dir, 'ids.json'), sorted);
     state = {
       district: d.id,
@@ -174,25 +180,15 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
     if (opts.maxChunks != null && read >= opts.maxChunks) break;
     const slice = ids.slice(n * s.chunkSize, (n + 1) * s.chunkSize);
     try {
-      const body = await fetchJson<{ features?: { attributes: Record<string, unknown>; geometry?: { rings?: number[][][] } }[]; error?: { message?: string } }>(
-        `${layer}/query`,
-        {
-          ...http,
-          form: {
-            f: 'json',
-            objectIds: slice.join(','),
-            outFields: '*',
-            returnGeometry: 'true',
-            outSR: '4326',
-            geometryPrecision: '6',
-            // Simplify the outline to roughly 10 m: only its centre is kept.
-            maxAllowableOffset: '0.0001'
-          }
-        }
-      );
-      if (body.error || !body.features) throw new Error(body.error?.message ?? 'no features');
+      const { features, vanished } = await readSlice(layer, slice, oidField, http);
+      if (vanished.length) {
+        // The layer no longer has these ids (deleted after the inventory was taken): an explicit, logged
+        // reconciliation, never a silent gap.
+        s.vanished = [...(s.vanished ?? []), ...vanished];
+        log(`${d.id}: request ${n}: ${vanished.length} object ids no longer exist on the layer`);
+      }
       const lines: string[] = [];
-      for (const f of body.features) {
+      for (const f of features) {
         const c = ringCenter(f.geometry);
         const r = normalizeRow(d, f.attributes, { retrieved, dataset: layer, lat: c?.lat, lng: c?.lng, taxYear: layerYear });
         if (r) lines.push(JSON.stringify(r));
@@ -220,7 +216,19 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
     if (d.pauseMs) await sleep(d.pauseMs);
   }
   await writeJson(statePath, s);
-  const complete = s.chunksDone.length === total;
+  let complete = s.chunksDone.length === total;
+  if (complete) {
+    // A read that spanned a layer edit mixes two versions: leave it unfinished so the next run starts over.
+    const after = await fetchJson<LayerInfo>(`${layer}?f=json`, http);
+    const editedAfter = after.editingInfo?.lastEditDate ?? null;
+    if (editedAfter !== s.sourceEdited) {
+      complete = false;
+      s.errors.push({ at: now().toISOString(), chunk: -1, message: `layer edited during the read (${s.sourceEdited} -> ${editedAfter}); not finished` });
+      log(`${d.id}: layer edited during the read; the earlier finished copy is kept and this read is not finished`);
+      // sourceEdited stays the starting edit date, so the next run sees the change and starts a fresh read.
+      await writeJson(statePath, s);
+    }
+  }
   let bytes: number | undefined;
   if (complete) bytes = await finish(dir, s, now);
   return {
@@ -246,6 +254,81 @@ export function collapse(rows: AppraisalRecord[]): AppraisalRecord {
   const owners = [...new Set(rows.map((r) => r.owner).filter((o): o is string => !!o))];
   const conflicting = KEPT_SAME.filter((k) => rows.some((r) => r[k] !== first[k]));
   return { ...first, owner: owners.length ? owners.join('; ') : null, ...(conflicting.length ? { conflicting } : {}) };
+}
+
+type Feature = { attributes: Record<string, unknown>; geometry?: { rings?: number[][][] } };
+type Http = Parameters<typeof fetchJson>[1];
+
+/**
+ * Check the layer's id list before reading by it: ids must be whole numbers, unique, not cut off by a transfer
+ * limit, and as many as the layer's own count.
+ */
+async function checkedInventory(ids: { objectIds?: number[]; exceededTransferLimit?: boolean }, layer: string, http: Http): Promise<number[]> {
+  if (ids.exceededTransferLimit) throw new Error('object id list was cut off by a transfer limit');
+  const list = ids.objectIds ?? [];
+  if (list.some((id) => !Number.isInteger(id))) throw new Error('object id list has non-integer ids');
+  const sorted = [...list].sort((a, b) => a - b);
+  if (sorted.some((id, i) => i > 0 && id === sorted[i - 1])) throw new Error('object id list has duplicate ids');
+  const count = await fetchJson<{ count?: number; error?: { message?: string } }>(`${layer}/query?${new URLSearchParams({ f: 'json', where: '1=1', returnCountOnly: 'true' })}`, http);
+  if (count.error || typeof count.count !== 'number') throw new Error(`object count: ${count.error?.message ?? 'none returned'}`);
+  if (count.count !== sorted.length) throw new Error(`object id list has ${sorted.length} ids but the layer counts ${count.count}`);
+  return sorted;
+}
+
+/**
+ * Read one slice of object ids and prove the answer covers it: every returned feature must be a requested id,
+ * once. Ids left out (a transfer limit, or a short reply without one) are asked for again in smaller pieces;
+ * any still missing are checked against the layer, and only ids the layer confirms no longer exist are
+ * accepted, as `vanished`. Anything else throws, so the slice stays unread.
+ */
+export async function readSlice(layer: string, slice: number[], oidField: string, http: Http, depth = 0): Promise<{ features: Feature[]; vanished: number[] }> {
+  const body = await fetchJson<{ features?: Feature[]; exceededTransferLimit?: boolean; error?: { message?: string } }>(`${layer}/query`, {
+    ...http,
+    form: {
+      f: 'json',
+      objectIds: slice.join(','),
+      outFields: '*',
+      returnGeometry: 'true',
+      outSR: '4326',
+      geometryPrecision: '6',
+      // Simplify the outline to roughly 10 m: only its centre is kept.
+      maxAllowableOffset: '0.0001'
+    }
+  });
+  if (body.error || !body.features) throw new Error(body.error?.message ?? 'no features');
+  const wanted = new Set(slice);
+  const got = new Map<number, Feature>();
+  for (const f of body.features) {
+    const raw = Object.entries(f.attributes ?? {}).find(([k]) => k.toLowerCase() === oidField.toLowerCase())?.[1];
+    const id = Number(raw);
+    if (raw == null || !Number.isInteger(id)) throw new Error(`a feature came back without its ${oidField}`);
+    if (!wanted.has(id)) throw new Error(`object id ${id} came back but was not requested`);
+    if (got.has(id)) throw new Error(`object id ${id} came back twice`);
+    got.set(id, f);
+  }
+  const missing = slice.filter((id) => !got.has(id));
+  const features = [...got.values()];
+  if (!missing.length) return { features, vanished: [] };
+  if (depth < 4 && missing.length > 1) {
+    const half = Math.ceil(missing.length / 2);
+    const vanished: number[] = [];
+    for (const part of [missing.slice(0, half), missing.slice(half)]) {
+      const r = await readSlice(layer, part, oidField, http, depth + 1);
+      features.push(...r.features);
+      vanished.push(...r.vanished);
+    }
+    return { features, vanished };
+  }
+  if (depth < 4) return readSlice(layer, missing, oidField, http, depth + 1).then((r) => ({ features: [...features, ...r.features], vanished: r.vanished }));
+  // Still missing after retries: do they exist?
+  const still = await fetchJson<{ objectIds?: number[] | null; error?: { message?: string } }>(`${layer}/query`, {
+    ...http,
+    form: { f: 'json', objectIds: missing.join(','), returnIdsOnly: 'true' }
+  });
+  if (still.error) throw new Error(`checking missing ids: ${still.error.message ?? 'error'}`);
+  const exist = (still.objectIds ?? []).filter((id) => wanted.has(id));
+  if (exist.length) throw new Error(`${exist.length} requested object ids exist but were not returned`);
+  return { features, vanished: missing };
 }
 
 /** Join the chunks into records.ndjson and compare with the last finished run. */

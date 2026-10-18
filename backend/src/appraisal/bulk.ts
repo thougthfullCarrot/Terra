@@ -10,7 +10,7 @@
  * it does for ArcGIS layers.
  */
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
@@ -180,7 +180,7 @@ function fromPage(page: string): Source['resolve'] {
   };
 }
 
-interface Source {
+export interface Source {
   /** The file to download now and the tax year it holds; `extra` names more files read with it. */
   resolve: (year: number) => Promise<{ url: string; taxYear: number; extra?: Record<string, string> }>;
   read: (zip: string, onRow: (row: Row) => Promise<unknown> | unknown, sample: string[], extra: Record<string, string>) => Promise<void>;
@@ -360,10 +360,22 @@ export const BULK_SOURCES: Record<string, Source> = {
   }
 };
 
+/** Hooks for tests: the source, its date check and the download, which otherwise reach the network. */
+export interface BulkHooks {
+  source?: Source;
+  lastModified?: (url: string) => Promise<string | null | false>;
+  download?: (url: string, dest: string) => Promise<void>;
+}
+
+async function curlDownload(url: string, dest: string): Promise<void> {
+  await run('curl', ['-sSfL', '--retry', '4', '--retry-delay', '15', '-A', BROWSER, '-m', '2400', '-o', dest, url], { maxBuffer: 1 << 20 });
+}
+
 /** Read one bulk-file district into the cache. */
-export async function collectBulk(d: District, opts: CollectOptions & { maxLines?: number }): Promise<DistrictReport> {
-  const source = BULK_SOURCES[d.id];
+export async function collectBulk(d: District, opts: CollectOptions & { maxLines?: number; hooks?: BulkHooks }): Promise<DistrictReport> {
+  const source = opts.hooks?.source ?? BULK_SOURCES[d.id];
   if (!source) throw new Error(`No bulk reader for ${d.id}`);
+  const download = opts.hooks?.download ?? curlDownload;
   const started = Date.now();
   const log = opts.log ?? (() => {});
   const now = opts.now ?? (() => new Date());
@@ -371,7 +383,7 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
   const chunks = join(dir, 'chunks');
   await mkdir(dir, { recursive: true });
   const { url, taxYear, extra = {} } = await source.resolve(now().getUTCFullYear());
-  const modified = (await lastModified(url)) || null;
+  const modified = (await (opts.hooks?.lastModified ?? lastModified)(url)) || null;
   // A file posted under a new name is a new roll even when the server sends no date.
   const version = `${url} ${modified ?? ''}`.trim();
   const statePath = join(dir, 'state.json');
@@ -383,30 +395,42 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
     log(`${d.id}: unchanged since ${previous.completedAt} (${version})`);
     return { district: d.id, status: 'unchanged', records: previous.records, totalIds: previous.totalIds, chunksDone: 1, chunksTotal: 1, errors: [], seconds: 0 };
   }
+  // Recorded before the first download: the finished copy stays on disk, but from here until the new version is
+  // fully read it is not complete (completeness() reads completedAt). Which files already hold the pending
+  // version is tracked separately, so a half-done refresh never reuses a file from the older version.
+  const pending: DistrictState = {
+    ...(previous ?? ({} as DistrictState)),
+    completedAt: null,
+    finishedVersion: previous?.completedAt ? previous.sourceEdited : (previous?.finishedVersion ?? null),
+    pendingVersion: version,
+    downloaded: previous?.pendingVersion === version ? (previous.downloaded ?? {}) : {}
+  };
+  await writeFile(statePath, JSON.stringify(pending));
+  const fetchFile = async (name: string, link: string, path: string) => {
+    if (pending.downloaded![name] === version && (await stat(path).catch(() => null))) return;
+    log(`${d.id}: downloading ${link}`);
+    await rm(path, { force: true });
+    await download(link, `${path}.part`);
+    await rename(`${path}.part`, path);
+    pending.downloaded![name] = version;
+    await writeFile(statePath, JSON.stringify(pending));
+  };
   const zip = join(dir, 'source.zip');
-  const have = await stat(zip).catch(() => null);
-  if (!have || previous?.sourceEdited !== version) {
-    log(`${d.id}: downloading ${url}`);
-    await run('curl', ['-sSfL', '--retry', '4', '--retry-delay', '15', '-A', BROWSER, '-m', '2400', '-o', `${zip}.part`, url], { maxBuffer: 1 << 20 });
-    await run('mv', [`${zip}.part`, zip]);
-  } else log(`${d.id}: reading the saved download`);
+  await fetchFile('source', url, zip);
   const extraFiles: Record<string, string> = {};
   for (const [name, link] of Object.entries(extra)) {
     const path = join(dir, `${name}.zip`);
-    if (!(await stat(path).catch(() => null)) || previous?.sourceEdited !== version) {
-      log(`${d.id}: downloading ${link}`);
-      await run('curl', ['-sSfL', '--retry', '4', '--retry-delay', '15', '-A', BROWSER, '-m', '2400', '-o', `${path}.part`, link], { maxBuffer: 1 << 20 });
-      await run('mv', [`${path}.part`, path]);
-    }
+    await fetchFile(name, link, path);
     extraFiles[name] = path;
   }
-  // Saved before reading, so a run that dies here reads the same file next time.
-  await writeFile(statePath, JSON.stringify({ ...(previous ?? {}), sourceEdited: version, completedAt: null }));
+  // Saved before reading, so a run that dies here reads the same files next time.
+  await writeFile(statePath, JSON.stringify({ ...pending, sourceEdited: version }));
   await rm(chunks, { recursive: true, force: true });
   await mkdir(chunks, { recursive: true });
   const retrieved = now().toISOString().slice(0, 10);
   const state: DistrictState = {
     district: d.id, dataset: url, startedAt: now().toISOString(), completedAt: null, sourceEdited: version,
+    finishedVersion: pending.finishedVersion, pendingVersion: version, downloaded: pending.downloaded,
     totalIds: 0, chunkSize: CHUNK_LINES, chunksDone: [], records: 0, fields: {}, errors: []
   };
   let buffer: string[] = [];

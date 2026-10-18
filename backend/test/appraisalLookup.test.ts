@@ -138,6 +138,7 @@ describe('collectArcgis', () => {
       const u = String(url);
       const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } });
       if (u.startsWith(`${layer}?f=json`)) return json({ maxRecordCount: 1000, objectIdField: 'OBJECTID', editingInfo: { lastEditDate: 42 }, fields: [{ name: 'Prop_id' }, { name: 'Situs' }, { name: 'Market_val' }] });
+      if (u.includes('returnCountOnly')) return json({ count: ids.length });
       if (u.includes('returnIdsOnly')) return json({ objectIds: ids });
       const form = new URLSearchParams(String(init?.body ?? ''));
       const asked = form.get('objectIds')!.split(',').map(Number);
@@ -145,7 +146,7 @@ describe('collectArcgis', () => {
         fails = null;
         return new Response('down', { status: 400 });
       }
-      return json({ features: asked.map((id) => ({ attributes: { Prop_id: id, Situs: `${id} MAIN ST`, Market_val: id }, geometry: { rings: [[[-98, 29], [-98.002, 29.002]]] } })) });
+      return json({ features: asked.map((id) => ({ attributes: { OBJECTID: id, Prop_id: id, Situs: `${id} MAIN ST`, Market_val: id }, geometry: { rings: [[[-98, 29], [-98.002, 29.002]]] } })) });
     }) as unknown as typeof fetch;
     return impl;
   }
@@ -316,5 +317,185 @@ describe('withheld records', () => {
     const kept = gunzipSync(await readFile(join(dir, 'records.ndjson.gz'))).toString().trim().split('\n').map((l) => JSON.parse(l));
     expect(kept).toEqual([expect.objectContaining({ account: 'A', owner: 'CONFIDENTIAL' })]);
     expect((state as { changes: { removed: number } }).changes.removed).toBe(1);
+  });
+});
+
+describe('collectArcgis proves each reply covers what it asked for', () => {
+  const layer = district('bexar').layer!;
+  type Mode = { reply: (asked: number[]) => { features: number[]; flagged?: boolean }; exists?: (id: number) => boolean; ids?: number[]; count?: number; editAfter?: number };
+  function server(m: Mode) {
+    const ids = m.ids ?? [1, 2, 3];
+    let infoCalls = 0;
+    return (async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.startsWith(`${layer}?f=json`)) {
+        infoCalls++;
+        const edit = infoCalls > 1 && m.editAfter != null ? m.editAfter : 42;
+        return json({ maxRecordCount: 1000, objectIdField: 'OBJECTID', editingInfo: { lastEditDate: edit }, fields: [{ name: 'Prop_id' }, { name: 'Situs' }, { name: 'Market_val' }] });
+      }
+      if (u.includes('returnCountOnly')) return json({ count: m.count ?? ids.length });
+      if (u.includes('returnIdsOnly')) return json({ objectIds: ids });
+      const form = new URLSearchParams(String(init?.body ?? ''));
+      const asked = form.get('objectIds')!.split(',').map(Number);
+      if (form.get('returnIdsOnly')) return json({ objectIds: asked.filter((id) => (m.exists ?? (() => true))(id)) });
+      const { features, flagged } = m.reply(asked);
+      return json({
+        features: features.map((id) => ({ attributes: { OBJECTID: id, Prop_id: id, Situs: `${id} MAIN ST`, Market_val: id }, geometry: { rings: [[[-98, 29], [-98.002, 29.002]]] } })),
+        ...(flagged ? { exceededTransferLimit: true } : {})
+      });
+    }) as unknown as typeof fetch;
+  }
+  async function run(m: Mode, withPrevious = true) {
+    const { mkdir } = await import('node:fs/promises');
+    const { gzipSync } = await import('node:zlib');
+    const cacheDir = await mkdtemp(join(tmpdir(), 'appraisal-'));
+    if (withPrevious) {
+      await mkdir(join(cacheDir, 'bexar'), { recursive: true });
+      await writeFile(join(cacheDir, 'bexar', 'records.ndjson.gz'), gzipSync(`${JSON.stringify({ account: 'OLD' })}\n`));
+      await writeFile(join(cacheDir, 'bexar', 'state.json'), JSON.stringify({ completedAt: '2026-01-01', sourceEdited: 1, chunksDone: [0], totalIds: 1, chunkSize: 1000, records: 1, errors: [] }));
+    }
+    const report = await collectArcgis(district('bexar'), { cacheDir, sleep: async () => {}, fetchImpl: server(m) });
+    const accounts: string[] = [];
+    for await (const r of cachedRecords(cacheDir, 'bexar')) accounts.push(r.account);
+    return { report, accounts, done: await completeness(cacheDir, 'bexar') };
+  }
+  const notDone = (r: Awaited<ReturnType<typeof run>>) => {
+    expect(r.report.status).toBe('partial');
+    expect(r.done.complete).toBe(false);
+    expect(r.accounts).toEqual(['OLD']);
+  };
+
+  it('does not finish on an empty reply for ids that exist, and keeps the last copy', async () => {
+    notDone(await run({ reply: () => ({ features: [] }) }));
+  });
+  it('asks again for what a transfer limit cut off, and finishes once every id is in', async () => {
+    const r = await run({ reply: (asked) => ({ features: asked.slice(0, 1), flagged: asked.length > 1 }) });
+    expect(r.report.status).toBe('complete');
+    expect(r.accounts.sort()).toEqual(['1', '2', '3']);
+    expect(r.done.complete).toBe(true);
+  });
+  it('does not finish when a short, unflagged reply keeps leaving out an id that exists', async () => {
+    notDone(await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }) }));
+  });
+  it('rejects unrequested and duplicate ids', async () => {
+    notDone(await run({ reply: (asked) => ({ features: [...asked, 99] }) }));
+    notDone(await run({ reply: (asked) => ({ features: [...asked, asked[0]!] }) }));
+  });
+  it('accepts an id only once the layer confirms it was deleted during the read', async () => {
+    const r = await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }), exists: (id) => id !== 3 });
+    expect(r.report.status).toBe('complete');
+    expect(r.accounts.sort()).toEqual(['1', '2']);
+  });
+  it('does not finish a read that spanned a layer edit', async () => {
+    notDone(await run({ reply: (asked) => ({ features: asked }), editAfter: 43 }));
+  });
+  it('refuses a bad id inventory before reading', async () => {
+    await expect(run({ reply: (a) => ({ features: a }), ids: [1, 2, 2] })).rejects.toThrow(/duplicate/);
+    await expect(run({ reply: (a) => ({ features: a }), count: 4 })).rejects.toThrow(/counts 4/);
+  });
+});
+
+describe('a bulk refresh marks the old copy incomplete before downloading', async () => {
+  const { collectBulk } = await import('../src/appraisal/bulk.js');
+  async function seeded() {
+    const { mkdir } = await import('node:fs/promises');
+    const { gzipSync } = await import('node:zlib');
+    const cache = await mkdtemp(join(tmpdir(), 'appraisal-bulk-'));
+    await mkdir(join(cache, 'travis'), { recursive: true });
+    await writeFile(join(cache, 'travis', 'records.ndjson.gz'), gzipSync(`${JSON.stringify({ account: 'OLD' })}\n`));
+    await writeFile(join(cache, 'travis', 'state.json'), JSON.stringify({ district: 'travis', completedAt: '2026-10-01T00:00:00Z', sourceEdited: 'https://x/2026.zip v1', records: 1, chunksDone: [], errors: [] }));
+    expect((await completeness(cache, 'travis')).complete).toBe(true);
+    return cache;
+  }
+  const source = { resolve: async () => ({ url: 'https://x/2026.zip', taxYear: 2026, extra: { owners: 'https://x/owners.zip' } }), read: async () => {} };
+  const hooks = (download: (url: string, dest: string) => Promise<void>) => ({ source, lastModified: async () => 'v2', download });
+  async function afterFailure(cache: string) {
+    expect((await completeness(cache, 'travis')).complete).toBe(false);
+    const got: string[] = [];
+    for await (const r of cachedRecords(cache, 'travis')) got.push(r.account);
+    expect(got).toEqual(['OLD']);
+    const state = JSON.parse(await readFile(join(cache, 'travis', 'state.json'), 'utf8'));
+    expect(state).toMatchObject({ completedAt: null, finishedVersion: 'https://x/2026.zip v1', pendingVersion: 'https://x/2026.zip v2' });
+    return state;
+  }
+
+  it('the main download fails', async () => {
+    const cache = await seeded();
+    await expect(collectBulk(district('travis'), { cacheDir: cache, hooks: hooks(async () => { throw new Error('HTTP 503'); }) })).rejects.toThrow('503');
+    expect((await afterFailure(cache)).downloaded).toEqual({});
+  });
+
+  it('an extra archive fails, and the next run reuses only files of the pending version', async () => {
+    const cache = await seeded();
+    const fetched: string[] = [];
+    const download = async (url: string, dest: string) => {
+      fetched.push(url);
+      if (url.includes('owners')) throw new Error('HTTP 404');
+      await writeFile(dest, 'zip');
+    };
+    await expect(collectBulk(district('travis'), { cacheDir: cache, hooks: hooks(download) })).rejects.toThrow('404');
+    expect((await afterFailure(cache)).downloaded).toEqual({ source: 'https://x/2026.zip v2' });
+    await expect(collectBulk(district('travis'), { cacheDir: cache, hooks: hooks(download) })).rejects.toThrow('404');
+    expect(fetched).toEqual(['https://x/2026.zip', 'https://x/owners.zip', 'https://x/owners.zip']);
+  });
+
+  it('the process is interrupted mid-download', async () => {
+    const cache = await seeded();
+    let finishDownload!: () => void;
+    let started!: () => void;
+    const begun = new Promise<void>((r) => (started = r));
+    const run = collectBulk(district('travis'), {
+      cacheDir: cache,
+      hooks: hooks(async (url, dest) => {
+        await writeFile(dest, 'half');
+        if (url.includes('owners')) throw new Error('stopped');
+        started();
+        await new Promise<void>((r) => (finishDownload = r));
+      })
+    });
+    await begun;
+    // State as a killed process would leave it: the half-written file is never taken as the source.
+    const state = await afterFailure(cache);
+    expect(state.downloaded).toEqual({});
+    finishDownload();
+    await run.catch(() => {});
+  });
+});
+
+describe('verification policy', async () => {
+  const { failures, runStatus } = await import('../src/appraisal/verdict.js');
+  type C = import('../src/appraisal/verdict.js').CaseChecks;
+  const ok: C = { index: { state: 'pass' }, accounts: { state: 'pass' }, values: { state: 'pass' }, page: { state: 'pass' } };
+  const full = (c: Partial<C>) => runStatus([{ checks: ok }, { checks: { ...ok, ...c } }], 'full');
+
+  it('passes a full run only when every required check passes', () => {
+    expect(full({}).exitCode).toBe(0);
+    expect(full({}).summary).toMatch(/^FULL verification: 2\/2/);
+  });
+  it.each([
+    ['a wrong expected lookup', { index: { state: 'fail', note: 'expected match' } }],
+    ['an official account mismatch', { accounts: { state: 'fail' } }],
+    ['an official value mismatch', { values: { state: 'fail' } }],
+    ['a failed account page check', { page: { state: 'fail', note: 'value NOT found' } }],
+    ['a live check that could not run', { accounts: { state: 'unavailable', note: 'live check failed' }, values: { state: 'unavailable' } }]
+  ] as [string, Partial<C>][])('fails a full run on %s', (_name, c) => {
+    expect(full(c).exitCode).toBe(1);
+  });
+  it('fails a full run that checked nothing', () => {
+    expect(runStatus([], 'full').exitCode).toBe(1);
+  });
+  it('labels unavailable and skipped checks rather than counting them as passes', () => {
+    const closed: C = { ...ok, page: { state: 'unavailable', note: 'robots.txt disallows' }, values: { state: 'skipped', note: 'bulk' } };
+    const s = runStatus([{ checks: closed }], 'full');
+    expect(s.exitCode).toBe(0);
+    expect(s.summary).toContain('page 0 pass / 0 fail / 1 unavailable');
+    expect(s.summary).toContain('values 0 pass / 0 fail / 0 unavailable / 1 skipped');
+  });
+  it('a quick run requires the index only and says it is not full verification', () => {
+    const s = runStatus([{ checks: { ...ok, values: { state: 'fail' } } }], 'quick');
+    expect(s.exitCode).toBe(0);
+    expect(s.summary).toMatch(/^QUICK check .*not full verification/);
+    expect(failures({ ...ok, index: { state: 'fail' } }, 'quick')).toHaveLength(1);
   });
 });

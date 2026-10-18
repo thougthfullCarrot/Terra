@@ -107,14 +107,25 @@ jobs:
         run: |
           set -o pipefail
           npm run --silent appraisal -- index --districts "$DISTRICTS" --cache ../.appraisal-cache 2>&1 | tee /tmp/index.log
-          npm run --silent appraisal -- verify --districts "$DISTRICTS" --cache ../.appraisal-cache > /tmp/verify.log 2>&1 || true
-          grep -E 'PASS|FAIL' /tmp/verify.log || true
           du -sh ../.appraisal-cache/* ../.appraisal-cache/index/* 2>/dev/null | tee /tmp/sizes.log
           # Per-group gzipped sizes: what a browser or server would fetch for one lookup in one district.
           for d in ../.appraisal-cache/index/*/; do
             find "$d" -name '*.json' -exec sh -c 'gzip -c "$1" | wc -c' _ {} \; | sort -n | awk -v d="$d" '{a[NR]=$1; t+=$1} END {print d, "groups", NR, "gz total", t, "p50", a[int(NR*0.5)+1], "p95", a[int(NR*0.95)+1], "max", a[NR]}'
           done | tee -a /tmp/sizes.log
           for d in ../.appraisal-cache/index/*/; do echo "$d $(ls $d | wc -l) files, gz $(tar czf - -C $d . | wc -c) bytes"; done | tee -a /tmp/sizes.log
+
+      # Verification fails the job when a required check fails. A push or a capped pilot read covers only part of
+      # each district, so it runs the quick policy (index checks only) and says so; a full manual run requires the
+      # live-layer and account-page checks too. The steps after this one still run and keep the diagnostics.
+      - name: Verify
+        if: always()
+        run: |
+          set -o pipefail
+          policy=full status=0
+          if [ "${{ github.event_name }}" = "push" ] || [ -n "${{ inputs.max_chunks }}" ]; then policy=quick; fi
+          npm run --silent appraisal -- verify --districts "$DISTRICTS" --cache ../.appraisal-cache --policy "$policy" > /tmp/verify.log 2>&1 || status=$?
+          grep -E 'PASS|FAIL' /tmp/verify.log || true
+          exit "$status"
 
       # Real-browser timing of index lookups (headless Chromium, DevTools network throttling, local static server).
       - name: Measure lookups in a browser
