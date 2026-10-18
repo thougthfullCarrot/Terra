@@ -3,7 +3,7 @@ import * as turf from '@turf/turf';
 import { execFileSync } from 'node:child_process';
 const UA = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
 const BUA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
-const out = (k, v) => console.log(`\n### ${k}\n` + JSON.stringify(v).slice(0, 40000));
+const out = (k, v) => console.log(`\n### ${k}\n` + String(JSON.stringify(v ?? null)).slice(0, 40000));
 // curl, because Node's fetch failed TLS/connect to gis.sara-tx.org while curl succeeded
 function get(url, ua = UA) {
   const t0 = Date.now();
@@ -42,9 +42,9 @@ for (const [name, layer] of [['cbcad', L], ['sara', SARA]]) {
   }
   if (PID) {
     const d = j(q(layer, { where: '1=1', groupByFieldsForStatistics: PID, having: `COUNT(${PID}) > 1`, outStatistics: cnt(PID), orderByFields: 'n DESC', resultRecordCount: '15' }));
-    out(`${name}.multiPolygonAccounts`, d.features?.map((x) => x.attributes) ?? d);
+    out(`${name}.multiPolygonAccounts`, { groups: d.features?.length, top: d.features?.slice(0, 15).map((x) => x.attributes) ?? d });
     const id = d.features?.[0]?.attributes?.[PID];
-    if (id != null) out(`${name}.multiPolygonExample`, j(q(layer, { where: `${PID} = '${id}'`, outFields: '*', returnGeometry: 'false' })).features?.map((x) => x.attributes));
+    if (id != null) out(`${name}.multiPolygonExample`, j(q(layer, { where: `${PID} = ${id}`, outFields: '*', returnGeometry: 'false' })).features?.map((x) => x.attributes));
   }
   // county-wide server-side filter + sort, no geometry
   if (SC) {
