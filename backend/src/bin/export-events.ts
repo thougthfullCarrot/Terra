@@ -3,14 +3,16 @@
  * events per city, from chapter calendars (see src/events/events.ts).
  *
  *   npm run export:events                          # writes ../site/events.json
- *   npm run export:events -- --out <path> --previous <path>
+ *   npm run export:events -- --out <path> --previous <path> --report <path>
  *
+ * The per-market collection report (sources read, failures, upcoming events, duplicates removed, last verification)
+ * is printed, kept in events.json under "report", and written as Markdown to --report (and the Actions job summary).
  * A source that fails keeps its events from --previous (default: the --out file).
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildEventsFile, type EventsFile } from '../events/events.js';
+import { buildEventsFile, reportMarkdown, type EventsFile } from '../events/events.js';
 import { loadSheetEvents, mergeManual, parseManualFile } from '../events/sheetEvents.js';
 import { sheetsClientFromEnv } from '../sheets/env.js';
 
@@ -49,6 +51,11 @@ async function main(): Promise<void> {
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, `${JSON.stringify(file)}\n`);
   console.log(`Wrote ${total} events to ${out}`);
+  const markdown = reportMarkdown(file);
+  console.log(`\n${markdown}`);
+  const report = flag('--report');
+  if (report) await writeFile(resolve(report), markdown);
+  if (process.env.GITHUB_STEP_SUMMARY) await writeFile(process.env.GITHUB_STEP_SUMMARY, markdown, { flag: 'a' });
 }
 
 main().catch((error: unknown) => {

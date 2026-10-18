@@ -1,6 +1,7 @@
 import { fetchJson, fetchText } from '../lib/http.js';
 import { decodeXml } from '../news/googleNews.js';
 import { CITIES, type City } from '../types.js';
+import { addressCity, courseSessions, SERIES_SPAN_DAYS, deadlineIn, eligibilityIn, guessFormat, joinDays, ldDetails, mergeListing, price, shortText, titleStatus, topicOf, type Details } from './enrich.js';
 
 /**
  * Real estate networking and industry events for each Terra city, read from
@@ -25,6 +26,56 @@ export interface TerraEvent {
   source?: string;
   /** True when the source gave only dates (no clock time): shown as "Time not listed", not "All day". */
   dateOnly?: boolean;
+  /** IANA zone of the venue's local times: America/Chicago, or America/Denver for El Paso. */
+  timezone?: TimeZone;
+  /** Where to register when it differs from the event page (offers.url, ticket links). */
+  registrationUrl?: string | null;
+  /** Street address when the source gives one; city attribution follows it. */
+  address?: string | null;
+  /** Absent when the source does not say. Virtual events stay listed under their organizer's market. */
+  format?: EventFormat;
+  /** True only when the source lists the event as free (price 0 or "Free"). */
+  free?: boolean;
+  /** Last day/time to register, when the source lists one (never the publishing date). */
+  registrationDeadline?: string | null;
+  /** Who may attend or a student/member price note, as the source words it. */
+  eligibility?: string | null;
+  /** Up to 300 characters of the source's own description. */
+  description?: string | null;
+  topic?: EventTopic;
+  /** Absent means scheduled. Cancelled and sold-out events stay listed, marked, until they pass. */
+  status?: EventStatus;
+  /** The earlier start when the organizer moved the event (schema.org previousStartDate, or a changed start since the last build). */
+  rescheduledFrom?: string | null;
+  /** One id for every occurrence of a repeating event. */
+  seriesId?: string;
+  /** EventSource.key, or "manual". */
+  sourceKey?: string;
+  /** When Terra last read this event from its source. Kept (not refreshed) when the source fails. */
+  verifiedAt?: string;
+  /** True when the source could not be read this run and the event comes from an earlier build. */
+  stale?: boolean;
+  /** A course or series sold as one registration: its dated sessions (start/end are the first and last). */
+  sessions?: Array<{ start: string; end: string | null }>;
+  /** Wording on the organizer's page that disagrees with itself (session counts), shown as a warning. */
+  conflicts?: string[];
+  /**
+   * For a course: open (first session ahead, registration not closed), closed (page says registration is closed),
+   * or in-progress (first session has passed; listed until its last session, not as something to sign up for).
+   */
+  enrollment?: 'open' | 'closed' | 'in-progress';
+  /** A listing spans a week or more and its page names no session dates: shown with its range, never exported as one block. */
+  spanUnverified?: boolean;
+}
+
+export type TimeZone = 'America/Chicago' | 'America/Denver';
+export type EventFormat = 'in-person' | 'virtual' | 'hybrid';
+export type EventStatus = 'scheduled' | 'cancelled' | 'postponed' | 'rescheduled' | 'sold-out';
+export type EventTopic = 'Networking' | 'Property tour' | 'Panel' | 'Career fair' | 'Conference' | 'Education' | 'Luncheon' | 'Social';
+
+/** Every market is on Central time except El Paso (Mountain). */
+export function zoneOf(city: City): TimeZone {
+  return city === 'El Paso' ? 'America/Denver' : 'America/Chicago';
 }
 
 export interface EventSource {
@@ -32,7 +83,7 @@ export interface EventSource {
   key: string;
   organizer: string;
   city: City;
-  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist' | 'sitemap';
+  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist' | 'livewhale' | 'sitemap';
   /** Site root, no trailing slash. */
   base: string;
   /** The listing page (default base + /events). */
@@ -47,7 +98,12 @@ export interface EventSource {
   sitemapPath?: string;
   /** Place each event in the market its address names (a group meeting in more than one city); source.city otherwise. */
   cityFromVenue?: boolean;
-  /** localist: the search words (a university calendar lists every event on campus). */
+  /**
+   * Venue or group wording that puts an event at a campus in another market (Texas A&M's law school is in
+   * Fort Worth, not College Station). Checked after the street address and before the source's own city.
+   */
+  places?: Array<[RegExp, City]>;
+  /** localist, livewhale: the search words (a university calendar lists every event on campus). */
   keyword?: string;
 }
 
@@ -83,7 +139,30 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'unt', organizer: 'UNT', city: 'Dallas', kind: 'localist', base: 'https://calendar.unt.edu', keyword: 'real estate' },
   { key: 'utd', organizer: 'UT Dallas', city: 'Dallas', kind: 'localist', base: 'https://calendar.utdallas.edu', keyword: 'real estate' },
   { key: 'uta', organizer: 'UT Arlington', city: 'Fort Worth', kind: 'localist', base: 'https://events.uta.edu', keyword: 'real estate' },
-  { key: 'ut-austin', organizer: 'UT Austin', city: 'Austin', kind: 'localist', base: 'https://calendar.utexas.edu', keyword: 'real estate' }
+  // McCombs runs its working-professional MBA classes and alumni events in Dallas, Houston and San Antonio.
+  { key: 'ut-austin', organizer: 'UT Austin', city: 'Austin', kind: 'localist', base: 'https://calendar.utexas.edu', keyword: 'real estate', places: [[/\bDallas\b/i, 'Dallas'], [/\bHouston\b/i, 'Houston'], [/San Antonio/i, 'San Antonio']] },
+  { key: 'tcu', organizer: 'TCU', city: 'Fort Worth', kind: 'localist', base: 'https://calendar.tcu.edu', keyword: 'real estate' },
+  { key: 'trinity', organizer: 'Trinity University', city: 'San Antonio', kind: 'localist', base: 'https://events.trinity.edu', keyword: 'real estate' },
+  // LiveWhale university calendars (public JSON search): Texas A&M (College Station) and Rice (Houston).
+  {
+    key: 'tamu',
+    organizer: 'Texas A&M',
+    city: 'College Station',
+    kind: 'livewhale',
+    base: 'https://calendar.tamu.edu',
+    keyword: 'real estate',
+    // calendar.tamu.edu covers every campus: the School of Law (LEB, Law and Education Building) is downtown
+    // Fort Worth, TAMUG is Galveston, and the Health Science Center sites in Houston.
+    places: [
+      [/\bLEB\b|Law (?:and|&) Education Building|School of Law|· Law$/i, 'Fort Worth'],
+      [/\bTAMUG\b|Galveston|Pelican Island/i, 'Galveston'],
+      [/Texas Medical Center|\bTMC\b|\bHouston\b/i, 'Houston']
+    ]
+  },
+  { key: 'rice', organizer: 'Rice University', city: 'Houston', kind: 'livewhale', base: 'https://events.rice.edu', keyword: 'real estate' },
+  // Architecture chapters on The Events Calendar: only their networking, development and industry events.
+  { key: 'aia-dallas', organizer: 'AIA Dallas', city: 'Dallas', kind: 'tribe', base: 'https://www.aiadallas.org', relevantOnly: true },
+  { key: 'aia-houston', organizer: 'AIA Houston', city: 'Houston', kind: 'tribe', base: 'https://aiahouston.org', relevantOnly: true }
 ];
 
 /** A CREW Network chapter site: <city>.crewnetwork.org. */
@@ -114,8 +193,14 @@ function httpUrl(value: unknown): string | null {
   }
 }
 
-/** "2026-10-14 11:30:00" (site-local Central time) → ISO with offset. */
-export function centralIso(local: string): string | null {
+/**
+ * The zone floating local times are read in while one source is parsed (fetchSource sets it; sources are read one at a
+ * time). Central unless the source's market is El Paso.
+ */
+let parseZone: TimeZone = 'America/Chicago';
+
+/** "2026-10-14 11:30:00" (the venue's local time; Central unless a Mountain zone is given or being parsed) → ISO with offset. */
+export function centralIso(local: string, zone: TimeZone = parseZone): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(local.trim());
   if (!m) return null;
   const [, y, mo, d, h = '00', mi = '00', s = '00'] = m;
@@ -123,8 +208,14 @@ export function centralIso(local: string): string | null {
   const year = Number(y);
   const firstSunday = (month: number) => 1 + ((7 - new Date(Date.UTC(year, month, 1)).getUTCDay()) % 7);
   const key = Number(mo) * 100 + Number(d);
-  const dst = key >= 300 + firstSunday(2) + 7 && key < 1100 + firstSunday(10);
-  return `${y}-${mo}-${d}T${h}:${mi}:${s}${dst ? '-05:00' : '-06:00'}`;
+  const springDay = 300 + firstSunday(2) + 7;
+  const fallDay = 1100 + firstSunday(10);
+  // The clocks change at 2:00 AM local: the early hours of the change day still keep the old offset.
+  const early = Number(h) < 2;
+  const dst = (key > springDay || (key === springDay && !early)) && (key < fallDay || (key === fallDay && early));
+  // US Mountain (El Paso) follows the same daylight dates one hour behind.
+  const offset = zone === 'America/Denver' ? (dst ? '-06:00' : '-07:00') : dst ? '-05:00' : '-06:00';
+  return `${y}-${mo}-${d}T${h}:${mi}:${s}${offset}`;
 }
 
 // ---- The Events Calendar (WordPress) ----
@@ -147,7 +238,12 @@ interface TribeEvent {
   utc_start_date?: string;
   utc_end_date?: string;
   cost?: string;
-  venue?: { venue?: string; address?: string; city?: string } | unknown[];
+  all_day?: boolean;
+  website?: string;
+  description?: string;
+  is_virtual?: boolean;
+  cost_details?: { values?: string[] };
+  venue?: { venue?: string; address?: string; city?: string; state?: string; zip?: string } | unknown[];
 }
 
 export function parseTribe(body: { events?: TribeEvent[] } | null, source: EventSource): TerraEvent[] {
@@ -160,16 +256,25 @@ export function parseTribe(body: { events?: TribeEvent[] } | null, source: Event
     const end = e.utc_end_date ? `${e.utc_end_date.replace(' ', 'T')}Z` : e.end_date ? centralIso(e.end_date) : null;
     const v = e.venue && !Array.isArray(e.venue) ? e.venue : null;
     const venue = v ? [v.venue, v.city].map((x) => decodeText(x ?? '')).filter(Boolean).join(', ') : '';
+    const address = v ? [v.address, v.city, [v.state, v.zip].filter(Boolean).join(' ')].map((x) => decodeText(x ?? '')).filter(Boolean).join(', ') : '';
+    const cost = price(e.cost_details?.values?.length === 1 ? e.cost_details.values[0] : e.cost);
+    // An all-day event: its local dates, not the UTC instants (which fall on the evening before).
+    const allDay = e.all_day === true && e.start_date;
     out.push({
       id: `${source.key}-${e.id ?? url}`,
       title,
       url,
-      start,
-      end,
+      start: allDay ? centralIso(e.start_date!.slice(0, 10))! : start,
+      end: allDay ? (e.end_date && e.end_date.slice(0, 10) > e.start_date!.slice(0, 10) ? centralIso(e.end_date.slice(0, 10)) : null) : end,
       city: source.city,
       organizer: source.organizer,
       venue: venue || null,
-      cost: decodeText(e.cost ?? '') || null
+      cost: decodeText(cost.cost ?? '') || null,
+      ...(cost.free ? { free: true } : {}),
+      ...(address ? { address } : {}),
+      ...(httpUrl(e.website) && httpUrl(e.website) !== url ? { registrationUrl: httpUrl(e.website) } : {}),
+      ...(e.is_virtual ? { format: v ? 'hybrid' : 'virtual' } : {}),
+      ...(e.description ? { description: shortText(decodeText(e.description)) } : {})
     });
   }
   return out;
@@ -207,10 +312,11 @@ function icsText(value: string): string {
 }
 
 /** Events in an iCal (or vCalendar 1.0) file; fallbackUrl stands in when an event has no URL line. */
-export function parseIcs(text: string, source: EventSource, fallbackUrl?: string): TerraEvent[] {
+export function parseIcs(text: string, source: EventSource, fallbackUrl?: string, now?: Date): TerraEvent[] {
   if (!/BEGIN:VCALENDAR/.test(text)) return [];
   const unfolded = text.replace(/\r?\n[ \t]/g, '');
   const out: TerraEvent[] = [];
+  const overrides = new Map<string, TerraEvent>();
   for (const [, block = ''] of unfolded.matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/g)) {
     const field = (name: string) => {
       const m = new RegExp(`^${name}(?:;[^:\\r\\n]*)?:(.*)$`, 'mi').exec(block);
@@ -228,7 +334,9 @@ export function parseIcs(text: string, source: EventSource, fallbackUrl?: string
       const last = dayBefore(end);
       end = last && last.slice(0, 10) > start.slice(0, 10) ? last : null;
     }
-    out.push({
+    const status = /^cancel+ed$/i.test(field('STATUS')) ? ({ status: 'cancelled' } as const) : {};
+    const description = shortText(icsText(field('DESCRIPTION')));
+    const base: TerraEvent = {
       id: `${source.key}-${field('UID') || url}`,
       title,
       url,
@@ -238,10 +346,110 @@ export function parseIcs(text: string, source: EventSource, fallbackUrl?: string
       city: source.city,
       organizer: source.organizer,
       venue: icsText(field('LOCATION')) || null,
-      cost: null
-    });
+      cost: null,
+      ...status,
+      ...(description ? { description } : {})
+    };
+    const rrule = field('RRULE');
+    const recurrenceId = icsDate(field('RECURRENCE-ID'));
+    if (recurrenceId) {
+      // One changed occurrence of a series: replaces the generated one at that time (below).
+      overrides.set(`${field('UID')}|${recurrenceId}`, { ...base, id: `${base.id}-${start.slice(0, 10)}`, seriesId: base.id });
+      continue;
+    }
+    if (rrule) {
+      const exdates = new Set([...block.matchAll(/^EXDATE(?:;[^:\r\n]*)?:(.*)$/gim)].flatMap((m) => (m[1] ?? '').split(',')).map((v) => icsDate(v)).filter(Boolean));
+      for (const at of expandRrule(start, rrule, now ?? new Date())) {
+        if (exdates.has(at)) continue;
+        const shift = end ? new Date(end).getTime() - new Date(start).getTime() : 0;
+        const occEnd = end ? shiftIso(at, shift) : null;
+        out.push({ ...base, id: `${base.id}-${at.slice(0, 10)}`, seriesId: base.id, start: at, end: occEnd, _key: `${field('UID')}|${at}` } as TerraEvent);
+      }
+      continue;
+    }
+    out.push(base);
+  }
+  // Apply single-occurrence changes (a moved or cancelled meeting of a series).
+  const final = out.map((e) => {
+    const key = (e as TerraEvent & { _key?: string })._key;
+    const { _key: _drop, ...rest } = e as TerraEvent & { _key?: string };
+    const o = key ? overrides.get(key) : undefined;
+    if (key) overrides.delete(key);
+    return o ? { ...o, ...(o.start !== rest.start ? { rescheduledFrom: rest.start } : {}) } : rest;
+  });
+  return [...final, ...overrides.values()];
+}
+
+/** The same wall-clock instant moved by ms, keeping the source's offset form (Z or ±hh:mm). */
+function shiftIso(iso: string, ms: number): string {
+  const t = new Date(new Date(iso).getTime() + ms);
+  if (/Z$/.test(iso)) return t.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const local = new Date(t.getTime() + offsetMs(iso));
+  return centralIso(local.toISOString().slice(0, 19).replace('T', ' '))!;
+}
+
+function offsetMs(iso: string): number {
+  const m = /([+-])(\d{2}):(\d{2})$/.exec(iso);
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) * 60_000 : 0;
+}
+
+const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+/**
+ * The occurrences of an iCal RRULE from now through the event window: DAILY, WEEKLY (BYDAY list) and MONTHLY (BYDAY
+ * with an ordinal such as 2TU or -1FR, or the start's day of month), with INTERVAL, COUNT and UNTIL. Times keep the
+ * series' local clock time across daylight-time changes. At most 60 occurrences; other rules give just the first.
+ */
+export function expandRrule(start: string, rule: string, now: Date, days = WINDOW_DAYS): string[] {
+  const parts = Object.fromEntries(rule.split(';').map((p) => p.split('=') as [string, string]));
+  const freq = parts.FREQ;
+  const interval = Math.max(1, Number(parts.INTERVAL ?? 1) || 1);
+  const count = parts.COUNT ? Number(parts.COUNT) : Infinity;
+  const until = parts.UNTIL ? new Date(icsDate(parts.UNTIL) ?? '').getTime() : Infinity;
+  const limit = Math.min(until, now.getTime() + days * 86_400_000);
+  const utc = /Z$/.test(start);
+  const local = utc ? start.slice(11, 19) : start.slice(11, 19);
+  const at = (ymd: string) => (utc ? `${ymd}T${local}Z` : centralIso(`${ymd} ${local}`)!);
+  const first = start.slice(0, 10);
+  const byday = (parts.BYDAY ?? '').split(',').filter(Boolean);
+  if (!['DAILY', 'WEEKLY', 'MONTHLY'].includes(freq ?? '')) return [start];
+  const out: string[] = [];
+  let made = 0;
+  const day = new Date(`${first}T12:00:00Z`);
+  for (let guard = 0; guard < 3000 && out.length < 60; guard++) {
+    const ymd = day.toISOString().slice(0, 10);
+    const when = at(ymd);
+    if (new Date(when).getTime() > limit || made >= count) break;
+    if (matches(day)) {
+      made++;
+      if (new Date(when).getTime() >= now.getTime() - 86_400_000) out.push(when);
+    }
+    day.setUTCDate(day.getUTCDate() + 1);
   }
   return out;
+
+  function matches(d: Date): boolean {
+    const startDay = new Date(`${first}T12:00:00Z`);
+    const diffDays = Math.round((d.getTime() - startDay.getTime()) / 86_400_000);
+    if (freq === 'DAILY') return diffDays % interval === 0;
+    if (freq === 'WEEKLY') {
+      const week = Math.floor((diffDays + startDay.getUTCDay()) / 7);
+      if (week % interval) return false;
+      return byday.length ? byday.some((b) => b.slice(-2) === WEEKDAYS[d.getUTCDay()]) : d.getUTCDay() === startDay.getUTCDay();
+    }
+    const months = (d.getUTCFullYear() - startDay.getUTCFullYear()) * 12 + d.getUTCMonth() - startDay.getUTCMonth();
+    if (months % interval) return false;
+    if (!byday.length) return d.getUTCDate() === startDay.getUTCDate();
+    return byday.some((b) => {
+      const m = /^([+-]?\d)?([A-Z]{2})$/.exec(b);
+      if (!m || m[2] !== WEEKDAYS[d.getUTCDay()]) return false;
+      if (!m[1]) return true;
+      const n = Number(m[1]);
+      const dom = d.getUTCDate();
+      const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+      return n > 0 ? Math.ceil(dom / 7) === n : Math.ceil((dim - dom + 1) / 7) === -n;
+    });
+  }
 }
 
 /** Event links on a GrowthZone listing page: /events/Details/<slug>-<id>. */
@@ -265,7 +473,11 @@ export function slugTitle(url: string): string {
 
 /** True when an ISO time is midnight on its own (Central) calendar day: a date with no clock time. */
 export function isMidnight(iso: string | null | undefined): boolean {
-  return Boolean(iso) && /T00:00(:00)?(\.0+)?([+-]0[56]:00)$/.test(String(iso));
+  if (!iso) return false;
+  const m = /T00:00(?::00)?(?:\.0+)?(-0[567]:00)$/.exec(String(iso));
+  // Midnight in Central (-05/-06) or, for El Paso, Mountain (-06/-07) on that date.
+  const day = String(iso).slice(0, 10);
+  return Boolean(m) && [centralIso(day, 'America/Chicago'), centralIso(day, 'America/Denver')].some((x) => x!.endsWith(m![1]!));
 }
 
 function clock(h: string, m: string | undefined, meridian: string): string {
@@ -360,7 +572,7 @@ interface LdEvent {
   url?: string;
   startDate?: string;
   endDate?: string;
-  location?: { name?: string } | Array<{ name?: string }> | string;
+  location?: { name?: string; '@type'?: string } | Array<{ name?: string }> | string;
   offers?: { price?: string | number } | Array<{ price?: string | number }>;
 }
 
@@ -396,8 +608,12 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
       }
       if (!title || !start || !url) continue;
       const loc = Array.isArray(n.location) ? n.location[0] : n.location;
-      const venue = typeof loc === 'string' ? loc : loc?.name;
+      const details = ldDetails(n as Record<string, unknown>, normalizeDate);
+      const { locations, ...extra } = details;
+      const place = locations[0] ?? (typeof loc === 'object' && !/Virtual/i.test(String((loc as { '@type'?: string })['@type'])) ? loc : undefined);
+      const venue = typeof loc === 'string' ? loc : place?.name;
       out.push({
+        ...clean(extra),
         id: `${source.key}-${url}`,
         title,
         url,
@@ -406,11 +622,35 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
         city: source.city,
         organizer: source.organizer,
         venue: venue ? decodeText(venue) || null : null,
-        cost: null
+        cost: extra.cost ?? null
       });
     }
   }
   return out;
+}
+
+/** Details without the undefined and null keys (so they never overwrite a value when spread). */
+function clean(details: Details): Details {
+  return Object.fromEntries(Object.entries(details).filter(([, v]) => v !== undefined && v !== null && v !== '')) as Details;
+}
+
+/** The schema.org details of the first Event on a detail page (registration, price, format, status...). */
+export function pageDetails(html: string): Details {
+  for (const [, json = ''] of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    let data: unknown;
+    try {
+      data = JSON.parse(json.trim());
+    } catch {
+      continue;
+    }
+    for (const n of ldNodes(data)) {
+      const types = Array.isArray(n['@type']) ? n['@type'] : [n['@type']];
+      if (!types.some((t) => typeof t === 'string' && /Event$/.test(t))) continue;
+      const { locations: _l, ...extra } = ldDetails(n as Record<string, unknown>, normalizeDate);
+      return clean(extra);
+    }
+  }
+  return {};
 }
 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
@@ -467,20 +707,29 @@ interface LocalistEvent {
   localist_url?: string;
   location_name?: string;
   ticket_cost?: string;
+  ticket_url?: string;
+  free?: boolean;
+  address?: string;
+  description_text?: string;
+  experience?: string;
+  status?: string;
   event_instances?: Array<{ event_instance?: { start?: string; end?: string | null } }>;
 }
 
-/** One event per listing, at its first instance (the API returns instances from today on). */
+/** One event per instance (the API returns instances from today on); a repeating listing's instances share a seriesId. */
 export function parseLocalist(body: { events?: Array<{ event?: LocalistEvent }> } | null, source: EventSource): TerraEvent[] {
   const out: TerraEvent[] = [];
   for (const { event: e } of body?.events ?? []) {
     const url = httpUrl(e?.localist_url);
     const title = decodeText(e?.title ?? '');
-    const at = e?.event_instances?.[0]?.event_instance;
+    const instances = (e?.event_instances ?? []).map((i) => i.event_instance).filter((i) => i?.start).slice(0, 30);
+    for (const at of instances) {
     const start = at?.start ? normalizeDate(at.start) : null;
     if (!e || !url || !title || !start) continue;
+    const many = instances.length > 1;
     out.push({
-      id: `${source.key}-${e.id ?? url}`,
+      id: many ? `${source.key}-${e.id ?? url}-${start.slice(0, 10)}` : `${source.key}-${e.id ?? url}`,
+      ...(many ? { seriesId: `${source.key}-${e.id ?? url}` } : {}),
       title,
       url,
       start,
@@ -488,7 +737,76 @@ export function parseLocalist(body: { events?: Array<{ event?: LocalistEvent }> 
       city: source.city,
       organizer: source.organizer,
       venue: decodeText(e.location_name ?? '') || null,
-      cost: decodeText(e.ticket_cost ?? '') || null
+      cost: e.free ? 'Free' : decodeText(e.ticket_cost ?? '') || null,
+      ...(e.free ? { free: true } : {}),
+      ...(httpUrl(e.ticket_url) && httpUrl(e.ticket_url) !== url ? { registrationUrl: httpUrl(e.ticket_url) } : {}),
+      ...(e.address ? { address: decodeText(e.address) } : {}),
+      ...(e.experience === 'virtual' ? { format: 'virtual' as const } : e.experience === 'hybrid' ? { format: 'hybrid' as const } : e.experience === 'inperson' ? { format: 'in-person' as const } : {}),
+      ...(e.status === 'cancelled' ? { status: 'cancelled' as const } : {}),
+      ...(e.description_text ? { description: shortText(e.description_text) } : {})
+    });
+    }
+  }
+  return out;
+}
+
+// ---- LiveWhale (university calendars) ----
+
+export function liveWhaleUrl(source: EventSource): string {
+  return `${source.base}/live/json/events/search/${encodeURIComponent(source.keyword ?? 'real estate')}/max/50`;
+}
+
+interface LiveWhaleEvent {
+  id?: number;
+  title?: string;
+  url?: string;
+  date_iso?: string;
+  date2_iso?: string;
+  is_all_day?: boolean | number;
+  location?: string;
+  location_title?: string;
+  cost?: string;
+  summary?: string;
+  description?: string;
+  registration?: string;
+  online_type?: string;
+  is_canceled?: boolean | number;
+  group_title?: string;
+  repeats?: string | null;
+}
+
+/** Events from a LiveWhale JSON search (an array; each repeat of a series is its own row with its own date). */
+export function parseLiveWhale(body: LiveWhaleEvent[] | { data?: LiveWhaleEvent[] } | null, source: EventSource): TerraEvent[] {
+  const rows = Array.isArray(body) ? body : (body?.data ?? []);
+  const seen = new Map<string, number>();
+  for (const e of rows) if (e?.url) seen.set(e.url, (seen.get(e.url) ?? 0) + 1);
+  const out: TerraEvent[] = [];
+  for (const e of rows) {
+    const url = httpUrl(e?.url);
+    const title = decodeText(e?.title ?? '');
+    const allDay = e?.is_all_day === true || e?.is_all_day === 1;
+    const start = e?.date_iso ? (allDay ? centralIso(e.date_iso.slice(0, 10)) : normalizeDate(e.date_iso)) : null;
+    if (!url || !title || !start) continue;
+    const end = e.date2_iso ? (allDay ? (e.date2_iso.slice(0, 10) > start.slice(0, 10) ? centralIso(e.date2_iso.slice(0, 10)) : null) : normalizeDate(e.date2_iso)) : null;
+    const repeat = (seen.get(e.url!) ?? 0) > 1 || Boolean(e.repeats);
+    const cost = price(e.cost);
+    const online = String(e.online_type ?? '').toLowerCase();
+    out.push({
+      id: `${source.key}-${e.id ?? url}-${start.slice(0, 10)}`,
+      ...(repeat ? { seriesId: `${source.key}-${url}` } : {}),
+      title,
+      url,
+      start,
+      end,
+      city: source.city,
+      organizer: e.group_title ? `${source.organizer} \u00b7 ${decodeText(e.group_title)}` : source.organizer,
+      venue: decodeText(e.location_title ?? e.location ?? '') || null,
+      cost: cost.cost,
+      ...(cost.free ? { free: true } : {}),
+      ...(online === 'online' ? { format: 'virtual' as const } : online === 'hybrid' ? { format: 'hybrid' as const } : {}),
+      ...(e.is_canceled ? { status: 'cancelled' as const } : {}),
+      ...(httpUrl(e.registration) ? { registrationUrl: httpUrl(e.registration) } : {}),
+      ...((e.summary || e.description) ? { description: shortText(decodeText(e.summary || e.description || '')) } : {})
     });
   }
   return out;
@@ -586,8 +904,69 @@ const defaultFetcher: Fetcher = {
 };
 
 export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
-  const events = tidy(await fetchRaw(source, now, fetcher, log));
-  return events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
+  parseZone = zoneOf(source.city);
+  try {
+    const events = await withSessions(tidy(await fetchRaw(source, now, fetcher, log)), fetcher, log);
+    const kept = events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
+    return joinDays(kept.map((e) => finalize(e, source, now)));
+  } finally {
+    parseZone = 'America/Chicago';
+  }
+}
+
+/**
+ * The fields every event carries once read: status and format from the organizer's own words, the market of the
+ * venue's address (not the organizer's office), topic, free, eligibility and deadline from the description, and
+ * when it was verified.
+ */
+export function finalize(e: TerraEvent, source: Pick<EventSource, 'key' | 'city'> & { places?: EventSource['places'] }, now: Date): TerraEvent {
+  const marked = titleStatus(e.title);
+  const format = e.format ?? guessFormat(e);
+  // A physical event goes to the market its street address names; a virtual one stays with its organizer's market.
+  const city = format === 'virtual' ? e.city : (addressCity(e.address) ?? addressCity(e.venue) ?? placeCity(e, source.places) ?? e.city);
+  const timezone = zoneOf(city);
+  const description = e.description ?? null;
+  const out: TerraEvent = {
+    ...e,
+    title: marked.title,
+    city,
+    timezone,
+    sourceKey: e.sourceKey ?? source.key,
+    verifiedAt: now.toISOString()
+  };
+  const status = e.status ?? marked.status;
+  if (status && status !== 'scheduled') out.status = status;
+  if (format) out.format = format;
+  const topic = topicOf(out.title, description);
+  if (topic) out.topic = topic;
+  if (!out.free && e.cost && /^\s*(free|\$0(?:\.00)?)\s*$/i.test(e.cost)) out.free = true;
+  const who = e.eligibility ?? eligibilityIn(description);
+  if (who) out.eligibility = who;
+  const deadline = e.registrationDeadline ?? deadlineIn(description, Number(e.start.slice(0, 4)), timezone, centralIso);
+  // A deadline after the event starts is a publishing or listing date, not a registration deadline.
+  if (deadline && new Date(deadline).getTime() <= new Date(e.start).getTime()) out.registrationDeadline = deadline;
+  else delete out.registrationDeadline;
+  if (out.registrationUrl && urlKey(out.registrationUrl) === urlKey(out.url)) delete out.registrationUrl;
+  if (out.sessions?.length) {
+    // A course whose first session has passed is in progress: listed until its last session, not as open to join.
+    if (new Date(out.sessions[0]!.start).getTime() < now.getTime()) out.enrollment = 'in-progress';
+    else if (out.enrollment !== 'closed') out.enrollment = 'open';
+  }
+  for (const key of Object.keys(out) as Array<keyof TerraEvent>) if (out[key] === null && !['end', 'venue', 'cost'].includes(key)) delete out[key];
+  return out;
+}
+
+/** The market a source's campus wording names for this venue or organizer group, if any. */
+export function placeCity(e: Pick<TerraEvent, 'venue' | 'organizer' | 'address'>, places: EventSource['places']): City | null {
+  // A venue written "Hotel Ella, Austin" names its city even without ", TX".
+  const tail = e.venue ? [...CITIES].find((c) => new RegExp(`,\\s*${c}\\s*$`, 'i').test(e.venue!)) : undefined;
+  if (tail) return tail;
+  if (!places) return null;
+  for (const text of [e.venue, e.address, e.organizer]) {
+    if (!text) continue;
+    for (const [pattern, city] of places) if (pattern.test(text)) return city;
+  }
+  return null;
 }
 
 async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (m: string) => void): Promise<TerraEvent[]> {
@@ -603,7 +982,7 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       try {
         const text = await fetcher.text(feed);
         if (!/BEGIN:VCALENDAR/.test(text)) continue;
-        const events = parseIcs(text, source);
+        const events = parseIcs(text, source, undefined, now);
         log(`${source.organizer}: ${events.length} events from ${feed}`);
         return events;
       } catch (error) {
@@ -622,6 +1001,12 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
 
   if (source.kind === 'localist') {
     const events = parseLocalist((await fetcher.json(localistUrl(source))) as { events?: Array<{ event?: LocalistEvent }> }, source);
+    log(`${source.organizer}: ${events.length} events matching "${source.keyword ?? 'real estate'}".`);
+    return events;
+  }
+
+  if (source.kind === 'livewhale') {
+    const events = parseLiveWhale((await fetcher.json(liveWhaleUrl(source))) as LiveWhaleEvent[], source);
     log(`${source.organizer}: ${events.length} events matching "${source.keyword ?? 'real estate'}".`);
     return events;
   }
@@ -676,7 +1061,7 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
 
   for (const feed of growthZoneFeeds(source.base)) {
     try {
-      const events = parseIcs(await fetcher.text(feed), source);
+      const events = parseIcs(await fetcher.text(feed), source, undefined, now);
       if (events.length) {
         log(`${source.organizer}: ${events.length} events from ${feed}`);
         return withDetailTimes(events, fetcher, log);
@@ -692,9 +1077,11 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
   const out: TerraEvent[] = [];
   for (const link of links) {
     try {
-      const detail = parseGrowthZoneDetail(await fetcher.text(link.url));
+      const html = await fetcher.text(link.url);
+      const detail = parseGrowthZoneDetail(html);
       if (!detail.start) continue;
       out.push({
+        ...pageDetails(html),
         id: `${source.key}-${/-(\d+)\/?$/.exec(link.url)?.[1] ?? link.url}`,
         title: detail.title || (/-->/.test(link.title) ? slugTitle(link.url) : link.title),
         url: link.url,
@@ -713,6 +1100,53 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
   return out;
 }
 
+function spanDays(e: Pick<TerraEvent, 'start' | 'end'>): number {
+  if (!e.end) return 0;
+  return Math.round((Date.parse(`${e.end.slice(0, 10)}T12:00:00Z`) - Date.parse(`${e.start.slice(0, 10)}T12:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * A listing that spans a week or more (a designation course "Oct 2 – Nov 6") is read from its own page: when the
+ * page lists the session dates, the event carries those sessions (and any wording that contradicts them);
+ * otherwise it is marked spanUnverified so no calendar export blocks out the whole range.
+ */
+export async function withSessions(events: TerraEvent[], fetcher: Fetcher, log: (m: string) => void, limit = 10): Promise<TerraEvent[]> {
+  let read = 0;
+  const out: TerraEvent[] = [];
+  for (const e of events) {
+    if (e.sessions || spanDays(e) < SERIES_SPAN_DAYS) {
+      out.push(e);
+      continue;
+    }
+    let found: ReturnType<typeof courseSessions> = null;
+    if (read < limit) {
+      read++;
+      try {
+        found = courseSessions(await fetcher.text(e.url), e.start.slice(0, 10), e.end!.slice(0, 10));
+      } catch (error) {
+        log(`${e.url}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (!found) {
+      out.push({ ...e, spanUnverified: true });
+      continue;
+    }
+    const sessions = found.sessions.map((s) => ({ start: centralIso(s.start)!, end: s.end ? centralIso(s.end) : null }));
+    const timed = found.sessions[0]!.start.length > 10;
+    const { dateOnly: _d, ...rest } = e;
+    out.push({
+      ...rest,
+      ...(timed ? {} : { dateOnly: true }),
+      start: sessions[0]!.start,
+      end: sessions.at(-1)!.end ?? sessions.at(-1)!.start,
+      sessions,
+      ...(found.conflicts.length ? { conflicts: found.conflicts } : {}),
+      ...(found.registrationClosed ? { enrollment: 'closed' as const } : {})
+    });
+  }
+  return out;
+}
+
 /**
  * Chamber iCal feeds often list an evening mixer as a date with no time. For those, read the
  * event's own page (at most `limit` of them) and take its clock times when it lists them.
@@ -727,11 +1161,13 @@ export async function withDetailTimes(events: TerraEvent[], fetcher: Fetcher, lo
     }
     read++;
     try {
-      const detail = parseGrowthZoneDetail(await fetcher.text(e.url));
+      const html = await fetcher.text(e.url);
+      const detail = parseGrowthZoneDetail(html);
+      const extra = pageDetails(html);
       const timed = detail.start && !detail.dateOnly && detail.start.slice(0, 10) === e.start.slice(0, 10);
       if (timed) {
         const { dateOnly: _drop, ...rest } = e;
-        out.push({ ...rest, start: detail.start!, end: detail.end && new Date(detail.end).getTime() > new Date(detail.start!).getTime() ? detail.end : null, venue: e.venue ?? detail.venue });
+        out.push({ ...extra, ...rest, start: detail.start!, end: detail.end && new Date(detail.end).getTime() > new Date(detail.start!).getTime() ? detail.end : null, venue: e.venue ?? detail.venue });
         continue;
       }
     } catch (error) {
@@ -757,22 +1193,25 @@ export function urlKey(url: string): string {
  * When an event is over, in ms. A date with no clock time (midnight) means the whole of that
  * day, so it ends at the next midnight in Texas, DST included; no end means the start's day.
  */
-export function eventEnds(e: Pick<TerraEvent, 'start' | 'end'>): number {
+export function eventEnds(e: Pick<TerraEvent, 'start' | 'end' | 'timezone'>): number {
   const last = e.end ?? e.start;
   if (!e.end || isMidnight(last)) {
     const next = new Date(`${last.slice(0, 10)}T12:00:00Z`);
     next.setUTCDate(next.getUTCDate() + 1);
-    return new Date(centralIso(next.toISOString().slice(0, 10))!).getTime();
+    return new Date(centralIso(next.toISOString().slice(0, 10), e.timezone ?? 'America/Chicago')!).getTime();
   }
   return new Date(last).getTime();
 }
 
-/** Upcoming (not yet ended, starting within the window), one per url, by start. */
+/**
+ * Upcoming (not yet ended, starting within the window), one per url and day, by start. The day is part of the key so
+ * the occurrences of a repeating event that share one page (a monthly luncheon) are all kept.
+ */
 export function upcoming(events: TerraEvent[], now: Date, days = WINDOW_DAYS): TerraEvent[] {
   const limit = now.getTime() + days * 86_400_000;
   const byUrl = new Map<string, TerraEvent>();
   for (const e of events) {
-    const key = e.url ? urlKey(e.url) : e.id;
+    const key = `${e.url ? urlKey(e.url) : e.id}|${e.start.slice(0, 10)}`;
     const start = new Date(e.start).getTime();
     const end = eventEnds(e);
     if (!Number.isFinite(start) || start > limit || end < now.getTime()) continue;
@@ -803,20 +1242,72 @@ export function sameEvent(a: TerraEvent, b: TerraEvent): boolean {
   return shared / x.size >= 0.75 && shared >= Math.min(2, x.size);
 }
 
-/** Drop repeats of one event listed by several sources (or by hand and a calendar): the first listing wins. */
+/**
+ * Drop repeats of one event listed by several sources (or by hand and a calendar). The first listing wins every field
+ * it has; later copies fill its blanks, and a later copy's cancellation or sell-out is kept (see mergeListing).
+ */
 export function dedupe(events: TerraEvent[]): TerraEvent[] {
+  return dedupeCounted(events).events;
+}
+
+export function dedupeCounted(events: TerraEvent[]): { events: TerraEvent[]; removed: Map<City, number> } {
   const out: TerraEvent[] = [];
-  for (const e of events) if (!out.some((kept) => sameEvent(kept, e))) out.push(e);
-  return out;
+  const removed = new Map<City, number>();
+  for (const e of events) {
+    const at = out.findIndex((kept) => sameEvent(kept, e) || (kept.url && kept.url === e.url && kept.start === e.start && kept.city === e.city));
+    if (at < 0) out.push(e);
+    else {
+      out[at] = mergeListing(out[at]!, e);
+      removed.set(e.city, (removed.get(e.city) ?? 0) + 1);
+    }
+  }
+  return { events: out, removed };
+}
+
+export interface SourceStatus {
+  /** Absent in files written before the collection report. */
+  key?: string;
+  organizer: string;
+  city: City | null;
+  url: string;
+  /** This run's read time, or the last good one when it failed. */
+  fetchedAt: string;
+  /** Upcoming events this source contributes (from the earlier build when it failed). */
+  count: number;
+  ok?: boolean;
+  /** Why it could not be read this run (HTTP status, timeout...). */
+  error?: string;
+  /** When the source was last read successfully; null when never. */
+  lastSuccessAt?: string | null;
+}
+
+export interface MarketReport {
+  city: City;
+  /**
+   * events: upcoming events listed; none-found: the sources were read and list nothing upcoming; unreadable: no source
+   * could be read; no-sources: no calendar is configured for the market (hand-typed rows only).
+   */
+  state: 'events' | 'none-found' | 'unreadable' | 'no-sources';
+  sourcesChecked: number;
+  sourcesOk: number;
+  sourcesFailed: number;
+  upcoming: number;
+  virtual: number;
+  duplicatesRemoved: number;
+  /** Events kept from an earlier build because their source failed. */
+  stale: number;
+  /** The newest successful read of any source in this market. */
+  lastVerifiedAt: string | null;
 }
 
 export interface EventsFile {
   generatedAt: string;
-  sources: Array<{ organizer: string; city: City | null; url: string; fetchedAt: string; count: number }>;
+  sources: SourceStatus[];
   cities: Array<{ city: City; events: TerraEvent[] }>;
+  report?: MarketReport[];
 }
 
-/** Build events.json. A source that fails keeps its events from the previous file. */
+/** Build events.json. A source that fails keeps its events from the previous file, marked stale with their old verification time. */
 export async function buildEventsFile(
   now: Date,
   previous: EventsFile | null,
@@ -830,33 +1321,94 @@ export async function buildEventsFile(
 ): Promise<EventsFile> {
   const { sources = EVENT_SOURCES, fetcher = defaultFetcher, log = console.log, manual = null } = options;
   const all: TerraEvent[] = [];
-  const meta: EventsFile['sources'] = [];
+  const meta: SourceStatus[] = [];
+  const previousEvents = (previous?.cities ?? []).flatMap((c) => c.events);
+  const previousById = new Map(previousEvents.map((e) => [e.id, e]));
   for (const source of sources) {
-    // Matched by organizer and city, so one organizer can list events in several markets.
-    const before = previous?.sources.find((s) => s.organizer === source.organizer && s.city === source.city);
-    const kept = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.organizer === source.organizer && (source.cityFromVenue || e.city === source.city) && e.source !== MANUAL_SOURCE);
+    // Matched by key (older files: organizer and city), so one organizer can list events in several markets.
+    const before = previous?.sources.find((s) => (s.key ? s.key === source.key : s.organizer === source.organizer && s.city === source.city));
+    const kept = previousEvents.filter((e) =>
+      e.source !== MANUAL_SOURCE && (e.sourceKey ? e.sourceKey === source.key : e.organizer === source.organizer && (source.cityFromVenue || e.city === source.city))
+    );
+    const url = source.page ?? `${source.base}/events`;
     try {
-      const events = upcoming(await fetchSource(source, now, fetcher, log), now);
+      const events = upcoming(await fetchSource(source, now, fetcher, log), now).map((e) => withReschedule(e, previousById.get(e.id)));
       log(`${source.organizer}: ${events.length} upcoming events.`);
       all.push(...events);
-      meta.push({ organizer: source.organizer, city: source.city, url: source.page ?? `${source.base}/events`, fetchedAt: now.toISOString(), count: events.length });
+      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: now.toISOString(), count: events.length, ok: true, lastSuccessAt: now.toISOString() });
     } catch (error) {
-      log(`${source.organizer}: ${error instanceof Error ? error.message : String(error)}; keeping ${kept.length} earlier events.`);
-      const still = upcoming(kept, now);
+      const message = error instanceof Error ? error.message : String(error);
+      log(`${source.organizer}: ${message}; keeping ${kept.length} earlier events.`);
+      const still = upcoming(kept, now).map((e) => ({ ...e, stale: true, verifiedAt: e.verifiedAt ?? before?.fetchedAt ?? previous?.generatedAt }) as TerraEvent);
       all.push(...still);
-      if (before) meta.push({ ...before, count: still.length });
+      const last = before ? (before.lastSuccessAt !== undefined ? before.lastSuccessAt : before.fetchedAt) : null;
+      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: before?.fetchedAt ?? now.toISOString(), count: still.length, ok: false, error: message.slice(0, 120), lastSuccessAt: last ?? null });
     }
   }
-  const previousManual = (previous?.cities ?? []).flatMap((c) => c.events).filter((e) => e.source === MANUAL_SOURCE);
-  const hand = upcoming((manual ?? previousManual).map((e) => ({ ...e, source: MANUAL_SOURCE })), now);
+  const previousManual = previousEvents.filter((e) => e.source === MANUAL_SOURCE);
+  const hand = upcoming((manual ?? previousManual).map((e) => ({ ...e, source: MANUAL_SOURCE, sourceKey: 'manual', timezone: e.timezone ?? zoneOf(e.city), verifiedAt: e.verifiedAt ?? now.toISOString() })), now);
   if (hand.length) {
-    meta.push({ organizer: MANUAL_SOURCE, city: null, url: '', fetchedAt: now.toISOString(), count: hand.length });
+    meta.push({ key: 'manual', organizer: MANUAL_SOURCE, city: null, url: '', fetchedAt: now.toISOString(), count: hand.length, ok: true, lastSuccessAt: now.toISOString() });
   }
   // Hand-entered rows first, so they win over a calendar's copy of the same event.
-  const sorted = dedupe(upcoming([...hand, ...all], now));
-  return {
-    generatedAt: now.toISOString(),
-    sources: meta,
-    cities: CITIES.map((city) => ({ city, events: sorted.filter((e) => e.city === city) }))
-  };
+  const { events: merged, removed } = dedupeCounted(upcoming([...hand, ...all], now));
+  const sorted = linkSeries(merged);
+  const cities = CITIES.map((city) => ({ city, events: sorted.filter((e) => e.city === city) }));
+  return { generatedAt: now.toISOString(), sources: meta, cities, report: marketReport(cities, meta, sources, removed) };
+}
+
+/**
+ * Mark the occurrences of a repeating event that a calendar lists as separate entries (a chamber's monthly
+ * luncheon with one UID per month): same source, organizer and title on two or more different days.
+ */
+export function linkSeries(events: TerraEvent[]): TerraEvent[] {
+  const key = (e: TerraEvent) => `${e.sourceKey ?? e.organizer}|${e.city}|${e.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`;
+  const days = new Map<string, Set<string>>();
+  for (const e of events) if (!e.seriesId) days.set(key(e), (days.get(key(e)) ?? new Set()).add(e.start.slice(0, 10)));
+  return events.map((e) => (!e.seriesId && (days.get(key(e))?.size ?? 0) > 1 ? { ...e, seriesId: `series-${key(e)}` } : e));
+}
+
+/** A start that moved since the last build, for a source that does not say so itself. */
+function withReschedule(e: TerraEvent, before: TerraEvent | undefined): TerraEvent {
+  if (!before || e.rescheduledFrom || e.seriesId || before.source === MANUAL_SOURCE) return e;
+  // Only a different local day is a move: a listing that gains its clock time (midnight → 8 AM, or a course's
+  // first session read from its page) is the same event on the same day.
+  const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: e.timezone ?? zoneOf(e.city) }).format(new Date(iso));
+  const moved = (x: string | null | undefined): x is string => Boolean(x) && (day(x!) !== day(e.start) || !isMidnight(x!));
+  const from = [before.start !== e.start ? before.start : null, before.rescheduledFrom].find(moved);
+  return from ? { ...e, rescheduledFrom: from, status: e.status ?? 'rescheduled' } : e;
+}
+
+/** Per market: which of its sources were read, what they list, and when it was last verified. */
+export function marketReport(cities: EventsFile['cities'], meta: SourceStatus[], sources: EventSource[], removed: Map<City, number>): MarketReport[] {
+  return cities.map(({ city, events }) => {
+    const mine = meta.filter((m) => m.city === city || (m.key !== 'manual' && sources.find((s) => s.key === m.key)?.cityFromVenue && events.some((e) => e.sourceKey === m.key)));
+    const ok = mine.filter((m) => m.ok);
+    const last = mine.map((m) => m.lastSuccessAt).filter((t): t is string => Boolean(t)).sort().pop() ?? null;
+    const upcomingCount = events.filter((e) => e.status !== 'cancelled').length;
+    return {
+      city,
+      state: upcomingCount ? 'events' : !mine.length ? 'no-sources' : ok.length ? 'none-found' : 'unreadable',
+      sourcesChecked: mine.length,
+      sourcesOk: ok.length,
+      sourcesFailed: mine.length - ok.length,
+      upcoming: upcomingCount,
+      virtual: events.filter((e) => e.format === 'virtual').length,
+      duplicatesRemoved: removed.get(city) ?? 0,
+      stale: events.filter((e) => e.stale).length,
+      lastVerifiedAt: last
+    };
+  });
+}
+
+/** The collection report as Markdown (written next to events.json and to the workflow summary). */
+export function reportMarkdown(file: EventsFile): string {
+  const lines = [`# Events collection report`, '', `Built ${file.generatedAt}.`, '', '| Market | Result | Sources read | Failed | Upcoming | Virtual | Duplicates removed | Kept from earlier build | Last verified |', '|---|---|---|---|---|---|---|---|---|'];
+  const label = { events: 'Events listed', 'none-found': 'No upcoming events found', unreadable: 'Sources could not be read', 'no-sources': 'No calendar configured' };
+  for (const r of file.report ?? []) {
+    lines.push(`| ${r.city} | ${label[r.state]} | ${r.sourcesOk}/${r.sourcesChecked} | ${r.sourcesFailed} | ${r.upcoming} | ${r.virtual} | ${r.duplicatesRemoved} | ${r.stale} | ${r.lastVerifiedAt ?? 'never'} |`);
+  }
+  lines.push('', '## Sources', '', '| Market | Source | Read this run | Upcoming | Last success | Error |', '|---|---|---|---|---|---|');
+  for (const s of file.sources) lines.push(`| ${s.city ?? 'All'} | [${s.organizer}](${s.url || '#'}) | ${s.ok ? 'yes' : 'no'} | ${s.count} | ${s.lastSuccessAt ?? 'never'} | ${(s.error ?? '').replace(/\|/g, '/')} |`);
+  return `${lines.join('\n')}\n`;
 }

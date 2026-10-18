@@ -194,15 +194,20 @@ describe('buildEventsFile', () => {
       }
     };
     // University calendars answer JSON too; this fake only speaks The Events Calendar's.
-    const sources = EVENT_SOURCES.filter((s) => s.kind !== 'localist');
+    const sources = EVENT_SOURCES.filter((s) => s.kind !== 'localist' && s.kind !== 'livewhale' && !s.key.startsWith('aia-'));
     const file = await buildEventsFile(now, previous, { sources, fetcher, log: () => {} });
     expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels', 'College Station', 'Galveston', 'Lubbock', 'Midland']);
     expect(file.cities.find((c) => c.city === 'Houston')!.events).toHaveLength(2);
     expect(file.cities.find((c) => c.city === 'Dallas')!.events.map((e) => e.start)).toEqual(['2026-10-20T16:00:00Z']);
-    expect(file.sources.map((s) => [s.organizer, s.count])).toEqual([
-      ['CREDA Houston', 2],
-      ['BOMA Dallas', 1]
+    // Every source is reported; the ones that failed say so and keep their earlier events, marked stale.
+    expect(file.sources.filter((s) => s.count).map((s) => [s.organizer, s.count, s.ok])).toEqual([
+      ['CREDA Houston', 2, true],
+      ['BOMA Dallas', 1, false]
     ]);
+    expect(file.sources.find((s) => s.key === 'boma-dallas')).toMatchObject({ ok: false, error: 'HTTP 503', lastSuccessAt: '2026-10-04T12:00:00Z' });
+    expect(file.cities.find((c) => c.city === 'Dallas')!.events[0]).toMatchObject({ stale: true, verifiedAt: '2026-10-04T12:00:00Z' });
+    expect(file.cities.find((c) => c.city === 'Houston')!.events[0]).toMatchObject({ verifiedAt: now.toISOString() });
+    expect(file.cities.find((c) => c.city === 'Houston')!.events[0]!.stale).toBeUndefined();
   });
 });
 
@@ -232,7 +237,8 @@ describe('site events.js', () => {
     expect([...eventCounts(file, now)]).toEqual([
       ['Dallas', 1],
       ['Houston', 1],
-      ['Austin', 0]
+      ['Austin', 0],
+      ['Online', 0]
     ]);
     expect(groupByMonth(all).map((g) => [g.month, g.events.length])).toEqual([
       ['October 2026', 1],
@@ -348,7 +354,7 @@ describe('auto-filled sources for every market', () => {
     const events = await fetchSource(unt, now, fetcher, () => {});
     expect(asked).toBe('https://calendar.unt.edu/api/2/events?days=120&pp=100&keyword=real+estate');
     expect(events).toEqual([
-      { id: 'unt-5412', title: 'Tonti Properties x North Texas Real Estate Collective', url: 'https://calendar.unt.edu/event/tonti-properties', start: '2026-10-14T17:30:00-05:00', end: '2026-10-14T19:00:00-05:00', city: 'Dallas', organizer: 'UNT', venue: 'University Union', cost: null }
+      { id: 'unt-5412', title: 'Tonti Properties x North Texas Real Estate Collective', url: 'https://calendar.unt.edu/event/tonti-properties', start: '2026-10-14T17:30:00-05:00', end: '2026-10-14T19:00:00-05:00', city: 'Dallas', organizer: 'UNT', venue: 'University Union', cost: null, sourceKey: 'unt', timezone: 'America/Chicago', verifiedAt: now.toISOString() }
     ]);
     expect(parseLocalist(null, unt)).toEqual([]);
   });
