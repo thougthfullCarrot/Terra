@@ -187,7 +187,8 @@ for (const vp of [
       pinsText: Number(/(\d[\d,]*) pins?/.exec(document.querySelector('.dev-count').textContent)?.[1].replace(/,/g, '')),
       items: document.querySelectorAll('.dev-list .dev-item:not([hidden])').length,
       offMap: document.querySelectorAll('.dev-list .dev-item:not([hidden]) .dev-off').length,
-      markers: document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive:not(.dev-small-pin)').length,
+      // Pins are category icons or counted clusters; the map reports how many projects they hold in all.
+      markers: Number(document.querySelector('.dev-map').dataset.drawn ?? -1),
       empty: !document.querySelector('.dev-empty').hidden
     }));
   const setF = async (f) => {
@@ -342,19 +343,31 @@ for (const vp of [
   await page.locator('.dev-card').scrollIntoViewIfNeeded();
   // Click a pin that is actually on screen and on top: the first one in the
   // document can sit outside the phone's map view or under another pin.
-  const spot = await page.evaluate(() => {
-    const box = document.querySelector('.dev-map').getBoundingClientRect();
-    for (const path of document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive')) {
-      const r = path.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      if (x > box.left + 4 && x < box.right - 4 && y > box.top + 4 && y < box.bottom - 4 && document.elementFromPoint(x, y) === path) return { x, y };
-    }
-    return null;
-  });
+  await page.locator('.dev-map').scrollIntoViewIfNeeded();
+  // Nearby pins share a counted cluster until zoomed in, so click clusters until a project icon is on screen.
+  const onTop = (selector) =>
+    page.evaluate((selector) => {
+      const box = document.querySelector('.dev-map').getBoundingClientRect();
+      for (const node of document.querySelectorAll(`.dev-map .leaflet-marker-pane ${selector}`)) {
+        const r = node.getBoundingClientRect();
+        const x = r.left + r.width / 2;
+        const y = r.top + r.height / 2;
+        if (x > box.left + 24 && x < box.right - 24 && y > box.top + 24 && y < box.bottom - 24 && document.elementFromPoint(x, y)?.closest(selector) === node) return { x, y };
+      }
+      return null;
+    }, selector);
+  let spot = await onTop('.devx-pin-icon');
+  for (let i = 0; !spot && i < 8; i++) {
+    const cluster = await onTop('.devx-cluster-icon');
+    if (!cluster) break;
+    await page.mouse.click(cluster.x, cluster.y);
+    await page.waitForTimeout(800);
+    spot = await onTop('.devx-pin-icon');
+  }
+  log(`${v}: clicking clusters zooms in to individual category icons`, Boolean(spot));
   console.log(`  ${v}: clicking the pin at ${spot ? `${Math.round(spot.x)},${Math.round(spot.y)}` : 'none on screen; first in page'}`);
   if (spot) await page.mouse.click(spot.x, spot.y);
-  else await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
+  else await page.locator('.dev-map .devx-pin-icon').first().click({ force: true });
   await page.waitForSelector('.devx-panel:not([hidden]) .dev-pop-title', { timeout: 5000 }).catch(() => null);
   const popTitle = await page.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null);
   const active = await page.locator('.dev-item.active .dev-name').textContent().catch(() => null);

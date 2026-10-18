@@ -7763,15 +7763,179 @@ nav.market-tools a.chip[aria-current='page'] {
   text-decoration: line-through;
 }
 
-.devx-legend-item[aria-pressed='false'] .devx-dot {
+.devx-legend-item[aria-pressed='false'] .devx-badge {
   opacity: 0.25;
 }
 
-.devx-dot {
+.devx-cat {
+  --glyph: #ffffff;
+  background: var(--cat, #9b958d);
+  color: var(--glyph);
+}
+
+.devx-glyph-dark {
+  --glyph: #1b1917;
+}
+
+/* Category badge: the legend, the list and the panel. */
+.devx-badge {
   flex: none;
-  width: 10px;
-  height: 10px;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
+  box-shadow: 0 0 0 1px oklch(0 0 0 / 0.12);
+}
+
+.devx-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.devx-badge.approx {
+  background: color-mix(in srgb, var(--cat) 60%, var(--surface));
+  outline: 1.5px dashed var(--ink);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.devx-panel-cat .devx-badge {
+  width: 18px;
+  height: 18px;
+}
+
+.devx-panel-cat .devx-badge svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* Map pins: one size for every project, a solid disc with a contrasting border and a soft shadow. */
+.devx-pin-icon,
+.devx-cluster-icon {
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+}
+
+.devx-pin-icon:focus-visible,
+.devx-cluster-icon:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.devx-pin {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.35), 0 0 0 1px oklch(0 0 0 / 0.18);
+  transition: transform 0.12s ease;
+}
+
+.devx-pin svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Approximate: a paler disc and a dashed dark border, so it never reads as an exact site. */
+.devx-pin.approx {
+  background: color-mix(in srgb, var(--cat) 58%, #ffffff);
+  border: 2px dashed #1b1917;
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
+}
+
+.devx-pin.approx.devx-cat:not(.devx-glyph-dark) {
+  --glyph: #1b1917;
+}
+
+.devx-pin-icon.lit .devx-pin {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #1b1917, 0 2px 6px oklch(0 0 0 / 0.4);
+}
+
+.devx-pin-icon.chosen .devx-pin {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px var(--accent), 0 3px 8px oklch(0 0 0 / 0.45);
+}
+
+.devx-cluster {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  background: var(--ring, #9b958d);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #ffffff, 0 2px 5px oklch(0 0 0 / 0.35);
+}
+
+.devx-cluster b {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font: 600 13px var(--ui);
+  color: #1b1917;
+  background: #ffffff;
+  border-radius: 50%;
+}
+
+.devx-cluster-icon.lit .devx-cluster {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #1b1917, 0 2px 6px oklch(0 0 0 / 0.4);
+}
+
+.devx .leaflet-overlay-pane .devx-leader {
+  stroke: #1b1917;
+  stroke-opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .devx-pin {
+    transition: none;
+  }
+}
+
+/* The pin key under the legend. */
+.devx-key {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 20px;
+  padding: 10px 0 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.devx-key-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.devx-key-cluster,
+.devx-key-approx {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+
+.devx-key-cluster {
+  font: 600 10px var(--ui);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 3px var(--muted);
+}
+
+.devx-key-approx {
+  background: var(--sunk);
+  border: 2px dashed var(--ink);
 }
 
 .devx-list-head {
@@ -7842,9 +8006,9 @@ nav.market-tools a.chip[aria-current='page'] {
 
 .devx-list .dev-pick {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: start;
-  gap: 4px 14px;
+  gap: 4px 12px;
   width: 100%;
   padding: 12px 10px;
   font: inherit;
@@ -7865,8 +8029,8 @@ nav.market-tools a.chip[aria-current='page'] {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.devx-list .dev-pick .devx-dot {
-  margin-top: 6px;
+.devx-list .dev-pick .devx-badge {
+  margin-top: 1px;
 }
 
 .devx-row-text {
@@ -8552,7 +8716,7 @@ nav.market-tools a.chip[aria-current='page'] {
 
 .devx .devx-list button.dev-pick {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   flex-direction: unset;
 }
 
