@@ -37,6 +37,8 @@ function pageAll(layer, fields, where = '1=1', size = 2000) {
 // ---------- round 6: accounts with values but no CoSA polygon; paginated duplicate-zoning scan
 const cbIds = new Set(pageAll(CB, ['PropID']).rows.map((r) => r.PropID).filter((x) => x > 0));
 const sa = pageAll(SA, ['Prop_id', 'State_cd', 'City', 'Situs_Zip', 'Market_val', 'Shape__Area', 'Exemptions']);
+out('sara.paging', { rows: sa.rows.length, pages: sa.pages, error: sa.error });
+if (sa.error || sa.rows.length < 700000) throw new Error('SARA paging incomplete; not profiling');
 const seen = new Set(); const miss = [];
 for (const r of sa.rows) { if (!(r.Prop_id > 0) || seen.has(r.Prop_id)) continue; seen.add(r.Prop_id); if (!cbIds.has(r.Prop_id)) miss.push(r); }
 const tally = (k) => Object.entries(miss.reduce((m, r) => { const v = String(r[k] ?? 'null').trim() || 'blank'; m[v] = (m[v] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 25);
@@ -54,10 +56,3 @@ for (const r of sample) {
 }
 out('valuesOnly.whatIsUnderThem', under);
 
-// paginated duplicate-zoning scan over a dense 4 km box
-const box = JSON.stringify({ xmin: -98.53, ymin: 29.39, xmax: -98.47, ymax: 29.45, spatialReference: { wkid: 4326 } });
-let off = 0, polys = [], pages = 0;
-for (;;) { const r = get(q(Z, { where: '1=1', outFields: 'OBJECTID,Zoning', returnGeometry: 'true', outSR: '4326', geometryPrecision: '7', geometry: box, geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', orderByFields: 'OBJECTID', resultOffset: String(off), resultRecordCount: '2000' }).replace('f=json', 'f=geojson')); const f = r.features ?? []; pages++; polys.push(...f); if (f.length < 2000) break; off += 2000; if (pages > 60) break; }
-const gg = {}; for (const f of polys) (gg[createHash('sha1').update(JSON.stringify(f.geometry?.coordinates ?? null)).digest('hex')] ??= []).push([f.properties.OBJECTID, f.properties.Zoning]);
-const dups = Object.values(gg).filter((c) => c.length > 1);
-out('zoning.duplicateScan', { pages, polygons: polys.length, uniqueOids: new Set(polys.map((f) => f.properties.OBJECTID)).size, duplicateGroups: dups.length, sameCode: dups.filter((c) => new Set(c.map((x) => x[1])).size === 1).length, differentCodes: dups.filter((c) => new Set(c.map((x) => x[1])).size > 1).length, differentExamples: dups.filter((c) => new Set(c.map((x) => x[1])).size > 1).slice(0, 15) });
