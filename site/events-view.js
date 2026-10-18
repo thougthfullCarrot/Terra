@@ -5,10 +5,16 @@
 // organizer's page.
 import { stateBox } from './labels.js';
 import {
+  canExport,
   dateParts,
+  nextSession,
+  eventBadges,
   eventCounts,
-  eventDate,
   eventIcs,
+  eventWhen,
+  marketNote,
+  ONLINE,
+  zoneOf,
   filterEvents,
   googleCalendarUrl,
   groupByMonth,
@@ -77,15 +83,18 @@ function render() {
   const counts = eventCounts(file, now);
   $('e-cities').replaceChildren(
     chip('All', '', filterEvents(file, {}, now).length),
-    ...file.cities.map((c) => chip(c.city, c.city, counts.get(c.city) ?? 0))
+    ...file.cities.map((c) => chip(c.city, c.city, counts.get(c.city) ?? 0)),
+    chip(ONLINE, ONLINE, counts.get(ONLINE) ?? 0)
   );
 
   const events = filterEvents(file, state, now);
-  $('e-count').textContent = `${events.length} upcoming ${events.length === 1 ? 'event' : 'events'}${state.city ? ` in ${state.city}` : ' across Texas'}`;
+  $('e-count').textContent = `${events.length} upcoming ${events.length === 1 ? 'event' : 'events'}${state.city === ONLINE ? ' online' : state.city ? ` in ${state.city}` : ' across Texas'}`;
 
   drawCalendar(events);
   if (!events.length) {
-    message(state.city ? `No events listed yet for ${state.city}.` : 'No events listed yet.');
+    // A market whose calendars were all unreadable says so, instead of reading as a quiet month.
+    const note = state.city && state.city !== ONLINE ? marketNote(file, state.city) : null;
+    message(note ? note.empty : state.city === ONLINE ? 'No virtual events listed right now.' : 'No events listed yet.');
   } else {
     let i = 0;
     $('e-list').replaceChildren(
@@ -105,9 +114,28 @@ function render() {
       '',
       `Events from ${names || 'chapter'} calendars${
         Number.isNaN(updated.getTime()) ? '' : `, updated ${updated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-      }. Each one opens on the organizer's site to register.`
-    )
+      }. Each one opens on the organizer's site to register. Times are the venue's local time.`
+    ),
+    reportDetails()
   );
+}
+
+/** "Collection report": per market, calendars read, failures and the last good read. */
+function reportDetails() {
+  const rows = file.report ?? [];
+  const box = el('details', 'events-report');
+  if (!rows.length) return box;
+  box.append(el('summary', '', 'Collection report'));
+  const list = el('ul', 'events-report-list');
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never');
+  for (const r of rows) {
+    const verdict = r.state === 'no-sources' ? 'no readable calendar yet' : r.state === 'unreadable' ? 'calendars could not be read' : r.state === 'none-found' ? 'no upcoming events found' : `${r.upcoming} upcoming`;
+    const li = el('li', `report-${r.state}`);
+    li.append(el('b', '', r.city), el('span', '', ` · ${verdict} · ${r.sourcesOk}/${r.sourcesChecked} calendars read${r.duplicatesRemoved ? ` · ${r.duplicatesRemoved} duplicates merged` : ''} · last verified ${fmt(r.lastVerifiedAt)}`));
+    list.append(li);
+  }
+  box.append(list);
+  return box;
 }
 
 function chip(label, city, count) {
@@ -122,7 +150,8 @@ function chip(label, city, count) {
 function item(event, index) {
   const card = el('article', 'card event-card');
   card.style.setProperty('--i', String(Math.min(index, 20)));
-  const parts = dateParts(event.start);
+  // A course's date block shows its next session.
+  const parts = dateParts(nextSession(event)?.start ?? event.start, zoneOf(event));
   if (parts) card.dataset.day = parts.ymd;
 
   const block = el('time', 'date-block');
@@ -140,27 +169,50 @@ function item(event, index) {
   } else {
     title.textContent = event.title;
   }
+  if (event.status === 'cancelled') card.classList.add('is-cancelled');
   // The time (the date is in the block), then where.
-  const when = eventDate(event.start).split(' · ')[1] ?? (event.dateOnly ? 'Time not listed' : 'All day');
-  const where = [event.venue, state.city ? '' : event.city].filter(Boolean).join(', ');
+  const when = eventWhen(event);
+  const place = event.format === 'virtual' ? 'Online' : event.venue || 'Venue not listed';
+  const where = [place, state.city && state.city !== ONLINE ? '' : event.format === 'virtual' ? '' : event.city].filter(Boolean).join(', ');
   body.append(title, el('p', 'event-where', [when, where].filter(Boolean).join(' · ')));
+  if (event.address && event.format !== 'virtual') body.append(el('p', 'event-address', event.address));
   const tags = el('div', 'event-tags');
   const org = el('span', 'chip org', event.organizer);
   org.prepend(el('i'));
   tags.append(org);
-  if (event.cost) tags.append(el('span', 'chip', event.cost));
+  for (const b of eventBadges(event)) {
+    const tag = el('span', `chip badge-${b.kind}`, b.text);
+    if (b.title) tag.title = b.title;
+    tags.append(tag);
+  }
   body.append(tags);
+  // What a reader must know before going: deadline, a move, and how fresh the listing is.
+  const notes = [];
+  if (event.registrationDeadline) notes.push(`Register by ${new Date(event.registrationDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: zoneOf(event) })}`);
+  if (event.rescheduledFrom) notes.push(`Moved from ${new Date(event.rescheduledFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: zoneOf(event) })}`);
+  if (event.spanUnverified) notes.push('Runs over several weeks; the page lists no session dates, so check it before planning');
+  for (const c of event.conflicts ?? []) notes.push(`Check the page: ${c}`);
+  if (event.stale && event.verifiedAt) notes.push(`Calendar unreachable; last verified ${new Date(event.verifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
+  if (notes.length) body.append(el('p', 'event-notes', notes.join(' · ')));
 
   const actions = el('div', 'event-actions');
-  const add = el('button', 'secondary sm', 'Add to calendar');
+  const exportable = canExport(event);
+  const add = el('button', 'secondary sm', event.sessions?.length ? 'Add all sessions' : 'Add to calendar');
   add.type = 'button';
   add.title = 'Download an .ics file for Apple Calendar, Outlook or Google';
   add.addEventListener('click', () => download(event));
-  const google = el('a', 'link sm', 'Google Calendar');
+  const google = el('a', 'link sm', event.sessions?.length ? 'Google Calendar (next session)' : 'Google Calendar');
   google.href = googleCalendarUrl(event);
   google.target = '_blank';
   google.rel = 'noopener noreferrer';
-  actions.append(add, google);
+  if (event.registrationUrl && event.status !== 'cancelled' && (!event.enrollment || event.enrollment === 'open')) {
+    const reg = el('a', 'link sm', 'Register');
+    reg.href = event.registrationUrl;
+    reg.target = '_blank';
+    reg.rel = 'noopener noreferrer';
+    actions.append(reg);
+  }
+  if (exportable) actions.append(add, google);
 
   card.append(block, body, actions);
   return card;
@@ -181,12 +233,13 @@ function download(event) {
 /** The mini month calendar beside the list: days with an event are marked and jump to it. */
 function drawCalendar(events) {
   const side = $('e-side');
-  const months = [...new Set(events.map((e) => dateParts(e.start)?.ymd.slice(0, 7)).filter(Boolean))];
+  const day = (e) => dateParts(e.start, zoneOf(e))?.ymd;
+  const months = [...new Set(events.map((e) => day(e)?.slice(0, 7)).filter(Boolean))];
   side.hidden = !months.length;
   if (!months.length) return;
   if (!months.includes(calMonth)) calMonth = months[0];
   const at = months.indexOf(calMonth);
-  const inMonth = events.filter((e) => dateParts(e.start)?.ymd.startsWith(calMonth));
+  const inMonth = events.filter((e) => day(e)?.startsWith(calMonth));
   const today = dateParts(new Date().toISOString())?.ymd;
 
   const head = el('div', 'cal-head');
@@ -208,7 +261,7 @@ function drawCalendar(events) {
     if (cell.has) {
       const button = el('button', cls, String(cell.day));
       button.type = 'button';
-      const count = inMonth.filter((e) => dateParts(e.start)?.ymd === cell.ymd).length;
+      const count = inMonth.filter((e) => day(e) === cell.ymd).length;
       button.setAttribute('aria-label', `${cell.ymd}: ${count} ${count === 1 ? 'event' : 'events'}`);
       button.addEventListener('click', () => {
         const target = $('e-list').querySelector(`[data-day="${cell.ymd}"]`);

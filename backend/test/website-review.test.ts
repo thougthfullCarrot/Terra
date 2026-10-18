@@ -17,7 +17,7 @@ const MIXER_URL = 'https://newbraunfelschamber.growthzoneapp.com/events/Details/
 function ics(dtstart: string, dtend: string, title = 'Membership Mixer: Veramendi - The Ledge', url = MIXER_URL) {
   return ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', `UID:${title}`, `SUMMARY:${title}`, `URL:${url}`, dtstart, dtend, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 }
-const googleDates = (e: object) => new URL(googleCalendarUrl(e as Parameters<typeof googleCalendarUrl>[0])).searchParams.get('dates');
+const googleDates = (e: object) => new URL(googleCalendarUrl(e as Parameters<typeof googleCalendarUrl>[0])!).searchParams.get('dates');
 
 describe('1. event times and calendar ranges', () => {
   // The chamber feed lists the mixer as an all-day date (exclusive end Oct 16); the page says 5:30-7:30 PM.
