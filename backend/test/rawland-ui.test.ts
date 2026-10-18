@@ -12,7 +12,10 @@ let close = (): void => {};
 try {
   const { chromium } = await import('playwright-core');
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
-} catch { browser = null; }
+} catch (e) {
+  if (process.env.REQUIRE_BROWSER) throw new Error(`REQUIRE_BROWSER is set but Chromium did not launch: ${String(e)}`);
+  browser = null;
+}
 
 beforeAll(async () => {
   if (!browser) return;
@@ -33,7 +36,7 @@ const select = (p: Page, id: string) => p.evaluate(async (i) => { await (globalT
 type Box = { x: number; y: number; width: number; height: number };
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-describe.skipIf(!browser)('Raw Land screen (phone, synthetic)', () => {
+describe.skipIf(!browser && !process.env.REQUIRE_BROWSER)('Raw Land screen (phone, synthetic)', () => {
   const PHONE = { width: 390, height: 844 };
 
   it('details cover Results/Filters, scroll to the last field, and keep Close reachable', async () => {
@@ -75,7 +78,7 @@ describe.skipIf(!browser)('Raw Land screen (phone, synthetic)', () => {
     const p = await open(PHONE);
     await select(p, 'SYN-100004'); // i % 4 === 0 → not matched
     const t = (await p.textContent('#detail'))!;
-    expect(t).toMatch(/not matched in the city parcel layer/);
+    expect(t).toContain('account not matched in the city parcel layer; current status unknown');
     expect(t).not.toMatch(/Matched by account number only/);
     await p.close();
   });
