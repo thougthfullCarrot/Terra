@@ -49,7 +49,7 @@ async function loadList(append = false) {
   list.innerHTML = state.rows.length ? '' : '<div class="empty">No accounts match these filters.</div>';
   for (const a of state.rows) {
     const el = document.createElement('div'); el.className = 'row'; el.role = 'option'; el.setAttribute('aria-selected', a.account === state.selected);
-    el.innerHTML = `<span class="id">${a.account}</span><span class="psf">${fmtPsf(a.landPsf) ?? '<span class="pill">Unavailable</span>'}</span><span class="meta">${a.acres == null ? 'Acres unavailable' : `${a.acres.toLocaleString('en-US')} ac`} · ${a.stateCode ?? '—'} · ${a.zoningBases.join(', ') || a.zoningStatus}</span>`;
+    el.innerHTML = `<span class="id">${a.account}</span><span class="psf">${fmtPsf(a.landPsf) ?? '<span class="pill">Unavailable</span>'}</span><span class="meta">${a.acres == null ? 'Acres unavailable' : `${a.acres.toLocaleString('en-US')} ac`} · ${a.stateCode ?? '—'} · ${[...new Set(a.zoningBases)].join(', ') || a.zoningStatus}</span>`;
     el.onclick = () => select(a.account, true); list.append(el);
   }
   if (state.after) { const b = document.createElement('button'); b.className = 'more'; b.textContent = 'Show more'; b.onclick = () => loadList(true); list.append(b); }
@@ -65,21 +65,35 @@ async function select(id, fly = false) {
   const a = await r.json();
   if (fly) map.fitBounds(L.geoJSON(a.outline).getBounds(), { maxZoom: 17, padding: [40, 40] });
   const z = a.zoning;
-  const zoningHtml = z && z.districts ? z.districts.map((d) => `${d.code} ${Math.round(d.share * 100)}%`).join(' · ') : a.zoningStatus;
-  const zoneCls = /unavailable/i.test(a.zoningStatus) ? 'bad' : z?.conflict ? 'warn' : '';
-  const zWhy = z?.conflict ? 'Identical zoning shapes carry different codes. Both are shown; confirm with the city.' : z?.status === 'coverage unavailable' ? `Not computed: ${z.reason}. No partial result is shown.` : /PDF/.test(a.zoningStatus) ? 'This city publishes zoning as a PDF only; it is not integrated.' : a.zoningStatus === L_.unincorporated ? 'Outside every city limit. Bexar County has no zoning for unincorporated land.' : '';
-  $('#detail').innerHTML = `<button class="close" aria-label="Close">✕</button>
-    <h2>Account ${a.account}</h2><div class="sub">${a.synthetic ? 'Synthetic record' : 'Bexar Appraisal District account'} · state code ${a.stateCode ?? 'unavailable'}</div>
+  const uninc = a.zoningStatus === L_.unincorporated;
+  let zoningHtml, zWhy = '', zoneCls = /unavailable/i.test(a.zoningStatus) ? 'bad' : '';
+  if (z?.conflict) {
+    // conflicting records: each is listed on its own; their coverage shares overlap and are not summed
+    zoningHtml = `<span class="pill warn">Conflicting zoning records</span><ul class="records">${z.districts.map((d) => `<li><b>${d.code}</b> · record covers ${Math.round(d.share * 100)}% of the parcel</li>`).join('')}</ul>`;
+    zWhy = 'These records cover the same ground, so their percentages overlap and do not add up to 100%. The layer does not say which is current; confirm with the city.';
+  } else if (z?.districts) {
+    zoningHtml = z.districts.map((d) => `${d.code} ${Math.round(d.share * 100)}%`).join(' · ');
+  } else {
+    zoningHtml = uninc ? 'Unincorporated (no city zoning)' : a.zoningStatus;
+    zWhy = z?.status === 'coverage unavailable' ? `Not computed: ${z.reason}. No partial result is shown.` : /PDF/.test(a.zoningStatus) ? 'This city publishes zoning as a PDF only; it is not integrated.' : '';
+  }
+  const limitsSrc = a.synthetic ? 'Synthetic boundary' : 'Bexar County "Cities" layer';
+  const juris = uninc ? fact('Jurisdiction', 'Unincorporated', `${limitsSrc} classifies this area as JURIS = "Unincorporated". Bexar County does not zone unincorporated land. Boundary last updated: unknown (the county layer publishes no edit date).`) : '';
+  const matched = !/not matched/.test(a.cityMatch);
+  $('#detail').innerHTML = `<div class="dhead"><button class="close" aria-label="Close">✕</button>
+    <h2>Account ${a.account}</h2><div class="sub">${a.synthetic ? 'Synthetic record' : 'Bexar Appraisal District account'} · state code ${a.stateCode ?? 'unavailable'}</div></div>
     ${fact('Market value', a.market == null ? 'Unavailable' : fmt$(a.market), L_.marketValue)}
     ${fact(L_.landValue, a.land == null ? 'Unavailable' : fmt$(a.land), a.land == null ? a.valueStatus : L_.provisional, a.land == null ? 'bad' : '')}
     ${fact(L_.landPsf, a.landPsf == null ? 'Unavailable' : fmtPsf(a.landPsf), a.landPsf == null ? (a.acres == null ? 'No reported land area.' : 'Land value unavailable.') : L_.provisional, a.landPsf == null ? 'bad' : 'prov')}
     ${fact('Appraised / assessed value', L_.appraisedAssessed)}
     ${fact('Land area', a.acres == null ? 'Unavailable' : `${a.acres.toLocaleString('en-US')} acres (reported)`)}
+    ${juris}
     ${fact('Zoning', zoningHtml, zWhy, zoneCls)}
-    ${fact('City parcel layer', a.cityMatch, 'Matched by account number only.', /not matched|discrepancy/.test(a.cityMatch) ? 'warn' : '')}
+    ${fact('City parcel layer', a.cityMatch, matched ? 'Matched by account number only.' : '', /not matched|discrepancy/.test(a.cityMatch) ? 'warn' : '')}
     ${fact('Outline', L_.outline)}
     <div class="fact"><div class="why">Appraisal-district figures from the 2025 roll. They are not asking prices, sale prices or a current market estimate, and nothing here means the land is for sale.</div></div>`;
-  $('#detail').classList.add('open'); $('#detail .close').onclick = () => { $('#detail').classList.remove('open'); state.selected = null; layer.setStyle(layer.options.style); };
+  $('#detail').scrollTop = 0; document.body.classList.add('detail-open');
+  $('#detail').classList.add('open'); $('#detail .close').onclick = () => { $('#detail').classList.remove('open'); document.body.classList.remove('detail-open'); state.selected = null; layer.setStyle(layer.options.style); };
   layer.setStyle(layer.options.style);
   for (const el of document.querySelectorAll('.row')) el.setAttribute('aria-selected', el.querySelector('.id').textContent === id);
 }
