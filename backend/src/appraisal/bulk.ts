@@ -210,7 +210,7 @@ async function epcadRows(zip: string, table: string, onRow: (row: Row) => unknow
       if (v[0] === cols[0]) return;
     }
     const row: Row = {};
-    cols.forEach((c, i) => (row[c] = v[i] ?? ''));
+    cols.forEach((c, i) => (row[c] = (v[i] ?? '').replace(/\0/g, '').trim()));
     return onRow(row);
   });
 }
@@ -228,6 +228,8 @@ async function readEpcad(properties: string, onRow: (row: Row) => unknown, sampl
   }, sample);
   const rolls = new Map<string, Row>();
   await epcadRows(extra.Rolls!, 'Rolls', (r) => {
+    // Next year's roll rows exist before they carry values; keep the newest year that has an appraisal.
+    if (!r.Appraised?.trim()) return;
     if (newer(rolls.get(r.Property_dbId!), r)) rolls.set(r.Property_dbId!, r);
   }, sample);
   const land = new Map<string, number>();
@@ -241,9 +243,13 @@ async function readEpcad(properties: string, onRow: (row: Row) => unknown, sampl
     const built = Number(r.YearBuilt || 0) || null;
     imps.set(r.Property_dbId!, { area: had.area + (Number(r.LivingArea || 0) || 0), built: built && (!had.built || built < had.built) ? built : had.built, code: had.code || r.StateCode || '' });
   }, sample);
+  let joined = 0;
+  let total = 0;
   await epcadRows(properties, 'Properties', (p) => {
     if (p.Type && !/^r/i.test(p.Type)) return;
-    const k = p.dbId!;
+    const k = p.dbId!.trim();
+    total++;
+    if (owners.has(k) || rolls.has(k)) joined++;
     const o = owners.get(k);
     const roll = rolls.get(k);
     const imp = imps.get(k);
@@ -266,6 +272,7 @@ async function readEpcad(properties: string, onRow: (row: Row) => unknown, sampl
       StateCode: imp?.code ?? ''
     });
   }, sample);
+  sample.push(`joins: ${owners.size} owners, ${rolls.size} rolls with values, ${land.size} lands, ${imps.size} improvements; ${joined} of ${total} properties matched an owner or roll`);
 }
 
 export const BULK_SOURCES: Record<string, Source> = {
@@ -301,7 +308,8 @@ export const BULK_SOURCES: Record<string, Source> = {
     },
     async read(zip, onRow) {
       const names = await zipEntries(zip);
-      await delimited(zip, names[0]!, pipes, onRow);
+      // RP: R residential and C commercial real property; P (business personal property) and M (minerals) have no place to look up.
+      await delimited(zip, names[0]!, pipes, (r) => (r.RP && !['R', 'C'].includes(r.RP.trim()) ? undefined : onRow(r)));
     }
   },
   dallas: {
@@ -438,7 +446,7 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
   );
   if (buffer.length) await flush();
   if (repeated) log(`${d.id}: ${repeated} repeated account lines skipped`);
-  for (const line of sample.slice(1, 6)) log(`${d.id}: raw ${JSON.stringify(line.slice(0, 400))}`);
+  for (const line of sample.slice(1, 8)) log(`${d.id}: raw ${JSON.stringify(line.slice(0, 400))}`);
   if (sample.length) log(`${d.id}: first raw line ${JSON.stringify(sample[0]!.replace(/ {3,}/g, (s) => `‹${s.length}›`).slice(0, 1500))}`);
   state.totalIds = Math.min(lines, opts.maxLines ?? Infinity);
   await writeFile(statePath, JSON.stringify(state));
