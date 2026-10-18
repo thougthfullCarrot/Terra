@@ -334,6 +334,12 @@ jobs:
           set -o pipefail
           npm run --silent export:property 2>&1 | tee /tmp/property.log
 
+      # The whole deal file in the log, so a review can check each market's
+      # pick against the real build without downloading the site.
+      - name: Show the deal of the week file
+        if: always()
+        run: jq -c . ../site/property/deal.json 2>/dev/null | sed 's/^/DEAL_JSON /' || true
+
       - name: Cache the property files
         if: steps.property.outcome == 'success'
         uses: actions/cache/save@v4

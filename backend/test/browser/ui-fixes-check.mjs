@@ -1,7 +1,11 @@
 // Browser check for the Deal of the week markets and the shared UI fixes.
 //
 //   node test/browser/ui-fixes-check.mjs [site dir]
+//   node test/browser/ui-fixes-check.mjs [site dir] --deal <real deal.json>
 //
+// With --deal, the Deal of the week checks run against that file (one a CI
+// build wrote) instead of the fixture: every market's expected result is
+// worked out from the file itself and compared with what the page shows.
 // Serves the built site folder with synthetic postings.json and
 // property/deal.json (answered by the page's network routes, so nothing is
 // written to the site folder), then checks in Chromium, desktop and phone,
@@ -20,7 +24,11 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 
-const siteDir = resolve(process.argv[2] ?? '../site');
+const args = process.argv.slice(2);
+const dealAt = args.indexOf('--deal');
+const realDealPath = dealAt >= 0 ? args.splice(dealAt, 2)[1] : null;
+const siteDir = resolve(args[0] ?? '../site');
+const shots = process.env.SHOTS ? resolve(process.env.SHOTS) : null;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -52,6 +60,8 @@ const dealFile = {
   history: [austinOld],
   alsoThisWeek: [{ title: sa.title, url: sa.url, source: sa.source, price: sa.price }]
 };
+const realDeal = realDealPath ? JSON.parse(await readFile(realDealPath, 'utf8')) : null;
+
 const firms = ['CBRE', 'JLL', 'Transwestern Real Estate Services and Development Partners of North Texas', 'Stewart Title'];
 const jobs = Array.from({ length: 16 }, (_, i) => ({
   id: `j${i}`,
@@ -90,7 +100,7 @@ async function open(size, theme, hash, { dealDelay = 0 } = {}) {
   await page.route(/postings\.json/, (route) => route.fulfill({ json: postings }));
   await page.route(/property\/deal\.json/, async (route) => {
     if (dealDelay) await new Promise((r) => setTimeout(r, dealDelay));
-    await route.fulfill({ json: dealFile }).catch(() => {});
+    await route.fulfill({ json: realDeal ?? dealFile }).catch(() => {});
   });
   await page.route(/property\/distress\.json/, (route) => route.fulfill({ status: 404 }));
   await page.addInitScript(() => {
@@ -104,8 +114,62 @@ async function open(size, theme, hash, { dealDelay = 0 } = {}) {
 }
 const card = (page) => page.locator('.deal-card, .deal-none').first();
 
-// ---- 1. Deal of the week by market
-for (const [size, theme] of [['desk', 'light'], ['phone', 'dark']]) {
+// ---- 1a. Deal of the week against a real deal.json: expectations from the file itself.
+if (realDeal) {
+  const MARKETS = ['Houston', 'Dallas', 'Fort Worth', 'Austin', 'San Antonio', 'El Paso', 'Lubbock', 'Midland', 'College Station', 'Galveston', 'New Braunfels'];
+  const week = new Date(Date.parse(realDeal.generatedAt));
+  week.setUTCHours(12, 0, 0, 0);
+  week.setUTCDate(week.getUTCDate() - ((week.getUTCDay() + 6) % 7));
+  const thisWeek = week.toISOString().slice(0, 10);
+  const pool = [...Object.values(realDeal.markets ?? {}), realDeal.deal, ...(realDeal.history ?? []), ...(realDeal.past ?? [])].filter(Boolean);
+  const expect = (city) => {
+    if (!city) return { status: 'statewide', url: realDeal.deal?.url };
+    const mine = pool.filter((d) => d.city === city);
+    const now = mine.find((d) => d.week === thisWeek);
+    if (now) return { status: 'local', url: now.url, deal: now };
+    const old = mine.filter((d) => d.week < thisWeek).sort((a, b) => b.week.localeCompare(a.week))[0];
+    return old ? { status: 'older', url: old.url, deal: old } : { status: 'none' };
+  };
+  const pageDate = (iso) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00Z` : iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' });
+  console.log(`Real deal.json from ${realDeal.generatedAt}, week ${thisWeek}`);
+  for (const city of ['', ...MARKETS]) console.log(`  ${city || 'All markets'}: ${JSON.stringify((({ status, url }) => ({ status, url }))(expect(city)))}`);
+  for (const [size, theme] of [['desk', 'light'], ['phone', 'dark']]) {
+    for (const city of ['', ...MARKETS]) {
+      const want = expect(city);
+      const name = `real ${size} ${theme}: ${city || 'All markets'} (${want.status})`;
+      const page = await open(size, theme, `#property&tool=deal${city ? `&city=${encodeURIComponent(city)}` : ''}`);
+      await card(page).waitFor({ timeout: 15000 }).catch(() => {});
+      const shown = await page.locator('.deal-card').getAttribute('data-deal-url').catch(() => null);
+      const status = await page.locator('.deal-card').getAttribute('data-deal-status').catch(() => null);
+      const text = (await card(page).innerText().catch(() => '')).replace(/\s+/g, ' ');
+      if (want.status === 'none') {
+        log(name, !shown && (await page.locator('.deal-none').count()) === 1 && text.includes(`No verified ${city} sale`), text.slice(0, 120));
+      } else {
+        const shownDeal = pool.find((d) => d.url === shown);
+        const sameMarket = !city || shownDeal?.city === city;
+        const reported = want.deal?.publishedAt ? text.includes(pageDate(want.deal.publishedAt)) : true;
+        const dated = want.status !== 'older' || (await page.locator('.deal-older-note').innerText()).includes(pageDate(want.deal.week));
+        log(name, shown === want.url && status === want.status && sameMarket && reported && dated, `${shownDeal?.city ?? '?'} | ${shownDeal?.title ?? shown}`);
+      }
+      if (size === 'desk' && theme === 'light' && shots) await page.screenshot({ path: `${shots}/real-deal-${(city || 'all').replace(/\W+/g, '-').toLowerCase()}.png`, fullPage: true });
+      await page.close();
+    }
+  }
+  for (const city of ['San Antonio', 'Dallas', 'Houston', 'Lubbock', '']) {
+    const want = expect(city);
+    const page = await open('desk', 'light', `#property${city ? `&city=${encodeURIComponent(city)}` : ''}`);
+    await page.locator('.owner-side-card').waitFor({ timeout: 15000 }).catch(() => {});
+    const shown = await page.locator('.owner-side-card').getAttribute('data-deal-url').catch(() => null);
+    const text = await page.locator('.owner-side-card').innerText().catch(() => '');
+    const ok = want.status === 'none' ? !shown && text.includes(`No ${city} sale`) : shown === want.url;
+    log(`real lookup side panel: ${city || 'All markets'} (${want.status})`, ok, text.replace(/\s+/g, ' ').slice(0, 140));
+    if (shots) await page.screenshot({ path: `${shots}/real-lookup-${(city || 'all').replace(/\W+/g, '-').toLowerCase()}.png` });
+    await page.close();
+  }
+}
+
+// ---- 1. Deal of the week by market (fixture)
+for (const [size, theme] of realDeal ? [] : [['desk', 'light'], ['phone', 'dark']]) {
   const page = await open(size, theme, '#property&tool=deal&city=San%20Antonio');
   await card(page).waitFor();
   const text = async () => (await card(page).innerText()).replace(/\s+/g, ' ');
@@ -130,7 +194,7 @@ for (const [size, theme] of [['desk', 'light'], ['phone', 'dark']]) {
 }
 
 // Rapid switching with a slow file: the last pick wins.
-{
+if (!realDeal) {
   const page = await open('desk', 'light', '#property&tool=deal&city=Dallas', { dealDelay: 1200 });
   await page.locator('#p-city option').nth(3).waitFor({ state: 'attached' });
   for (const city of ['San Antonio', 'Lubbock', 'Dallas', 'Austin']) await page.selectOption('#p-city', city);
@@ -141,13 +205,13 @@ for (const [size, theme] of [['desk', 'light'], ['phone', 'dark']]) {
 }
 
 // The lookup's side panel follows the market.
-for (const [city, want] of [['San Antonio', sa.url], ['Dallas', dallas.url], ['', dallas.url]]) {
+for (const [city, want] of realDeal ? [] : [['San Antonio', sa.url], ['Dallas', dallas.url], ['', dallas.url]]) {
   const page = await open('desk', 'light', `#property${city ? `&city=${encodeURIComponent(city)}` : ''}`);
   await page.locator('.owner-side-card').waitFor();
   log(`lookup side panel for ${city || 'All markets'} shows ${want.split('/').pop()}`, (await page.locator('.owner-side-card').getAttribute('data-deal-url')) === want);
   await page.close();
 }
-{
+if (!realDeal) {
   const page = await open('desk', 'light', '#property&city=Lubbock');
   await page.locator('.owner-side-card').waitFor();
   log('lookup side panel for Lubbock says there is no local deal', /No Lubbock sale/.test(await page.locator('.owner-side-card').innerText()) && !(await page.locator('.owner-side-card[data-deal-url]').count()));
