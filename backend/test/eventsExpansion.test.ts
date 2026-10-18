@@ -15,6 +15,7 @@ import {
   type Fetcher,
   type TerraEvent
 } from '../src/events/events.js';
+import { linkSeries } from '../src/events/events.js';
 import { addressCity, joinDays, titleStatus, topicOf } from '../src/events/enrich.js';
 import { parseManualFile } from '../src/events/sheetEvents.js';
 import { eventBadges, eventIcs, eventWhen, filterEvents, googleCalendarUrl, marketNote } from '../../site/events.js';
@@ -312,5 +313,17 @@ describe('LiveWhale university calendars', () => {
     expect(asked).toBe('https://calendar.tamu.edu/live/json/events/search/real%20estate/max/50');
     expect(events.find((e) => e.id.startsWith('tamu-388284'))).toMatchObject({ organizer: 'Texas A&M · Law', cost: 'Free', free: true, start: '2026-11-06T08:30:00-06:00', city: 'College Station', topic: 'Conference' });
     expect(events.filter((e) => e.seriesId).map((e) => e.start)).toEqual(['2026-10-21T18:00:00-05:00', '2026-11-04T18:00:00-06:00']);
+  });
+});
+
+describe('repeats listed one entry per date', () => {
+  it('links same-title entries of one source on different days into a series', () => {
+    const a = ev({ id: 'gz-1', title: 'Coffee & Connections', start: '2026-10-21T07:30:00-05:00', sourceKey: 'gz' });
+    const b = ev({ id: 'gz-2', title: 'Coffee & Connections', start: '2026-11-18T07:30:00-06:00', sourceKey: 'gz' });
+    const c = ev({ id: 'gz-3', title: 'Annual Gala', start: '2026-11-20T18:00:00-06:00', sourceKey: 'gz' });
+    const out = linkSeries([a, b, c]);
+    expect(out[0]!.seriesId).toBeDefined();
+    expect(out[0]!.seriesId).toBe(out[1]!.seriesId);
+    expect(out[2]!.seriesId).toBeUndefined();
   });
 });

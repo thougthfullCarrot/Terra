@@ -89,6 +89,14 @@ for (const [shape, e] of Object.entries(picks)) {
   else console.log(`PICK  ${shape}: "${e.title}" (${e.organizer}, ${e.city}) ${e.start} → ${e.end ?? 'no end'} ${e.url}`);
 }
 
+// Sample results for every market: the report line and the first few events, so a reviewer sees real data.
+for (const r of file.report ?? []) {
+  const events = file.cities.find((c) => c.city === r.city)?.events ?? [];
+  console.log(`MARKET  ${r.city}: ${r.state}, ${r.sourcesOk}/${r.sourcesChecked} sources read, ${r.upcoming} upcoming, ${r.virtual} virtual, ${r.duplicatesRemoved} duplicates merged, ${r.stale} kept from earlier, last verified ${r.lastVerifiedAt ?? 'never'}`);
+  for (const e of events.slice(0, 3)) console.log(`  SAMPLE  ${e.start} ${e.end ? `→ ${e.end} ` : ''}| ${e.title} | ${e.organizer} | ${e.venue ?? 'venue not listed'}${e.cost ? ` | ${e.cost}` : ''}${e.format ? ` | ${e.format}` : ''}${e.status ? ` | ${e.status}` : ''}${e.seriesId ? ' | repeats' : ''}`);
+}
+for (const s of file.sources ?? []) if (s.ok === false) console.log(`SOURCE FAILED  ${s.organizer} (${s.city ?? 'all'}): ${s.error ?? ''}`);
+
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 if (shots) await mkdir(shots, { recursive: true });
 for (const vp of [

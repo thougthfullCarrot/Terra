@@ -1255,9 +1255,21 @@ export async function buildEventsFile(
     meta.push({ key: 'manual', organizer: MANUAL_SOURCE, city: null, url: '', fetchedAt: now.toISOString(), count: hand.length, ok: true, lastSuccessAt: now.toISOString() });
   }
   // Hand-entered rows first, so they win over a calendar's copy of the same event.
-  const { events: sorted, removed } = dedupeCounted(upcoming([...hand, ...all], now));
+  const { events: merged, removed } = dedupeCounted(upcoming([...hand, ...all], now));
+  const sorted = linkSeries(merged);
   const cities = CITIES.map((city) => ({ city, events: sorted.filter((e) => e.city === city) }));
   return { generatedAt: now.toISOString(), sources: meta, cities, report: marketReport(cities, meta, sources, removed) };
+}
+
+/**
+ * Mark the occurrences of a repeating event that a calendar lists as separate entries (a chamber's monthly
+ * luncheon with one UID per month): same source, organizer and title on two or more different days.
+ */
+export function linkSeries(events: TerraEvent[]): TerraEvent[] {
+  const key = (e: TerraEvent) => `${e.sourceKey ?? e.organizer}|${e.city}|${e.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`;
+  const days = new Map<string, Set<string>>();
+  for (const e of events) if (!e.seriesId) days.set(key(e), (days.get(key(e)) ?? new Set()).add(e.start.slice(0, 10)));
+  return events.map((e) => (!e.seriesId && (days.get(key(e))?.size ?? 0) > 1 ? { ...e, seriesId: `series-${key(e)}` } : e));
 }
 
 /** A start that moved since the last build, for a source that does not say so itself. */
