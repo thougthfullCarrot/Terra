@@ -145,7 +145,15 @@ for (const vp of [
   await page.goto(`${base}#events`);
   await page.waitForSelector('#e-list .event-card', { timeout: 20000 });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  check(overflow <= 1, `${vp.name}: no sideways scroll (${overflow}px)`);
+  // Name what sticks out, so a failure says which card or label to fix.
+  const wide = await page.evaluate(() => {
+    const limit = document.documentElement.clientWidth;
+    return [...document.querySelectorAll('#events-view *')]
+      .filter((n) => n.getBoundingClientRect().right > limit + 1 && !n.closest('.chip-row'))
+      .slice(0, 3)
+      .map((n) => `${n.tagName.toLowerCase()}.${[...n.classList].join('.')} "${(n.textContent || '').trim().slice(0, 50)}"`);
+  });
+  check(overflow <= 1, `${vp.name}: no sideways scroll (${overflow}px)${wide.length ? ` widest: ${wide.join(' | ')}` : ''}`);
   await page.locator('.events-report summary').click();
   check((await page.locator('.events-report-list li').count()) === (file.report ?? []).length, `${vp.name}: collection report lists every market`);
   if (shots) await page.screenshot({ path: join(shots, `events-${vp.name}.png`), fullPage: false });

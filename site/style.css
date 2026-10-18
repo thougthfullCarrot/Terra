@@ -5085,6 +5085,17 @@ svg.bars text {
   cursor: default;
 }
 
+/* Long organizer names, prices and addresses from the calendars wrap instead of widening a phone page. */
+.event-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.event-tags .chip {
+  max-width: 100%;
+  white-space: normal;
+}
+
 .event-address,
 .event-notes {
   margin: 2px 0 0;
@@ -5492,8 +5503,9 @@ svg.bars text {
   .event-actions {
     grid-column: 2;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 8px 12px;
   }
 
   .gap-row {

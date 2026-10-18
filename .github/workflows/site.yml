@@ -388,7 +388,7 @@ jobs:
           { echo '## Events tab check'; echo '```'; cat /tmp/events-check.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the events check screenshots
-        if: github.event_name == 'pull_request' && hashFiles('site/events.json') != ''
+        if: always() && github.event_name == 'pull_request' && hashFiles('site/events.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: events-check
