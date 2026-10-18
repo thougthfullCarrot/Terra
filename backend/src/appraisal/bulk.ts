@@ -164,7 +164,7 @@ export function newestExport(page: string, base: string): { url: string; taxYear
     });
   const ranked = links
     // The year in the file name, not the upload folder (/2023/07/2026-CERTIFIED.zip is the 2026 roll).
-    .map((url) => ({ url, taxYear: Math.max(0, ...[...decodeURIComponent(url.split('/').pop()!).matchAll(/20\d\d/g)].map((m) => Number(m[0]))) }))
+    .map((url) => ({ url, taxYear: Math.max(0, ...[...decodeURIComponent(url.split('/').pop()!).matchAll(/(?<!\d)20\d\d(?!\d)/g)].map((m) => Number(m[0]))) }))
     .sort((a, b) => b.taxYear - a.taxYear || Number(/certified/i.test(b.url)) - Number(/certified/i.test(a.url)));
   return ranked[0] ?? null;
 }
@@ -215,6 +215,8 @@ async function epcadRows(zip: string, table: string, onRow: (row: Row) => unknow
   });
 }
 
+const EPCAD_CITIES = /\s((?:EL PASO|SOCORRO|HORIZON CITY|CANUTILLO|ANTHONY|CLINT|SAN ELIZARIO|VINTON|FABENS|TORNILLO|SANTA TERESA)\s*)$/;
+
 async function readEpcad(properties: string, onRow: (row: Row) => unknown, sample: string[], extra: Record<string, string>): Promise<void> {
   // Each table is keyed by the property's database id; the newest year wins where a table holds several.
   const newer = (a: Row | undefined, b: Row) => !a || Number(b.Year || 0) > Number(a.Year || 0);
@@ -245,8 +247,13 @@ async function readEpcad(properties: string, onRow: (row: Row) => unknown, sampl
     const o = owners.get(k);
     const roll = rolls.get(k);
     const imp = imps.get(k);
+    // "700 CRESTAMIRA DR EL PASO, TX": the city is run into the street line.
+    const [street = '', ...after] = (p.Location_Address ?? '').split(',');
+    const city = street.toUpperCase().match(EPCAD_CITIES)?.[1] ?? '';
     return onRow({
       ...p,
+      Location_Address: city ? street.slice(0, street.length - city.length).trim() : [street, ...after].join(',').trim(),
+      SitusCity: city.trim(),
       OwnerName: o?.Name ?? '',
       MailingAddress: o?.MailingAddress ?? '',
       LandMarket: roll?.LandMarket ?? '',

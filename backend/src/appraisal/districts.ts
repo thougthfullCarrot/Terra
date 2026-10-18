@@ -243,6 +243,7 @@ export const DISTRICTS: District[] = [
     fields: {
       account: ['PropertyId'],
       situs: ['Location_Address'],
+      situsCity: ['SitusCity'],
       owner: ['OwnerName'],
       mailing: ['MailingAddress'],
       landValue: ['LandMarket'],

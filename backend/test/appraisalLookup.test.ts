@@ -224,3 +224,11 @@ describe('roll quirks', () => {
     expect(gradeMatch(parseAddress('1200 Winding Brook Dr, Mesquite')!, parseAddress('1200 WINDING BROOK DR, GARLAND')!)).toBe('probable');
   });
 });
+
+describe('export year', async () => {
+  const { newestExport } = await import('../src/appraisal/bulk.js');
+  it('ignores run numbers that look like years', () => {
+    const page = '<a href="/u/2023/07/2023-07-26_002061_CERTIFIED-ROLL.zip"></a><a href="/u/2026/08/2026-CERTIFIED-ROLL-WEB-EXPORT-W-EXPORT-LAYOUT.zip"></a>';
+    expect(newestExport(page, 'https://g.example/')?.taxYear).toBe(2026);
+  });
+});
