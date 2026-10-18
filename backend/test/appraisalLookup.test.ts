@@ -503,19 +503,47 @@ describe('verification policy', async () => {
 describe('account page value rows', async () => {
   const { pageValue } = await import('../src/appraisal/verdict.js');
   // BCAD's page for account 249983, read 2026-10-18 (value rows only): the Appraised column has no "$".
-  const bcad = 'TAX YEAR: 2027 - VALUES NOT AVAILABLE 2026 2025 2024 2023 TOTAL VALUE: $129,530 YEAR IMPROVEMENTS LAND MARKET AG VALUATION APPRAISED HS CAP ASSESSED 2026 $69,430 $60,100 0 129,530 $0 $129,530 2025 $65,570 $60,100 0 125,670 $0 $125,670 2024 $71,230 $56,180 0 127,410 $0 $127,410';
+  const header = 'YEAR IMPROVEMENTS LAND MARKET AG VALUATION APPRAISED HS CAP ASSESSED';
+  const bcad = `TAX YEAR: 2027 - VALUES NOT AVAILABLE 2026 2025 2024 2023 TOTAL VALUE: $129,530 ${header} 2026 $69,430 $60,100 0 129,530 $0 $129,530 2025 $65,570 $60,100 0 125,670 $0 $125,670 2024 $71,230 $56,180 0 127,410 $0 $127,410`;
 
-  it("finds a value in the whole row of TERRA's tax year, including columns printed without $", () => {
-    const got = pageValue(bcad, '125,670', 2025);
+  it("matches a market value to Improvements + Land Market in TERRA's tax-year row", () => {
+    const got = pageValue(bcad, 125_670, 2025, 'market');
     expect(got.hasValue).toBe(true);
     expect(got.yearRow?.year).toBe(2025);
+    expect(got.compared).toBe('Improvements + Land Market 125,670');
     expect(got.years).toMatch(/newest year with values 2026/);
   });
+  it('matches an appraised value to the Appraised column, printed without $', () => {
+    expect(pageValue(bcad, 125_670, 2025, 'appraised').hasValue).toBe(true);
+  });
   it('still fails a value that is only in another year', () => {
-    expect(pageValue(bcad, '129,530', 2025).hasValue).toBe(false);
-    expect(pageValue(bcad, '127,410', 2025).hasValue).toBe(false);
+    expect(pageValue(bcad, 129_530, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(bcad, 127_410, 2025, 'market').hasValue).toBe(false);
   });
   it('does not take a digit run inside a larger figure as a match', () => {
-    expect(pageValue(bcad, '25,670', 2025).hasValue).toBe(false);
+    expect(pageValue(bcad, 25_670, 2025, 'market').hasValue).toBe(false);
+  });
+  it('fails when the requested year has no row, even if the value is elsewhere on the page', () => {
+    const got = pageValue(bcad, 127_410, 2023, 'market');
+    expect(got.hasValue).toBe(false);
+    expect(got.compared).toBe('no 2023 row');
+    expect(pageValue(`TOTAL VALUE: $125,670 ${header}`, 125_670, 2025, 'market').hasValue).toBe(false);
+  });
+  it('does not accept a value that only equals the land or improvements cell', () => {
+    expect(pageValue(bcad, 60_100, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(bcad, 65_570, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(bcad, 60_100, 2025, 'appraised').hasValue).toBe(false);
+  });
+  it('does not treat Appraised or Assessed as market value', () => {
+    // Homestead with a cap: market 300,000, appraised 280,000, assessed 280,000.
+    const capped = `${header} 2025 $200,000 $100,000 0 280,000 $20,000 $280,000`;
+    expect(pageValue(capped, 280_000, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(capped, 300_000, 2025, 'market').hasValue).toBe(true);
+    expect(pageValue(capped, 280_000, 2025, 'appraised').hasValue).toBe(true);
+  });
+  it('fails without the column header or with an unknown basis', () => {
+    const row = '2025 $65,570 $60,100 0 125,670 $0 $125,670';
+    expect(pageValue(row, 125_670, 2025, 'market').compared).toBe('no column header');
+    expect(pageValue(bcad, 125_670, 2025, null).hasValue).toBe(false);
   });
 });

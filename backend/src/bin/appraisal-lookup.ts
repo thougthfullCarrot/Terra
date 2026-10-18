@@ -13,6 +13,7 @@
  * what failed, and why. Exits non-zero only when every district asked for failed.
  */
 import { failures, label, pageValue, runStatus, type CaseChecks, type Policy } from '../appraisal/verdict.js';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -192,8 +193,8 @@ async function officialPage(url: string, r: IndexRow): Promise<{ url: string; ok
     const ownerWord = (r.owner ?? '').toUpperCase().split(/\s+/).find((w) => w.length > 2) ?? '';
     const value = r.totalValue != null ? r.totalValue.toLocaleString('en-US') : '';
     const hasOwner = Boolean(ownerWord) && plain.includes(ownerWord);
-    const { hasValue, yearRow, years } = pageValue(plain, value, r.taxYear);
-    return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, value $${value} ${hasValue ? 'found' : 'NOT found'}${yearRow ? ` in the ${r.taxYear} row` : ''}, ${years}` };
+    const { hasValue, compared, years } = pageValue(plain, r.totalValue, r.taxYear, r.valueBasis);
+    return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, ${r.valueBasis ?? 'unknown-basis'} value $${value} ${hasValue ? 'matches' : 'does NOT match'} the ${r.taxYear} row (${compared ?? 'not compared'}), ${years}` };
   } catch (error) {
     return { url, ok: false, closed: true, note: `could not read: ${(error as Error).message}` };
   }
@@ -316,6 +317,8 @@ async function compare(): Promise<void> {
       const url = d.accountUrl.replace('{account}', account);
       let pageRows: string[] = [];
       let pageNote = '';
+      let pageCheck: ReturnType<typeof pageValue> | undefined;
+      let pageSha256: string | undefined;
       try {
         const u = new URL(url);
         const robots = await fetch(new URL('/robots.txt', u).href, { signal: AbortSignal.timeout(20_000) }).then((x) => (x.ok ? x.text() : ''));
@@ -324,6 +327,13 @@ async function compare(): Promise<void> {
         const res = await fetch(url, { headers: { 'user-agent': 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)' }, signal: AbortSignal.timeout(30_000) });
         const html = await res.text();
         pageNote = `HTTP ${res.status}, ${html.length} bytes`;
+        pageSha256 = createHash('sha256').update(html).digest('hex');
+        // The same check the full run makes, on the layer's own figures for this account.
+        const first = raw[0] ?? {};
+        const total = Number(first[d.fields!.totalValue?.[0] ?? '']);
+        const year = Number(first.Prop_yr ?? first.prop_yr);
+        const plain = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').toUpperCase();
+        pageCheck = pageValue(plain, Number.isFinite(total) ? total : null, Number.isFinite(year) ? year : null, d.valueBasis ?? null);
         // Every table row that carries a dollar figure or names a value, with its cells kept apart by " | ".
         pageRows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
           .map((m) => [...m[1]!.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((c) => c[1]!.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').trim()).join(' | '))
@@ -331,7 +341,7 @@ async function compare(): Promise<void> {
       } catch (error) {
         pageNote = `could not read: ${(error as Error).message}`;
       }
-      out.push({ district: id, account, layer: d.layer, layerRead, layerError, raw, page: url, pageRead: new Date().toISOString(), pageNote, pageRows });
+      out.push({ district: id, account, layer: d.layer, layerRead, layerError, raw, page: url, pageRead: new Date().toISOString(), pageNote, pageSha256, pageCheck, pageRows });
     }
   }
   await writeFile(join(cacheDir, 'compare.json'), JSON.stringify(out, null, 1));
