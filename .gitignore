@@ -32,3 +32,6 @@ site/property/
 dev-audit-output/
 /dev-pages.json
 .appraisal-cache/
+
+# Raw Land local prototype outputs: real parcel/value data, never committed or uploaded
+local-data/
