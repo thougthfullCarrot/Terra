@@ -31,9 +31,7 @@ jobs:
             fi
           done
           echo "### def tax code 1.04 / 23"
-          curl -sSL -A "$UA" https://statutes.capitol.texas.gov/Docs/TX/htm/TX.1.htm | sed 's/<[^>]*>//g' | grep -n -A3 -E 'Market value|Appraised value|Assessed value|Taxable value' | head -40
-          curl -sSL -A "$UA" https://statutes.capitol.texas.gov/Docs/TX/htm/TX.23.htm | sed 's/<[^>]*>//g' | grep -n -A3 -E 'Sec. 23.23\.|Sec. 23.231|Sec. 23.41\.|Sec. 23.51' | head -40
-          echo "### def SA UDC overlays"
-          for u in https://www.sanantonio.gov/DSD/Resources/Zoning https://www.sanantonio.gov/DSD/Constructing/Zoning; do
-            curl -sSL -A 'Mozilla/5.0' -w '\nHTTP %{http_code}\n' "$u" | sed 's/<[^>]*>//g' | grep -i -E 'overlay|AHOD|MLOD|MLR|RIO|NCD|"H"|CD |PUD|IDZ|MPCD|HTTP' | head -40
-          done
+          curl -sSL -A "$UA" https://statutes.capitol.texas.gov/Docs/TX/htm/TX.1.htm -w "\nHTTP %{http_code}\n" | sed 's/<[^>]*>//g' | grep -n -A3 -E 'HTTP|Market value|Appraised value|Assessed value|Taxable value' | head -40
+          curl -sSL -A "$UA" https://statutes.capitol.texas.gov/Docs/TX/htm/TX.23.htm -w "\nHTTP %{http_code}\n" | sed 's/<[^>]*>//g' | grep -n -A3 -E 'Sec. 23.23\.|Sec. 23.231|Sec. 23.41\.|Sec. 23.51' | head -40
+          echo "### def categories D E"
+          grep -n -A14 -E '^\s*Category (D1|E):' g.txt | head -70
