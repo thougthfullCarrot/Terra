@@ -28,6 +28,7 @@ import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 import { stateBox } from './labels.js';
 import { publishedReports, reportPopup, reportsSection } from './devreports-view.js';
 import { matchSmaller } from './devreports.js';
+import { categoryBadge, categoryClass, glyphSvg } from './devicons.js';
 
 export const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
@@ -221,10 +222,8 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     const button = el('button', 'devx-legend-item');
     button.type = 'button';
     button.dataset.category = cat.key;
-    const dot = el('i', 'devx-dot');
-    dot.style.background = cat.color;
     const n = el('span', 'devx-legend-count');
-    button.append(dot, el('span', 'devx-legend-label', cat.label), n);
+    button.append(categoryBadge(cat, { label: false }), el('span', 'devx-legend-label', cat.label), n);
     button.addEventListener('click', () => {
       const off = new Set(filters.off ?? []);
       off.has(cat.key) ? off.delete(cat.key) : off.add(cat.key);
@@ -275,7 +274,12 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   const hint = el('span', 'dev-meta', 'Try a wider cost range or filing window, or ');
   hint.append(emptyClear, '.');
   empty.append(el('strong', '', 'No projects match these filters.'), hint);
-  side.append(search, summary, bar, legend, listHead, smallerHint, list);
+  // How to read the pins beyond their category: groups and approximate spots.
+  const key = el('p', 'devx-key');
+  key.innerHTML =
+    '<span class="devx-key-item"><span class="devx-key-cluster" aria-hidden="true">12</span>Group of nearby projects: zoom in or click to see each one</span>' +
+    '<span class="devx-key-item"><span class="devx-key-approx" aria-hidden="true"></span>Dashed border: approximate location, near the ZIP code center</span>';
+  side.append(search, summary, bar, legend, key, listHead, smallerHint, list);
 
   // ---- Right: the map with floating filters, the chart and the project panel.
   const mapNode = el('div', 'dev-map');
@@ -624,18 +628,40 @@ function drawChart(node, months, since, onPick) {
   node.replaceChildren(head, bars, axis);
 }
 
-const markers = new Map();
+/** Below this zoom nearby pins group into a counted cluster; from it on, every project has its own icon. */
+const SPREAD_ZOOM = 16;
+/** Cluster grid cell, in screen pixels. */
+const CELL = 64;
+/** Pin icon size (the hit area; the visible disc is a little smaller, in style.css). */
+const PIN = 40;
+
+/** A keydown handler that runs act on Enter or Space, as a button would. */
+function pressed(act) {
+  return (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    act();
+  };
+}
+
+/** A pin's accessible name and tooltip: name, category, cost, and an approximate spot said in words. */
+function pinLabel(project, cat) {
+  return [project.name, cat?.label, money(project.cost), project.approximate ? 'approximate location' : ''].filter(Boolean).join(', ');
+}
 
 /**
- * Draws every project's pin once; show() then adds or removes pins as the
- * filters change, and hover() and select() restyle them in place, so the map
- * is never rebuilt. Null when the card left the page while Leaflet loaded.
+ * Draws the map once; show() then sets which projects are on it as the
+ * filters change, and the pins redraw from that on every pan and zoom:
+ * zoomed out, nearby projects share a counted cluster; zoomed in, each has
+ * its category icon, and projects at the very same point fan out around it.
+ * Only pins near the view are put on the page. Null when the card left the
+ * page while Leaflet loaded.
  */
 async function drawMap(node, wrap, projects, city, catOf, reports = null, small = [], onPick = () => {}) {
   const L = await loadLeaflet();
   if (!node.isConnected) return null;
   disposeMap();
-  markers.clear();
   node.replaceChildren();
   const map = L.map(node, { scrollWheelZoom: true, zoomControl: false });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -644,32 +670,49 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   // A map always has a view before its first fit; fitBounds on a 0-size container leaves it blank.
   map.setView(CENTERS[city] ?? [31, -99], 9);
   L.tileLayer(TILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map);
-  const layer = L.featureGroup().addTo(map);
+  const layer = L.layerGroup().addTo(map);
+  const leaders = L.layerGroup().addTo(map);
 
   const styles = getComputedStyle(document.documentElement);
-  const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
-  const dark = () => (document.documentElement.dataset.theme ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
-  const stroke = () => (dark() ? '#161412' : '#ffffff');
-  const ink = () => (dark() ? '#f2f0ed' : '#1b1917');
-  const accent = color('--accent', '#c0582c');
-  const max = Math.max(...projects.map((p) => p.cost), 1);
-  const radius = (p) => 4 + Math.sqrt(Math.min(Math.max(p.cost, 0), max) / max) * 14;
-  const base = (p) => ({
-    radius: radius(p),
-    color: stroke(),
-    weight: 1.5,
-    fillColor: catOf.get(projectCategory(p))?.color ?? '#9b958d',
-    fillOpacity: p.approximate ? 0.45 : 0.85,
-    dashArray: p.approximate ? '3 3' : null
-  });
-  for (const project of projects.filter((p) => p.lat != null && p.lng != null)) {
-    const marker = L.circleMarker([project.lat, project.lng], base(project));
-    marker.bindTooltip(project.name, { direction: 'top', offset: [0, -6] });
+  const accent = styles.getPropertyValue('--accent').trim() || '#c0582c';
+
+  // Each located project's point, its exact-spot key, and its pin (made once, moved as needed).
+  const located = projects.filter((p) => p.lat != null && p.lng != null);
+  const where = new Map();
+  const spotOf = new Map();
+  const pins = new Map();
+  for (const project of located) {
+    where.set(project, L.latLng(project.lat, project.lng));
+    spotOf.set(project, `${project.lat},${project.lng}`);
+  }
+  const pinFor = (project) => {
+    let marker = pins.get(project);
+    if (marker) return marker;
+    const key = projectCategory(project);
+    const cat = catOf.get(key);
+    const icon = L.divIcon({
+      className: 'devx-pin-icon',
+      html: `<span class="devx-pin ${categoryClass(key)}${project.approximate ? ' approx' : ''}" style="--cat:${cat?.color ?? '#9b958d'}">${glyphSvg(key)}</span>`,
+      iconSize: [PIN, PIN]
+    });
+    const label = pinLabel(project, cat);
+    marker = L.marker(where.get(project), { icon, keyboard: true, riseOnHover: true });
+    marker.bindTooltip(label, { direction: 'top', offset: [0, -16] });
     marker.on('click', () => onPick(project));
     marker.on('mouseover', () => api.hover(project));
     marker.on('mouseout', () => api.hover(null));
-    markers.set(project, marker);
-  }
+    marker.on('add', () => {
+      const icon = marker.getElement();
+      icon.setAttribute('aria-label', label);
+      icon.dataset.category = key;
+      icon.dataset.id = project.id;
+      icon.onkeydown = pressed(() => onPick(project));
+      decorate(project);
+    });
+    pins.set(project, marker);
+    return marker;
+  };
+
   // Smaller filings (below the cap) with a pin from a spare page read: small,
   // hollow and under the main pins. Shown while no filter but the search is on.
   const smallLayer = L.featureGroup().addTo(map);
@@ -708,18 +751,18 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   const pulse = L.marker([0, 0], { icon: L.divIcon({ className: 'devx-pulse-icon', html: '<span class="devx-pulse"></span>', iconSize: [0, 0] }), interactive: false, keyboard: false });
   let hovered = null;
   let chosen = null;
-  const paint = (p) => {
-    const marker = markers.get(p);
-    if (!marker) return;
-    const lit = p === hovered || p === chosen;
-    const b = base(p);
-    marker.setStyle(lit ? { ...b, radius: b.radius + 3, weight: 3, color: ink(), fillOpacity: 0.95 } : b);
-    if (lit) marker.bringToFront();
+  /** The cluster each project sat in at the last draw, for the list's hover. */
+  let clusterOf = new Map();
+  const decorate = (project) => {
+    const icon = pins.get(project)?.getElement();
+    if (icon) {
+      icon.classList.toggle('lit', project === hovered);
+      icon.classList.toggle('chosen', project === chosen);
+      if (project === chosen) icon.setAttribute('aria-current', 'true');
+      else icon.removeAttribute('aria-current');
+    }
+    clusterOf.get(project)?.getElement()?.classList.toggle('lit', project === hovered);
   };
-  window.addEventListener('themechange', () => {
-    if (map !== liveMap) return;
-    for (const p of markers.keys()) paint(p);
-  });
 
   const wide = () => node.clientWidth >= NARROW_MAP;
   /** Fit padding scaled to the map: room for the filters on top, the chart below and the panel on the right. */
@@ -734,15 +777,169 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       maxZoom: 14
     };
   };
+
+  /** Projects on the map now (located and matching the filters). */
+  let shown = [];
+  /** Where each shown pin is drawn at this zoom (fanned out from a shared spot), for the pulse and flyTo. */
+  let drawnAt = new Map();
+
+  /** A counted cluster; a click zooms to its projects, or fans out a single shared spot. */
+  const clusterMarker = (members, at) => {
+    const n = members.length;
+    const byCat = new Map();
+    for (const p of members) byCat.set(projectCategory(p), (byCat.get(projectCategory(p)) ?? 0) + 1);
+    // The ring shows the category mix, in legend order.
+    let from = 0;
+    const stops = [];
+    for (const cat of catOf.values()) {
+      const c = byCat.get(cat.key);
+      if (!c) continue;
+      const to = from + (c / n) * 360;
+      stops.push(`${cat.color} ${from}deg ${to}deg`);
+      from = to;
+    }
+    const size = n < 10 ? 36 : n < 100 ? 42 : 48;
+    const label = `${n.toLocaleString('en-US')} projects here: ${[...catOf.values()].filter((c) => byCat.get(c.key)).map((c) => `${byCat.get(c.key)} ${c.label}`).join(', ')}. Zoom in to see each one.`;
+    const marker = L.marker(at, {
+      icon: L.divIcon({
+        className: 'devx-cluster-icon',
+        html: `<span class="devx-cluster" style="--ring:conic-gradient(${stops.join(',')});width:${size}px;height:${size}px" data-count="${n}"><b>${n.toLocaleString('en-US')}</b></span>`,
+        iconSize: [Math.max(size, 44), Math.max(size, 44)]
+      }),
+      keyboard: true,
+      riseOnHover: true
+    });
+    marker.bindTooltip(`${n.toLocaleString('en-US')} projects: click to zoom in`, { direction: 'top', offset: [0, -size / 2] });
+    marker.on('add', () => {
+      const icon = marker.getElement();
+      icon.setAttribute('aria-label', label);
+      icon.onkeydown = pressed(() => marker.fire('click'));
+      if (hovered && members.includes(hovered)) icon.classList.add('lit');
+    });
+    marker.on('click', () => {
+      const spots = new Set(members.map((p) => spotOf.get(p)));
+      const target = Math.max(map.getZoom() + 1, SPREAD_ZOOM);
+      if (spots.size === 1) map.setView(where.get(members[0]), target, { animate: !reduceMotion() });
+      else map.fitBounds(L.latLngBounds(members.map((p) => where.get(p))), { ...padding(), maxZoom: SPREAD_ZOOM, animate: !reduceMotion() });
+    });
+    return marker;
+  };
+
+  /** Redraws the pins for this zoom and view. */
+  const draw = () => {
+    if (map !== liveMap || !node.clientWidth) return;
+    const started = performance.now();
+    const zoom = map.getZoom();
+    const view = map.getPixelBounds().pad(0.5);
+    const want = new Set();
+    const nextCluster = new Map();
+    const nextAt = new Map();
+    const lines = [];
+    const px = (p) => map.project(where.get(p), zoom);
+    const place = (project, at) => {
+      nextAt.set(project, at);
+      if (!view.contains(map.project(at, zoom))) return;
+      const marker = pinFor(project);
+      if (!marker.getLatLng().equals(at)) marker.setLatLng(at);
+      want.add(marker);
+    };
+    // Projects at one exact point, fanned out around it with a line back to the true spot:
+    // a ring for a few, a spiral for many, so no two icons overlap.
+    const fan = (members) => {
+      const center = members[0];
+      if (members.length === 1) return place(center, where.get(center));
+      const c = px(center);
+      const n = members.length;
+      let angle = 0;
+      let leg = 34;
+      for (let i = 0; i < n; i++) {
+        let offset;
+        if (n <= 8) {
+          const r = Math.max(34, (n * (PIN - 2)) / (2 * Math.PI));
+          const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+          offset = L.point(Math.cos(a) * r, Math.sin(a) * r);
+        } else {
+          // Archimedean spiral: one icon's width along the arc per step, one icon further out per turn.
+          const step = (PIN - 4) / leg;
+          angle += step;
+          offset = L.point(Math.cos(angle) * leg, Math.sin(angle) * leg);
+          leg += ((PIN - 2) * step) / (2 * Math.PI);
+        }
+        const at = map.unproject(c.add(offset), zoom);
+        lines.push([where.get(center), at]);
+        place(members[i], at);
+      }
+    };
+    const spots = new Map();
+    for (const p of shown) {
+      const k = spotOf.get(p);
+      spots.set(k, [...(spots.get(k) ?? []), p]);
+    }
+    let count = 0;
+    if (zoom >= SPREAD_ZOOM) {
+      for (const members of spots.values()) {
+        fan(members);
+        count += members.length;
+      }
+    } else {
+      // Grid clustering in screen pixels. The selected project always keeps its own icon.
+      const cells = new Map();
+      for (const p of shown) {
+        if (p === chosen) continue;
+        const pt = px(p);
+        const k = `${Math.floor(pt.x / CELL)}:${Math.floor(pt.y / CELL)}`;
+        let cell = cells.get(k);
+        if (!cell) cells.set(k, (cell = { members: [], x: 0, y: 0 }));
+        cell.members.push(p);
+        cell.x += pt.x;
+        cell.y += pt.y;
+      }
+      if (chosen && where.has(chosen) && shown.includes(chosen)) {
+        place(chosen, where.get(chosen));
+        count++;
+      }
+      for (const cell of cells.values()) {
+        count += cell.members.length;
+        if (cell.members.length === 1) {
+          place(cell.members[0], where.get(cell.members[0]));
+          continue;
+        }
+        const at = map.unproject(L.point(cell.x / cell.members.length, cell.y / cell.members.length), zoom);
+        for (const p of cell.members) nextAt.set(p, at);
+        if (!view.contains(map.project(at, zoom))) continue;
+        const marker = clusterMarker(cell.members, at);
+        for (const p of cell.members) nextCluster.set(p, marker);
+        want.add(marker);
+      }
+    }
+    // Swap in the new set: kept pins stay on the page, so focus and hover survive a pan.
+    for (const marker of [...layer.getLayers()]) if (!want.has(marker)) layer.removeLayer(marker);
+    for (const marker of want) if (!layer.hasLayer(marker)) layer.addLayer(marker);
+    leaders.clearLayers();
+    for (const line of lines) if (view.contains(map.project(line[1], zoom))) L.polyline(line, { className: 'devx-leader', interactive: false, weight: 1.5 }).addTo(leaders);
+    clusterOf = nextCluster;
+    drawnAt = nextAt;
+    if (chosen && pins.get(chosen)) pins.get(chosen).setZIndexOffset(1000);
+    if (chosen && nextAt.has(chosen)) pulse.setLatLng(nextAt.get(chosen));
+    node.dataset.drawn = String(count);
+    node.dataset.clusters = String(new Set(nextCluster.values()).size);
+    node.dataset.drawMs = String(Math.round(performance.now() - started));
+  };
+  let drawing = 0;
+  const redraw = () => {
+    cancelAnimationFrame(drawing);
+    drawing = requestAnimationFrame(draw);
+  };
+  map.on('zoomend moveend', redraw);
+
   let lastIds = null;
   let fitted = false;
   const fit = () => {
     if (!node.clientWidth || !node.clientHeight || !lastIds) return;
-    const visible = [];
-    for (const [project, marker] of markers) if (lastIds.has(project)) visible.push(marker.getLatLng());
-    if (visible.length) map.fitBounds(L.latLngBounds(visible), { ...padding(), animate: false });
+    if (shown.length) map.fitBounds(L.latLngBounds(shown.map((p) => where.get(p))), { ...padding(), animate: false });
     else map.setView(CENTERS[city] ?? [31, -99], 9, { animate: false });
     fitted = true;
+    draw();
   };
   // The container gets its size after layout, and changes with the window or a tab switch.
   const observer = new ResizeObserver(() => {
@@ -783,42 +980,41 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       if (key === last) return;
       last = key;
       lastIds = ids;
-      let count = 0;
-      for (const [project, marker] of markers) {
-        const on = ids.has(project);
-        if (on) count++;
-        if (on !== layer.hasLayer(marker)) on ? layer.addLayer(marker) : layer.removeLayer(marker);
-      }
-      node.dataset.pins = String(count);
+      shown = located.filter((p) => ids.has(p));
+      node.dataset.pins = String(shown.length);
       fit();
     },
     hover(project) {
       if (map !== liveMap) return;
       const was = hovered;
       hovered = project;
-      if (was) paint(was);
-      if (project) paint(project);
+      if (was) decorate(was);
+      if (project) decorate(project);
     },
     /** Marks the chosen project's pin and, with fly, brings it into view beside the panel. */
     select(project, fly = false) {
       if (map !== liveMap) return;
       const was = chosen;
       chosen = project;
-      if (was) paint(was);
-      const marker = project ? markers.get(project) : null;
-      if (!marker || !layer.hasLayer(marker)) {
+      if (was) {
+        pins.get(was)?.setZIndexOffset(0);
+        decorate(was);
+      }
+      if (!project || !where.has(project) || !shown.includes(project)) {
         pulse.remove();
+        draw();
         return;
       }
-      paint(project);
-      pulse.setLatLng(marker.getLatLng()).addTo(map);
+      draw();
+      decorate(project);
+      pulse.setLatLng(drawnAt.get(project) ?? where.get(project)).addTo(map);
       if (!fly) return;
       const zoom = Math.max(map.getZoom(), 13);
       const w = node.clientWidth;
       const h = node.clientHeight;
       // Center the map off the pin so the panel doesn't cover it.
       const shift = wide() ? L.point(Math.min(420, w * 0.45) / 2, 0) : L.point(0, h * 0.28);
-      const target = map.unproject(map.project(marker.getLatLng(), zoom).add(shift), zoom);
+      const target = map.unproject(map.project(where.get(project), zoom).add(shift), zoom);
       if (reduceMotion()) map.setView(target, zoom, { animate: false });
       else map.flyTo(target, zoom, { duration: 0.6 });
     }
@@ -844,10 +1040,9 @@ function drawList(projects, catOf, hiringFor, onPick, onHover) {
     item.dataset.id = project.id;
     const button = el('button', 'dev-pick');
     button.type = 'button';
-    const dot = el('i', 'devx-dot');
     const cat = catOf.get(projectCategory(project));
-    dot.style.background = cat?.color ?? '#9b958d';
-    dot.title = cat?.label ?? '';
+    const dot = categoryBadge(cat ?? { key: 'other', label: 'Other / unclassified' });
+    if (project.approximate) dot.classList.add('approx');
     const text = el('span', 'devx-row-text');
     const meta = [project.place, project.facility && project.facility !== project.name ? project.facility : '', project.work].filter(Boolean).join(' · ');
     text.append(el('span', 'dev-name', project.name), el('span', 'dev-meta', meta));
@@ -918,9 +1113,7 @@ function projectPanel(project, { catOf, hiring, step = null, close = null }) {
   const cat = catOf.get(projectCategory(project));
   const head = el('div', 'devx-panel-head');
   const label = el('span', 'devx-panel-cat');
-  const dot = el('i', 'devx-dot');
-  dot.style.background = cat?.color ?? '#9b958d';
-  label.append(dot, [cat?.label, project.work].filter(Boolean).join(' · '));
+  label.append(categoryBadge(cat, { label: false }), [cat?.label, project.work].filter(Boolean).join(' · '));
   head.append(label);
   if (step || close) {
     const nav = el('span', 'devx-panel-nav');

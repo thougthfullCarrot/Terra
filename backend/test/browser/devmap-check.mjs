@@ -176,6 +176,14 @@ for (const vp of [
   await page.locator('.devx-more-summary').click();
   const after = await page.locator('.devx-more-body').isVisible();
   log(`${v}: More starts folded and opens on ${vp.mobile ? 'tap' : 'click'}`, !moreOpen && !before && after);
+  // Every legend label and count fits inside the side column, with no clipping.
+  const legendFit = await page.evaluate(() => {
+    const side = document.querySelector('.devx-side').getBoundingClientRect();
+    return [...document.querySelectorAll('.devx-legend li:not([hidden]) :is(.devx-legend-label, .devx-legend-count)')]
+      .filter((n) => n.getBoundingClientRect().right > side.right - 4 || n.scrollWidth > n.clientWidth + 1)
+      .map((n) => n.textContent);
+  });
+  log(`${v}: every legend label and count fits`, legendFit.length === 0, legendFit.join(', '));
   if (vp.mobile) {
     const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
     log(`${v}: no sideways scrolling`, scrollW <= vp.width, `${scrollW}px`);
@@ -187,7 +195,8 @@ for (const vp of [
       pinsText: Number(/(\d[\d,]*) pins?/.exec(document.querySelector('.dev-count').textContent)?.[1].replace(/,/g, '')),
       items: document.querySelectorAll('.dev-list .dev-item:not([hidden])').length,
       offMap: document.querySelectorAll('.dev-list .dev-item:not([hidden]) .dev-off').length,
-      markers: document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive:not(.dev-small-pin)').length,
+      // Pins are category icons or counted clusters; the map reports how many projects they hold in all.
+      markers: Number(document.querySelector('.dev-map').dataset.drawn ?? -1),
       empty: !document.querySelector('.dev-empty').hidden
     }));
   const setF = async (f) => {
@@ -342,19 +351,51 @@ for (const vp of [
   await page.locator('.dev-card').scrollIntoViewIfNeeded();
   // Click a pin that is actually on screen and on top: the first one in the
   // document can sit outside the phone's map view or under another pin.
-  const spot = await page.evaluate(() => {
-    const box = document.querySelector('.dev-map').getBoundingClientRect();
-    for (const path of document.querySelectorAll('.dev-map .leaflet-overlay-pane path.leaflet-interactive')) {
-      const r = path.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      if (x > box.left + 4 && x < box.right - 4 && y > box.top + 4 && y < box.bottom - 4 && document.elementFromPoint(x, y) === path) return { x, y };
-    }
-    return null;
+  // Clusters hold exactly the filtered pins, and a project inside a cluster opens from the list.
+  await setF({});
+  await page.waitForTimeout(400);
+  const grouped = await page.evaluate(() => {
+    const map = document.querySelector('.dev-map');
+    const icons = new Set([...document.querySelectorAll('.devx-pin-icon')].map((n) => n.dataset.id));
+    const inClusters = [...document.querySelectorAll('.devx-cluster')].reduce((n, c) => n + Number(c.dataset.count), 0);
+    // A located project with no icon of its own sits in a cluster (or off screen).
+    const row = [...document.querySelectorAll('.dev-list .dev-item')].find((r) => !r.querySelector('.dev-off') && !icons.has(r.dataset.id));
+    return { clusters: Number(map.dataset.clusters), inClusters, onPage: inClusters + icons.size, drawn: Number(map.dataset.drawn), id: row?.dataset.id, name: row?.querySelector('.dev-name').textContent };
   });
+  log(`${v}: clusters and icons on the page hold no more than the ${grouped.drawn} pins`, grouped.clusters > 0 && grouped.onPage <= grouped.drawn, `${grouped.clusters} clusters holding ${grouped.inClusters}, ${grouped.onPage} on the page`);
+  if (grouped.id) {
+    await page.locator(`.dev-item[data-id="${grouped.id}"] .dev-pick`).first().click();
+    await page.waitForTimeout(1200);
+    const opened = await page.evaluate((id) => ({ title: document.querySelector('.devx-panel:not([hidden]) .dev-pop-title')?.textContent, chosen: document.querySelector('.devx-pin-icon.chosen')?.dataset.id }), grouped.id);
+    log(`${v}: picking a clustered project in the list opens it and draws its own highlighted icon`, opened.title === grouped.name && opened.chosen === grouped.id, `"${grouped.name}"`);
+    await page.locator('.devx-close').click();
+  } else log(`${v}: picking a clustered project in the list opens it and draws its own highlighted icon`, false, 'no clustered project found');
+  await setF({ cost: '25to100' });
+  await page.locator('.dev-map').scrollIntoViewIfNeeded();
+  // Nearby pins share a counted cluster until zoomed in, so click clusters until a project icon is on screen.
+  const onTop = (selector) =>
+    page.evaluate((selector) => {
+      const box = document.querySelector('.dev-map').getBoundingClientRect();
+      for (const node of document.querySelectorAll(`.dev-map .leaflet-marker-pane ${selector}`)) {
+        const r = node.getBoundingClientRect();
+        const x = r.left + r.width / 2;
+        const y = r.top + r.height / 2;
+        if (x > box.left + 24 && x < box.right - 24 && y > box.top + 24 && y < box.bottom - 24 && document.elementFromPoint(x, y)?.closest(selector) === node) return { x, y };
+      }
+      return null;
+    }, selector);
+  let spot = await onTop('.devx-pin-icon');
+  for (let i = 0; !spot && i < 8; i++) {
+    const cluster = await onTop('.devx-cluster-icon');
+    if (!cluster) break;
+    await page.mouse.click(cluster.x, cluster.y);
+    await page.waitForTimeout(800);
+    spot = await onTop('.devx-pin-icon');
+  }
+  log(`${v}: clicking clusters zooms in to individual category icons`, Boolean(spot));
   console.log(`  ${v}: clicking the pin at ${spot ? `${Math.round(spot.x)},${Math.round(spot.y)}` : 'none on screen; first in page'}`);
   if (spot) await page.mouse.click(spot.x, spot.y);
-  else await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
+  else await page.locator('.dev-map .devx-pin-icon').first().click({ force: true });
   await page.waitForSelector('.devx-panel:not([hidden]) .dev-pop-title', { timeout: 5000 }).catch(() => null);
   const popTitle = await page.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null);
   const active = await page.locator('.dev-item.active .dev-name').textContent().catch(() => null);
