@@ -235,6 +235,16 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
   };
 }
 
+const KEPT_SAME = ['situs', 'situsCity', 'situsZip', 'landValue', 'improvementValue', 'totalValue', 'valueBasis', 'taxYear', 'stateCode', 'landSqft', 'buildingSqft', 'yearBuilt'] as const;
+
+/** One record from an account's repeated rows: owners listed once each, and any other field that disagrees flagged. */
+export function collapse(rows: AppraisalRecord[]): AppraisalRecord {
+  const first = rows[0]!;
+  const owners = [...new Set(rows.map((r) => r.owner).filter((o): o is string => !!o))];
+  const conflicting = KEPT_SAME.filter((k) => rows.some((r) => r[k] !== first[k]));
+  return { ...first, owner: owners.length ? owners.join('; ') : null, ...(conflicting.length ? { conflicting } : {}) };
+}
+
 /** Join the chunks into records.ndjson and compare with the last finished run. */
 export async function finish(dir: string, s: DistrictState, now: () => Date = () => new Date()): Promise<number> {
   const chunks = join(dir, 'chunks');
@@ -245,21 +255,48 @@ export async function finish(dir: string, s: DistrictState, now: () => Date = ()
   await writeFile(out, '');
   let bytes = 0;
   const changes = { added: 0, changed: 0, removed: 0, unchanged: 0 };
+  // Some sources repeat an account (SARA's Bexar copy has a row per owner). Count first, so repeated
+  // accounts can be collapsed to one record without holding a whole county in memory.
+  const seen = new Map<string, number>();
   for (const name of names) {
-    const body = await readFile(join(chunks, name), 'utf8');
-    bytes += Buffer.byteLength(body);
-    await appendFile(out, body);
-    for (const line of body.split('\n')) {
+    for (const line of (await readFile(join(chunks, name), 'utf8')).split('\n')) {
+      if (!line) continue;
+      const { account } = JSON.parse(line) as AppraisalRecord;
+      seen.set(account, (seen.get(account) ?? 0) + 1);
+    }
+  }
+  const repeated = new Map<string, AppraisalRecord[]>();
+  const emit = async (r: AppraisalRecord) => {
+    const line = `${JSON.stringify(r)}\n`;
+    bytes += Buffer.byteLength(line);
+    await appendFile(out, line);
+    const h = recordHash(r);
+    hashes[r.account] = h;
+    if (previous) {
+      if (!(r.account in previous)) changes.added++;
+      else if (previous[r.account] !== h) changes.changed++;
+      else changes.unchanged++;
+    }
+  };
+  for (const name of names) {
+    const lines: string[] = [];
+    for (const line of (await readFile(join(chunks, name), 'utf8')).split('\n')) {
       if (!line) continue;
       const r = JSON.parse(line) as AppraisalRecord;
-      const h = recordHash(r);
-      hashes[r.account] = h;
-      if (previous) {
-        if (!(r.account in previous)) changes.added++;
-        else if (previous[r.account] !== h) changes.changed++;
-        else changes.unchanged++;
+      const n = seen.get(r.account)!;
+      if (n === 1) {
+        lines.push(line);
+        continue;
+      }
+      const rows = repeated.get(r.account) ?? [];
+      rows.push(r);
+      repeated.set(r.account, rows);
+      if (rows.length === n) {
+        await emit(collapse(rows));
+        repeated.delete(r.account);
       }
     }
+    for (const line of lines) await emit(JSON.parse(line) as AppraisalRecord);
   }
   if (previous) changes.removed = Object.keys(previous).filter((a) => !(a in hashes)).length;
   // Kept gzipped and without the chunks, so every district's cache together stays well under GitHub's 10 GB cache limit.

@@ -39,6 +39,11 @@ export interface AppraisalRecord {
   retrieved: string;
   /** The dataset it was read from (layer URL or file name). */
   dataset: string;
+  /**
+   * Set when the source repeated the account (SARA's Bexar copy has one row per owner): the fields whose
+   * rows disagreed. Repeated rows are collapsed to one record, never summed.
+   */
+  conflicting?: string[];
 }
 
 export const OWNER_CAUTION = 'Owner of record on the appraisal roll; it may not be the beneficial owner.';

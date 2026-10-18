@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { gradeMatch, matchAddress, parseAddress } from '../src/appraisal/address.js';
-import { cachedRecords, collectArcgis } from '../src/appraisal/collect.js';
+import { cachedRecords, collapse, collectArcgis } from '../src/appraisal/collect.js';
 import { district } from '../src/appraisal/districts.js';
 import { lookup, shardOf, writeIndex, type IndexRow } from '../src/appraisal/lookup.js';
 import { normalizeRow, ringCenter } from '../src/appraisal/normalize.js';
@@ -245,5 +245,17 @@ describe('a failed collection', () => {
     const got: string[] = [];
     for await (const r of cachedRecords(cache, 'bexar')) got.push(r.account);
     expect(got).toEqual(['OLD']);
+  });
+});
+
+describe('collapse', () => {
+  const base = { district: 'bexar', account: '1', owner: 'A', landValue: 10, totalValue: 100 } as AppraisalRecord;
+  it('lists each owner once and keeps values, never summing them', () => {
+    const r = collapse([base, { ...base, owner: 'B' }, { ...base, owner: 'A' }]);
+    expect(r).toMatchObject({ owner: 'A; B', landValue: 10, totalValue: 100 });
+    expect(r.conflicting).toBeUndefined();
+  });
+  it('flags fields whose repeated rows disagree', () => {
+    expect(collapse([base, { ...base, totalValue: 120 }]).conflicting).toEqual(['totalValue']);
   });
 });
