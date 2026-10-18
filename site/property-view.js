@@ -17,6 +17,8 @@ import {
   DEAL_LOAN,
   DEAL_TYPE_LABELS,
   dealSteps,
+  pastDeals,
+  pickDeal,
   DRIVE_MINUTES,
   entityName,
   FALLBACK_MPH,
@@ -62,6 +64,8 @@ let bound = false;
 const files = {};
 const loading = {};
 let liveMap = null;
+// Bumped on every render, so a view still waiting on a file can tell it has been replaced (a newer market or tool).
+let renders = 0;
 
 export function startProperty() {
   if (bound) return;
@@ -126,8 +130,10 @@ function render() {
   const body = $('p-body');
   body.replaceChildren(stateBox('Loading…', 'loading'));
   const view = { owner: ownerView, leases: leasesView, distress: distressView, drive: driveView, deal: dealView }[state.tool];
-  Promise.resolve(view(body))
-    .catch((error) => body.replaceChildren(stateBox(`Couldn't load this tool. ${error instanceof Error ? error.message : ''}`.trim(), 'error', { retry: true })));
+  const gen = ++renders;
+  const live = () => gen === renders;
+  Promise.resolve(view(body, live))
+    .catch((error) => live() && body.replaceChildren(stateBox(`Couldn't load this tool. ${error instanceof Error ? error.message : ''}`.trim(), 'error', { retry: true })));
 }
 
 const BLURBS = {
@@ -143,7 +149,7 @@ const BLURBS = {
 
 let ownerResults = null;
 
-function ownerView(body) {
+function ownerView(body, live) {
   const form = el('form', 'card owner-form');
   const label = el('label', 'calc-field owner-field');
   label.append(el('span', 'eyebrow', 'Address or owner name'));
@@ -182,7 +188,7 @@ function ownerView(body) {
   const layout = el('div', 'owner-layout');
   layout.append(main, aside);
   body.replaceChildren(layout);
-  companion(aside);
+  companion(aside, state.city, live);
   if (ownerResults && ownerResults.q === state.q) results.replaceChildren(...ownerResults.nodes);
   else if (state.q) search(state.q, results);
   $('p-sources').replaceChildren(
@@ -403,35 +409,49 @@ async function parcelDetail(parcel) {
 }
 
 /**
- * Beside the lookup: this week's deal and the next tax sales, from the same
- * files their own tools read; nothing shows for a file this build lacks.
+ * Beside the lookup: the market's deal of the week and the next tax sales,
+ * from the same files their own tools read; nothing shows for a file this
+ * build lacks. city is the market picked when the lookup was drawn, and live()
+ * turns false once a newer pick has redrawn the tab.
  */
-async function companion(aside) {
+async function companion(aside, city, live = () => true) {
   const [deal, distress] = await Promise.all([load('deal').catch(() => null), load('distress').catch(() => null)]);
+  if (!live()) return;
   const nodes = [];
-  if (deal?.deal) {
-    const d = deal.deal;
+  const pick = deal ? pickDeal(deal, city) : null;
+  if (pick?.deal) {
+    const d = pick.deal;
     const steps = dealSteps(d, deal, analyzeDeal);
     const card = el('section', 'card owner-side-card');
-    card.append(el('p', 'eyebrow', 'Deal of the week'));
+    card.dataset.dealUrl = d.url;
+    card.append(el('p', 'eyebrow', city ? `Deal of the week, ${city}` : 'Deal of the week, Texas'));
+    if (pick.status === 'older') card.append(el('p', 'deal-older-note', `No ${city} sale with a reported price this week. Most recent: week of ${longDate(d.week)}.`));
     card.append(el('h3', 'owner-side-title', d.title));
     const facts = el('dl', 'owner-side-facts');
     for (const [label, value] of [
-      ['Price', steps.price ? money(steps.price) : null],
-      [steps.capKnown ? 'Cap rate' : 'Cap rate (typical)', steps.cap != null ? `${Number(steps.cap).toFixed(2)}%` : null],
-      ['Where', d.place]
+      ['Price (reported)', steps.price ? money(steps.price) : null],
+      [steps.capKnown ? 'Cap rate (reported)' : 'Cap rate (Terra estimate)', steps.cap != null ? `${Number(steps.cap).toFixed(2)}%` : null],
+      ['Where', d.place],
+      ['Reported', d.publishedAt ? longDate(d.publishedAt) : null]
     ]) {
       if (value) facts.append(el('dt', '', label), el('dd', '', value));
     }
     const more = el('a', 'link', 'Walk through the math →');
-    more.href = writePropertyHash({ ...state, tool: 'deal' });
+    more.href = writePropertyHash({ tool: 'deal', city });
     card.append(facts, more);
     nodes.push(card);
+  } else if (city && pick?.status === 'none') {
+    const card = el('section', 'card owner-side-card');
+    card.append(el('p', 'eyebrow', `Deal of the week, ${city}`), el('p', 'deal-older-note', `No ${city} sale with a reported price has been in the news lately.`));
+    const all = el('a', 'link', "See this week's Texas deal →");
+    all.href = writePropertyHash({ tool: 'deal' });
+    card.append(all);
+    nodes.push(card);
   }
-  const sales = distress?.sales ? filterSales(distress.sales, { city: state.city, scheduledOnly: true }).slice(0, 3) : [];
+  const sales = distress?.sales ? filterSales(distress.sales, { city, scheduledOnly: true }).slice(0, 3) : [];
   if (sales.length) {
     const card = el('section', 'owner-side-list');
-    card.append(el('p', 'eyebrow', `Next tax sales${state.city ? `, ${state.city} area` : ''}`));
+    card.append(el('p', 'eyebrow', `Next tax sales${city ? `, ${city} area` : ''}`));
     const list = el('ul');
     for (const sale of sales) {
       const li = el('li');
@@ -795,22 +815,64 @@ function disposeMap() {
 
 // ---------------------------------------------------------------- deal of the week
 
-async function dealView(body) {
+async function dealView(body, live = () => true) {
+  const city = state.city;
   const file = await load('deal');
-  if (!file?.deal) {
-    body.replaceChildren(el('div', 'state', "This week's deal is being picked. Check back after the next update."));
+  // A newer market or tool was picked while the file loaded; that render owns the page now.
+  if (!live()) return;
+  const pick = file ? pickDeal(file, city) : { status: 'pending', deal: null };
+  if (!pick.deal) {
+    const box = el('div', 'state deal-none');
+    if (pick.status === 'none') {
+      box.append(el('p', '', `No verified ${city} sale with a reported price was in the news this week, and Terra has no earlier ${city} pick to show. Terra won't swap in another market's deal.`));
+      const all = el('a', 'link', "See this week's Texas deal (All markets) →");
+      all.href = writePropertyHash({ tool: 'deal' });
+      box.append(all);
+    } else {
+      box.textContent = "This week's deal is being picked. Check back after the next update.";
+    }
+    body.replaceChildren(box);
+    $('p-sources').replaceChildren(dealSourceNote(file));
     return;
   }
-  const deal = file.deal;
+  const deal = pick.deal;
   const steps = dealSteps(deal, file, analyzeDeal);
   const card = el('article', 'card deal-card');
   const top = el('p', 'news-meta');
-  top.append(el('span', '', `Week of ${longDate(deal.week)}`), el('span', 'news-source', deal.source));
+  card.dataset.dealUrl = deal.url;
+  card.dataset.dealStatus = pick.status;
+  top.append(el('span', '', `${city || 'Texas'} · week of ${longDate(deal.week)}`), el('span', 'news-source', deal.source));
   const title = el('h3', 'deal-title');
   title.append(link(deal.title, deal.url));
   const tags = el('ul', 'chips');
   for (const t of [deal.place, DEAL_TYPE_LABELS[deal.type], deal.curated ? 'Figures checked by Terra' : '']) if (t) tags.append(el('li', '', t));
-  card.append(top, title, tags);
+  card.append(top);
+  if (pick.status === 'older')
+    card.append(
+      el(
+        'p',
+        'deal-older-note',
+        `No verified ${city} sale with a reported price was in the news the week of ${longDate(pick.week)}. This is the most recent ${city} deal Terra picked, from the week of ${longDate(deal.week)}${deal.publishedAt ? ` (reported ${longDate(deal.publishedAt)})` : ''}.`
+      )
+    );
+  card.append(title, tags);
+
+  // What the news reported, kept apart from Terra's teaching estimates below.
+  const reported = el('dl', 'deal-reported');
+  for (const [label, value] of [
+    ['Price', money(deal.price)],
+    ['Where', deal.place],
+    ['Size', deal.squareFeet ? `${Math.round(deal.squareFeet).toLocaleString('en-US')} sq ft` : deal.units ? `${deal.units} units` : null],
+    ['Reported', deal.publishedAt ? `${longDate(deal.publishedAt)}${deal.source ? `, ${deal.source}` : ''}` : deal.source || null],
+    ['Cap rate', deal.capRate != null ? `${Number(deal.capRate).toFixed(2)}%` : null],
+    ['Income (NOI)', deal.noi != null ? money(deal.noi) : null]
+  ]) {
+    if (value) reported.append(el('dt', '', label), el('dd', '', value));
+  }
+  const facts = el('section', 'deal-facts');
+  facts.append(el('h4', 'deal-step-title', 'Reported in the news'), reported);
+  if (!steps.capKnown) facts.append(el('p', 'calc-note', 'The income, loan and returns below are Terra\'s teaching estimates from typical cap rates and today\'s rates. The buyer\'s real income and financing weren\'t disclosed.'));
+  card.append(facts);
 
   const list = el('ol', 'deal-steps');
   const step = (heading, ...lines) => {
@@ -831,14 +893,14 @@ async function dealView(body) {
   );
   if (steps.cap != null) {
     step(
-      `The income it implies: about ${money(steps.noi)} a year`,
+      `${steps.capKnown ? 'The income' : 'The income it implies (estimate)'}: about ${money(steps.noi)} a year`,
       steps.capKnown
         ? `The deal traded at a ${steps.cap.toFixed(2)}% cap rate, so the building's net operating income (rent minus operating costs, before the loan) is about ${money(steps.noi)} a year.`
         : `Texas doesn't make sale prices or rents public, so the income is an estimate. ${DEAL_TYPE_LABELS[deal.type]} in Texas has been trading around a ${steps.band.low}–${steps.band.high}% cap rate. At ${steps.cap}%, the buyer expects about ${money(steps.noi)} a year of net operating income. Cap rate = income ÷ price.`
     );
     const loan = steps.loan;
     step(
-      `The loan: ${money(loan.amount)} at about ${steps.rate.toFixed(2)}%`,
+      `A typical loan (estimate): ${money(loan.amount)} at about ${steps.rate.toFixed(2)}%`,
       `A typical lender would lend around ${100 - DEAL_LOAN.down}% of the price. At ${file.treasury ? `the 10-year Treasury (${file.treasury.value.toFixed(2)}%) plus ${DEAL_LOAN.spread} points` : 'today\'s rates'}, over ${DEAL_LOAN.years} years, the payments come to ${money(loan.debtService)} a year. The income covers that ${loan.dscr ? loan.dscr.toFixed(2) : '—'} times (lenders want at least 1.25).`
     );
     const verdict =
@@ -848,7 +910,7 @@ async function dealView(body) {
           ? `Negative leverage: the debt costs ${loan.constant.toFixed(2)}% a year but the property only earns ${steps.cap.toFixed(2)}%, so borrowing lowers the buyer's return today. Buyers accept that when they expect rents or value to grow, plan to fix up the building, or pay mostly cash.`
           : `Neutral leverage: the debt costs about what the property earns (${loan.constant.toFixed(2)}% vs ${steps.cap.toFixed(2)}%), so the return comes down to growth.`;
     step(
-      `Year-one cash return: ${loan.cashOnCash == null ? '—' : `${loan.cashOnCash.toFixed(1)}%`}`,
+      `Year-one cash return (estimate): ${loan.cashOnCash == null ? '—' : `${loan.cashOnCash.toFixed(1)}%`}`,
       `The buyer puts in about ${money(loan.cashInvested)} of equity and keeps ${money(loan.cashFlow)} after the loan payments.`,
       verdict
     );
@@ -859,7 +921,7 @@ async function dealView(body) {
   card.append(list);
 
   if (steps.noi != null) {
-    const calc = writeDeal({ price: steps.price, income: Math.round(steps.noi), vacancy: 0, expenses: 0, down: DEAL_LOAN.down, closing: DEAL_LOAN.closing, rate: steps.rate, years: DEAL_LOAN.years, city: '' });
+    const calc = writeDeal({ price: steps.price, income: Math.round(steps.noi), vacancy: 0, expenses: 0, down: DEAL_LOAN.down, closing: DEAL_LOAN.closing, rate: steps.rate, years: DEAL_LOAN.years, city: deal.city ?? '' });
     const row = el('p', 'dev-links');
     const a = el('a', 'link', 'Change the assumptions in the deal calculator →');
     a.href = `#markets&tool=calc&${calc}`;
@@ -877,7 +939,8 @@ async function dealView(body) {
   );
 
   const nodes = [card];
-  if (file.alsoThisWeek?.length) {
+  // Other markets' sales only on All markets, labeled as such; a market page stays local.
+  if (!city && file.alsoThisWeek?.length) {
     const more = el('section', 'card');
     more.append(el('h3', 'group-title', 'Other Texas sales in the news this week'));
     const ul = el('ul', 'owner-list');
@@ -889,21 +952,26 @@ async function dealView(body) {
     more.append(ul);
     nodes.push(more);
   }
-  if (file.past?.length) {
+  const earlier = pastDeals(file, city, deal);
+  if (earlier.length) {
     const past = el('section', 'card');
-    past.append(el('h3', 'group-title', 'Past deals of the week'));
+    past.append(el('h3', 'group-title', city ? `Earlier ${city} deals of the week` : 'Past deals of the week'));
     const ul = el('ul', 'owner-list');
-    for (const d of file.past) {
+    for (const d of earlier) {
       const li = el('li');
-      li.append(link(d.title, d.url), el('span', 'radar-line muted', `Week of ${longDate(d.week)} · ${money(d.price)}`));
+      li.append(link(d.title, d.url), el('span', 'radar-line muted', `Week of ${longDate(d.week)} · ${money(d.price)}${city ? '' : ` · ${d.place}`}`));
       ul.append(li);
     }
     past.append(ul);
     nodes.push(past);
   }
   body.replaceChildren(...nodes);
-  $('p-sources').replaceChildren(
-    note(`Picked from Google News headlines that report a Texas sale with a price; the biggest of the week. The 10-year Treasury is from FRED. Updated ${longDate(file.generatedAt)}.`)
+  $('p-sources').replaceChildren(dealSourceNote(file));
+}
+
+function dealSourceNote(file) {
+  return note(
+    `Picked from Google News headlines that report a Texas sale with a price: the biggest of the week statewide, and the biggest in each market by where the property is (not where the buyer or the paper is). The 10-year Treasury is from FRED.${file?.generatedAt ? ` Updated ${longDate(file.generatedAt)}.` : ''}`
   );
 }
 

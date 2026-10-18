@@ -64,9 +64,17 @@ export interface DealFile {
   assumptions: typeof ASSUMED_CAP_RATES;
   /** The 10-year Treasury the loan step prices off (percent), and its date. */
   treasury: { value: number; date: string } | null;
+  /** The statewide pick: this week's biggest priced Texas sale ("All markets"). */
   deal: Deal | null;
-  /** Earlier weeks, newest first. */
+  /** Earlier weeks' statewide picks, newest first. */
   past: Deal[];
+  /**
+   * This week's pick in each market, chosen by where the property is, not the
+   * buyer or the paper. A market with no priced local sale this week is absent.
+   */
+  markets: Partial<Record<City, Deal>>;
+  /** Earlier weeks' market picks, newest first, so a quiet market can offer its last local deal with its real date. */
+  history: Deal[];
   /** The other candidates this week, for "also this week". */
   alsoThisWeek: { title: string; url: string; source: string; price: number }[];
 }
@@ -131,6 +139,7 @@ export function dealType(title: string): DealType {
  * names Dallas only as the buyer's home, so it doesn't count.
  */
 export function texasPlace(title: string): { place: string; city: City | null } | null {
+  const hits: { place: string; city: City | null; at: number }[] = [];
   for (const [place, city] of PLACES) {
     const re = new RegExp(`(^|[^-\\w])${place.replace(/ /g, '\\s')}(?![-\\w])('s)?`, 'gi');
     for (const m of title.matchAll(re)) {
@@ -139,12 +148,24 @@ export function texasPlace(title: string): { place: string; city: City | null } 
       const nextWords = after.split(/\s+/).slice(0, 3).join(' ');
       if (m[2] || /\bin\s+(downtown\s+|north\s+|south\s+|east\s+|west\s+)?$/i.test(before) || /^,?\s*(Texas|TX)\b/.test(after) ||
         nextWords.split(' ').some((w) => PROPERTY_WORD.test(w.replace(/[^\w-]/g, '')))) {
-        if (/^(firm|company|developer|investor|based|REIT|-based)\b/i.test(after)) continue;
-        return { place, city };
+        if (/^(firm|company|developer|investor|investors|buyer|group|based|REIT|-based)\b/i.test(after)) continue;
+        hits.push({ place, city, at: m.index! + m[1]!.length });
+        break;
       }
     }
   }
-  return null;
+  if (!hits.length) return null;
+  // "Houston's Hines buys San Antonio apartments", "Austin REIT sells Dallas
+  // tower": when a place follows the sale word it is the property's, and the
+  // one before it is the buyer's or seller's home. "Dallas tower sells for $X"
+  // has nothing after the verb, so the first place stands. A named market
+  // beats "Texas" alone.
+  const sale = SALE.exec(title)?.index ?? -1;
+  const named = hits.filter((h) => h.city !== null);
+  const pool = named.length ? named : hits;
+  const afterSale = pool.filter((h) => sale >= 0 && h.at > sale);
+  const pick = (afterSale.length ? afterSale : pool).sort((a, b) => a.at - b.at)[0]!;
+  return { place: pick.place, city: pick.city };
 }
 
 export interface Candidate {
@@ -236,6 +257,7 @@ export function readOverride(raw: unknown, week: string): Deal | null {
 
 const QUERIES = [
   '(sells OR sold OR acquires OR buys OR purchased) (Houston OR Dallas OR Austin OR "San Antonio" OR "Fort Worth") (office OR industrial OR apartments OR retail OR warehouse OR multifamily OR tower OR "shopping center") million',
+  '(sells OR sold OR acquires OR buys OR purchased) ("El Paso" OR Lubbock OR Midland OR Odessa OR "College Station" OR Galveston OR "New Braunfels" OR "San Antonio") (office OR industrial OR apartments OR retail OR warehouse OR multifamily OR "shopping center" OR hotel) million',
   '(sells OR sold OR acquires OR buys OR purchased) Texas (office OR industrial OR apartments OR retail OR warehouse OR multifamily OR tower OR "shopping center" OR hotel) million'
 ];
 export const dealSearchUrl = (q: string, days: number) =>
@@ -281,18 +303,64 @@ export async function buildDealFile(options: DealOptions = {}): Promise<DealFile
   }
   for (const c of found) log(`  ${c.price.toLocaleString('en-US').padStart(13)}  ${c.place}: ${c.title} (${c.source})`);
 
-  // The week's pick stays put once made, so the page doesn't change under a reader mid-week.
+  // The week's picks stay put once made, so the page doesn't change under a
+  // reader mid-week; a market that finds its first local sale later in the week gets it then.
   const kept = previous?.deal?.week === week ? previous.deal : null;
   const deal = override ?? kept ?? (found[0] ? toDeal(found[0], week) : null);
   const past = [...(previous?.deal && previous.deal.week !== week ? [previous.deal] : []), ...(previous?.past ?? [])]
     .filter((d, i, all) => all.findIndex((x) => x.week === d.week) === i)
     .slice(0, 12);
+  const { markets, history } = marketPicks(found, week, deal, previous);
   return {
     generatedAt: now.toISOString(),
     assumptions: ASSUMED_CAP_RATES,
     treasury,
     deal,
     past,
+    markets,
+    history,
     alsoThisWeek: found.filter((c) => c.url !== deal?.url).slice(0, 5).map(({ title, url, source, price }) => ({ title, url, source, price }))
   };
+}
+
+/** How many earlier local picks each market keeps for its "no deal this week" fallback. */
+export const HISTORY_PER_MARKET = 4;
+
+/**
+ * Each market's pick for the week: the biggest priced sale of a property in
+ * that market (Candidate.city comes from where the headline puts the
+ * property). The statewide pick counts for its own market, and an earlier
+ * pick made this week is kept. Last weeks' picks move to history, which keeps
+ * a few per market, newest first.
+ */
+export function marketPicks(
+  found: Candidate[],
+  week: string,
+  statewide: Deal | null,
+  previous: Pick<DealFile, 'markets' | 'history' | 'deal' | 'past'> | null
+): { markets: Partial<Record<City, Deal>>; history: Deal[] } {
+  const markets: Partial<Record<City, Deal>> = {};
+  for (const [city, d] of Object.entries(previous?.markets ?? {}) as [City, Deal][]) if (d && d.week === week && d.city === city) markets[city] = d;
+  if (statewide?.city && !markets[statewide.city]) markets[statewide.city] = statewide;
+  for (const c of found) if (c.city && !markets[c.city]) markets[c.city] = toDeal(c, week);
+
+  const older = [
+    ...Object.values(previous?.markets ?? {}),
+    ...(previous?.history ?? []),
+    // Files written before market picks existed only have statewide picks; they are still local to their own market.
+    ...(previous?.deal ? [previous.deal] : []),
+    ...(previous?.past ?? [])
+  ].filter((d): d is Deal => !!d && !!d.city && d.week < week);
+  const seen = new Set<string>();
+  const perCity = new Map<City, number>();
+  const history = older
+    .sort((a, b) => b.week.localeCompare(a.week))
+    .filter((d) => {
+      const key = `${d.city}|${d.url}`;
+      if (seen.has(key) || (perCity.get(d.city!) ?? 0) >= HISTORY_PER_MARKET) return false;
+      seen.add(key);
+      perCity.set(d.city!, (perCity.get(d.city!) ?? 0) + 1);
+      return true;
+    });
+  return { markets, history };
 }
