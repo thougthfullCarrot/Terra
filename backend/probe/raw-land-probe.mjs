@@ -69,7 +69,7 @@ for (const { r } of accts) {
   else if (eq(r.Market_val, land + imp + (r.AG_Use_val ?? 0))) sumLIagUse++;
   else { other++; if (otherIds.length < 15) otherIds.push([r.Prop_id, r.State_cd, r.Market_val, land, imp, r.AG_Market, r.AG_Use_val]); }
 }
-out('sara.accounts', { rows: sa.rows.length, pages: sa.pages, exceededPages: sa.exceededPages, error: sa.error, accounts: accts.length, multiRowAccounts: accts.filter((a) => a.n > 1).length, maxRows: Math.max(...accts.map((a) => a.n)), accountsWithDisagreeingRows: accts.filter((a) => a.conflict).length, years: [...new Set(sa.rows.map((r) => r.Prop_yr))] });
+out('sara.accounts', { rows: sa.rows.length, pages: sa.pages, exceededPages: sa.exceededPages, error: sa.error, accounts: accts.length, multiRowAccounts: accts.filter((a) => a.n > 1).length, maxRows: accts.reduce((m, a) => Math.max(m, a.n), 0), accountsWithDisagreeingRows: accts.filter((a) => a.conflict).length, years: [...new Set(sa.rows.map((r) => r.Prop_yr))] });
 out('sara.componentArithmetic', { accounts: accts.length, market_eq_land_plus_impr: sumLI, market_eq_land_impr_agMarket: sumLIag, market_eq_land_impr_agUse: sumLIagUse, other, withAgMarket: withAg, otherExamples_id_code_market_land_impr_agMkt_agUse: otherIds });
 
 // ---------- 3. Joining 2025 values to current geometry
@@ -118,7 +118,7 @@ out('pagination', {
   rowCount: get(q(SA, { where: WHERE, returnCountOnly: 'true' })).count, truthAccounts: truth.length,
   serverCountDistinct: distinct.features?.[0]?.attributes ?? distinct.error, groupCountOnly: grp.count ?? grp.error,
   keyset: { pages: ks.pages, requests: ks.requests, accounts: ids.length, unique: new Set(ids).size, matchesTruthOrder: JSON.stringify(ids) === JSON.stringify(truth.map((t) => t[1])) },
-  naiveOffsetPerPageDedupe: { accounts: naive.length, unique: new Set(naive).size, repeated: naive.length - new Set(naive).size, missing: truth.filter((t) => !naive.includes(t[1])).length }
+  naiveOffsetPerPageDedupe: { accounts: naive.length, unique: new Set(naive).size, repeated: naive.length - new Set(naive).size, missing: (() => { const s = new Set(naive); return truth.filter((t) => !s.has(t[1])).length; })() }
 });
 
 // ---------- 5. Zoning: fully paginated intersections for the parcels that looked incomplete
