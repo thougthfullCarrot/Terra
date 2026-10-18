@@ -16,7 +16,7 @@ export const LABELS = {
 } as const;
 
 /** City zoning status from Phase 0 (city by city). Only San Antonio is integrated in Phase 1. */
-export const CITY_ZONING: Record<string, 'integrated' | 'published, not yet integrated' | 'published as PDF only' | 'retrieval failed' | 'not machine-readable' | 'not yet checked'> = {
+export const CITY_ZONING: Record<string, 'integrated' | 'published, not yet integrated' | 'published as PDF only' | 'retrieval failed' | 'not machine-readable' | 'not yet checked' | 'military installation, no city zoning'> = {
   'San Antonio': 'integrated',
   'Fort Sam Houston': 'military installation, no city zoning', 'Lackland AFB': 'military installation, no city zoning', 'Randolph AFB': 'military installation, no city zoning',
   'Alamo Heights': 'published as PDF only',
