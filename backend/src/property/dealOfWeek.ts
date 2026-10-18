@@ -311,6 +311,9 @@ export async function buildDealFile(options: DealOptions = {}): Promise<DealFile
     .filter((d, i, all) => all.findIndex((x) => x.week === d.week) === i)
     .slice(0, 12);
   const { markets, history } = marketPicks(found, week, deal, previous);
+  log(`statewide: ${deal ? `${deal.place} | ${deal.title} | week ${deal.week} | reported ${deal.publishedAt ?? 'undated'}` : 'none'}`);
+  for (const [city, d] of Object.entries(markets)) log(`market ${city}: ${d!.place} | ${d!.title} | week ${d!.week} | reported ${d!.publishedAt ?? 'undated'}`);
+  for (const d of history) log(`history ${d.city}: ${d.title} | week ${d.week}`);
   return {
     generatedAt: now.toISOString(),
     assumptions: ASSUMED_CAP_RATES,
