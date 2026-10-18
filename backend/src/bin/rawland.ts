@@ -4,6 +4,7 @@
  *
  *   npm run rawland -- collect --source sara-polygons|zoning|city-parcels|city-limits [--limits-url U --limits-city-field F]
  *   npm run rawland -- build --appraisal-cache DIR [--prev-manifest FILE]
+ *   npm run rawland -- serve [--synthetic] [--port 4173]
  *
  * Values come from #84's Bexar read in the local appraisal cache (`npm run appraisal -- collect --district bexar
  * --cache DIR`), checked with completeness(); the build refuses unless that and every geometry read are complete.
@@ -28,6 +29,8 @@ import { assertBuildable, assertNotPublishable, joinOutlines, privacyScan, compa
 import { tileKey } from '../rawland/tiles.js';
 import type { AccountRow } from '../rawland/accountIndex.js';
 import * as turf from '@turf/turf';
+import { synthBuild } from '../rawland/synth.js';
+import { rawlandServer } from '../rawland/server.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(join(here, '../../../local-data/rawland'));
@@ -142,6 +145,20 @@ async function build(): Promise<void> {
   log(`built ${rows.length} accounts, ${tiles.size} tiles; dropped ${droppedOutlines} outlines without values; ${noOutline} accounts without outline`);
 }
 
+/** localhost only. --synthetic serves invented data; otherwise the local build (which exists only after build passed its gates). */
+async function serve(): Promise<void> {
+  let data;
+  if (args.includes('--synthetic')) data = synthBuild();
+  else {
+    const dir = join(OUT, 'build'); const { gunzipSync } = await import('node:zlib'); const { readdir } = await import('node:fs/promises');
+    const rows = JSON.parse(gunzipSync(await readFile(join(dir, 'index.json.gz'))).toString());
+    const tiles = new Map(); for (const f of await readdir(join(dir, 'tiles'))) tiles.set(f.replace('.json.gz', ''), JSON.parse(gunzipSync(await readFile(join(dir, 'tiles', f))).toString()));
+    data = { rows, tiles, manifest: JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) };
+  }
+  const port = Number(arg('--port') ?? 4173);
+  rawlandServer(data).listen(port, '127.0.0.1', () => log(`http://127.0.0.1:${port} (${data.manifest.synthetic ? 'synthetic data' : 'local build'})`));
+}
+
 const cmd = args[0];
-(cmd === 'collect' ? collect(arg('--source') as keyof typeof SOURCES) : cmd === 'build' ? build() : Promise.reject(new Error('usage: rawland collect --source ... | build --appraisal-cache DIR')))
+(cmd === 'collect' ? collect(arg('--source') as keyof typeof SOURCES) : cmd === 'build' ? build() : cmd === 'serve' ? serve() : Promise.reject(new Error('usage: rawland collect --source ... | build --appraisal-cache DIR | serve [--synthetic]')))
   .catch((e) => { log((e as Error).message); process.exitCode = 1; });

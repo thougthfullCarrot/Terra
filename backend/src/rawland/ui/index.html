@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raw Land prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/leaflet/leaflet.css">
+<link rel="stylesheet" href="/rawland.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side" data-tab="results">
+    <div class="head">
+      <h1>Raw Land <span class="badge" id="badge">Private prototype</span></h1>
+      <div class="sub" id="sub">Bexar County · values 2025 roll</div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="chip" data-tab="results" aria-pressed="true">Results</button>
+      <button class="chip" data-tab="filters" aria-pressed="false">Filters</button>
+    </div>
+    <form class="filters" id="filters" autocomplete="off">
+      <label>Min acres<input name="minAcres" inputmode="decimal" placeholder="Any"></label>
+      <label>Max acres<input name="maxAcres" inputmode="decimal" placeholder="Any"></label>
+      <label>Min land $/sf<input name="minPsf" inputmode="decimal" placeholder="Any"></label>
+      <label>Max land $/sf<input name="maxPsf" inputmode="decimal" placeholder="Any"></label>
+      <label class="wide">Zoning (San Antonio base code)<select name="zoning"><option value="">Any</option></select></label>
+      <div class="wide chips" id="codeChips">
+        <button type="button" class="chip" data-vacant aria-pressed="false">Vacant (C1)</button>
+      </div>
+      <label>Sort by<select name="sort">
+        <option value="landPsf:desc">Land $/sf, high to low</option>
+        <option value="landPsf:asc">Land $/sf, low to high</option>
+        <option value="acres:desc">Acres, largest first</option>
+        <option value="market:desc">Market value, high to low</option>
+      </select></label>
+    </form>
+    <div class="count"><strong id="count">…</strong><span class="scope" id="scope"></span></div>
+    <label class="toggle"><input type="checkbox" id="limit"> Limit to map area</label>
+    <div class="note" id="unranked"></div>
+    <div class="list" id="list" role="listbox" aria-label="Matching accounts"></div>
+  </aside>
+  <main class="mapwrap">
+    <div id="map" aria-label="Parcel map"></div>
+    <div class="legend" id="legend">
+      <div><i style="background:var(--accent)"></i>Matches filters</div>
+      <div><i style="background:var(--muted);opacity:.35"></i>Doesn't match</div>
+      <div><i style="background:transparent;border:2px dashed var(--amber)"></i>Zoning conflict or unavailable</div>
+    </div>
+    <section class="detail" id="detail" aria-live="polite"></section>
+  </main>
+</div>
+<script src="/leaflet/leaflet.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

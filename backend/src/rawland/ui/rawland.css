@@ -1,0 +1,163 @@
+/* Tokens copied from site/style.css (v3 look) so the prototype matches the site without loading its page styles. */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --sunk: oklch(0.975 0.003 80);
+  --surface-2: var(--sunk);
+  --ink: oklch(0.19 0.005 60);
+  --ink2: oklch(0.36 0.005 60);
+  --secondary: var(--ink2);
+  --muted: oklch(0.5 0.005 60);
+  --faint: var(--muted);
+  --line: oklch(0.19 0.005 60 / 0.1);
+  --line2: oklch(0.19 0.005 60 / 0.06);
+  --hairline: var(--line);
+  --divider: var(--line2);
+  --chip: var(--sunk);
+  --chip-hover: oklch(0.95 0.004 80);
+  --acc-l: 0.57;
+  --acc-h: 42;
+  --tint-a: 0.08;
+  --accent: oklch(var(--acc-l) 0.15 var(--acc-h));
+  --accent-hover: oklch(calc(var(--acc-l) - 0.06) 0.15 var(--acc-h));
+  --tint: oklch(var(--acc-l) 0.15 var(--acc-h) / var(--tint-a));
+  --accent-tint: var(--tint);
+  --on-tint: oklch(0.45 0.13 var(--acc-h));
+  --on-accent: #ffffff;
+  --pos: oklch(0.52 0.11 150);
+  --neg: oklch(0.55 0.14 28);
+  --red: var(--neg);
+  --green: var(--pos);
+  --amber: oklch(0.6 0.12 75);
+  --error-surface: oklch(0.55 0.14 28 / 0.09);
+  --error-ink: oklch(0.42 0.12 28);
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-float: 0 6px 20px -10px rgb(0 0 0 / 0.18);
+  --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.18);
+  --scrim: rgb(0 0 0 / 0.35);
+  --appbar: var(--bg);
+  --skeleton: linear-gradient(90deg, var(--sunk) 0%, var(--bg) 50%, var(--sunk) 100%);
+
+  --ui: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: var(--ui);
+  --radius: 12px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: oklch(0.16 0.004 60);
+    --surface: oklch(0.16 0.004 60);
+    --sunk: oklch(0.2 0.004 60);
+    --ink: oklch(0.95 0.003 80);
+    --ink2: oklch(0.8 0.003 80);
+    --muted: oklch(0.66 0.003 80);
+    --line: oklch(0.95 0.003 80 / 0.12);
+    --line2: oklch(0.95 0.003 80 / 0.07);
+    --chip-hover: oklch(0.24 0.004 60);
+    --acc-l: 0.72;
+    --tint-a: 0.14;
+    --on-tint: oklch(0.8 0.1 var(--acc-h));
+    --on-accent: oklch(0.16 0.01 60);
+    --pos: oklch(0.74 0.11 150);
+    --neg: oklch(0.72 0.12 28);
+    --amber: oklch(0.78 0.11 75);
+    --error-surface: oklch(0.72 0.12 28 / 0.14);
+    --error-ink: oklch(0.85 0.07 28);
+    --shadow-float: 0 6px 20px -10px rgb(0 0 0 / 0.6);
+    --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
+    --scrim: rgb(0 0 0 / 0.55);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: oklch(0.16 0.004 60);
+  --surface: oklch(0.16 0.004 60);
+  --sunk: oklch(0.2 0.004 60);
+  --ink: oklch(0.95 0.003 80);
+  --ink2: oklch(0.8 0.003 80);
+  --muted: oklch(0.66 0.003 80);
+  --line: oklch(0.95 0.003 80 / 0.12);
+  --line2: oklch(0.95 0.003 80 / 0.07);
+  --chip-hover: oklch(0.24 0.004 60);
+  --acc-l: 0.72;
+  --tint-a: 0.14;
+  --on-tint: oklch(0.8 0.1 var(--acc-h));
+  --on-accent: oklch(0.16 0.01 60);
+  --pos: oklch(0.74 0.11 150);
+  --neg: oklch(0.72 0.12 28);
+  --amber: oklch(0.78 0.11 75);
+  --error-surface: oklch(0.72 0.12 28 / 0.14);
+  --error-ink: oklch(0.85 0.07 28);
+  --shadow-float: 0 6px 20px -10px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
+  --scrim: rgb(0 0 0 / 0.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--ui); }
+button, input, select { font: inherit; color: inherit; }
+.app { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
+.side { display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; background: var(--bg); }
+.head { padding: 16px 16px 8px; }
+.head h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.badge { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; background: var(--tint); color: var(--on-tint); vertical-align: 2px; }
+.sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.filters { padding: 8px 16px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-bottom: 1px solid var(--line); }
+.filters label { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.filters input, .filters select { width: 100%; background: var(--sunk); border: 1px solid transparent; border-radius: 8px; padding: 7px 9px; min-width: 0; }
+.filters input:focus, .filters select:focus { outline: none; border-color: var(--accent); }
+.filters .wide { grid-column: 1 / -1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 0; background: var(--chip); border-radius: 999px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.chip[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
+.count { padding: 10px 16px 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.count strong { font-size: 15px; font-weight: 600; }
+.count .scope { color: var(--muted); font-size: 12px; }
+.toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding: 0 16px 8px; }
+.note { padding: 0 16px 8px; font-size: 12px; color: var(--muted); }
+.list { overflow: auto; flex: 1; padding: 0 8px 12px; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 10px 8px; border-radius: 10px; cursor: pointer; }
+.row:hover, .row[aria-selected='true'] { background: var(--sunk); }
+.row .id { font-weight: 500; }
+.row .psf { font-weight: 600; text-align: right; }
+.row .meta { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.more { margin: 8px; width: calc(100% - 16px); border: 1px solid var(--line); background: none; border-radius: 10px; padding: 8px; cursor: pointer; }
+.mapwrap { position: relative; min-height: 0; }
+#map { position: absolute; inset: 0; background: var(--sunk); }
+.legend { position: absolute; left: 12px; bottom: 12px; z-index: 500; background: var(--bg); border-radius: var(--radius); box-shadow: var(--shadow-float); padding: 8px 10px; font-size: 12px; display: grid; gap: 4px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; }
+.detail { position: absolute; top: 12px; right: 12px; bottom: 12px; width: 360px; z-index: 600; background: var(--bg); border-radius: var(--radius); box-shadow: var(--shadow-lg); overflow: auto; padding: 16px; display: none; }
+.detail.open { display: block; }
+.detail h2 { font-size: 16px; margin: 0 0 2px; }
+.detail .close { position: absolute; top: 10px; right: 10px; border: 0; background: var(--sunk); border-radius: 999px; width: 30px; height: 30px; cursor: pointer; }
+.fact { padding: 10px 0; border-top: 1px solid var(--line); }
+.fact .k { color: var(--muted); font-size: 12px; }
+.fact .v { font-size: 15px; font-weight: 500; }
+.fact .why { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--sunk); }
+.pill.warn { background: oklch(0.6 0.12 75 / 0.16); color: var(--ink); }
+.pill.bad { background: var(--error-surface); color: var(--error-ink); }
+.pill.prov { background: var(--tint); color: var(--on-tint); }
+.tabs { display: none; }
+.empty { padding: 24px 16px; color: var(--muted); text-align: center; }
+.leaflet-container { font: inherit; background: var(--sunk); }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  .mapwrap { grid-row: 1; height: 100vh; }
+  .side { position: fixed; left: 0; right: 0; bottom: 0; height: 46vh; z-index: 700; border-right: 0; border-radius: 16px 16px 0 0; box-shadow: var(--shadow-lg); }
+  .side.collapsed { height: 112px; }
+  .side.collapsed .filters, .side.collapsed .list, .side.collapsed .toggle, .side.collapsed .note { display: none; }
+  .tabs { display: flex; gap: 6px; padding: 0 16px 8px; }
+  .side[data-tab='results'] .filters { display: none; }
+  .side[data-tab='filters'] .list, .side[data-tab='filters'] .count, .side[data-tab='filters'] .toggle { display: none; }
+  .detail { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 70vh; border-radius: 16px 16px 0 0; }
+  .legend { top: 12px; bottom: auto; left: auto; right: 12px; }
+  .leaflet-bottom.leaflet-right { bottom: 46vh; }
+}
