@@ -55,6 +55,8 @@ async function probe(): Promise<void> {
           modified: res.headers.get('last-modified'),
           captcha: /captcha|recaptcha|hcaptcha|turnstile|cf-challenge/i.test(body),
           robots: url.endsWith('/robots.txt') ? body.slice(0, 800) : undefined,
+          text: /\.txt$/i.test(url) && !url.endsWith('/robots.txt') ? body.slice(0, 4000) : undefined,
+          arcgis: url.endsWith('?f=json') ? (() => { try { const j = JSON.parse(body); return { name: j.name, description: String(j.description ?? '').slice(0, 400), copyright: j.copyrightText, edited: j.editingInfo?.lastEditDate, fields: (j.fields ?? []).map((f: { name: string }) => f.name).join(',') }; } catch { return undefined; } })() : undefined,
           links: links.length ? [...new Set(links)] : undefined
         });
       } catch (error) {
@@ -150,6 +152,47 @@ async function liveByAddress(d: District, address: string): Promise<Record<strin
   return (body.features ?? []).map((f) => f.attributes);
 }
 
+/** Whether robots.txt lets a general crawler fetch a path (Disallow rules for * only). */
+export function robotsAllow(robots: string, path: string): boolean {
+  let applies = false;
+  const rules: string[] = [];
+  for (const raw of robots.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim();
+    const [k, ...rest] = line.split(':');
+    const v = rest.join(':').trim();
+    if (/^user-agent$/i.test(k ?? '')) applies = v === '*';
+    else if (applies && /^disallow$/i.test(k ?? '') && v) rules.push(v);
+  }
+  return !rules.some((r) => path.startsWith(r.replace(/\*.*$/, '')));
+}
+
+/**
+ * Read the district's own account page and check the owner and value TERRA
+ * holds appear on it. One request per case, after robots.txt says yes; a
+ * page behind a bot check is reported, not worked around.
+ */
+async function officialPage(url: string, r: IndexRow): Promise<{ url: string; ok: boolean; note: string }> {
+  const ua = { 'user-agent': 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)' };
+  try {
+    const u = new URL(url);
+    const robots = await fetch(new URL('/robots.txt', u).href, { headers: ua, signal: AbortSignal.timeout(20_000) }).then((x) => (x.ok ? x.text() : ''));
+    if (!robotsAllow(robots, u.pathname + u.search)) return { url, ok: false, note: 'robots.txt disallows the account page; not read' };
+    await new Promise((done) => setTimeout(done, 2000));
+    const res = await fetch(url, { headers: ua, signal: AbortSignal.timeout(30_000) });
+    const html = await res.text();
+    if (!res.ok || /captcha|cf-challenge|turnstile/i.test(html)) return { url, ok: false, note: `page refused automated reading (HTTP ${res.status})` };
+    const plain = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').toUpperCase();
+    const ownerWord = (r.owner ?? '').toUpperCase().split(/\s+/).find((w) => w.length > 2) ?? '';
+    const value = r.totalValue != null ? r.totalValue.toLocaleString('en-US') : '';
+    const hasOwner = Boolean(ownerWord) && plain.includes(ownerWord);
+    const hasValue = Boolean(value) && plain.includes(value);
+    const years = [...plain.matchAll(/\b(20[12]\d)\b/g)].map((m) => Number(m[1]));
+    return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, value $${value} ${hasValue ? 'found' : 'NOT found'}, newest year on page ${years.length ? Math.max(...years) : 'none'}` };
+  } catch (error) {
+    return { url, ok: false, note: `could not read: ${(error as Error).message}` };
+  }
+}
+
 /**
  * Pick test cases from the index: an address one account holds, an address
  * several accounts share, a typed address that leaves out a direction that
@@ -207,9 +250,12 @@ async function verify(): Promise<void> {
           official = { accounts: [], agrees: false, note: `live check failed: ${(error as Error).message}` };
         }
       }
-      const row = { district: id, ...c, status: result.status, reason: 'reason' in result ? result.reason : undefined, got, passed: result.status === c.expect && (!c.accounts || [...c.accounts].sort().join() === [...got].sort().join()), official, unavailable, sample: result.status === 'match' ? result.records[0] : result.status === 'ambiguous' ? result.candidates[0]?.record : undefined };
+      let page: { url: string; ok: boolean; note: string } | undefined;
+      const first = result.status === 'match' ? result.records[0] : undefined;
+      if (first?.sourceUrl && d.access === 'arcgis') page = await officialPage(first.sourceUrl, first);
+      const row = { district: id, ...c, page, status: result.status, reason: 'reason' in result ? result.reason : undefined, got, passed: result.status === c.expect && (!c.accounts || [...c.accounts].sort().join() === [...got].sort().join()), official, unavailable, sample: result.status === 'match' ? result.records[0] : result.status === 'ambiguous' ? result.candidates[0]?.record : undefined };
       results.push(row);
-      log(`${id} ${c.kind}: "${c.address}" → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'}${official ? ` official ${official.agrees ? 'agrees' : 'DIFFERS'}${official.valuesAgree === false ? ' (values differ)' : ''}${official.note ? ` ${official.note}` : ''}` : ''}`);
+      log(`${id} ${c.kind}: "${c.address}" → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'}${page ? ` district page: ${page.note}` : ''}${official ? ` official ${official.agrees ? 'agrees' : 'DIFFERS'}${official.valuesAgree === false ? ' (values differ)' : ''}${official.note ? ` ${official.note}` : ''}` : ''}`);
     }
   }
   await writeFile(join(cacheDir, 'verify.json'), JSON.stringify(results, null, 1));

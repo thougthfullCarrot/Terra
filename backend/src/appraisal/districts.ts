@@ -93,26 +93,29 @@ export const DISTRICTS: District[] = [
     search: 'https://bexar.trueautomation.com/clientdb/?cid=110',
     accountUrl: 'https://bexar.trueautomation.com/clientdb/Property.aspx?cid=110&prop_id={account}',
     access: 'arcgis',
-    layer: 'https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0',
-    publisher: 'Bexar County (maps.bexar.org), from BCAD certified roll',
+    // Bexar County's own layer (maps.bexar.org Parcels) says "from BCAD FTP as of September 2019", so the
+    // San Antonio River Authority copy the site already uses is read instead; its age is logged each run.
+    layer: 'https://gis.sara-tx.org/ags1/rest/services/FW_Bexar/BCAD_Parcels_PROD/FeatureServer/0',
+    publisher: 'San Antonio River Authority copy of the BCAD roll (gis.sara-tx.org)',
     fields: {
       ...COMMON,
-      account: ['PropID', 'Prop_id'],
+      account: ['Prop_id', 'PropID'],
       situs: ['Situs'],
-      owner: ['Owner', 'Owner_name'],
-      mailing: ['AddrLn1', 'AddrLn2', 'AddrLn3', 'AddrCity', 'AddrSt', 'Zip'],
-      landValue: ['LandVal'],
-      improvementValue: ['ImprVal'],
-      totalValue: ['TotVal', 'Market_val'],
+      owner: ['Owner_name', 'Owner'],
+      mailing: ['Addr_line1', 'Addr_line2', 'Addr_line3', 'Addr_city', 'Addr_state', 'Zip'],
+      landValue: ['Land_val', 'Land_value', 'LandVal', 'Land_hstd_val'],
+      improvementValue: ['Impr_val', 'Imprv_val', 'Improvement_val', 'ImprVal'],
+      totalValue: ['Market_val', 'Appraised_val', 'TotVal'],
+      taxYear: ['Prop_val_yr', 'Tax_year', 'Year', 'Roll_year'],
       stateCode: ['State_cd'],
-      landAcres: ['Acres', 'LglAcres', 'Land_acres'],
-      buildingSqft: ['TOT_GBA', 'GBA', 'Sq_ft'],
-      yearBuilt: ['YrBlt', 'Yr_blt']
+      landAcres: ['Land_acres', 'Acres'],
+      buildingSqft: ['Sq_ft', 'TOT_GBA'],
+      yearBuilt: ['Yr_blt', 'YrBlt']
     },
     valueBasis: 'market',
     pauseMs: 500,
-    terms: 'BCAD does not offer a public bulk export; its downloads page requires a paid request. Bexar County publishes the parcel layer openly (1,000 rows per request).',
-    notes: 'The SARA copy the site used before (gis.sara-tx.org BCAD_Parcels_PROD) is kept as a fallback in the browser.'
+    terms: 'BCAD offers no public bulk export or API (its site sits behind a bot check). Public agencies republish its roll as open ArcGIS layers; Bexar County\'s (maps.bexar.org) is the 2019 roll, so SARA\'s is used.',
+    notes: 'Verify checks sample accounts against BCAD\'s own property page (bexar.trueautomation.com) when its robots.txt allows.'
   },
   {
     id: 'harris',
@@ -233,7 +236,7 @@ export const DISTRICTS: District[] = [
     markets: ['El Paso'],
     site: 'https://epcad.org/',
     search: 'https://epcad.org/Search',
-    downloads: ['https://epcad.org/OpenGovernment', 'https://export.epcad.org/datasets/2026_Certified_Export_Files.zip', 'https://propertysearch.blob.core.windows.net/abepublicfiles/Schemas.txt'],
+    downloads: ['https://epcad.org/OpenGovernment', 'https://export.epcad.org/datasets/2026_Certified_Export_Files.zip', 'https://propertysearch.blob.core.windows.net/abepublicfiles/Schemas.txt', 'https://propertysearch.blob.core.windows.net/abepublicfiles/Properties2027Dump.zip'],
     api: 'https://go.epcad.org/ApiPropertySearch',
     access: 'bulk',
     publisher: 'EPCAD certified export files (PACS 8.0 layout, Open Government page)',
@@ -249,6 +252,7 @@ export const DISTRICTS: District[] = [
     markets: ['New Braunfels'],
     site: 'https://comalad.org/',
     search: 'https://esearch.comalad.org/',
+    downloads: ['https://gis.bisclient.com/comalcad/'],
     access: 'none',
     terms: 'No public bulk export or API on the district site; the property search has a CAPTCHA, so it is not automated. The district GIS viewer (gis.bisclient.com/comalcad) is a map for people. The only open parcel layer (TNRIS copy, services6.arcgis.com Comal_County_Parcels) dates from January 2021. Data can be asked for under the Public Information Act (comalad.org/open-records-request).'
   },
@@ -301,6 +305,7 @@ export const DISTRICTS: District[] = [
     markets: ['Midland'],
     site: 'https://midcad.org/',
     search: 'https://www.southwestdatasolution.com/webindex.aspx?dbkey=MIDLANDCAD',
+    downloads: ['https://gis.bisclient.com/midlandcad/'],
     access: 'none',
     terms: 'No public bulk export or API on the district site; the search is a vendor site (Southwest Data Solutions) and the GIS viewer (gis.bisclient.com/midlandcad) is a map for people. Data can be asked for under the Public Information Act (midcad.org/open-records).'
   }

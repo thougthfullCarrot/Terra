@@ -130,14 +130,14 @@ async function pacs(zip: string, onRow: (row: Row) => Promise<unknown> | unknown
   const names = await zipEntries(zip);
   const land = new Map<string, number>();
   try {
-    await zipLines(zip, pick(names, /(^|\/)[^/]*LAND_DET\.TXT$/i), (line) => {
+    await zipLines(zip, pick(names, /(^|\/)[^/]*(LAND_DET|APPRAISAL_LAND_DETAIL)\.TXT$/i), (line) => {
       const sqft = Number(line.slice(83, 97).trim());
       if (!sqft) return;
       const id = String(Number(line.slice(0, 12)));
       land.set(id, (land.get(id) ?? 0) + sqft);
     });
   } catch {}
-  await zipLines(zip, pick(names, /(^|\/)[^/]*PROP\.TXT$/i), async (line) => {
+  await zipLines(zip, pick(names, /(^|\/)[^/]*(PROP|APPRAISAL_INFO)\.TXT$/i), async (line) => {
     if (sample.length < 2) sample.push(line.slice(0, 4500));
     const row = pacsRow(line);
     // Real property only: personal property and minerals have no street address to look up.
@@ -158,7 +158,8 @@ export function newestExport(page: string, base: string): { url: string; taxYear
     .map((m) => new URL(m[1]!.replace(/&amp;/g, '&'), base).href)
     .filter((u) => /certified|export|appraisal|roll/i.test(decodeURIComponent(u)) && !/supplement|personal|mineral|bpp|layout|totals|protest|sales/i.test(decodeURIComponent(u)));
   const ranked = links
-    .map((url) => ({ url, taxYear: Math.max(0, ...[...decodeURIComponent(url).matchAll(/20\d\d/g)].map((m) => Number(m[0]))) }))
+    // The year in the file name, not the upload folder (/2023/07/2026-CERTIFIED.zip is the 2026 roll).
+    .map((url) => ({ url, taxYear: Math.max(0, ...[...decodeURIComponent(url.split('/').pop()!).matchAll(/20\d\d/g)].map((m) => Number(m[0]))) }))
     .sort((a, b) => b.taxYear - a.taxYear || Number(/certified/i.test(b.url)) - Number(/certified/i.test(a.url)));
   return ranked[0] ?? null;
 }
@@ -167,6 +168,8 @@ function fromPage(page: string): Source['resolve'] {
   return async (year) => {
     const html = await fetchText(page, { timeoutMs: 60_000, headers: { 'user-agent': BROWSER } });
     const found = newestExport(html, page);
+    const all = [...html.matchAll(/href=["']([^"']+\.zip)["']/gi)].map((m) => m[1]);
+    console.log(`  ${page}: ${all.length} zip links: ${all.slice(0, 30).join(' ')}`);
     if (!found) throw new Error(`No roll export link on ${page}`);
     return { url: found.url, taxYear: found.taxYear || year };
   };
@@ -230,6 +233,8 @@ export const BULK_SOURCES: Record<string, Source> = {
         values.set(r.ACCOUNT_NUM!, { LAND_VAL: r.LAND_VAL!, IMPR_VAL: r.IMPR_VAL!, TOT_VAL: r.TOT_VAL!, SPTD_CODE: r.SPTD_CODE!, APPRAISAL_YR: r.APPRAISAL_YR! });
       });
       await delimited(zip, 'ACCOUNT_INFO.CSV', parseCsvLine, (r) => {
+        // Business personal property (BPP) accounts are equipment and inventory, not places.
+        if (r.DIVISION_CD && !['RES', 'COM'].includes(r.DIVISION_CD.trim())) return;
         const v = values.get(r.ACCOUNT_NUM!);
         const situs = [r.STREET_NUM, r.STREET_HALF_NUM, r.FULL_STREET_NAME, r.UNIT_ID ? `UNIT ${r.UNIT_ID}` : ''].map((x) => x?.trim()).filter(Boolean).join(' ');
         return onRow({ ...r, ...(v ?? {}), SITUS: situs });
