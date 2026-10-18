@@ -96,6 +96,8 @@ function hideFeed(message) {
   $('meta').textContent = message ?? '';
   $('list').replaceChildren();
   $('count').textContent = '';
+  $('jobs-total').textContent = '';
+  $('tab-jobs-count').textContent = '';
   $('stats').hidden = true;
   $('today').hidden = true;
   if ($('job-panel').open) $('job-panel').close();
@@ -191,7 +193,7 @@ function fillFilters(jobs) {
 /** City and role type as chips, counted against the other filters so each number is what a tap would show. */
 function drawChips() {
   for (const [key, id] of Object.entries(CHIP_FILTERS)) {
-    const pool = filterJobs(snapshot.jobs, { ...state, [key]: '', savedIds: saved });
+    const pool = filterJobs(snapshot.jobs, { ...state, [key]: '', savedIds: saved, bestIds });
     const counts = new Map(facet(pool, key).map(({ value, count }) => [value, count]));
     const values = facet(snapshot.jobs, key, key === 'city' ? snapshot.cities ?? [] : []).map(({ value }) => value);
     const row = $(id);
@@ -216,6 +218,7 @@ function drawChips() {
 function bind() {
   let timer;
   $('q').addEventListener('input', (event) => {
+    if ($('jobs-view').hidden) location.hash = '';
     clearTimeout(timer);
     timer = setTimeout(() => update({ q: event.target.value.trim() }), 120);
   });
@@ -229,14 +232,17 @@ function bind() {
     for (const key of SELECT_FILTERS) $(key).value = '';
   });
   $('saved-toggle').addEventListener('click', () => update({ saved: !state.saved }));
+  $('best-toggle').addEventListener('click', () => update({ best: !state.best }));
 
   // Press / to search, as on most sites with a search box.
   document.addEventListener('keydown', (event) => {
     if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target;
     if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
-    if ($('jobs-view').hidden || isModal()) return;
+    if (isModal()) return;
     event.preventDefault();
+    // The search sits in the header on every section; it searches the jobs.
+    if ($('jobs-view').hidden) location.hash = '';
     $('q').focus();
     $('q').select();
   });
@@ -252,6 +258,9 @@ function update(change, chosenSort = false) {
   render();
 }
 
+/** Jobs scored a best match for the signed-in visitor's resume, for the Best matches only filter. */
+let bestIds = new Set();
+
 function render() {
   // A filter tapped while the feed reloads (sign-in, sign-out) has nothing to draw yet.
   if (!snapshot) return;
@@ -260,11 +269,17 @@ function render() {
 
   const failed = boards?.failed ? ` · ${boards.failed} of ${boards.polled} boards didn't answer` : '';
   $('meta').textContent = `${updatedLabel(generatedAt, now)}${failed}`;
+  bestIds = new Set(jobs.filter((job) => scores.get(job.id)?.strong).map((job) => job.id));
+  // Best matches only needs a resume to score against; without one the filter is off and hidden.
+  if (!bestIds.size && state.best) state = { ...state, best: false };
+  $('best-toggle').hidden = !bestIds.size;
+  $('best-toggle').setAttribute('aria-pressed', String(state.best));
+  $('best-count').textContent = String(bestIds.size);
   drawToday(jobs, now);
   drawChips();
 
-  shown = sortJobs(filterJobs(jobs, { ...state, savedIds: saved }), state.sort);
-  const filtered = Boolean(state.q || state.saved || state.role || FILTERS.some((key) => state[key]));
+  shown = sortJobs(filterJobs(jobs, { ...state, savedIds: saved, bestIds }), state.sort);
+  const filtered = Boolean(state.q || state.saved || state.best || state.role || FILTERS.some((key) => state[key]));
   const roleName = state.role ? TITLE_GUIDE.find((entry) => entry.key === state.role)?.title : '';
   const strong = shown.filter((job) => scores.get(job.id)?.strong).length;
 
@@ -272,6 +287,8 @@ function render() {
     strong ? ` · ${strong} best ${strong === 1 ? 'match' : 'matches'} for you` : ''
   }`;
   $('clear').hidden = !filtered;
+  $('jobs-total').textContent = String(shown.length);
+  $('tab-jobs-count').textContent = String(jobs.length);
   drawSavedToggle();
 
   if (!jobs.length) {
@@ -283,6 +300,9 @@ function render() {
         : 'Nothing matches those filters.'
     );
   } else {
+    // Beside the list, a posting kept through a re-sort stays drawn and highlighted, however far down it moved.
+    const kept = WIDE.matches && panelJob ? shown.findIndex((j) => j.id === panelJob.id) : -1;
+    if (kept >= limit) limit = Math.ceil((kept + 1) / PAGE_SIZE) * PAGE_SIZE;
     $('list').replaceChildren(...shown.slice(0, limit).map((job, index) => card(job, now, index)));
     drawMore(now);
   }
@@ -307,6 +327,7 @@ function fillSplit() {
   if (!WIDE.matches || isModal() || $('jobs-view').hidden) return;
   if (panelJob && shown.some((j) => j.id === panelJob.id)) {
     markSelected();
+    paintPosition();
   } else if (shown.length) {
     if (state.job) setJobParam('');
     openPanel(shown[0], { auto: true });
@@ -652,10 +673,7 @@ function openPanel(job, { auto = false } = {}) {
   if (href) apply.href = href;
   paintPanelSave();
 
-  const index = shown.findIndex((j) => j.id === job.id);
-  $('jp-position').textContent = index >= 0 ? `${index + 1} of ${shown.length}` : '';
-  $('jp-prev').disabled = index <= 0;
-  $('jp-next').disabled = index < 0 || index >= shown.length - 1;
+  paintPosition();
 
   panel.querySelector('.sheet-body').scrollTop = 0;
   if (!panel.open) {
@@ -755,6 +773,14 @@ function drawSimilar(job) {
 }
 
 /** The open posting goes in the link without redrawing the list behind it. */
+/** "3 of 64" and previous/next, for the posting's place in the list as sorted and filtered now. */
+function paintPosition() {
+  const index = panelJob ? shown.findIndex((j) => j.id === panelJob.id) : -1;
+  $('jp-position').textContent = index >= 0 ? `${index + 1} of ${shown.length}` : '';
+  $('jp-prev').disabled = index <= 0;
+  $('jp-next').disabled = index < 0 || index >= shown.length - 1;
+}
+
 function setJobParam(id) {
   state = { ...state, job: id };
   history.replaceState(null, '', `${location.pathname}${writeQuery(state)}${location.hash}`);
@@ -813,6 +839,7 @@ function startTheme() {
     const dark = current() === 'dark';
     $('theme-toggle').setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} mode`);
     $('theme-toggle').dataset.mode = dark ? 'dark' : 'light';
+    $('theme-toggle').textContent = dark ? 'Light' : 'Dark';
   };
   $('theme-toggle').addEventListener('click', () => {
     const next = current() === 'dark' ? 'light' : 'dark';

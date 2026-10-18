@@ -156,7 +156,10 @@ async function show() {
     if (name === active) $(`tab-${name}`).setAttribute('aria-current', 'page');
     else $(`tab-${name}`).removeAttribute('aria-current');
   }
-  if (!open) return;
+  if (!open) {
+    delete document.body.dataset.workspace;
+    return;
+  }
 
   if (!snapshot) {
     if (!loader) return;
@@ -204,13 +207,17 @@ function render() {
   $('m-focus').value = state.focus;
   // Sorting means nothing with one market on screen, or in the tools.
   const tool = state.tool;
-  $('m-sort-label').hidden = Boolean(state.city) || Boolean(tool);
-  $('m-order-label').hidden = Boolean(state.city) || Boolean(tool);
+  // The overview's table sorts from its own column headers.
+  $('m-sort-label').hidden = true;
+  $('m-order-label').hidden = true;
   // The comparison picks its own cities; the calculator brings its own inputs; the topic means nothing to the broker views.
   $('m-city-label').hidden = tool === 'compare';
   $('m-focus-label').hidden = ['leases', 'reports', 'sites', ...INSIGHTS].includes(tool);
   $('m-filters').hidden = tool === 'calc' || tool === 'uw';
-  for (const name of ['', 'compare', 'calc', 'uw', 'leases', 'sites', 'reports', ...INSIGHTS]) {
+  // The development map is its own full-height workspace under the header.
+  if (tool === 'map') document.body.dataset.workspace = 'map';
+  else delete document.body.dataset.workspace;
+  for (const name of ['', 'map', 'compare', 'calc', 'uw', 'leases', 'sites', 'reports', ...INSIGHTS]) {
     const link = $(`m-tool-${name || 'data'}`);
     link.href = writeMarketHash({ ...state, tool: name, compare: name === 'compare' ? state.compare : [] });
     if (tool === name) link.setAttribute('aria-current', 'page');
@@ -218,6 +225,14 @@ function render() {
   }
 
   disposeMap();
+  if (tool === 'map') {
+    $('m-blurb').textContent = '';
+    $('m-rates').replaceChildren();
+    $('m-chart').replaceChildren();
+    $('m-sources').replaceChildren();
+    $('m-body').replaceChildren(devMap(state.city || null, true) || mapMissing());
+    return;
+  }
   if (tool) {
     $('m-blurb').textContent = TOOL_BLURBS[tool];
     $('m-rates').replaceChildren();
@@ -230,8 +245,9 @@ function render() {
 
   $('m-blurb').textContent = group.blurb ?? '';
   $('m-rates').replaceChildren(rates());
-  $('m-chart').replaceChildren(...(state.city ? [] : group.key === 'development' ? [devMap(), chart(group)] : [chart(group)]));
-  $('m-body').replaceChildren(state.city ? cityView(state.city, group) : table(group));
+  // All markets: the comparison table beside the picked city's panel, the map's entry and the chart under it.
+  $('m-chart').replaceChildren();
+  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [overview(group), ...(group.key === 'development' ? [devTeaser()] : []), chartFold(group)]));
   if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
 }
@@ -263,7 +279,58 @@ function toolView(tool) {
   return sitesView(snapshot, state.city);
 }
 
-function table(group, me = '') {
+/** The city the all-markets panel shows; a table row's click picks it. */
+let sideCity = null;
+
+/** All markets: the comparison table with the picked city's figures beside it. */
+function overview(group) {
+  const box = el('div', 'market-overview');
+  const markets = sortMarkets(snapshot.markets, state.sort, state.order);
+  if (!markets.some((m) => m.city === sideCity)) sideCity = markets[0]?.city ?? null;
+  const tableBox = table(group, sideCity, (city) => {
+    sideCity = city;
+    render();
+  });
+  const side = el('aside', 'card market-side');
+  side.setAttribute('aria-live', 'polite');
+  const market = snapshot.markets.find((m) => m.city === sideCity);
+  if (market) {
+    side.setAttribute('aria-label', `${market.city} at a glance`);
+    const head = el('div', 'market-side-head');
+    head.append(el('h2', 'market-side-city', market.city), el('p', 'market-side-metro', market.metro ?? ''));
+    const follow = watchControls(market.city);
+    if (follow) head.append(follow);
+    side.append(head, kpis(market, group));
+    const missing = group.metrics.slice(0, 4).filter((key) => market.values[key] == null).length;
+    if (missing) side.append(el('p', 'market-side-note', `${missing === 1 ? 'One figure has' : `${missing} figures have`} no published value for ${market.city} yet.`));
+    const links = el('div', 'market-side-links');
+    const open = el('a', 'primary', `Open ${market.city}'s page`);
+    open.href = writeMarketHash({ ...state, city: market.city });
+    links.append(open);
+    if (snapshot.developments?.projects?.some((p) => p.city === market.city)) {
+      const map = el('a', 'secondary', 'Development map');
+      map.href = writeMarketHash({ ...state, tool: 'map', city: market.city });
+      links.append(map);
+    }
+    side.append(links);
+  }
+  const main = el('div', 'market-overview-main');
+  main.append(tableBox);
+  box.append(main, side);
+  return box;
+}
+
+/** The metric chart, folded under the table: the same figures as bars. */
+function chartFold(group) {
+  const fold = el('details', 'chart-fold');
+  fold.open = chartOpen;
+  fold.addEventListener('toggle', () => (chartOpen = fold.open));
+  fold.append(el('summary', 'chart-fold-summary', 'Show the figures as a chart'), chart(group));
+  return fold;
+}
+let chartOpen = false;
+
+function table(group, me = '', onPick = null) {
   const metrics = group.metrics.map(metricFor).filter(Boolean);
   const markets = sortMarkets(snapshot.markets, state.sort, state.order);
   const sorted = metricFor(state.sort);
@@ -280,12 +347,27 @@ function table(group, me = '') {
   for (const market of markets) {
     const row = el('tr', market.city === me ? 'me' : '');
     if (market.city === me) row.setAttribute('aria-current', 'true');
+    // The overview picks a city for its side panel; the city's name still opens its own page.
+    if (onPick) {
+      row.classList.add('pickable');
+      row.addEventListener('click', (event) => {
+        if (!event.target.closest('a, button')) onPick(market.city);
+      });
+    }
     const name = el('th', 'city-col');
     name.scope = 'row';
     if (placeFor?.has(market.city)) name.append(el('span', 'rank', String(placeFor.get(market.city))));
     const link = el('a', 'city-link', market.city);
     link.href = writeMarketHash({ ...state, city: market.city });
     name.append(link, el('span', 'metro', market.metro ?? ''));
+    if (onPick) {
+      const pick = el('button', 'link market-pick', market.city === me ? 'Shown' : 'Show');
+      pick.type = 'button';
+      pick.setAttribute('aria-label', `Show ${market.city} in the side panel`);
+      pick.setAttribute('aria-pressed', String(market.city === me));
+      pick.addEventListener('click', () => onPick(market.city));
+      name.append(pick);
+    }
     row.append(name);
 
     for (const metric of metrics) {
@@ -468,7 +550,7 @@ function cityView(city, focus) {
   frag.append(head, kpis(market, focus));
   const points = talkingPoints(market, focus);
   if (points) frag.append(points);
-  frag.append(devMap(city));
+  frag.append(devTeaser(city));
 
   // The chosen property type first, then the rest.
   const groups = [focus, ...snapshot.groups.filter((g) => g.key !== focus.key)];
@@ -694,10 +776,18 @@ function rates() {
  * a city's own page and on the all-markets development view. Nothing until a build has
  * read the state's project register.
  */
-function devMap(city) {
+function devMap(city, workspace = false) {
   const data = snapshot.developments;
   if (!data?.projects?.length) return '';
   const cities = snapshot.markets.map((m) => m.city).filter((c) => data.projects.some((p) => p.city === c));
+  // In the workspace the city is in the URL, so the switcher moves the hash
+  // and a link or the back button opens the same metro.
+  if (workspace) {
+    const pick = cities.includes(city) ? city : cities.includes(mapCity) ? mapCity : cities[0];
+    mapCity = pick;
+    loadDevFile(data, pick);
+    return developmentMap({ data, cities, city: pick, bids: snapshot.bids, onCity: (next) => update({ city: next }), back: writeMarketHash({ ...state, tool: '', city: '' }) });
+  }
   // On a city's page the switcher moves to that city's page, so changing
   // areas never means backing out to All markets first.
   if (city) loadDevFile(data, city);
@@ -714,6 +804,43 @@ function devMap(city) {
       render();
     }
   });
+}
+
+/** The workspace with no development data in this build. */
+function mapMissing() {
+  const box = el('div', 'card state');
+  box.append(el('p', '', 'No development projects in this build yet.'));
+  const back = el('a', 'link', '← Market data');
+  back.href = writeMarketHash({ ...state, tool: '', city: '' });
+  box.append(back);
+  return box;
+}
+
+/**
+ * The development map's entry on the market pages: what the map holds for
+ * this city (or every market) and a link into the full-height workspace.
+ */
+function devTeaser(city) {
+  const data = snapshot.developments;
+  if (!data?.projects?.length) return '';
+  const cities = snapshot.markets.map((m) => m.city).filter((c) => data.projects.some((p) => p.city === c));
+  if (city && !cities.includes(city)) return '';
+  const rows = city ? data.projects.filter((p) => p.city === city) : data.projects;
+  const listed = city ? (data.metros?.find((m) => m.city === city)?.listed ?? rows.length) : null;
+  const card = el('section', 'card devx-teaser');
+  card.setAttribute('aria-labelledby', 'dev-teaser-title');
+  const text = el('div', 'devx-teaser-text');
+  const title = el('h2', 'devx-teaser-title', city ? `What's being built in ${city}` : "What's being built across Texas");
+  title.id = 'dev-teaser-title';
+  const count = listed ?? rows.length;
+  text.append(
+    title,
+    el('p', 'devx-teaser-note', city ? `${count.toLocaleString('en-US')} filed projects from state TABS filings${rows.some((p) => p.source === 'city') ? ' and city permits' : ''}, with a list, filters and a filings chart.` : `Filed projects in ${cities.length} metros from state TABS filings, with a list, filters and a filings chart.`)
+  );
+  const open = el('a', 'primary devx-teaser-open', city ? `Open the ${city} map` : 'Open the development map');
+  open.href = writeMarketHash({ ...state, tool: 'map', city: city ?? mapCity ?? '' });
+  card.append(text, open);
+  return card;
 }
 
 /**

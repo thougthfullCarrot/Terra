@@ -91,7 +91,7 @@ function render() {
     $('e-list').replaceChildren(
       ...groupByMonth(events).map((group) => {
         const section = el('section', 'events-month');
-        section.append(el('h3', 'eyebrow events-month-title', group.month.toUpperCase()), ...group.events.map((e) => item(e, i++)));
+        section.append(el('h3', 'eyebrow events-month-title', group.month), ...group.events.map((e) => item(e, i++)));
         return section;
       })
     );

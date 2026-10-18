@@ -167,7 +167,7 @@ export function calculatorView(snapshot) {
     if (prefix) box.append(el('span', 'calc-affix', prefix));
     box.append(input);
     if (suffix) box.append(el('span', 'calc-affix', suffix));
-    label.append(el('span', 'eyebrow', field.label.toUpperCase()), box);
+    label.append(el('span', 'eyebrow', field.label), box);
     form.append(label);
   }
 
@@ -177,7 +177,7 @@ export function calculatorView(snapshot) {
   taxSelect.append(new Option('None (include it in expenses)', ''));
   for (const city of taxCities) taxSelect.append(new Option(`${city}: ${formatValue(taxFor(city), 'taxRate')}`, city));
   taxSelect.value = deal.city;
-  const taxEyebrow = el('span', 'eyebrow', 'PROPERTY TAX FROM CITY');
+  const taxEyebrow = el('span', 'eyebrow', 'Property tax from city');
   taxLabel.append(taxEyebrow, taxSelect);
   form.append(taxLabel);
   card.append(form);
@@ -189,7 +189,7 @@ export function calculatorView(snapshot) {
   const fills = rateFills(snapshot.rates);
   if (fills.length) {
     const row = el('div', 'calc-fills');
-    const rateHead = el('span', 'eyebrow', 'USE A LIVE RATE');
+    const rateHead = el('span', 'eyebrow', 'Use a live rate');
     rateHead.append(labelTag('estimate', 'a published benchmark rate plus a typical lender spread'));
     row.append(rateHead);
     for (const fill of fills) {

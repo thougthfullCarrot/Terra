@@ -89,7 +89,7 @@ export function stateBox(text, kind = 'empty', { retry = false } = {}) {
 export function labelHeading(text, kind, source = '') {
   const head = document.createElement('p');
   head.className = 'prov-heading eyebrow';
-  head.append(text.toUpperCase(), labelTag(kind, source));
+  head.append(text, labelTag(kind, source));
   return head;
 }
 

@@ -198,7 +198,7 @@ export function barPercent(value, values, unit) {
   return Math.max(4, Math.round(((value - min) / (max - min)) * 100));
 }
 
-export const TOOLS = ['compare', 'calc', 'uw', 'leases', 'reports', 'sites', 'pay', 'zoning', 'growth'];
+export const TOOLS = ['map', 'compare', 'calc', 'uw', 'leases', 'reports', 'sites', 'pay', 'zoning', 'growth'];
 
 /** The most cities the comparison puts side by side; fewer than two is filled up from the list. */
 export const MAX_COMPARE = 4;
@@ -336,7 +336,45 @@ export const PUBLIC_INVOLVEMENT = [
   { key: 'private', label: 'Not indicated in filing' }
 ];
 
-export const EMPTY_DEV_FILTERS = Object.freeze({ query: '', place: '', work: '', publicInvolvement: '', cost: '', status: '', filed: '' });
+export const EMPTY_DEV_FILTERS = Object.freeze({ query: '', place: '', work: '', publicInvolvement: '', cost: '', status: '', filed: '', since: '', off: Object.freeze([]) });
+
+/**
+ * Map categories, read from the words in a filing's project and facility
+ * names (TABS has no building-type field). A name that names no category, or
+ * names two that disagree, is Other / unclassified rather than a guess; the
+ * scope text is only used when the names say nothing and it points one way.
+ */
+export const DEV_CATEGORIES = [
+  { key: 'residential', label: 'Residential', color: '#d27a52', words: /\b(apartments?|apts|multi-?family|residences?|residential|lofts?|townhomes?|townhouses?|condos?|condominiums?|senior living|independent living|assisted living|housing|homes|duplex(es)?|dwellings?|single family)\b/ },
+  { key: 'office', label: 'Office', color: '#6874c8', words: /\b(office|offices|headquarters|hq|corporate campus)\b/ },
+  { key: 'industrial', label: 'Industrial', color: '#c9a347', words: /\b(warehouse|warehouses|distribution|logistics|industrial|manufacturing|fulfillment|data center|self[- ]storage|mini[- ]storage|cold storage|business park|commerce center)\b/ },
+  { key: 'healthcare', label: 'Healthcare', color: '#c46a92', words: /\b(hospital|medical|clinic|health|healthcare|surgery|surgical|rehab|rehabilitation|emergency|behavioral|dialysis|imaging|cancer|pediatric|physicians?)\b/ },
+  { key: 'public', label: 'Public & education', color: '#4f9a7e', words: /\b(school|schools|isd|elementary|middle school|high school|university|college|library|fire station|police|city hall|courthouse|municipal|recreation center|natatorium|stadium|athletic|academy|education|classroom|dormitory|residence hall|church|chapel|worship|wastewater|water treatment)\b/ },
+  { key: 'retail', label: 'Retail & hospitality', color: '#4c9cbf', words: /\b(retail|restaurant|hotel|inn|suites|shopping|shops|store|grocery|h-?e-?b|walmart|target|costco|kroger|bank|car wash|gas station|convenience|fuel|dining|cafe|entertainment|theater|cinema|club|clubhouse)\b/ }
+];
+export const OTHER_CATEGORY = { key: 'other', label: 'Other / unclassified', color: '#9b958d' };
+
+const categoryOf = new WeakMap();
+
+/** A project's map category key ('other' when the filing's words don't support one). */
+export function projectCategory(p) {
+  if (!p || typeof p !== 'object') return OTHER_CATEGORY.key;
+  let key = categoryOf.get(p);
+  if (key) return key;
+  const hits = (text) => DEV_CATEGORIES.filter((c) => c.words.test(String(text ?? '').toLowerCase())).map((c) => c.key);
+  let found = hits([p.name, p.facility].filter(Boolean).join(' '));
+  // Public money or land plus a public word settles a mixed name (a school with a "clubhouse").
+  if (found.length > 1 && p.isPublic && found.includes('public')) found = ['public'];
+  if (!found.length) found = hits(p.scope);
+  key = found.length === 1 ? found[0] : OTHER_CATEGORY.key;
+  categoryOf.set(p, key);
+  return key;
+}
+
+/** Every category the map can show, Other last. */
+export function categoryList() {
+  return [...DEV_CATEGORIES, OTHER_CATEGORY];
+}
 
 /** Lowercase, accents and punctuation folded, so "TABS2025-026208" finds "TABS2025026208". */
 const fold = (text) =>
@@ -349,7 +387,7 @@ const fold = (text) =>
 
 /** The text a search reads: name, facility, project or permit number, every address, town, and other names the site is filed under. */
 export function projectSearchText(p) {
-  const text = fold([p.name, p.facility, p.id, p.address, ...(p.addresses ?? []), p.place, ...(p.aliases ?? [])].filter(Boolean).join(' '));
+  const text = fold([p.name, p.facility, p.id, p.address, ...(p.addresses ?? []), p.place, p.owner, ...(p.aliases ?? [])].filter(Boolean).join(' '));
   // Also the words run together, so a project number typed with or without dashes matches.
   return `${text} ${text.replace(/ /g, '')}`;
 }
@@ -365,7 +403,10 @@ function matchesQuery(p, words) {
 
 /** How many filters are set (the search counts as one). */
 export function activeFilterCount(filters) {
-  return Object.keys(EMPTY_DEV_FILTERS).filter((k) => String(filters?.[k] ?? '').trim()).length;
+  return Object.keys(EMPTY_DEV_FILTERS).filter((k) => {
+    const value = filters?.[k];
+    return Array.isArray(value) ? value.length > 0 : String(value ?? '').trim() !== '';
+  }).length;
 }
 
 /**
@@ -378,6 +419,9 @@ export function filterProjects(projects, filters = EMPTY_DEV_FILTERS, asOf = new
   const band = COST_BANDS.find((b) => b.key === f.cost);
   const window = FILED_WINDOWS.find((w) => w.key === f.filed);
   const since = window ? new Date(new Date(asOf).getTime() - window.days * 86_400_000).toISOString().slice(0, 10) : null;
+  // "since" is a month picked on the filing chart (YYYY-MM): filed in that month or later.
+  const fromMonth = /^\d{4}-\d{2}$/.test(f.since ?? '') ? f.since : null;
+  const off = new Set(Array.isArray(f.off) ? f.off : []);
   return (projects ?? []).filter(
     (p) =>
       matchesQuery(p, words) &&
@@ -386,7 +430,9 @@ export function filterProjects(projects, filters = EMPTY_DEV_FILTERS, asOf = new
       (!f.publicInvolvement || (f.publicInvolvement === 'public') === Boolean(p.isPublic)) &&
       (!band || (p.cost > 0 && p.cost >= band.min && p.cost < band.max)) &&
       (!f.status || p.status === f.status) &&
-      (!since || (/^\d{4}-\d{2}-\d{2}/.test(p.registered ?? '') && p.registered.slice(0, 10) >= since))
+      (!since || (/^\d{4}-\d{2}-\d{2}/.test(p.registered ?? '') && p.registered.slice(0, 10) >= since)) &&
+      (!fromMonth || (/^\d{4}-\d{2}/.test(p.registered ?? '') && p.registered.slice(0, 7) >= fromMonth)) &&
+      (!off.size || !off.has(projectCategory(p)))
   );
 }
 
@@ -398,6 +444,33 @@ export function filterChoices(projects) {
     return [...tally].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]))).map(([value, n]) => ({ value, count: n }));
   };
   return { places: count('place'), works: count('work'), statuses: count('status') };
+}
+
+/** Projects in display order: biggest (cost), newest (filing date) or finishing (estimated end, soonest first; none last). */
+export function sortProjects(projects, sort = 'biggest') {
+  const rows = [...(projects ?? [])];
+  if (sort === 'newest') return rows.sort((a, b) => String(b.registered ?? '').localeCompare(String(a.registered ?? '')) || b.cost - a.cost);
+  if (sort === 'finishing') {
+    const end = (p) => (/^\d{4}-\d{2}/.test(p.end ?? '') ? p.end : '9999');
+    return rows.sort((a, b) => end(a).localeCompare(end(b)) || b.cost - a.cost);
+  }
+  return rows.sort((a, b) => b.cost - a.cost);
+}
+
+/** Filings per month for the last `months` months up to asOf: [{ month: 'YYYY-MM', count }], oldest first. */
+export function filingsByMonth(projects, asOf, months = 24) {
+  const end = new Date(asOf);
+  const keys = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - i, 1));
+    keys.push(d.toISOString().slice(0, 7));
+  }
+  const counts = new Map(keys.map((k) => [k, 0]));
+  for (const p of projects ?? []) {
+    const key = String(p.registered ?? '').slice(0, 7);
+    if (counts.has(key)) counts.set(key, counts.get(key) + 1);
+  }
+  return keys.map((month) => ({ month, count: counts.get(month) }));
 }
 
 /** A map pin's radius in pixels: area grows with cost, from 6 for the smallest to 20 for the biggest. */

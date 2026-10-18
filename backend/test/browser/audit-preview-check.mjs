@@ -7,7 +7,7 @@
 // searches by name, id and street address, opens each result, and checks the
 // details and that the pin is drawn. It checks that ZIP-center pins say they
 // are approximate, that projects without coordinates stay searchable and open
-// their details in the list, and times each market's map with the bigger data.
+// their details in the panel, and times each market's map with the bigger data.
 // Read-only: a local server, no sign-in, outside requests blocked.
 import { createServer } from 'node:http';
 import { readFile, mkdir, stat } from 'node:fs/promises';
@@ -71,7 +71,7 @@ async function open(ctx, city) {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const t0 = Date.now();
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForSelector('.dev-map.leaflet-container', { timeout: 60000 });
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 60000 });
   return { page, errors, ms: Date.now() - t0 };
@@ -87,17 +87,18 @@ async function search(page, query) {
 
 const visibleNames = (page) => page.$$eval('.dev-list .dev-item:not([hidden]) .dev-name', (ns) => ns.map((n) => n.textContent));
 
-/** Click a list result; returns the details text and whether its pin's popup opened. */
+/** Click a list result; returns the project panel's text and whether its pin is selected on the map. */
 async function pick(page, name) {
   const item = page.locator('.dev-list .dev-item:not([hidden])').filter({ has: page.locator('.dev-name', { hasText: name }) }).first();
   await item.locator('.dev-pick').click();
-  try {
-    await page.waitForFunction((n) => [...document.querySelectorAll('.leaflet-popup .dev-pop-title')].some((t) => t.textContent === n), name, { timeout: 8000 });
-    return { text: await page.locator('.leaflet-popup .dev-pop').first().innerText(), popup: true };
-  } catch {
-    const detail = item.locator('.dev-detail');
-    return { text: (await detail.count()) ? await detail.innerText() : '', popup: false };
-  }
+  const opened = await page
+    .waitForFunction((n) => document.querySelector('.devx-panel:not([hidden]) .dev-pop-title')?.textContent === n, name, { timeout: 8000 })
+    .then(() => true, () => false);
+  if (!opened) return { text: '', popup: false };
+  await page.waitForTimeout(300);
+  // A selected pin carries the pulse ring; a project with no point opens the panel alone.
+  const pulse = await page.locator('.dev-map .devx-pulse').count();
+  return { text: await page.locator('.devx-panel').innerText(), popup: pulse > 0 };
 }
 
 for (const vp of [
@@ -108,10 +109,6 @@ for (const vp of [
   const v = vp.name;
   const { page, errors, ms } = await open(ctx, 'San Antonio');
   console.log(`\n[${v}] San Antonio map ready in ${ms} ms`);
-  if (vp.mobile) {
-    const body = page.locator('.dev-filters-body');
-    if (!(await body.isVisible())) await page.locator('.dev-filters-summary').click();
-  }
   for (const id of TARGETS) {
     const p = projects.find((x) => x.id === id);
     log(`${v}: ${id} is in the preview data`, Boolean(p));
@@ -128,17 +125,17 @@ for (const vp of [
     }
     await search(page, id);
     const got = await pick(page, p.name);
-    log(`${v}: ${id} opens its pin with details`, got.popup && p.lat != null, got.popup ? 'popup on the map' : 'no popup');
+    log(`${v}: ${id} opens its pin with details`, got.popup && p.lat != null, got.popup ? 'pin selected on the map' : 'no pin selected');
     log(`${v}: ${id} details show the address`, Boolean(p.address) && got.text.includes(p.address));
     const label = p.approximate ? /ZIP code center/ : p.locatedFrom ? /site's location from a city permit/ : null;
-    if (label) log(`${v}: ${id} details label where the pin came from`, label.test(got.text), got.text.split('\n').find((l) => /Pin is/.test(l)) ?? '');
+    if (label) log(`${v}: ${id} details label where the pin came from`, label.test(got.text), got.text.split('\n').find((l) => /^(Site point|Approximate)/.test(l)) ?? '');
     const pins = Number(await page.locator('.dev-map').getAttribute('data-pins'));
     log(`${v}: ${id} pin is drawn when it is the only result`, pins === 1, `${pins} pins`);
     if (shots) await page.screenshot({ path: join(shots, `${v}-${id}.png`) });
     await page.keyboard.press('Escape');
   }
 
-  // A ZIP-center project: dashed pin and a popup that says approximate.
+  // A ZIP-center project: dashed pin and a panel that says approximate.
   const approx = (byCity.get('San Antonio') ?? []).find((p) => p.approximate);
   if (approx) {
     await search(page, approx.id);
@@ -150,14 +147,14 @@ for (const vp of [
   // A project without coordinates: still found, marked, details in the list.
   const off = (byCity.get('San Antonio') ?? []).find((p) => p.lat == null) ?? projects.find((p) => p.lat == null);
   if (off) {
-    if (off.city !== 'San Antonio') await page.goto(`${base}#markets&city=${encodeURIComponent(off.city)}`), await page.waitForSelector('.dev-map.leaflet-container');
+    if (off.city !== 'San Antonio') await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(off.city)}`), await page.waitForSelector('.dev-map.leaflet-container');
     await search(page, off.id);
     const names = await visibleNames(page);
     log(`${v}: no-coordinate project ${off.id} (${off.city}) is searchable`, names.includes(off.name));
     const marked = await page.locator('.dev-list .dev-item:not([hidden]) .dev-off').count();
     log(`${v}: it is marked "Not on the map"`, marked >= 1);
     const got = await pick(page, off.name);
-    log(`${v}: it opens its details in the list`, !got.popup && got.text.includes(off.name));
+    log(`${v}: it opens its details in the panel, with no pin`, !got.popup && got.text.includes(off.name) && /Not on the map|Details pending/.test(got.text));
   }
   log(`${v}: no page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await page.close();
@@ -193,12 +190,11 @@ async function slowPhone(city, useBaseline) {
   let bytes = 0;
   cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength));
   const t0 = Date.now();
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForSelector('.dev-list .dev-item', { timeout: 180000 });
   const list = Date.now() - t0;
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 180000 });
   const map = Date.now() - t0;
-  if (!(await page.locator('.dev-filters-body').isVisible())) await page.locator('.dev-filters-summary').click();
   const typed = (await search(page, 'build')) - 250;
   await ctx.close();
   return { list, map, typed, mb: bytes / 1e6 };

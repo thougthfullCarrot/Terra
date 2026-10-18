@@ -11,15 +11,18 @@ import { followButton } from './watch-view.js';
 import { areaItem, projectItem } from './watch.js';
 import {
   activeFilterCount,
+  categoryList,
   cityProjects,
   COST_BANDS,
   EMPTY_DEV_FILTERS,
   FILED_WINDOWS,
+  filingsByMonth,
   filterChoices,
   filterProjects,
-  markerRadius,
+  projectCategory,
   projectDates,
-  PUBLIC_INVOLVEMENT
+  PUBLIC_INVOLVEMENT,
+  sortProjects
 } from './market.js';
 import { firmJobsHref, growthJobs, hiringOn } from './growth.js';
 import { stateBox } from './labels.js';
@@ -56,8 +59,6 @@ let liveMap = null;
 /** The map's filters, kept while the section redraws or the city changes (the town resets with the city). */
 let filters = { ...EMPTY_DEV_FILTERS };
 let filtersCity = null;
-/** The filter panel's open state once someone toggles it; null follows the screen width. */
-let panelOpen = null;
 
 export function loadLeaflet() {
   leaflet ??= new Promise((resolve, reject) => {
@@ -92,35 +93,43 @@ export function disposeMap() {
   liveMap = null;
 }
 
-/**
- * The map card. With several cities it shows a city switcher and calls
- * onCity when one is picked; on a city's own page, cities is just that one.
- */
 /** Rows put in the list before the first paint after a filter change. */
 const FIRST_ROWS = 300;
+/** Below this map width the project panel covers the lower part of the map instead of its right side. */
+const NARROW_MAP = 820;
+const SORTS = [
+  { key: 'biggest', label: 'Biggest' },
+  { key: 'newest', label: 'Newest' },
+  { key: 'finishing', label: 'Finishing' }
+];
+let sort = 'biggest';
+/** "Firms hiring now": only projects with a firm named on the filing that has open roles in the feed. */
+let hiringOnly = false;
 
-export function developmentMap({ data, cities, city, bids, onCity }) {
-  const box = el('section', 'card dev-card');
+/**
+ * The development map: a project list with a cost summary, category legend
+ * and sorting on the left; the map with floating filters, a filings-by-month
+ * chart and a project panel on the right. With several cities it shows a city
+ * switcher and calls onCity when one is picked; on a city's own page, cities
+ * is just that one.
+ */
+export function developmentMap({ data, cities, city, bids, onCity, back = null }) {
+  const box = el('section', 'card dev-card devx');
   box.setAttribute('aria-labelledby', 'dev-title');
-  const head = el('div', 'dev-head');
-  const title = el('h3', 'group-title', `${city} metro development map`);
-  title.id = 'dev-title';
-  head.append(
-    title,
-    el(
-      'p',
-      'group-blurb',
-      `New buildings and additions under way in the ${city} metro, from state filings over the last two years${PERMIT_CITIES[city] ? ` and ${PERMIT_CITIES[city]} building permits` : ''}. Click a pin or a project for the details and a link to the developer.`
-    )
-  );
-  // Watchlists (migration 0017): new filings in this metro by email. Null while they're off.
-  const followArea = followButton(areaItem(city), 'Follow new filings here');
-  if (followArea) head.append(followArea);
-  box.append(head);
 
-  const controls = el('div', 'dev-controls');
+  // ---- Title row: where we are, the city chips, Follow new filings.
+  const head = el('div', 'devx-head');
+  const titles = el('div', 'devx-titles');
+  const crumbs = el('p', 'devx-crumbs');
+  const home = back ? el('a', 'link', 'Market data') : el('span', '', 'Markets');
+  if (back) home.href = back;
+  crumbs.append(home, el('span', 'devx-sep', '/'), el('span', '', 'Development map'));
+  const title = el('h2', 'devx-title', `What's being built in ${city}`);
+  title.id = 'dev-title';
+  titles.append(crumbs, title);
+  const actions = el('div', 'devx-head-actions');
   if (cities.length > 1) {
-    const pick = el('div', 'metric-pills dev-cities');
+    const pick = el('div', 'dev-cities devx-cities');
     pick.setAttribute('role', 'group');
     pick.setAttribute('aria-label', 'City');
     for (const name of cities) {
@@ -130,12 +139,27 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       chip.addEventListener('click', () => onCity(name));
       pick.append(chip);
     }
-    controls.append(pick);
+    // Narrow screens: the same choice as one menu, so no city is hidden off the edge of a chip row.
+    const menu = el('label', 'devx-city-menu');
+    const select = el('select');
+    select.setAttribute('aria-label', 'City');
+    for (const name of cities) select.append(new Option(name, name));
+    select.value = city;
+    select.addEventListener('change', () => onCity(select.value));
+    menu.append(el('span', 'devx-pill-label', 'City'), select);
+    actions.append(pick, menu);
+    if (cities.length > 6) actions.classList.add('many');
   }
-  const legend = el('span', 'dev-legend');
-  legend.append(el('i', 'dot private'), 'Public involvement not indicated ', el('i', 'dot public'), 'Public involvement indicated');
-  if (smallerOf(data, city).length) legend.append(el('i', 'dot small'), 'Smaller filing');
-  box.append(controls);
+  // Watchlists (migration 0017): new filings in this metro by email. Null while they're off.
+  const followArea = followButton(areaItem(city), 'Follow new filings');
+  if (followArea) actions.append(followArea);
+  // Narrow screens: the list sits under the full-height map, so a visible control opens it.
+  const toList = el('button', 'secondary sm devx-to-list', 'Search & project list');
+  toList.type = 'button';
+  toList.setAttribute('aria-controls', 'devx-side');
+  actions.append(toList);
+  head.append(titles, actions);
+  box.append(head);
 
   if (filtersCity !== city) {
     filters = { ...filters, place: '' };
@@ -143,19 +167,93 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   }
   const all = cityProjects(data?.projects, city);
   const asOf = data?.asOf ?? new Date().toISOString();
-  const panel = filterPanel(all, () => apply());
-  controls.append(panel.node);
+  const cats = categoryList();
+  const catOf = new Map(cats.map((c) => [c.key, c]));
+  const hiringCache = new Map();
+  const hiringFor = (project) => {
+    let firms = hiringCache.get(project);
+    if (!firms) hiringCache.set(project, (firms = hiringOn(project, growthJobs())));
+    return firms;
+  };
 
-  const results = el('div', 'dev-results');
+  const body = el('div', 'devx-body');
+  const side = el('div', 'devx-side');
+  side.id = 'devx-side';
+  side.setAttribute('aria-label', 'Projects');
+  side.setAttribute('role', 'region');
+  const mapWrap = el('div', 'devx-mapwrap');
+  body.append(side, mapWrap);
+  box.append(body);
+
+  // ---- Left: search, summary, legend, sort, list.
+  const search = el('label', 'search dev-search devx-search');
+  const input = el('input');
+  input.type = 'search';
+  input.placeholder = 'Search name, address, owner or filing';
+  input.setAttribute('aria-label', 'Search projects by name, address, owner, project or permit number');
+  input.autocomplete = 'off';
+  input.enterKeyHint = 'search';
+  search.insertAdjacentHTML('beforeend', '<svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>');
+  search.append(input);
+  toList.addEventListener('click', () => {
+    side.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' });
+    input.focus({ preventScroll: true });
+  });
+  let typing = 0;
+  input.addEventListener('input', () => {
+    // The query is kept at once, so a menu changed within the debounce never drops it.
+    filters = { ...filters, query: input.value };
+    clearTimeout(typing);
+    typing = setTimeout(apply, 120);
+  });
+
+  const summary = el('div', 'devx-summary');
+  const total = el('p', 'devx-total');
+  const pinned = el('p', 'devx-pinned');
+  summary.append(total, pinned);
+  const bar = el('div', 'devx-bar');
+  bar.setAttribute('aria-hidden', 'true');
+  const legend = el('ul', 'devx-legend');
+  legend.setAttribute('aria-label', 'Categories: click one to hide or show it');
+  const legendItems = new Map();
+  for (const cat of cats) {
+    const li = el('li');
+    const button = el('button', 'devx-legend-item');
+    button.type = 'button';
+    button.dataset.category = cat.key;
+    const dot = el('i', 'devx-dot');
+    dot.style.background = cat.color;
+    const n = el('span', 'devx-legend-count');
+    button.append(dot, el('span', 'devx-legend-label', cat.label), n);
+    button.addEventListener('click', () => {
+      const off = new Set(filters.off ?? []);
+      off.has(cat.key) ? off.delete(cat.key) : off.add(cat.key);
+      filters = { ...filters, off: [...off] };
+      apply();
+    });
+    li.append(button);
+    legend.append(li);
+    legendItems.set(cat.key, { li, button, n });
+  }
+
+  const listHead = el('div', 'devx-list-head');
   const count = el('p', 'dev-count');
   count.setAttribute('aria-live', 'polite');
-  const clear = el('button', 'chip dev-clear', 'Clear filters');
-  clear.type = 'button';
-  clear.addEventListener('click', () => {
-    filters = { ...EMPTY_DEV_FILTERS };
-    panel.sync();
-    apply();
+  const sorter = el('div', 'devx-seg');
+  sorter.setAttribute('role', 'group');
+  sorter.setAttribute('aria-label', 'Sort projects');
+  const sortButtons = SORTS.map(({ key, label }) => {
+    const b = el('button', 'devx-seg-item', label);
+    b.type = 'button';
+    b.dataset.sort = key;
+    b.addEventListener('click', () => {
+      sort = key;
+      apply();
+    });
+    sorter.append(b);
+    return b;
   });
+  listHead.append(count, sorter);
   const smallerHint = el('button', 'link dev-smaller-hint');
   smallerHint.type = 'button';
   smallerHint.hidden = true;
@@ -166,56 +264,81 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
       details.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   });
-  results.append(count, smallerHint, clear, legend);
-  box.append(results);
 
-  const layout = el('div', 'dev-layout');
-  const mapNode = el('div', 'dev-map');
-  mapNode.setAttribute('role', 'region');
-  mapNode.setAttribute('aria-label', `Map of ${city} metro development projects`);
-  mapNode.append(el('div', 'state dev-loading', 'Loading the map…'));
-  const list = el('ol', 'dev-list');
-  list.setAttribute('aria-label', `${city} metro development projects, biggest first`);
+  const list = el('ol', 'dev-list devx-list');
+  list.setAttribute('aria-label', `${city} metro development projects`);
   const empty = el('li', 'dev-empty');
   empty.hidden = true;
   const emptyClear = el('button', 'link dev-empty-clear', 'Clear filters');
   emptyClear.type = 'button';
-  emptyClear.addEventListener('click', () => clear.click());
+  emptyClear.addEventListener('click', () => clearAll());
   const hint = el('span', 'dev-meta', 'Try a wider cost range or filing window, or ');
   hint.append(emptyClear, '.');
   empty.append(el('strong', '', 'No projects match these filters.'), hint);
-  layout.append(mapNode, list);
+  side.append(search, summary, bar, legend, listHead, smallerHint, list);
+
+  // ---- Right: the map with floating filters, the chart and the project panel.
+  const mapNode = el('div', 'dev-map');
+  mapNode.setAttribute('role', 'region');
+  mapNode.setAttribute('aria-label', `Map of ${city} metro development projects`);
+  mapNode.append(el('div', 'state dev-loading', 'Loading the map…'));
+  const pills = filterPills(all, () => apply(), () => clearAll());
+  const chart = el('section', 'devx-chart');
+  chart.setAttribute('aria-label', 'Filings by month');
+  const panel = el('section', 'devx-panel');
+  panel.setAttribute('aria-label', 'Project details');
+  panel.tabIndex = -1;
+  panel.hidden = true;
+  mapWrap.append(mapNode, pills.node, chart, panel);
+
+  // ---- Below: coverage, smaller filings and reports, public bids.
   const note = el('p', 'dev-note');
-  // What the map leaves out, smaller filings, and "Report a development" (migration 0019).
   const reports = reportsSection({ city, data, permits: PERMIT_CITIES[city] ?? null });
-  box.append(layout, note, reports.node);
+  box.append(note, reports.node);
   const bidList = bidsSection(bids, city);
   if (bidList) box.append(bidList);
 
   const placed = all.filter((p) => p.lat != null && p.lng != null);
   const updated = data?.asOf ? new Date(data.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
   const near = placed.filter((p) => p.approximate).length;
-  const parts = [`${placed.length} of ${all.length} projects have a map location`];
-  if (near) parts.push(`${near} with a dashed outline sit at the center of their ZIP code because their new address is not on the Census street map yet`);
+  const site = placed.filter((p) => !p.approximate && p.locatedFrom).length;
+  const waiting = all.filter((p) => p.awaiting).length;
+  const parts = [`${placed.length.toLocaleString('en-US')} of ${all.length.toLocaleString('en-US')} projects have a map location`];
+  if (site) parts.push(`${site.toLocaleString('en-US')} use the site's point from a city permit at the same address`);
+  if (near) parts.push(`${near.toLocaleString('en-US')} with a dashed outline sit at the center of their ZIP code because their new address is not on the Census street map yet`);
+  if (waiting) parts.push(`${waiting.toLocaleString('en-US')} are listed by name, number and cost while their details wait to be read from the state`);
   const sources = all.some((p) => p.source === 'city') ? `state TABS filings and ${PERMIT_CITIES[city] ?? 'city'} building permits` : 'state TABS filings';
   note.textContent = all.length
-    ? `${parts.join('; ')}. From ${sources}${updated ? `, updated ${updated}` : ''}. Costs are the owner's estimate. The filing date is the TABS registration date, or the permit's issue date for city permits. Single-family homes are not included${PERMIT_CITIES[city] ? '' : ", and this metro's cities do not publish their permits, so smaller projects may be missing"}.`
+    ? `${parts.join('; ')}. From ${sources}${updated ? `, updated ${updated}` : ''}. Costs are the owner's estimate. The filing date is the TABS registration date, or the permit's issue date for city permits. Categories come from the words in each filing's name; filings whose names don't say are Other / unclassified. Single-family homes are not included${PERMIT_CITIES[city] ? '' : ", and this metro's cities do not publish their permits, so smaller projects may be missing"}.`
     : 'No projects to show yet.';
 
-  const items = drawList(list, all);
-  list.append(empty);
+  const items = drawList(all, catOf, hiringFor, (project) => select(project, { fly: true, reveal: true }), (project, on) => map?.hover(on ? project : null));
   let map = null;
-
+  /** The projects on screen in list order, for the panel's previous and next. */
+  let order = [];
+  let selected = null;
   let listTurn = 0;
-  const apply = () => {
-    const shown = filterProjects(all, filters, asOf);
-    // Keyed by the project itself: city permit ids can repeat in a metro.
+
+  function clearAll() {
+    filters = { ...EMPTY_DEV_FILTERS };
+    hiringOnly = false;
+    pills.sync();
+    apply();
+  }
+
+  function apply() {
+    input.value = filters.query;
+    const hiring = (rows) => (hiringOnly ? rows.filter((p) => hiringFor(p).length) : rows);
+    const shown = hiring(filterProjects(all, filters, asOf));
+    // Legend counts ignore the legend itself, so a hidden category still says how many it holds.
+    const forLegend = hiring(filterProjects(all, { ...filters, off: [] }, asOf));
+    // The chart ignores its own month, so every bar stays clickable.
+    const forChart = hiring(filterProjects(all, { ...filters, since: '' }, asOf));
+    order = sortProjects(shown, sort);
     const ids = new Set(shown);
-    // Only matching rows stay in the list: hiding thousands of rows costs far
-    // more layout than detaching them, on a market's full list.
-    // The first rows go in at once and the rest right after the paint.
-    const rows = [];
-    for (const [project, item] of items) if (ids.has(project)) rows.push(item);
+
+    // Only matching rows stay in the list: detaching costs far less than hiding thousands.
+    const rows = order.map((p) => items.get(p));
     const turn = ++listTurn;
     list.textContent = '';
     list.append(...rows.slice(0, FIRST_ROWS), empty);
@@ -229,28 +352,125 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
         }, 0)
       );
     empty.hidden = shown.length > 0 || !all.length;
-    const active = activeFilterCount(filters);
+
     const pins = shown.filter((p) => p.lat != null && p.lng != null).length;
+    const cost = shown.reduce((sum, p) => sum + (p.cost > 0 ? p.cost : 0), 0);
+    total.replaceChildren(el('b', '', money(cost) || '$0'), ` across ${shown.length.toLocaleString('en-US')} ${shown.length === 1 ? 'project' : 'projects'}`);
+    pinned.textContent = `${pins.toLocaleString('en-US')} on the map`;
+    const active = activeFilterCount(filters) + (hiringOnly ? 1 : 0);
     count.replaceChildren(
       el('strong', '', shown.length.toLocaleString('en-US')),
       ` ${active ? `of ${all.length.toLocaleString('en-US')} ` : ''}${shown.length === 1 ? 'project' : 'projects'}`,
-      el('span', 'dev-count-pins', ` · ${pins.toLocaleString('en-US')} ${pins === 1 ? 'pin' : 'pins'} on the map`)
+      el('span', 'dev-count-pins visually-hidden', ` · ${pins.toLocaleString('en-US')} ${pins === 1 ? 'pin' : 'pins'} on the map`)
     );
+    for (const b of sortButtons) b.setAttribute('aria-pressed', String(b.dataset.sort === sort));
+
+    // Cost by category across what's shown, and the legend's counts.
+    const byCost = new Map();
+    const byCount = new Map();
+    for (const p of shown) byCost.set(projectCategory(p), (byCost.get(projectCategory(p)) ?? 0) + (p.cost > 0 ? p.cost : 0));
+    for (const p of forLegend) byCount.set(projectCategory(p), (byCount.get(projectCategory(p)) ?? 0) + 1);
+    const present = new Set(all.map((p) => projectCategory(p)));
+    bar.replaceChildren(
+      ...cats
+        .filter((c) => byCost.get(c.key))
+        .map((c) => {
+          const seg = el('i');
+          seg.style.background = c.color;
+          seg.style.flexGrow = String(byCost.get(c.key));
+          return seg;
+        })
+    );
+    const off = new Set(filters.off ?? []);
+    for (const [key, { li, button, n }] of legendItems) {
+      li.hidden = !present.has(key);
+      n.textContent = (byCount.get(key) ?? 0).toLocaleString('en-US');
+      button.setAttribute('aria-pressed', String(!off.has(key)));
+      button.title = off.has(key) ? 'Hidden: click to show' : 'Click to hide';
+    }
+
+    drawChart(chart, filingsByMonth(forChart, asOf), filters.since, (month) => {
+      filters = { ...filters, since: filters.since === month ? '' : month };
+      apply();
+    });
+
     // A search also looks through the smaller filings.
     const more = filters.query ? reports.searchSmaller(filters.query) : 0;
-    const onlyQuery = active === (filters.query ? 1 : 0);
-    map?.showSmall(onlyQuery ? new Set(matchSmaller(data?.smaller, city, filters.query).map((f) => f.id)) : null);
+    const onlyQuery = activeFilterCount({ ...filters, query: '' }) === 0 && !hiringOnly;
+    map?.showSmall(onlyQuery && filters.query ? new Set(matchSmaller(data?.smaller, city, filters.query).map((f) => f.id)) : null);
     smallerHint.hidden = !more;
     smallerHint.textContent = more ? `${more.toLocaleString('en-US')} more in Smaller filings below the map` : '';
-    clear.hidden = !active;
-    panel.badge(active);
+    pills.badge(active, hiringOnly);
     mapNode.dataset.matches = String(shown.length);
     map?.show(ids);
+    if (selected && !ids.has(selected)) close();
+    else if (selected) step(0);
+  }
+
+  pills.onHiring = () => {
+    hiringOnly = !hiringOnly;
+    apply();
   };
+
+  /** Opens a project in the panel: from a row, a pin, or the panel's own previous and next. */
+  function select(project, { fly = false, focus = false, reveal = false } = {}) {
+    selected = project;
+    for (const [p, item] of items) {
+      const on = p === project;
+      if (item.classList.contains('active') !== on) item.classList.toggle('active', on);
+    }
+    const row = items.get(project);
+    row?.querySelector('.dev-pick')?.setAttribute('aria-current', 'true');
+    for (const node of list.querySelectorAll('.dev-pick[aria-current]')) if (node.closest('.dev-item') !== row) node.removeAttribute('aria-current');
+    if (row?.isConnected) {
+      const top = row.offsetTop - list.offsetTop;
+      if (top < list.scrollTop || top + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTo({ top: top - 8, behavior: reduceMotion() ? 'auto' : 'smooth' });
+    }
+    panel.replaceChildren(...projectPanel(project, { catOf, hiring: hiringFor(project), step, close }));
+    panel.hidden = false;
+    mapWrap.classList.add('panel-open');
+    map?.select(project, fly);
+    // Stacked layout: the list sits under the map, so a row's pick brings the map and its panel back into view.
+    if (reveal && mapWrap.classList.contains('narrow') && mapWrap.getBoundingClientRect().top < 0) mapWrap.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' });
+    if (focus) panel.focus({ preventScroll: true });
+  }
+
+  /** Moves the panel through the list (0 redraws the same project). */
+  function step(by) {
+    const i = order.indexOf(selected);
+    const next = order[i + by];
+    if (i < 0 || !next) return;
+    select(next, { fly: by !== 0 });
+    const nav = panel.querySelector(by < 0 ? '.devx-prev' : '.devx-next');
+    if (by && nav && !nav.disabled) nav.focus({ preventScroll: true });
+  }
+
+  function close() {
+    const was = selected;
+    selected = null;
+    panel.hidden = true;
+    mapWrap.classList.remove('panel-open');
+    for (const item of list.querySelectorAll('.dev-item.active')) item.classList.remove('active');
+    for (const node of list.querySelectorAll('.dev-pick[aria-current]')) node.removeAttribute('aria-current');
+    map?.select(null);
+    if (was && panel.contains(document.activeElement)) items.get(was)?.querySelector('.dev-pick')?.focus({ preventScroll: true });
+  }
+
+  // Escape anywhere in the card (the panel, a row, the map) closes an open panel.
+  box.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && selected && !event.target.closest?.('.devx-more')) {
+      event.preventDefault();
+      const was = selected;
+      close();
+      items.get(was)?.querySelector('.dev-pick')?.focus({ preventScroll: true });
+    }
+  });
+  panel.prevStep = () => step(-1);
+
   apply();
   // After the card is on the page: Leaflet measures its container.
   queueMicrotask(() =>
-    drawMap(mapNode, list, all, city, reports, smallerOf(data, city))
+    drawMap(mapNode, mapWrap, all, city, catOf, reports, smallerOf(data, city), (project) => select(project, { fly: true, focus: false }))
       .then((drawn) => {
         if (!drawn) return;
         map = drawn;
@@ -264,124 +484,190 @@ export function developmentMap({ data, cities, city, bids, onCity }) {
   return box;
 }
 
-/** The filter controls: a search box and menus built from the values the metro's projects carry. */
-function filterPanel(all, onChange) {
+/**
+ * Phone workspace: the map fills the screen from its own top down to the
+ * bottom tabs, whatever the title row above it holds (a note, a wrapped button).
+ */
+function fitWorkspace(wrap, narrow) {
+  if (document.body.dataset.workspace !== 'map' || !narrow) {
+    wrap.style.removeProperty('height');
+    return;
+  }
+  const tabs = document.querySelector('nav.tabs');
+  const fixed = tabs && getComputedStyle(tabs).position === 'fixed';
+  const bottom = fixed ? tabs.getBoundingClientRect().top : innerHeight;
+  const top = wrap.getBoundingClientRect().top + scrollY;
+  const height = Math.max(320, Math.floor(bottom - top - 8));
+  if (wrap.style.height !== `${height}px`) wrap.style.height = `${height}px`;
+}
+
+function reduceMotion() {
+  return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
+
+/**
+ * The floating filter pills over the map: cost, type of work, public
+ * involvement (funding), More (town, filing status, filed window), the
+ * "Firms hiring now" toggle and Clear all. Each menu keeps its old label as
+ * its accessible name.
+ */
+function filterPills(all, onChange, onClear) {
   const choices = filterChoices(all);
-  const details = el('details', 'dev-filters');
-  const narrow = window.matchMedia?.('(max-width: 760px)').matches;
-  details.open = panelOpen ?? !narrow;
-  details.addEventListener('toggle', () => {
-    panelOpen = details.open;
-  });
-  const summary = el('summary', 'dev-filters-summary');
-  const badge = el('span', 'dev-filters-badge');
-  summary.append(el('span', '', 'Filter projects'), badge);
-  const body = el('div', 'dev-filters-body');
-  details.append(summary, body);
-
-  const search = el('label', 'search dev-search');
-  const input = el('input');
-  input.type = 'search';
-  input.placeholder = 'Search name, project number or address';
-  input.setAttribute('aria-label', 'Search projects by name, project number or address');
-  input.autocomplete = 'off';
-  input.enterKeyHint = 'search';
-  search.insertAdjacentHTML('beforeend', '<svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>');
-  search.append(input);
-  let timer = 0;
-  input.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      filters = { ...filters, query: input.value };
-      onChange();
-    }, 120);
-  });
-  body.append(search);
-
-  const grid = el('div', 'filters dev-filter-grid');
+  const node = el('div', 'devx-filters');
+  node.setAttribute('role', 'group');
+  node.setAttribute('aria-label', 'Filter projects');
   const selects = {};
-  const menu = (key, label, options) => {
+  const tally = (rows) => rows.map((r) => ({ value: r.value, label: `${r.value} (${r.count})` }));
+  const menu = (host, key, short, label, options, any = 'All') => {
     if (!options.length) return;
-    const wrap = el('label');
+    const wrap = el('label', 'devx-pill');
     const select = el('select');
-    select.append(new Option(`All`, ''));
+    select.setAttribute('aria-label', label);
+    select.dataset.filter = key;
+    select.append(new Option(any, ''));
     for (const o of options) select.append(new Option(o.label, o.value));
     select.addEventListener('change', () => {
       filters = { ...filters, [key]: select.value };
       onChange();
     });
-    wrap.append(el('span', 'dev-filter-label', label), select);
-    grid.append(wrap);
+    wrap.append(el('span', 'devx-pill-label', short), select);
+    host.append(wrap);
     selects[key] = select;
   };
-  const tally = (rows) => rows.map((r) => ({ value: r.value, label: `${r.value} (${r.count})` }));
-  if (choices.places.length > 1) menu('place', 'City or town', tally(choices.places));
-  menu('work', 'Type of work', tally(choices.works));
-  menu('publicInvolvement', 'Public involvement', PUBLIC_INVOLVEMENT.map((o) => ({ value: o.key, label: o.label })));
-  menu('cost', 'Estimated cost', COST_BANDS.map((b) => ({ value: b.key, label: b.label })));
-  if (choices.statuses.length > 1) menu('status', 'Filing status', tally(choices.statuses));
-  menu('filed', 'Filed', FILED_WINDOWS.map((w) => ({ value: w.key, label: w.label })));
-  body.append(grid);
+  menu(node, 'cost', 'Cost', 'Estimated cost', COST_BANDS.map((b) => ({ value: b.key, label: b.label })), 'Any');
+  menu(node, 'work', 'Work', 'Type of work', tally(choices.works));
+  menu(node, 'publicInvolvement', 'Funding', 'Public involvement', PUBLIC_INVOLVEMENT.map((o) => ({ value: o.key, label: o.label })));
 
-  const sync = () => {
-    input.value = filters.query;
-    for (const [key, select] of Object.entries(selects)) {
-      // A saved choice this metro doesn't carry (another metro's status) shows as All and is dropped.
-      select.value = filters[key];
-      if (select.value !== filters[key]) {
-        select.value = '';
-        filters = { ...filters, [key]: '' };
+  const more = el('details', 'devx-more');
+  const moreSummary = el('summary', 'devx-pill devx-more-summary');
+  const moreBadge = el('span', 'devx-more-badge');
+  moreSummary.append(el('span', '', 'More'), moreBadge);
+  const moreBody = el('div', 'devx-more-body');
+  more.append(moreSummary, moreBody);
+  if (choices.places.length > 1) menu(moreBody, 'place', 'Town', 'City or town', tally(choices.places));
+  if (choices.statuses.length > 1) menu(moreBody, 'status', 'Status', 'Filing status', tally(choices.statuses));
+  menu(moreBody, 'filed', 'Filed', 'Filed', FILED_WINDOWS.map((w) => ({ value: w.key, label: w.label })), 'Any time');
+  node.append(more);
+  more.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && more.open) {
+      more.open = false;
+      moreSummary.focus();
+    }
+  });
+
+  const hiring = el('button', 'devx-pill devx-toggle');
+  hiring.type = 'button';
+  hiring.append(el('i', 'devx-toggle-dot'), 'Firms hiring now');
+  hiring.title = 'Projects where a firm named on the filing (owner, tenant, architect or contractor) has open roles on Terra';
+  const clear = el('button', 'devx-pill devx-clear dev-clear', 'Clear all');
+  clear.type = 'button';
+  clear.addEventListener('click', onClear);
+  node.append(hiring, clear);
+
+  const api = {
+    node,
+    onHiring: null,
+    sync() {
+      for (const [key, select] of Object.entries(selects)) {
+        // A saved choice this metro doesn't carry (another metro's status) shows as All and is dropped.
+        select.value = filters[key];
+        if (select.value !== filters[key]) {
+          select.value = '';
+          filters = { ...filters, [key]: '' };
+        }
+        select.closest('.devx-pill')?.classList.toggle('on', Boolean(filters[key]));
       }
+    },
+    badge(active, hiringOn) {
+      clear.hidden = !active;
+      hiring.setAttribute('aria-pressed', String(hiringOn));
+      const extra = ['place', 'status', 'filed'].filter((k) => filters[k]).length;
+      moreBadge.textContent = extra ? String(extra) : '';
+      moreSummary.classList.toggle('on', extra > 0);
+      api.sync();
     }
   };
-  sync();
-  return {
-    node: details,
-    sync,
-    badge(active) {
-      badge.textContent = active ? `${active} on` : '';
-      badge.hidden = !active;
-    }
-  };
+  hiring.addEventListener('click', () => api.onHiring?.());
+  api.sync();
+  return api;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthLabel = (key, long = false) => {
+  const [y, m] = key.split('-');
+  return long ? `${MONTHS[+m - 1]} ${y}` : `${MONTHS[+m - 1]} '${y.slice(2)}`;
+};
+
+/** Filings by month: one bar per month; clicking a bar shows filings from that month on, clicking it again clears. */
+function drawChart(node, months, since, onPick) {
+  const max = Math.max(1, ...months.map((m) => m.count));
+  const head = el('div', 'devx-chart-head');
+  head.append(el('h3', 'devx-chart-title', 'Filings by month'), el('span', 'devx-chart-note', since ? `From ${monthLabel(since, true)} on · click it again to clear` : `Last ${months.length} months · click a bar to start there`));
+  const bars = el('div', 'devx-bars');
+  for (const { month, count } of months) {
+    const b = el('button', 'devx-bar-col');
+    b.type = 'button';
+    b.dataset.month = month;
+    b.setAttribute('aria-pressed', String(since === month));
+    b.setAttribute('aria-label', `${monthLabel(month, true)}: ${count} ${count === 1 ? 'filing' : 'filings'}. Show filings from this month on`);
+    b.title = `${monthLabel(month, true)}: ${count.toLocaleString('en-US')}`;
+    const fill = el('i');
+    fill.style.height = `${Math.max(count ? 6 : 2, Math.round((count / max) * 100))}%`;
+    if (since && month < since) b.classList.add('before');
+    b.append(fill);
+    b.addEventListener('click', () => onPick(month));
+    bars.append(b);
+  }
+  const axis = el('div', 'devx-axis');
+  const ticks = [0, Math.round(months.length / 3), Math.round((2 * months.length) / 3), months.length - 1];
+  for (const i of ticks) axis.append(el('span', '', months[i] ? monthLabel(months[i].month) : ''));
+  node.replaceChildren(head, bars, axis);
 }
 
 const markers = new Map();
 
 /**
  * Draws every project's pin once; show() then adds or removes pins as the
- * filters change, so filtering never rebuilds the map. Null when the card
- * left the page while Leaflet loaded.
+ * filters change, and hover() and select() restyle them in place, so the map
+ * is never rebuilt. Null when the card left the page while Leaflet loaded.
  */
-async function drawMap(node, list, projects, city, reports = null, small = []) {
+async function drawMap(node, wrap, projects, city, catOf, reports = null, small = [], onPick = () => {}) {
   const L = await loadLeaflet();
   if (!node.isConnected) return null;
   disposeMap();
   markers.clear();
   node.replaceChildren();
-  const map = L.map(node, { scrollWheelZoom: true });
+  const map = L.map(node, { scrollWheelZoom: true, zoomControl: false });
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener noreferrer">Leaflet</a>');
   liveMap = map;
+  // A map always has a view before its first fit; fitBounds on a 0-size container leaves it blank.
+  map.setView(CENTERS[city] ?? [31, -99], 9);
   L.tileLayer(TILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map);
   const layer = L.featureGroup().addTo(map);
 
   const styles = getComputedStyle(document.documentElement);
   const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
-  const fills = { private: color('--accent', '#2b4a8b'), public: color('--amber', '#b8722e') };
+  const dark = () => (document.documentElement.dataset.theme ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+  const stroke = () => (dark() ? '#161412' : '#ffffff');
+  const ink = () => (dark() ? '#f2f0ed' : '#1b1917');
+  const accent = color('--accent', '#c0582c');
   const max = Math.max(...projects.map((p) => p.cost), 1);
-  const placed = projects.filter((p) => p.lat != null && p.lng != null);
-  for (const project of placed) {
-    const fill = project.isPublic ? fills.public : fills.private;
-    const marker = L.circleMarker([project.lat, project.lng], {
-      radius: markerRadius(project.cost, max),
-      color: '#ffffff',
-      weight: 1.5,
-      fillColor: fill,
-      fillOpacity: project.approximate ? 0.45 : 0.78,
-      dashArray: project.approximate ? '3 3' : null
-    });
-    marker.bindPopup(() => popup(project), { maxWidth: 300, autoPanPadding: [24, 24] });
+  const radius = (p) => 4 + Math.sqrt(Math.min(Math.max(p.cost, 0), max) / max) * 14;
+  const base = (p) => ({
+    radius: radius(p),
+    color: stroke(),
+    weight: 1.5,
+    fillColor: catOf.get(projectCategory(p))?.color ?? '#9b958d',
+    fillOpacity: p.approximate ? 0.45 : 0.85,
+    dashArray: p.approximate ? '3 3' : null
+  });
+  for (const project of projects.filter((p) => p.lat != null && p.lng != null)) {
+    const marker = L.circleMarker([project.lat, project.lng], base(project));
     marker.bindTooltip(project.name, { direction: 'top', offset: [0, -6] });
-    marker.on('popupopen', () => highlight(list, project));
+    marker.on('click', () => onPick(project));
+    marker.on('mouseover', () => api.hover(project));
+    marker.on('mouseout', () => api.hover(null));
     markers.set(project, marker);
   }
   // Smaller filings (below the cap) with a pin from a spare page read: small,
@@ -391,7 +677,7 @@ async function drawMap(node, list, projects, city, reports = null, small = []) {
   for (const filing of small) {
     const marker = L.circleMarker([filing.lat, filing.lng], {
       radius: 3.5,
-      color: fills.private,
+      color: accent,
       weight: 1.5,
       fillColor: '#ffffff',
       fillOpacity: 0.9,
@@ -404,9 +690,9 @@ async function drawMap(node, list, projects, city, reports = null, small = []) {
     smallLayer.addLayer(marker);
   }
   smallLayer.bringToBack();
-  // Verified community reports: a square-ish ringed pin of their own, always shown.
+  // Verified community reports: a ringed pin of their own, always shown.
   for (const report of publishedReports(city)) {
-    L.circleMarker([report.lat, report.lng], { radius: 6, color: fills.private, weight: 2.5, fillColor: '#ffffff', fillOpacity: 0.95 })
+    L.circleMarker([report.lat, report.lng], { radius: 6, color: accent, weight: 2.5, fillColor: '#ffffff', fillOpacity: 0.95 })
       .bindPopup(() => reportPopup(report), { maxWidth: 300 })
       .bindTooltip(`${report.name || 'Community report'} (verified report)`, { direction: 'top', offset: [0, -6] })
       .addTo(map);
@@ -416,12 +702,61 @@ async function drawMap(node, list, projects, city, reports = null, small = []) {
     if (!reports?.picking()) return;
     reports.pick(event.latlng);
     dropped?.remove();
-    dropped = L.circleMarker(event.latlng, { radius: 8, color: fills.public, weight: 3, fillOpacity: 0.2, dashArray: '4 3' }).bindTooltip('Your report pin').addTo(map);
+    dropped = L.circleMarker(event.latlng, { radius: 8, color: accent, weight: 3, fillOpacity: 0.2, dashArray: '4 3' }).bindTooltip('Your report pin').addTo(map);
   });
-  const center = () => map.setView(CENTERS[city] ?? [31, -99], 9);
+
+  const pulse = L.marker([0, 0], { icon: L.divIcon({ className: 'devx-pulse-icon', html: '<span class="devx-pulse"></span>', iconSize: [0, 0] }), interactive: false, keyboard: false });
+  let hovered = null;
+  let chosen = null;
+  const paint = (p) => {
+    const marker = markers.get(p);
+    if (!marker) return;
+    const lit = p === hovered || p === chosen;
+    const b = base(p);
+    marker.setStyle(lit ? { ...b, radius: b.radius + 3, weight: 3, color: ink(), fillOpacity: 0.95 } : b);
+    if (lit) marker.bringToFront();
+  };
+  window.addEventListener('themechange', () => {
+    if (map !== liveMap) return;
+    for (const p of markers.keys()) paint(p);
+  });
+
+  const wide = () => node.clientWidth >= NARROW_MAP;
+  /** Fit padding scaled to the map: room for the filters on top, the chart below and the panel on the right. */
+  const padding = () => {
+    const w = node.clientWidth;
+    const h = node.clientHeight;
+    const open = wrap.classList.contains('panel-open');
+    const narrow = !wide();
+    return {
+      paddingTopLeft: [Math.min(40, w * 0.08), Math.min(narrow ? 56 : 64, h * 0.15)],
+      paddingBottomRight: [open && !narrow ? Math.min(420, w * 0.45) : Math.min(40, w * 0.08), open && narrow ? h * 0.62 : Math.min(narrow ? 40 : 150, h * 0.3)],
+      maxZoom: 14
+    };
+  };
+  let lastIds = null;
+  let fitted = false;
+  const fit = () => {
+    if (!node.clientWidth || !node.clientHeight || !lastIds) return;
+    const visible = [];
+    for (const [project, marker] of markers) if (lastIds.has(project)) visible.push(marker.getLatLng());
+    if (visible.length) map.fitBounds(L.latLngBounds(visible), { ...padding(), animate: false });
+    else map.setView(CENTERS[city] ?? [31, -99], 9, { animate: false });
+    fitted = true;
+  };
+  // The container gets its size after layout, and changes with the window or a tab switch.
+  const observer = new ResizeObserver(() => {
+    if (map !== liveMap) return observer.disconnect();
+    wrap.classList.toggle('narrow', !wide());
+    fitWorkspace(wrap, !wide());
+    map.invalidateSize({ pan: false });
+    if (!fitted) fit();
+  });
+  observer.observe(node);
+  map.on('unload', () => observer.disconnect());
+
   let last = null;
-  let viewed = false;
-  return {
+  const api = {
     /** Smaller pins to show: a set of filing ids, or null for none. */
     showSmall(ids) {
       if (map !== liveMap) return;
@@ -436,7 +771,7 @@ async function drawMap(node, list, projects, city, reports = null, small = []) {
       const marker = smallMarkers.get(id);
       if (!marker || map !== liveMap) return false;
       if (!smallLayer.hasLayer(marker)) smallLayer.addLayer(marker);
-      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.6 });
+      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 15), { duration: reduceMotion() ? 0 : 0.6 });
       map.once('moveend', () => marker.openPopup());
       return true;
     },
@@ -447,54 +782,97 @@ async function drawMap(node, list, projects, city, reports = null, small = []) {
       const key = projects.map((p) => (ids.has(p) ? 1 : 0)).join('');
       if (key === last) return;
       last = key;
-      const visible = [];
+      lastIds = ids;
+      let count = 0;
       for (const [project, marker] of markers) {
         const on = ids.has(project);
-        if (on) visible.push(marker.getLatLng());
+        if (on) count++;
         if (on !== layer.hasLayer(marker)) on ? layer.addLayer(marker) : layer.removeLayer(marker);
       }
-      node.dataset.pins = String(visible.length);
-      if (visible.length) map.fitBounds(L.latLngBounds(visible), { padding: [28, 28], maxZoom: 14 });
-      else if (!viewed) center();
-      viewed = true;
+      node.dataset.pins = String(count);
+      fit();
+    },
+    hover(project) {
+      if (map !== liveMap) return;
+      const was = hovered;
+      hovered = project;
+      if (was) paint(was);
+      if (project) paint(project);
+    },
+    /** Marks the chosen project's pin and, with fly, brings it into view beside the panel. */
+    select(project, fly = false) {
+      if (map !== liveMap) return;
+      const was = chosen;
+      chosen = project;
+      if (was) paint(was);
+      const marker = project ? markers.get(project) : null;
+      if (!marker || !layer.hasLayer(marker)) {
+        pulse.remove();
+        return;
+      }
+      paint(project);
+      pulse.setLatLng(marker.getLatLng()).addTo(map);
+      if (!fly) return;
+      const zoom = Math.max(map.getZoom(), 13);
+      const w = node.clientWidth;
+      const h = node.clientHeight;
+      // Center the map off the pin so the panel doesn't cover it.
+      const shift = wide() ? L.point(Math.min(420, w * 0.45) / 2, 0) : L.point(0, h * 0.28);
+      const target = map.unproject(map.project(marker.getLatLng(), zoom).add(shift), zoom);
+      if (reduceMotion()) map.setView(target, zoom, { animate: false });
+      else map.flyTo(target, zoom, { duration: 0.6 });
     }
   };
+  return api;
 }
 
-/** The list beside the map, every project once; filtering hides items. Returns project → item. */
-function drawList(list, projects) {
+/** Map location as the data supports it: an address match, a borrowed site point, a ZIP-center pin, or none yet. */
+function locationNote(project) {
+  if (project.awaiting) return 'Details pending from the state: listed by name, number and cost until its TABS page is read.';
+  if (project.lat == null || project.lng == null) return 'Not on the map: no reliable location for this filing yet.';
+  if (project.approximate) return 'Approximate: the pin is near the ZIP code center, not the exact site.';
+  if (project.locatedFrom) return `Site point: the pin is the site's location from a city permit at the same address (${project.locatedFrom}), not the building's own point.`;
+  return project.source === 'city' ? "Pin at the permit's location." : "Pin at the filing's address.";
+}
+
+/** The list, every project once, as rows; apply() puts them in order. Returns project → item. */
+function drawList(projects, catOf, hiringFor, onPick, onHover) {
   const items = new Map();
-  list.replaceChildren(
-    ...projects.map((project) => {
-      const item = el('li', 'dev-item');
-      const onMap = project.lat != null && project.lng != null;
-      const button = el('button', 'dev-pick');
-      button.type = 'button';
-      const meta = [project.place, money(project.cost), project.work, project.status].filter(Boolean).join(' · ');
-      button.append(
-        el('span', `dot ${project.isPublic ? 'public' : 'private'}`),
-        el('span', 'dev-name', project.name),
-        el('span', 'dev-meta', meta),
-        el('span', 'dev-meta', project.owner ? `Owner: ${project.owner}` : project.source === 'city' ? 'City building permit' : 'Owner not listed')
-      );
-      if (project.awaiting) button.append(el('span', 'dev-off', 'Details pending from the state'));
-      else if (!onMap) button.append(el('span', 'dev-off', 'Not on the map'));
-      button.addEventListener('click', () => {
-        const marker = markers.get(project);
-        // No pin (no coordinates, or the map library failed to load): show the details in the list instead.
-        if (!marker || !liveMap) {
-          toggleDetail(item, button, project);
-          return;
-        }
-        liveMap.flyTo(marker.getLatLng(), Math.max(liveMap.getZoom(), 15), { duration: 0.6 });
-        liveMap.once('moveend', () => marker.openPopup());
-      });
-      item.append(button, links(project));
-      items.set(project, item);
-      rows.set(project, item);
-      return item;
-    })
-  );
+  for (const project of projects) {
+    const item = el('li', 'dev-item');
+    item.dataset.category = projectCategory(project);
+    item.dataset.id = project.id;
+    const button = el('button', 'dev-pick');
+    button.type = 'button';
+    const dot = el('i', 'devx-dot');
+    const cat = catOf.get(projectCategory(project));
+    dot.style.background = cat?.color ?? '#9b958d';
+    dot.title = cat?.label ?? '';
+    const text = el('span', 'devx-row-text');
+    const meta = [project.place, project.facility && project.facility !== project.name ? project.facility : '', project.work].filter(Boolean).join(' · ');
+    text.append(el('span', 'dev-name', project.name), el('span', 'dev-meta', meta));
+    const tags = el('span', 'devx-tags');
+    if (project.status) tags.append(el('span', 'devx-tag', project.status));
+    if (project.awaiting) tags.append(el('span', 'devx-tag dev-off', 'Details pending from the state'));
+    else if (project.lat == null || project.lng == null) tags.append(el('span', 'devx-tag dev-off', 'Not on the map'));
+    else if (project.approximate) tags.append(el('span', 'devx-tag', 'Approximate pin'));
+    else if (project.locatedFrom) tags.append(el('span', 'devx-tag', 'Site point'));
+    const hiring = hiringFor(project);
+    if (hiring.length) {
+      const tag = el('span', 'devx-tag hiring', 'Firm on filing hiring');
+      tag.title = `${hiring.map((h) => h.firm).join(', ')}: named on this filing, with open roles on Terra`;
+      tags.append(tag);
+    }
+    text.append(tags);
+    button.append(dot, text, el('span', 'devx-cost', money(project.cost)));
+    button.addEventListener('click', () => onPick(project));
+    button.addEventListener('mouseenter', () => onHover(project, true));
+    button.addEventListener('mouseleave', () => onHover(project, false));
+    button.addEventListener('focus', () => onHover(project, true));
+    button.addEventListener('blur', () => onHover(project, false));
+    item.append(button);
+    items.set(project, item);
+  }
   return items;
 }
 
@@ -515,8 +893,8 @@ function smallPopup(filing) {
   return box;
 }
 
-/** Opens or closes a project's details under its list item, for projects without a pin. */
-export function toggleDetail(item, button, project, render = popup) {
+/** Opens or closes a project's details under its list item (used by lists outside the map). */
+export function toggleDetail(item, button, project, render = (p) => projectPanel(p, { catOf: new Map(categoryList().map((c) => [c.key, c])), hiring: [] })) {
   const open = item.querySelector(':scope > .dev-detail');
   if (open) {
     open.remove();
@@ -524,77 +902,152 @@ export function toggleDetail(item, button, project, render = popup) {
     return;
   }
   const panel = el('div', 'dev-detail');
-  panel.append(render(project));
+  const parts = render(project);
+  panel.append(...(Array.isArray(parts) ? parts : [parts]));
   button.after(panel);
   button.setAttribute('aria-expanded', 'true');
 }
 
-/** Each project's list item, for highlighting the one whose pin opened. */
-const rows = new WeakMap();
+const MONTH_FMT = (iso) => {
+  const m = /^(\d{4})-(\d{2})/.exec(iso ?? '');
+  return m ? `${MONTHS[+m[2] - 1]} ${m[1]}` : '';
+};
 
-function highlight(list, project) {
-  const row = rows.get(project);
-  for (const item of list.children) item.classList.toggle('active', item === row);
-  const active = list.querySelector('.dev-item.active');
-  if (active) list.scrollTo({ top: active.offsetTop - list.offsetTop - 8, behavior: 'smooth' });
-}
+/** The project panel's parts: header (category, previous/next, close), body and footer. */
+function projectPanel(project, { catOf, hiring, step = null, close = null }) {
+  const cat = catOf.get(projectCategory(project));
+  const head = el('div', 'devx-panel-head');
+  const label = el('span', 'devx-panel-cat');
+  const dot = el('i', 'devx-dot');
+  dot.style.background = cat?.color ?? '#9b958d';
+  label.append(dot, [cat?.label, project.work].filter(Boolean).join(' · '));
+  head.append(label);
+  if (step || close) {
+    const nav = el('span', 'devx-panel-nav');
+    if (step) {
+      const prev = el('button', 'icon-button devx-prev', '‹');
+      prev.type = 'button';
+      prev.setAttribute('aria-label', 'Previous project');
+      prev.addEventListener('click', () => step(-1));
+      const next = el('button', 'icon-button devx-next', '›');
+      next.type = 'button';
+      next.setAttribute('aria-label', 'Next project');
+      next.addEventListener('click', () => step(1));
+      nav.append(prev, next);
+    }
+    if (close) {
+      const x = el('button', 'icon-button devx-close', '✕');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'Close project details');
+      x.addEventListener('click', close);
+      nav.append(x);
+    }
+    head.append(nav);
+  }
 
-function popup(project) {
-  const box = el('div', 'dev-pop');
-  box.append(el('strong', 'dev-pop-title', project.name));
-  if (project.facility) box.append(el('span', 'dev-pop-line', project.facility));
-  if (project.place && !project.address) box.append(el('span', 'dev-pop-line muted', project.place));
-  if (project.address) box.append(el('span', 'dev-pop-line muted', project.address));
-  if (project.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
-  else if (project.locatedFrom) box.append(el('span', 'dev-pop-line muted', `Pin is the site's location from ${project.locatedFrom.replace(/^City/, 'a city')}, not the building's own point.`));
-  if (project.aliases?.length) box.append(el('span', 'dev-pop-line muted', `Also filed as ${project.aliases.slice(0, 4).join(', ')}`));
-  const facts = [money(project.cost), project.work, project.squareFeet ? `${project.squareFeet.toLocaleString('en-US')} sq ft` : ''].filter(Boolean);
-  box.append(el('span', 'dev-pop-line', facts.join(' · ')));
+  const body = el('div', 'devx-panel-body dev-pop');
+  body.append(el('h3', 'devx-panel-title dev-pop-title', project.name));
+  if (project.address) body.append(el('p', 'devx-panel-address', project.address));
+  else if (project.place) body.append(el('p', 'devx-panel-address', project.place));
+  body.append(el('p', 'devx-panel-note', `${project.source === 'city' ? 'Permit' : 'Filing'} ${project.id}`));
+  body.append(el('p', `devx-panel-loc${project.approximate || project.awaiting || project.lat == null ? ' warn' : ''}`, locationNote(project)));
+  if (project.aliases?.length) body.append(el('p', 'devx-panel-note', `Also filed as ${project.aliases.slice(0, 4).join(', ')}`));
+
+  const tiles = el('div', 'devx-tiles');
+  for (const [k, v] of [
+    ['Est. cost', money(project.cost) || 'Not listed'],
+    ['Size', project.squareFeet ? `${sqft(project.squareFeet)} sf` : 'Not listed'],
+    ['Work', project.work || 'Not listed']
+  ]) {
+    const t = el('div', 'devx-tile');
+    t.append(el('span', '', k), el('b', '', v));
+    tiles.append(t);
+  }
+  body.append(tiles);
+
   const status = project.status === 'Unknown status' && project.statusCode != null ? `Unknown status (TABS code ${project.statusCode})` : project.status;
-  const when = [status, projectDates(project.start, project.end)].filter(Boolean).join(' · ');
-  if (when) box.append(el('span', 'dev-pop-line muted', when));
-  const people = el('dl', 'dev-pop-people');
-  for (const [label, value] of [
+  if (status || project.start || project.end) {
+    const sched = el('div', 'devx-sched');
+    const top = el('div', 'devx-sched-top');
+    top.append(el('b', '', status || 'Status not listed'), el('span', '', project.start || project.end ? 'Estimated dates from the filing' : ''));
+    sched.append(top);
+    if (/^\d{4}-\d{2}/.test(project.start ?? '') && /^\d{4}-\d{2}/.test(project.end ?? '') && project.end >= project.start) {
+      const a = Date.parse(project.start);
+      const b = Date.parse(project.end);
+      const pct = Math.max(0, Math.min(100, ((Date.now() - a) / Math.max(1, b - a)) * 100));
+      const track = el('div', 'devx-track');
+      track.setAttribute('role', 'img');
+      track.setAttribute('aria-label', `Estimated ${Math.round(pct)}% of the way from start to finish by today`);
+      const fill = el('i');
+      fill.style.width = `${pct}%`;
+      track.append(fill);
+      const ends = el('div', 'devx-sched-ends');
+      ends.append(el('span', '', `Start ${MONTH_FMT(project.start)}`), el('span', '', `Finish ${MONTH_FMT(project.end)}`));
+      sched.append(track, ends);
+    } else {
+      const dates = projectDates(project.start, project.end);
+      if (dates) sched.append(el('div', 'devx-sched-ends', dates));
+    }
+    body.append(sched);
+  }
+
+  // A firm named on this filing with open jobs in the feed (growth.js matches the names).
+  if (hiring.length) {
+    const box = el('div', 'devx-hiring dev-pop-hiring');
+    box.append(el('p', 'devx-hiring-title', 'Firms on this filing with open roles'));
+    for (const { firm, count } of hiring) {
+      const row = el('p', 'devx-hiring-row');
+      const a = el('a', 'link', `${count} open ${count === 1 ? 'role' : 'roles'} →`);
+      a.href = firmJobsHref(firm, location.pathname);
+      row.append(el('span', '', firm), a);
+      box.append(row);
+    }
+    box.append(el('p', 'devx-hiring-note', 'Named on the filing as owner, tenant, architect or contractor. Their openings may not be for this project.'));
+    body.append(box);
+  }
+  if (project.scope) body.append(el('p', 'devx-scope dev-pop-scope', project.scope));
+
+  const people = el('dl', 'devx-people dev-pop-people');
+  for (const [k, v] of [
     ['Owner', project.owner],
     ['Tenant', project.tenant],
-    ['Architect', project.designFirm],
     ['Contractor', project.contractor],
+    ['Architect', project.designFirm],
     ['Permit contact', project.contact],
+    ['Filed', project.registered ? new Date(`${project.registered.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : null],
     // A permit the city lists at several addresses or parcels: every one, so nothing it filed is hidden.
     ['Also filed at', project.addresses?.length > 1 ? project.addresses.slice(1).join('; ') : null],
     ['Permits', project.permits?.length > 1 ? project.permits.join(', ') : null],
     ['Parcels', project.parcels?.length ? project.parcels.join('; ') : null],
     ['City record ids', project.sourceIds?.length > 1 ? project.sourceIds.join(', ') : null]
   ]) {
-    if (!value) continue;
-    people.append(el('dt', '', label), el('dd', '', value));
+    if (!v) continue;
+    people.append(el('dt', '', k), el('dd', '', v));
   }
-  if (people.children.length) box.append(people);
-  // A firm on this project with open jobs in the feed (growth.js matches the names).
-  const hiring = hiringOn(project, growthJobs());
-  if (hiring.length) {
-    const line = el('p', 'dev-pop-hiring', 'Hiring now: ');
-    hiring.forEach(({ firm, count }, i) => {
-      if (i) line.append(', ');
-      const a = el('a', 'link', `${firm} (${count} ${count === 1 ? 'job' : 'jobs'})`);
-      a.href = firmJobsHref(firm, location.pathname);
-      line.append(a);
-    });
-    box.append(line);
-  }
-  if (project.scope) box.append(el('p', 'dev-pop-scope', project.scope));
-  box.append(links(project));
+  if (people.children.length) body.append(people);
+
+  const foot = el('div', 'devx-panel-foot');
+  foot.append(links(project));
   // Status, finish date and cost changes by email; TABS projects only, since city permits carry no TABS number.
-  const followProject = project.source === 'city' ? null : followButton(projectItem(project.city, project.id, project.name), 'Follow this project');
-  if (followProject) box.append(followProject);
-  return box;
+  const follow = project.source === 'city' ? null : followButton(projectItem(project.city, project.id, project.name), 'Follow');
+  if (follow) foot.append(follow);
+  return [head, body, foot];
+}
+
+function sqft(n) {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e4) return `${Math.round(n / 1e3)}k`;
+  return n.toLocaleString('en-US');
 }
 
 function links(project) {
   const row = el('span', 'dev-links');
   const site = link(project.developerUrl, project.developerDirect ? "Developer's site ↗" : "Find the developer's site ↗");
+  site.className = 'primary small-accent';
   if (!project.developerDirect && project.owner) site.title = `Opens the top web result for ${project.owner}`;
-  row.append(site, link(project.url, project.source === 'city' ? 'City permit ↗' : 'State filing ↗'));
+  const filing = link(project.url, project.source === 'city' ? 'City permit ↗' : 'State filing ↗');
+  filing.className = 'secondary';
+  row.append(site, filing);
   return row;
 }
 

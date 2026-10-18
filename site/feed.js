@@ -11,7 +11,7 @@ import { decodeTitle, TITLE_GUIDE } from './career.js';
 export const FILTERS = ['city', 'firm', 'kind', 'sector'];
 
 /** The state change that shows every job: Clear filters and the "open roles" tile both use it. */
-export const CLEAR_FILTERS = Object.freeze({ q: '', city: '', firm: '', kind: '', sector: '', role: '', saved: false });
+export const CLEAR_FILTERS = Object.freeze({ q: '', city: '', firm: '', kind: '', sector: '', role: '', saved: false, best: false });
 export const SORTS = ['newest', 'deadline', 'match'];
 
 /** Whole calendar days from `from` to `to`, in UTC. Matches the API's arithmetic. */
@@ -43,12 +43,14 @@ export function facet(jobs, field, always = []) {
  * Every word of the search must appear somewhere in the posting, so
  * "analyst dallas" narrows rather than widens. Filters are exact matches; an
  * empty one is ignored. `saved` keeps only the ids in `savedIds`, the jobs the
- * visitor starred on this device.
+ * visitor starred on this device; `best` keeps only `bestIds`, the jobs scored
+ * a best match for the signed-in visitor's resume.
  */
-export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sector = '', role = '', saved = false, savedIds } = {}) {
+export function filterJobs(jobs, { q = '', city = '', firm = '', kind = '', sector = '', role = '', saved = false, savedIds, best = false, bestIds } = {}) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   return jobs.filter((job) => {
     if (saved && !savedIds?.has(job.id)) return false;
+    if (best && !bestIds?.has(job.id)) return false;
     if (city && job.city !== city) return false;
     if (firm && job.firm !== firm) return false;
     if (kind && job.kind !== kind) return false;
@@ -167,7 +169,7 @@ export function safeUrl(url) {
 /** Filter state <-> query string, so a filtered view is a link someone can send. */
 export function readQuery(search) {
   const params = new URLSearchParams(search);
-  const state = { q: params.get('q') ?? '', sort: params.get('sort') ?? 'newest', saved: params.get('saved') === '1' };
+  const state = { q: params.get('q') ?? '', sort: params.get('sort') ?? 'newest', saved: params.get('saved') === '1', best: params.get('best') === '1' };
   for (const key of FILTERS) state[key] = params.get(key) ?? '';
   if (!SORTS.includes(state.sort)) state.sort = 'newest';
   state.job = params.get('job') ?? '';
@@ -181,6 +183,7 @@ export function writeQuery(state) {
   for (const key of FILTERS) if (state[key]) params.set(key, state[key]);
   if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
   if (state.saved) params.set('saved', '1');
+  if (state.best) params.set('best', '1');
   if (state.role) params.set('role', state.role);
   if (state.job) params.set('job', state.job);
   const text = params.toString();

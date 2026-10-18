@@ -8,8 +8,8 @@
       name="description"
       content="Internships and entry-level commercial real estate jobs in Texas, collected from firm career boards every two hours."
     />
-    <meta name="theme-color" content="#f4f2ee" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#121416" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161412" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="favicon.png" />
     <link rel="canonical" href="https://thougthfullcarrot.github.io/Terra/" />
     <!-- The preview card when a Terra link is shared in a text, Slack, LinkedIn or Discord. -->
@@ -36,72 +36,97 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
     <script type="module" src="app.js"></script>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <header class="appbar">
       <div class="appbar-inner">
-        <a class="brand" href="./">
-          <span class="brand-mark" aria-hidden="true">T</span>
-          <span class="brand-name">Terra</span>
+        <a class="brand" href="./" aria-label="Terra home">
+          <span class="brand-name">terra</span>
+          <span class="brand-tag">Texas CRE</span>
         </a>
+        <!-- Signed out: jumps to the landing sections. -->
+        <nav class="landing-nav" aria-label="About Terra">
+          <a href="#how-title">How it works</a>
+          <a href="#why-title">Markets</a>
+          <a href="#price-title">Pricing</a>
+          <a href="#faq-title">Questions</a>
+        </nav>
+        <!-- Signed in: the sections (markets-view.js marks the open one). -->
+        <nav class="tabs" aria-label="Sections">
+          <a href="#" id="tab-jobs" class="tab" aria-current="page">Jobs<span class="tab-count" id="tab-jobs-count"></span></a>
+          <a href="#tracker" id="tab-tracker" class="tab" hidden>Tracker</a>
+          <a href="#markets" id="tab-markets" class="tab">Markets</a>
+          <a href="#property" id="tab-property" class="tab">Property</a>
+          <a href="#news" id="tab-news" class="tab">News</a>
+          <a href="#events" id="tab-events" class="tab">Events</a>
+          <a href="#career" id="tab-career" class="tab">Career</a>
+        </nav>
         <div class="appbar-actions">
-          <button type="button" id="theme-toggle" class="icon-button" aria-label="Switch to dark mode" title="Switch theme">
-            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
-            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="4.5" />
-              <path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" />
-            </svg>
-          </button>
-          <button type="button" id="account-button" class="account-button" hidden>
+          <label class="search head-search">
+            <span class="visually-hidden">Search postings</span>
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input id="q" name="q" type="search" placeholder="Search roles, firms, skills" autocomplete="off" form="controls" />
+            <kbd class="search-hint" aria-hidden="true">/</kbd>
+          </label>
+          <button type="button" id="theme-toggle" class="theme-button" aria-label="Switch to dark mode">Dark</button>
+          <button type="button" class="primary small signin-jump" id="signin-jump" hidden>Sign in</button>
+          <button type="button" id="account-button" class="account-button" hidden aria-label="Your profile">
             <span class="avatar small" id="account-avatar" aria-hidden="true"></span>
-            <span>Profile</span>
           </button>
         </div>
       </div>
     </header>
 
-    <main class="page">
-      <header class="masthead">
-        <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
-        <h1>Your first job in Texas commercial real estate.</h1>
-        <p class="lede">
-          Internships and roles asking for 0-2 years, read straight from firm career boards every two hours.
-        </p>
-        <p class="meta" id="meta" aria-live="polite">Loading postings…</p>
-        <dl class="stats" id="stats" hidden></dl>
-      </header>
-
-      <!-- Shown when accounts are configured and nobody is signed in. -->
-      <section id="gate" class="panel" hidden aria-labelledby="gate-title">
-        <h2 id="gate-title">Sign in to see the jobs</h2>
-        <p class="panel-lede" id="gate-lede">Terra is free for students. Sign in with your college (.edu) email.</p>
-        <form id="signin" class="signin" novalidate>
-          <label>
-            <span class="eyebrow">EMAIL</span>
-            <input id="signin-email" type="email" autocomplete="email" placeholder="you@school.edu" required />
-          </label>
-          <button type="submit" class="primary" id="signin-submit">Email me a sign-in code</button>
-        </form>
-        <button type="button" class="link tour-link" id="pitch-open">New here? Take the 1-minute tour</button>
-        <form id="verify" class="signin" novalidate hidden>
-          <label>
-            <span class="eyebrow">6-DIGIT CODE</span>
-            <input id="verify-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="123456" required />
-          </label>
-          <button type="submit" class="primary" id="verify-submit">Sign in</button>
-        </form>
-        <p class="notice" id="signin-status" aria-live="polite" hidden></p>
+    <main class="page" id="main" tabindex="-1">
+      <!-- Shown when accounts are configured and nobody is signed in: the landing hero with the sign-in form. -->
+      <section id="gate" class="hero" hidden aria-labelledby="gate-title">
+        <div class="hero-copy">
+          <p class="eyebrow accent">Texas · commercial real estate · entry level</p>
+          <h1 id="gate-title">Your first job in Texas commercial real estate.</h1>
+          <p class="lede">Internships and roles asking for 0-2 years, read straight from firm career boards every two hours.</p>
+          <form id="signin" class="signin pill-form" novalidate>
+            <label>
+              <span class="visually-hidden">Email</span>
+              <input id="signin-email" type="email" autocomplete="email" placeholder="you@school.edu" required />
+            </label>
+            <button type="submit" class="primary" id="signin-submit">Email me a sign-in code</button>
+          </form>
+          <form id="verify" class="signin pill-form" novalidate hidden>
+            <label>
+              <span class="visually-hidden">6-digit code</span>
+              <input id="verify-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="6-digit code" required />
+            </label>
+            <button type="submit" class="primary" id="verify-submit">Sign in</button>
+          </form>
+          <p class="notice" id="signin-status" aria-live="polite" hidden></p>
+          <p class="hero-note"><span id="gate-lede">Terra is free for students. Sign in with your college (.edu) email.</span> <button type="button" class="link tour-link" id="pitch-open">New here? Take the 1-minute tour</button></p>
+          <p class="meta" id="teaser" aria-live="polite"></p>
+        </div>
+        <aside class="hero-aside" aria-label="Example job card">
+          <div class="hero-aside-head"><span>What you'll see</span><span>Example</span></div>
+          <article class="sample-job">
+            <div class="sample-top"><span class="accent">Best match · Austin · ARGUS · senior</span><b class="sample-score">94<small>%</small></b></div>
+            <div class="sample-head">
+              <span class="monogram" aria-hidden="true">AF</span>
+              <div><h3>Acquisitions Analyst Intern</h3><p class="muted">Example firm · Austin</p></div>
+            </div>
+            <ul class="chips"><li class="kind">Internship</li><li>Investment</li><li class="pay">$25/hr</li></ul>
+            <div class="sample-foot"><span class="muted">Posted today</span><span class="accent">Apply at the firm →</span></div>
+          </article>
+          <p class="hint">An example for illustration. Sign in to see the real jobs.</p>
+        </aside>
       </section>
 
       <!-- Signed out: what Terra is, shown under the sign-in form. -->
       <div id="welcome" class="welcome" hidden>
         <section class="welcome-block" aria-labelledby="how-title">
-          <p class="eyebrow">HOW IT WORKS</p>
+          <p class="eyebrow">How it works</p>
           <h2 id="how-title">Three steps to your first CRE job</h2>
           <ol class="steps">
             <li>
@@ -123,7 +148,7 @@
         </section>
 
         <section class="welcome-block" aria-labelledby="why-title">
-          <p class="eyebrow">WHY TERRA</p>
+          <p class="eyebrow">Why Terra</p>
           <h2 id="why-title">Built for students breaking into Texas real estate</h2>
           <div class="features">
             <article class="feature">
@@ -159,33 +184,9 @@
           </div>
         </section>
 
-        <section class="welcome-block preview" aria-labelledby="preview-title">
-          <p class="eyebrow">WHAT YOU'LL SEE</p>
-          <h2 id="preview-title">A job list that knows your resume</h2>
-          <article class="card best preview-card" aria-label="Example job card">
-            <p class="match-badge">BEST MATCH · AUSTIN · ARGUS · SENIOR</p>
-            <div class="card-head">
-              <span class="monogram" aria-hidden="true">AF</span>
-              <div class="card-title">
-                <h3 class="role">Acquisitions Analyst Intern</h3>
-                <p class="firm">Example firm · Austin</p>
-              </div>
-            </div>
-            <ul class="chips">
-              <li class="kind">Internship</li>
-              <li>Investment</li>
-              <li class="pay">$25/hr</li>
-            </ul>
-            <div class="card-foot">
-              <p class="dates"><span class="posted">Posted today</span><span class="score">94% match</span></p>
-              <span class="apply">Apply</span>
-            </div>
-          </article>
-          <p class="hint">An example for illustration. Sign in to see the real jobs.</p>
-        </section>
-
+        <div class="welcome-pair">
         <section class="welcome-block" aria-labelledby="price-title">
-          <p class="eyebrow">PRICING</p>
+          <p class="eyebrow">Pricing</p>
           <h2 id="price-title">Free for students</h2>
           <div class="plans">
             <article class="plan featured">
@@ -208,7 +209,7 @@
         </section>
 
         <section class="welcome-block" aria-labelledby="faq-title">
-          <p class="eyebrow">QUESTIONS</p>
+          <p class="eyebrow">Questions</p>
           <h2 id="faq-title">Good to know</h2>
           <div class="faq">
             <details>
@@ -225,6 +226,8 @@
             </details>
           </div>
         </section>
+
+        </div>
 
         <section class="welcome-cta">
           <h2>Ready to find your first role?</h2>
@@ -245,6 +248,7 @@
 
       <!-- Profile: college, grad year, picture, resume. -->
       <section id="profile" class="panel profile" hidden aria-labelledby="profile-title">
+        <div class="profile-side">
         <div class="profile-head">
           <div class="avatar large" id="profile-avatar" aria-hidden="true"></div>
           <div class="profile-who">
@@ -252,6 +256,13 @@
             <p class="muted" id="profile-email"></p>
             <p class="school-line" id="profile-school" hidden></p>
             <p class="badge" id="profile-access"></p>
+            <div class="avatar-upload">
+              <label class="file-button small">
+                <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp,image/gif" />
+                <span>Change picture</span>
+              </label>
+              <span class="hint">JPG, PNG, WebP or GIF, up to 2 MB.</span>
+            </div>
           </div>
           <button type="button" class="link close" id="profile-close">Back</button>
         </div>
@@ -264,18 +275,16 @@
           </div>
           <ul class="prof-steps" id="prof-steps"></ul>
         </section>
+        <div class="profile-side-actions">
+          <a class="link" id="billing" target="_blank" rel="noopener noreferrer" hidden>Manage subscription</a>
+          <button type="button" class="link" id="signout">Sign out</button>
+        </div>
+        </div>
+        <div class="profile-main">
 
-        <div class="uploads">
-          <div class="upload">
-            <span class="eyebrow">PROFILE PICTURE</span>
-            <label class="file-button">
-              <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp,image/gif" />
-              <span>Choose a picture</span>
-            </label>
-            <p class="hint">JPG, PNG, WebP or GIF, up to 2 MB.</p>
-          </div>
-          <div class="upload">
-            <span class="eyebrow">RESUME</span>
+        <div class="uploads profile-cards">
+          <div class="upload card">
+            <span class="eyebrow">Resume</span>
             <label class="file-button">
               <input
                 type="file"
@@ -285,39 +294,40 @@
               <span id="resume-button-label">Upload resume</span>
             </label>
             <p class="hint" id="resume-state">PDF, Word or text, up to 5 MB. We use it to highlight your best matches.</p>
-            <p class="eyebrow resume-skills-title" id="resume-skills-title" hidden>SKILLS TERRA FOUND</p>
+            <p class="eyebrow resume-skills-title" id="resume-skills-title" hidden>Skills Terra found</p>
             <ul class="chips found" id="resume-skills"></ul>
             <button type="button" class="link" id="resume-remove" hidden>Remove resume</button>
           </div>
+          <!-- Skills open jobs ask for that the resume doesn't show (account.js drawGaps). -->
+          <section class="card skill-gaps" id="skill-gaps" aria-labelledby="gaps-title" hidden>
+            <div class="gaps-head"><h3 id="gaps-title" class="group-title">Skill gaps</h3><span class="meta" id="gaps-count"></span></div>
+            <p class="hint">Skills open Texas postings ask for most that aren't on your resume yet.</p>
+            <div class="gaps" id="gaps"></div>
+          </section>
         </div>
         <p class="notice" id="upload-status" aria-live="polite" hidden></p>
 
-        <!-- Skills open jobs ask for that the resume doesn't show (account.js drawGaps). -->
-        <section class="card skill-gaps" id="skill-gaps" aria-labelledby="gaps-title" hidden>
-          <div class="gaps-head"><h3 id="gaps-title" class="group-title">Skill gaps</h3><span class="meta" id="gaps-count"></span></div>
-          <p class="hint">Skills open Texas postings ask for most that aren't on your resume yet.</p>
-          <div class="gaps" id="gaps"></div>
-        </section>
 
         <form id="profile-form" class="profile-form" novalidate>
+          <h2 class="section-title">About you</h2>
           <label>
-            <span class="eyebrow">NAME</span>
+            <span class="eyebrow">Name</span>
             <input name="name" autocomplete="name" maxlength="120" />
           </label>
           <label>
-            <span class="eyebrow">COLLEGE</span>
+            <span class="eyebrow">College</span>
             <input name="school" autocomplete="organization" maxlength="120" placeholder="e.g. Texas A&amp;M University" />
           </label>
           <label>
-            <span class="eyebrow">GRAD YEAR</span>
+            <span class="eyebrow">Grad year</span>
             <select name="gradYear"><option value="">Select</option></select>
           </label>
           <label>
-            <span class="eyebrow">MAJOR</span>
+            <span class="eyebrow">Major</span>
             <input name="major" maxlength="120" placeholder="e.g. Finance" />
           </label>
           <label>
-            <span class="eyebrow">HOME CITY</span>
+            <span class="eyebrow">Home city</span>
             <select name="homeCity"><option value="">Select</option></select>
           </label>
           <label class="check">
@@ -325,11 +335,11 @@
             <span>Open to relocating within Texas</span>
           </label>
           <fieldset class="sectors">
-            <legend class="eyebrow">SECTORS YOU'RE INTERESTED IN</legend>
+            <legend class="eyebrow">Sectors you're interested in</legend>
             <div id="sector-options"></div>
           </fieldset>
           <fieldset class="sectors alerts" id="alert-settings">
-            <legend class="eyebrow">DAILY JOB ALERTS</legend>
+            <legend class="eyebrow">Daily job alerts</legend>
             <label class="check">
               <input type="checkbox" name="emailAlerts" class="switch" role="switch" />
               <span>Email me new jobs and tracker reminders every morning</span>
@@ -348,7 +358,7 @@
             </div>
           </fieldset>
           <fieldset class="sectors alerts" id="watch-settings" hidden>
-            <legend class="eyebrow">WATCHLIST</legend>
+            <legend class="eyebrow">Watchlist</legend>
             <label class="check">
               <input type="checkbox" name="watchEmails" class="switch" role="switch" />
               <span>Email me what changed in the markets and projects I follow</span>
@@ -366,53 +376,42 @@
           </fieldset>
           <div class="actions">
             <button type="submit" class="primary" id="profile-save">Save profile</button>
-            <a class="link" id="billing" target="_blank" rel="noopener noreferrer" hidden>Manage subscription</a>
-            <button type="button" class="link" id="signout">Sign out</button>
           </div>
           <p class="notice" id="profile-status" aria-live="polite" hidden></p>
         </form>
+        </div>
       </section>
 
       <div id="feed">
-      <nav class="tabs" aria-label="Sections">
-        <a href="#" id="tab-jobs" class="tab" aria-current="page">Jobs</a>
-        <a href="#tracker" id="tab-tracker" class="tab" hidden>Tracker</a>
-        <a href="#markets" id="tab-markets" class="tab">Market data</a>
-        <a href="#news" id="tab-news" class="tab">News</a>
-        <a href="#events" id="tab-events" class="tab">Events</a>
-        <a href="#property" id="tab-property" class="tab">Property</a>
-        <a href="#career" id="tab-career" class="tab">Career</a>
-      </nav>
 
       <div id="jobs-view">
+      <div class="page-head">
+        <h1 class="page-title">Open roles <span class="page-count" id="jobs-total"></span></h1>
+        <p class="meta" id="meta" aria-live="polite">Loading postings…</p>
+        <dl class="stats" id="stats" hidden></dl>
+      </div>
       <!-- Today at a glance: counts from the feed, the resume match and the tracker (app.js drawToday). -->
       <section id="today" class="today" aria-label="Today" hidden></section>
       <form class="controls" id="controls" role="search" onsubmit="return false">
-        <label class="search">
-          <span class="visually-hidden">Search postings</span>
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <input id="q" name="q" type="search" placeholder="Search role, firm, skill…" autocomplete="off" />
-          <kbd class="search-hint" aria-hidden="true">/</kbd>
-        </label>
         <div class="chip-group">
-          <span class="eyebrow">CITY</span>
+          <span class="eyebrow">City</span>
           <div class="chip-row" id="city-chips" role="group" aria-label="City"></div>
         </div>
         <div class="chip-group">
-          <span class="eyebrow">ROLE TYPE</span>
+          <span class="eyebrow">Role type</span>
           <div class="chip-row" id="kind-chips" role="group" aria-label="Role type"></div>
         </div>
         <div class="filters">
           <label>
-            <span class="eyebrow">FIRM</span>
+            <span class="eyebrow">Firm</span>
             <select id="firm" name="firm"><option value="">All firms</option></select>
           </label>
           <label>
-            <span class="eyebrow">SECTOR</span>
+            <span class="eyebrow">Sector</span>
             <select id="sector" name="sector"><option value="">All sectors</option></select>
           </label>
           <label>
-            <span class="eyebrow">SORT</span>
+            <span class="eyebrow">Sort</span>
             <select id="sort" name="sort">
               <option value="newest">Newest first</option>
               <option value="deadline">Deadline</option>
@@ -427,6 +426,9 @@
           <button type="button" id="saved-toggle" class="toggle" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z" /></svg>
             <span>Saved</span> <span class="toggle-count" id="saved-count">0</span>
+          </button>
+          <button type="button" id="best-toggle" class="toggle" aria-pressed="false" hidden>
+            <span>Best matches only</span> <span class="toggle-count" id="best-count">0</span>
           </button>
           <button type="button" id="clear" class="link" hidden>Clear filters</button>
         </div>
@@ -507,7 +509,7 @@
       <!-- The member's applications by stage: tracker-view.js draws it from tracked_jobs. -->
       <section id="tracker-view" hidden aria-labelledby="tracker-title">
         <div class="tracker-top">
-          <h2 id="tracker-title">Your applications</h2>
+          <h1 id="tracker-title" class="page-title">Your applications</h1>
           <p id="t-summary" class="muted"></p>
         </div>
         <div id="t-body" class="tracker-body"></div>
@@ -515,10 +517,11 @@
 
       <!-- Market data by city: markets-view.js draws it from market.json or the members-only snapshot. -->
       <section id="markets-view" hidden aria-labelledby="markets-title">
-        <h2 id="markets-title" class="visually-hidden">Market data</h2>
+        <h1 id="markets-title" class="page-title section-head">Market data</h1>
         <form class="controls" id="market-controls" onsubmit="return false">
           <nav class="market-tools" aria-label="Market data views">
             <a href="#markets" id="m-tool-data" class="chip">City data</a>
+            <a href="#markets&amp;tool=map" id="m-tool-map" class="chip">Development map</a>
             <a href="#markets&amp;tool=compare" id="m-tool-compare" class="chip">Compare cities</a>
             <a href="#markets&amp;tool=calc" id="m-tool-calc" class="chip">Deal calculator</a>
             <a href="#markets&amp;tool=uw" id="m-tool-uw" class="chip">Underwriting model</a>
@@ -531,19 +534,19 @@
           </nav>
           <div class="filters market-filters" id="m-filters">
             <label id="m-city-label">
-              <span class="eyebrow">MARKET</span>
+              <span class="eyebrow">Market</span>
               <select id="m-city"><option value="">All markets</option></select>
             </label>
             <label id="m-focus-label">
-              <span class="eyebrow">TOPIC</span>
+              <span class="eyebrow">Topic</span>
               <select id="m-focus"></select>
             </label>
             <label id="m-sort-label">
-              <span class="eyebrow">SORT BY</span>
+              <span class="eyebrow">Sort by</span>
               <select id="m-sort"></select>
             </label>
             <label id="m-order-label">
-              <span class="eyebrow">ORDER</span>
+              <span class="eyebrow">Order</span>
               <select id="m-order">
                 <option value="desc">High to low</option>
                 <option value="asc">Low to high</option>
@@ -560,12 +563,12 @@
 
       <!-- Property tools (owner lookup, lease radar, distress, drive time, deal of the week): property-view.js. -->
       <section id="property-view" hidden aria-labelledby="property-title">
-        <h2 id="property-title" class="visually-hidden">Property tools</h2>
+        <h1 id="property-title" class="page-title section-head">Property</h1>
         <form class="controls" id="property-controls" onsubmit="return false">
           <nav class="market-tools" id="p-tools" aria-label="Property tools"></nav>
           <div class="filters market-filters">
             <label>
-              <span class="eyebrow">MARKET</span>
+              <span class="eyebrow">Market</span>
               <select id="p-city"></select>
             </label>
           </div>
@@ -577,12 +580,12 @@
 
       <!-- Career tools (interview brief, title decoder, skills, new-agent sponsors, near campus, market tour): career-view.js. -->
       <section id="career-view" hidden aria-labelledby="career-title">
-        <h2 id="career-title" class="visually-hidden">Career tools</h2>
+        <h1 id="career-title" class="page-title section-head">Career</h1>
         <form class="controls" id="career-controls" onsubmit="return false">
           <nav class="market-tools" id="c-tools" aria-label="Career tools"></nav>
           <div class="filters market-filters">
             <label id="c-city-label">
-              <span class="eyebrow">MARKET</span>
+              <span class="eyebrow">Market</span>
               <select id="c-city"></select>
             </label>
           </div>
@@ -593,16 +596,16 @@
 
       <!-- Commercial real estate headlines by city: news-view.js draws them from news.json. -->
       <section id="news-view" hidden aria-labelledby="news-title">
-        <h2 id="news-title" class="visually-hidden">Commercial real estate news</h2>
+        <h1 id="news-title" class="page-title section-head">News</h1>
         <form class="controls" id="news-controls" onsubmit="return false">
           <div class="filters news-filters">
             <label>
-              <span class="eyebrow">CITY</span>
+              <span class="eyebrow">City</span>
               <select id="n-city"><option value="">All cities</option></select>
             </label>
           </div>
           <div class="chip-group">
-            <span class="eyebrow">TOPIC</span>
+            <span class="eyebrow">Topic</span>
             <div class="chip-row" id="n-topics" role="group" aria-label="Topic"></div>
           </div>
         </form>
@@ -613,10 +616,10 @@
 
       <!-- Real estate networking events by city: events-view.js draws them from events.json. -->
       <section id="events-view" hidden aria-labelledby="events-title">
-        <h2 id="events-title" class="visually-hidden">Real estate events</h2>
+        <h1 id="events-title" class="page-title section-head">Events</h1>
         <form class="controls" id="events-controls" onsubmit="return false">
           <div class="chip-group">
-            <span class="eyebrow">CITY</span>
+            <span class="eyebrow">City</span>
             <div class="chip-row" id="e-cities" role="group" aria-label="City"></div>
           </div>
         </form>
@@ -696,7 +699,7 @@
         <div class="pitch-track" id="pitch-track">
           <section class="pitch-slide cover" aria-roledescription="slide" aria-label="1 of 9: Terra">
             <div class="pitch-copy">
-              <p class="eyebrow">TEXAS · COMMERCIAL REAL ESTATE · ENTRY LEVEL</p>
+              <p class="eyebrow">Texas · commercial real estate · entry level</p>
               <h2>Break into Texas commercial real estate.</h2>
               <p class="pitch-lede">
                 The internships and 0-2 year roles in one place, plus the market know-how to stand out in the interview.
@@ -729,7 +732,7 @@
 
           <section class="pitch-slide" aria-roledescription="slide" aria-label="2 of 9: The problem">
             <div class="pitch-copy">
-              <p class="eyebrow">THE PROBLEM</p>
+              <p class="eyebrow">The problem</p>
               <h2>Entry-level CRE jobs are hard to find.</h2>
               <ul class="pitch-points">
                 <li><strong>Scattered.</strong> Each firm posts on its own career board, from Greenhouse to Workday.</li>
@@ -749,7 +752,7 @@
 
           <section class="pitch-slide" aria-roledescription="slide" aria-label="3 of 9: Jobs">
             <div class="pitch-copy">
-              <p class="eyebrow">JOBS</p>
+              <p class="eyebrow">Jobs</p>
               <h2>Every role asks for 0-2 years.</h2>
               <ul class="pitch-points">
                 <li>Read straight from firm career boards every two hours.</li>
@@ -772,7 +775,7 @@
 
           <section class="pitch-slide" aria-roledescription="slide" aria-label="4 of 9: Alerts and tracker">
             <div class="pitch-copy">
-              <p class="eyebrow">ALERTS + TRACKER</p>
+              <p class="eyebrow">Alerts + tracker</p>
               <h2>Never miss a role, never lose track.</h2>
               <ul class="pitch-points">
                 <li><strong>Daily alerts.</strong> Each morning, the new jobs that fit your resume and cities land in your inbox.</li>
@@ -791,7 +794,7 @@
 
           <section class="pitch-slide" aria-roledescription="slide" aria-label="5 of 9: Market data">
             <div class="pitch-copy">
-              <p class="eyebrow">MARKET DATA</p>
+              <p class="eyebrow">Market data</p>
               <h2>Walk into the interview knowing the market.</h2>
               <ul class="pitch-points">
                 <li>Rents, vacancy, jobs and population for every city, from BLS and the Census.</li>
@@ -815,7 +818,7 @@
 
           <section class="pitch-slide" aria-roledescription="slide" aria-label="6 of 9: Development">
             <div class="pitch-copy">
-              <p class="eyebrow">DEVELOPMENT</p>
+              <p class="eyebrow">Development</p>
               <h2>See what is getting built, and who is building it.</h2>
               <ul class="pitch-points">
                 <li><strong>Development maps.</strong> Projects across Texas on a map, with the owner, architect and stage.</li>
@@ -834,7 +837,7 @@
 
           <section class="pitch-slide" aria-roledescription="slide" aria-label="7 of 9: Property tools">
             <div class="pitch-copy">
-              <p class="eyebrow">PROPERTY TOOLS</p>
+              <p class="eyebrow">Property tools</p>
               <h2>Do the homework a first-year analyst does.</h2>
               <p class="pitch-lede">Public records turned into five quick tools, so you can talk deals with confidence.</p>
             </div>
@@ -851,7 +854,7 @@
 
           <section class="pitch-slide" aria-roledescription="slide" aria-label="8 of 9: News and events">
             <div class="pitch-copy">
-              <p class="eyebrow">NEWS + EVENTS</p>
+              <p class="eyebrow">News + events</p>
               <h2>Stay in the conversation.</h2>
               <ul class="pitch-points">
                 <li><strong>News.</strong> Commercial real estate headlines for your city, so you have something to talk about.</li>
@@ -872,7 +875,7 @@
 
           <section class="pitch-slide final" aria-roledescription="slide" aria-label="9 of 9: Get started">
             <div class="pitch-copy">
-              <p class="eyebrow">PRICING</p>
+              <p class="eyebrow">Pricing</p>
               <h2>Free for students.</h2>
               <div class="pitch-plans">
                 <p><b>Students</b><span class="price">Free</span><small>Any college email ending in .edu. Everything included.</small></p>

@@ -28,6 +28,9 @@ export interface FilterState {
   role?: string;
   saved?: boolean;
   savedIds?: ReadonlySet<string>;
+  /** Only the jobs in bestIds: best matches for the visitor's resume. */
+  best?: boolean;
+  bestIds?: ReadonlySet<string>;
 }
 
 export interface QueryState {
@@ -38,13 +41,14 @@ export interface QueryState {
   sector: string;
   sort: 'newest' | 'deadline' | 'match';
   saved: boolean;
+  best: boolean;
   /** The job whose detail panel is open, so a link can share one posting. */
   job: string;
   /** A Title Decoder family key; '' when absent or unknown. */
   role: string;
 }
 
-export const CLEAR_FILTERS: Readonly<{ q: ''; city: ''; firm: ''; kind: ''; sector: ''; role: ''; saved: false }>;
+export const CLEAR_FILTERS: Readonly<{ q: ''; city: ''; firm: ''; kind: ''; sector: ''; role: ''; saved: false; best: false }>;
 export const FILTERS: readonly ['city', 'firm', 'kind', 'sector'];
 export const SORTS: readonly ['newest', 'deadline', 'match'];
 

@@ -125,6 +125,12 @@ describe('site feed rules', () => {
     expect(filterJobs(jobs, { kind: 'Internship' }).map((j) => j.id)).toEqual(['2']);
   });
 
+  it('keeps only best matches when asked, and round-trips it in the link', () => {
+    expect(filterJobs(jobs, { best: true, bestIds: new Set(['1', '3']) }).map((j) => j.id)).toEqual(['1', '3']);
+    expect(filterJobs(jobs, { best: false, bestIds: new Set(['1']) })).toHaveLength(3);
+    expect(readQuery(writeQuery({ ...readQuery(''), best: true })).best).toBe(true);
+  });
+
   it('counts facet values, most common first', () => {
     expect(facet(jobs, 'firm')).toEqual([
       { value: 'JLL', count: 2 },
@@ -224,6 +230,7 @@ describe('site feed rules', () => {
       sector: '',
       sort: 'deadline' as const,
       saved: true,
+      best: true,
       job: 'abc',
       role: 'appraisal'
     };

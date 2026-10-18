@@ -86,7 +86,7 @@ const squash = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').
 function expected(city, f) {
   return (byCity.get(city) ?? []).filter((p) => {
     if (f.query) {
-      const hay = squash([p.name, p.facility, p.id, p.address, ...(p.addresses ?? []), p.place, ...(p.aliases ?? [])].filter(Boolean).join(' '));
+      const hay = squash([p.name, p.facility, p.id, p.address, ...(p.addresses ?? []), p.place, p.owner, ...(p.aliases ?? [])].filter(Boolean).join(' '));
       const all = `${hay} ${hay.replace(/ /g, '')}`;
       if (!squash(f.query).split(' ').filter(Boolean).every((w) => all.includes(w))) return false;
     }
@@ -99,6 +99,8 @@ function expected(city, f) {
     }
     if (f.status && p.status !== f.status) return false;
     if (f.filed && !(p.registered && p.registered >= new Date(asOf - days[f.filed] * 864e5).toISOString().slice(0, 10))) return false;
+    // A month picked on the filings chart: filed in that month or later.
+    if (f.since && !(p.registered && p.registered.slice(0, 7) >= f.since)) return false;
     return true;
   });
 }
@@ -144,7 +146,7 @@ for (const vp of [
   });
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const city = biggest;
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   const t0 = Date.now();
   await page.waitForSelector('.dev-map.leaflet-container', { timeout: 30000 });
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
@@ -154,13 +156,27 @@ for (const vp of [
   const v = vp.name;
   console.log(`\n[${v}] ${city}: ${all.length} projects, ${pinsOf(all)} with coordinates`);
 
-  const panelOpen = await page.locator('.dev-filters').evaluate((d) => d.open);
-  log(`${v}: filter panel ${vp.mobile ? 'starts folded' : 'starts open'}`, panelOpen === !vp.mobile);
+  // The workspace: the map starts on screen under the header, with the market controls out of the way.
+  const ws = await page.evaluate(() => {
+    const map = document.querySelector('.devx-mapwrap').getBoundingClientRect();
+    const head = document.querySelector('.appbar').getBoundingClientRect();
+    const title = document.querySelector('#dev-title').getBoundingClientRect();
+    const tabs = document.querySelector('nav.tabs');
+    const fixedTabs = tabs && getComputedStyle(tabs).position === 'fixed' ? tabs.getBoundingClientRect().top : innerHeight;
+    return { mapTop: map.top, mapBottom: map.bottom, title: title.top, head: head.bottom, controls: document.querySelector('#market-controls').offsetParent !== null, fixedTabs, vh: innerHeight };
+  });
+  log(`${v}: the map workspace starts under the header with the map on screen`, !ws.controls && ws.title >= ws.head && ws.mapTop < ws.vh * 0.4, JSON.stringify(ws));
+  log(`${v}: the map ends above the bottom tabs, so its controls and attribution show`, ws.mapBottom <= ws.fixedTabs + 1, `map bottom ${Math.round(ws.mapBottom)}, tabs at ${Math.round(ws.fixedTabs)}`);
+
+  // Cost, work and funding float over the map; town, status and filed sit under More, folded at first.
+  const pillsShown = await page.locator('.devx-filters select[aria-label="Estimated cost"]').isVisible();
+  log(`${v}: the main filters show over the map`, pillsShown);
+  const moreOpen = await page.locator('.devx-more').evaluate((d) => d.open);
+  const before = await page.locator('.devx-more-body').isVisible();
+  await page.locator('.devx-more-summary').click();
+  const after = await page.locator('.devx-more-body').isVisible();
+  log(`${v}: More starts folded and opens on ${vp.mobile ? 'tap' : 'click'}`, !moreOpen && !before && after);
   if (vp.mobile) {
-    const before = await page.locator('.dev-filters-body').isVisible();
-    await page.locator('.dev-filters-summary').click();
-    const after = await page.locator('.dev-filters-body').isVisible();
-    log(`${v}: tapping the panel header opens it`, !before && after);
     const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
     log(`${v}: no sideways scrolling`, scrollW <= vp.width, `${scrollW}px`);
   }
@@ -176,8 +192,9 @@ for (const vp of [
     }));
   const setF = async (f) => {
     await page.locator('.dev-search input').fill(f.query ?? '');
+    await page.locator('.devx-more').evaluate((d) => (d.open = true));
     for (const [k, label] of Object.entries(LABELS)) {
-      const select = page.locator('.dev-filter-grid label', { hasText: label }).locator('select');
+      const select = page.locator(`.devx-filters select[aria-label="${label}"]`);
       if (await select.count()) await select.selectOption(f[k] ?? '');
     }
     await page.waitForTimeout(200);
@@ -192,7 +209,7 @@ for (const vp of [
   };
 
   await check('no filters: every project listed, every located one pinned', {});
-  const menus = await page.$$eval('.dev-filter-grid label', (ls) => ls.map((l) => [l.querySelector('span').textContent, [...l.querySelector('select').options].map((o) => [o.value, o.textContent]).filter(([x]) => x)]));
+  const menus = await page.$$eval('.devx-filters select', (ls) => ls.map((l) => [l.getAttribute('aria-label'), [...l.options].map((o) => [o.value, o.textContent]).filter(([x]) => x)]));
   for (const [label, options] of menus) {
     const key = Object.keys(LABELS).find((k) => LABELS[k] === label);
     if (key === 'place' || key === 'work' || key === 'status') {
@@ -214,6 +231,74 @@ for (const vp of [
   await check('combo: public involvement + $100M and up + last 6 months', { publicInvolvement: 'public', cost: 'over100', filed: '180' });
   await check('combo: search + addition + under $5M', { query: 'school', work: 'Addition', cost: 'under5' });
   await check('combo: nothing matches, empty state shows', { query: 'zzqx no such project' });
+
+  // Legend, chart and sort, on their own and with the menus. Categories come
+  // from site/market.js's wording rules, so the check here is that the legend
+  // is consistent with the list: its counts add up to what is shown, hiding a
+  // category removes exactly its rows (and their pins), and nothing else moves.
+  const legendState = () =>
+    page.$$eval('.devx-legend-item', (bs) => bs.filter((b) => !b.closest('li').hidden).map((b) => ({ key: b.dataset.category, n: Number(b.querySelector('.devx-legend-count').textContent.replace(/,/g, '')), on: b.getAttribute('aria-pressed') === 'true' })));
+  const rowsBy = () => page.$$eval('.dev-list .dev-item', (rs) => rs.map((r) => r.dataset.category));
+  for (const [label, f] of [['legend alone', {}], ['legend + $5M-$25M + new construction', { cost: '5to25', work: 'New construction' }]]) {
+    await setF(f);
+    const exp = expected(city, f);
+    const legend = await legendState();
+    const sum = legend.reduce((a, c) => a + c.n, 0);
+    log(`${v}: ${label}: legend counts add up to the ${exp.length} shown`, sum === exp.length && legend.every((c) => c.on), legend.map((c) => `${c.key} ${c.n}`).join(', '));
+    const top = [...legend].sort((a, b) => b.n - a.n)[0];
+    if (!top) continue;
+    const pinsBefore = (await state()).markers;
+    const offPins = await page.$$eval('.dev-list .dev-item', (rs, k) => rs.filter((r) => r.dataset.category === k && !r.querySelector('.dev-off')).length, top.key);
+    await page.locator(`.devx-legend-item[data-category="${top.key}"]`).click();
+    await page.waitForTimeout(200);
+    const after = await state();
+    const cats = await rowsBy();
+    const pressed = await page.locator(`.devx-legend-item[data-category="${top.key}"]`).getAttribute('aria-pressed');
+    log(`${v}: ${label}: hiding ${top.key} removes its ${top.n} rows and ${offPins} pins`, after.count === exp.length - top.n && after.items === exp.length - top.n && after.markers === pinsBefore - offPins && !cats.includes(top.key) && pressed === 'false', `shown ${after.count}, drawn ${after.markers}`);
+    const legendHidden = (await legendState()).find((c) => c.key === top.key);
+    log(`${v}: ${label}: a hidden category still shows its count`, legendHidden?.n === top.n);
+    await page.locator(`.devx-legend-item[data-category="${top.key}"]`).click();
+    await page.waitForTimeout(200);
+    log(`${v}: ${label}: showing it again restores the list`, (await state()).count === exp.length);
+  }
+  // Filings chart: a bar's click keeps filings from that month on; a second click clears it.
+  await setF({});
+  const bars = await page.$$eval('.devx-bar-col', (bs) => bs.map((b) => b.dataset.month));
+  const regsBy = (rows) => rows.reduce((m, p) => (p.registered ? m.set(p.registered.slice(0, 7), (m.get(p.registered.slice(0, 7)) ?? 0) + 1) : m), new Map());
+  const barCounts = await page.$$eval('.devx-bar-col', (bs) => bs.map((b) => Number(/: ([\d,]+)/.exec(b.title)?.[1].replace(/,/g, ''))));
+  const byMonth = regsBy(all);
+  log(`${v}: chart bars match the filings per month`, bars.length > 0 && bars.every((m, i) => (byMonth.get(m) ?? 0) === barCounts[i]), `${bars.length} months`);
+  const mid = bars[Math.floor(bars.length / 2)];
+  for (const [label, f] of [['chart month alone', {}], ['chart month + public + $25M-$100M', { publicInvolvement: 'public', cost: '25to100' }]]) {
+    await setF(f);
+    await page.locator(`.devx-bar-col[data-month="${mid}"]`).click();
+    await page.waitForTimeout(200);
+    const exp = expected(city, { ...f, since: mid });
+    const st = await state();
+    log(`${v}: ${label} (${mid} on)`, st.count === exp.length && st.items === exp.length && st.markers === pinsOf(exp) && (await page.locator(`.devx-bar-col[data-month="${mid}"]`).getAttribute('aria-pressed')) === 'true', `expect ${exp.length}, shown ${st.count}`);
+    await page.locator(`.devx-bar-col[data-month="${mid}"]`).click();
+    await page.waitForTimeout(200);
+    log(`${v}: ${label}: clicking the bar again clears it`, (await state()).count === expected(city, f).length);
+  }
+  // Sorting: the list order follows the chosen sort, filters included.
+  await setF({ work: 'New construction' });
+  const exp = expected(city, { work: 'New construction' });
+  // Ids repeat now and then; only rows with a unique id are compared, each with the previous such row.
+  const idCount = exp.reduce((m, p) => m.set(p.id, (m.get(p.id) ?? 0) + 1), new Map());
+  const byId = new Map(exp.filter((p) => idCount.get(p.id) === 1).map((p) => [p.id, p]));
+  for (const [key, ok] of [
+    ['biggest', (a, b) => a.cost >= b.cost],
+    ['newest', (a, b) => String(a.registered ?? '') >= String(b.registered ?? '')],
+    ['finishing', (a, b) => (/^\d{4}-\d{2}/.test(a.end ?? '') ? a.end : '9999') <= (/^\d{4}-\d{2}/.test(b.end ?? '') ? b.end : '9999')]
+  ]) {
+    await page.locator(`.devx-seg-item[data-sort="${key}"]`).click();
+    await page.waitForTimeout(250);
+    const names = await page.$$eval('.dev-list .dev-item', (ns) => ns.slice(0, 300).map((n) => n.dataset.id));
+    const rows = names.map((n) => byId.get(n)).filter(Boolean);
+    const sorted = rows.length > names.length / 2 && rows.every((r, i) => i === 0 || ok(rows[i - 1], r));
+    log(`${v}: sort ${key} orders the filtered list`, sorted && (await page.locator(`.devx-seg-item[data-sort="${key}"]`).getAttribute('aria-pressed')) === 'true' && (await state()).count === exp.length, `${rows.length} of ${names.length} rows with a unique id checked`);
+  }
+  await page.locator('.devx-seg-item[data-sort="biggest"]').click();
   if (shots) await page.locator('.dev-card').screenshot({ path: join(shots, `${v}-empty.png`) });
 
   // Search responsiveness: typing to updated count.
@@ -239,7 +324,7 @@ for (const vp of [
   // Filter performance on the largest metro: worst case, every pin toggled.
   await setF({});
   const timing = await page.evaluate(async () => {
-    const select = [...document.querySelectorAll('.dev-filter-grid label')].find((l) => l.textContent.startsWith('Estimated cost')).querySelector('select');
+    const select = document.querySelector('.devx-filters select[aria-label="Estimated cost"]');
     const runs = [];
     for (const value of ['under5', '', 'over100', '', '5to25', '']) {
       const t = performance.now();
@@ -270,56 +355,99 @@ for (const vp of [
   console.log(`  ${v}: clicking the pin at ${spot ? `${Math.round(spot.x)},${Math.round(spot.y)}` : 'none on screen; first in page'}`);
   if (spot) await page.mouse.click(spot.x, spot.y);
   else await page.locator('.dev-map .leaflet-overlay-pane path.leaflet-interactive').first().click({ force: true });
-  await page.waitForSelector('.leaflet-popup .dev-pop-title', { timeout: 5000 }).catch(() => null);
-  const popTitle = await page.locator('.leaflet-popup .dev-pop-title').textContent().catch(() => null);
+  await page.waitForSelector('.devx-panel:not([hidden]) .dev-pop-title', { timeout: 5000 }).catch(() => null);
+  const popTitle = await page.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null);
   const active = await page.locator('.dev-item.active .dev-name').textContent().catch(() => null);
-  const popLinks = await page.locator('.leaflet-popup .dev-links a').count();
+  const popLinks = await page.locator('.devx-panel .dev-links a').count();
   log(`${v}: pin click opens the project panel and highlights it in the list`, Boolean(popTitle) && popTitle === active && popLinks === 2, `"${popTitle}"`);
   if (shots) await page.locator('.dev-card').screenshot({ path: join(shots, `${v}-filtered.png`) });
-  await page.locator('.leaflet-popup-close-button').click();
+  // The panel must not cover the selected pin (desktop), and must sit inside the map.
+  const layout = await page.evaluate(() => {
+    const map = document.querySelector('.dev-map').getBoundingClientRect();
+    const panel = document.querySelector('.devx-panel').getBoundingClientRect();
+    return { inside: panel.left >= map.left - 1 && panel.right <= map.right + 1 && panel.top >= map.top - 1 && panel.bottom <= map.bottom + 1, w: panel.width, h: panel.height };
+  });
+  log(`${v}: the project panel sits inside the map`, layout.inside && layout.w > 200 && layout.h > 150, `${Math.round(layout.w)}x${Math.round(layout.h)}`);
+  await page.locator('.devx-close').click();
+  log(`${v}: the panel's close button closes it`, await page.locator('.devx-panel').isHidden());
   const target = page.locator('.dev-item:not([hidden]):not(:has(.dev-off)):not(.active)').nth(2);
   const pick = await target.locator('.dev-name').textContent();
   await target.locator('.dev-pick').click();
-  await page.waitForFunction((t) => document.querySelector('.leaflet-popup .dev-pop-title')?.textContent === t, pick, { timeout: 5000 }).catch(() => null);
-  log(`${v}: list click flies to the pin and opens its panel`, (await page.locator('.leaflet-popup .dev-pop-title').textContent().catch(() => null)) === pick, `"${pick}"`);
+  await page.waitForFunction((t) => document.querySelector('.devx-panel:not([hidden]) .dev-pop-title')?.textContent === t, pick, { timeout: 5000 }).catch(() => null);
+  log(`${v}: list click flies to the pin and opens its panel`, (await page.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null)) === pick, `"${pick}"`);
+  // Next and previous walk the list in order; Escape closes and returns focus to the row.
+  const listNames = await page.$$eval('.dev-list .dev-item .dev-name', (ns) => ns.map((n) => n.textContent));
+  await page.locator('.devx-next').click();
+  const nextTitle = await page.locator('.devx-panel .dev-pop-title').textContent();
+  await page.locator('.devx-prev').click();
+  const backTitle = await page.locator('.devx-panel .dev-pop-title').textContent();
+  log(`${v}: next and previous step through the list`, nextTitle === listNames[listNames.indexOf(pick) + 1] && backTitle === pick, `"${nextTitle}"`);
+  await page.keyboard.press('Escape');
+  const escFocus = await page.evaluate(() => document.activeElement?.closest('.dev-item')?.querySelector('.dev-name')?.textContent);
+  log(`${v}: Escape closes the panel and returns focus to its row`, (await page.locator('.devx-panel').isHidden()) && escFocus === pick, `focus on "${escFocus}"`);
 
   // Clear filters.
   await setF({ query: 'a', publicInvolvement: 'private', cost: 'over100', filed: '365' });
+  await page.locator('.devx-legend-item:not([aria-pressed="false"])').first().click();
+  if (mid) await page.locator(`.devx-bar-col[data-month="${mid}"]`).click();
+  await page.locator('.devx-toggle').click();
+  await page.waitForTimeout(150);
   await page.locator('.dev-clear').click();
   await page.waitForTimeout(150);
   const s = await state();
-  const reset = (await page.$$eval('.dev-filter-grid select', (ss) => ss.every((x) => x.value === ''))) && (await page.locator('.dev-search input').inputValue()) === '';
-  log(`${v}: Clear filters restores every project and pin`, reset && s.count === all.length && s.items === all.length && s.markers === pinsOf(all) && !(await page.locator('.dev-clear').isVisible()), `${s.count} projects, ${s.markers} pins`);
+  const reset =
+    (await page.$$eval('.devx-filters select', (ss) => ss.every((x) => x.value === ''))) &&
+    (await page.locator('.dev-search input').inputValue()) === '' &&
+    (await page.locator('.devx-legend-item[aria-pressed="false"]').count()) === 0 &&
+    (await page.locator('.devx-bar-col[aria-pressed="true"]').count()) === 0 &&
+    (await page.locator('.devx-toggle').getAttribute('aria-pressed')) === 'false';
+  log(`${v}: Clear all resets search, menus, legend, chart month and the hiring toggle, restoring every project and pin`, reset && s.count === all.length && s.items === all.length && s.markers === pinsOf(all) && !(await page.locator('.dev-clear').isVisible()), `${s.count} projects, ${s.markers} pins`);
 
   // Keyboard: reach every control by Tab, each with a visible focus ring.
   if (!vp.mobile) {
     await setF({ cost: 'over100' });
-    await page.locator('.dev-filters-summary').focus();
-    const order = [];
-    for (let i = 0; i < 12; i++) {
-      const info = await page.evaluate(() => {
-        const a = document.activeElement;
-        const cs = getComputedStyle(a);
-        const ring = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
-        return { tag: a.tagName, cls: a.className, label: a.getAttribute('aria-label') ?? a.closest('label')?.querySelector('span')?.textContent ?? a.textContent.trim().slice(0, 30), ring, visible: a.matches(':focus-visible') };
-      });
-      order.push(info);
-      if (info.cls.includes('dev-clear')) break;
-      await page.keyboard.press('Tab');
-    }
-    const reached = order.map((o) => o.label);
-    const want = ['Filter projects', 'Search projects by name, project number or address', ...menus.map(([l]) => l), 'Clear filters'];
-    log(`${v}: Tab reaches the panel header, search, every menu and Clear filters in order`, want.every((w, i) => (reached[i] ?? '').startsWith(w)), reached.join(' → '));
-    const noRing = order.filter((o) => !o.ring || !o.visible);
+    const walk = async (from, stop, max) => {
+      await page.locator(from).first().focus();
+      const order = [];
+      for (let i = 0; i < max; i++) {
+        const info = await page.evaluate(() => {
+          const a = document.activeElement;
+          const cs = getComputedStyle(a);
+          const ring = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
+          return { tag: a.tagName, cls: String(a.className), label: a.getAttribute('aria-label') ?? a.textContent.trim().replace(/\s+/g, ' ').slice(0, 40), ring, visible: a.matches(':focus-visible') };
+        });
+        order.push(info);
+        if (stop(info)) break;
+        await page.keyboard.press('Tab');
+      }
+      return order;
+    };
+    // The list side: search, each legend category, each sort, then the first project.
+    const legendN = await page.locator('.devx-legend li:not([hidden]) .devx-legend-item').count();
+    const side = await walk('.dev-search input', (o) => o.cls.includes('dev-pick'), legendN + 6);
+    const sideWant = ['Search projects by name, address, owner, project or permit number', ...Array(legendN).fill('devx-legend-item'), 'devx-seg-item', 'devx-seg-item', 'devx-seg-item', 'dev-pick'];
+    log(`${v}: Tab goes search → ${legendN} legend categories → 3 sorts → first project`, sideWant.length === side.length && sideWant.every((w, i) => side[i].label === w || side[i].cls.includes(w)), side.map((o) => o.label).join(' → '));
+    // The map side: every filter menu (More is open after setF), the hiring toggle and Clear all.
+    const pills = await walk('.devx-filters select', (o) => o.cls.includes('dev-clear'), 14);
+    const reached = pills.map((o) => o.label);
+    const want = [...menus.slice(0, 3).map(([l]) => l), 'More', ...menus.slice(3).map(([l]) => l), 'Firms hiring now', 'Clear all'];
+    log(`${v}: Tab reaches every filter menu, More, Firms hiring now and Clear all in order`, want.length === reached.length && want.every((w, i) => (reached[i] ?? '').startsWith(w)), reached.join(' → '));
+    const noRing = [...side, ...pills].filter((o) => !o.ring || !o.visible);
     log(`${v}: every control shows a visible keyboard focus ring`, noRing.length === 0, noRing.map((o) => o.label).join(', '));
-    await page.locator('.dev-filters-summary').focus();
+    await page.locator('.devx-more-summary').focus();
     await page.keyboard.press('Enter');
-    const closed = !(await page.locator('.dev-filters').evaluate((d) => d.open));
+    const closed = !(await page.locator('.devx-more').evaluate((d) => d.open));
     await page.keyboard.press('Enter');
-    log(`${v}: Enter folds and unfolds the filter panel`, closed && (await page.locator('.dev-filters').evaluate((d) => d.open)));
+    log(`${v}: Enter folds and unfolds More`, closed && (await page.locator('.devx-more').evaluate((d) => d.open)));
+    // A legend category and a chart bar work by keyboard too.
+    await page.locator('.devx-legend-item').first().press('Enter');
+    const legendKey = (await page.locator('.devx-legend-item').first().getAttribute('aria-pressed')) === 'false';
+    await page.locator('.devx-bar-col').last().press('Enter');
+    const barKey = (await page.locator('.devx-bar-col').last().getAttribute('aria-pressed')) === 'true';
+    log(`${v}: Enter toggles a legend category and picks a chart month`, legendKey && barKey);
     await page.locator('.dev-clear').press('Enter');
     await page.waitForTimeout(100);
-    log(`${v}: Enter on Clear filters resets`, (await state()).count === all.length);
+    log(`${v}: Enter on Clear all resets`, (await state()).count === all.length);
   }
   // A project with no pin ("Not on the map") opens its details from the list, by mouse and keyboard.
   // Run in a metro that is known from the data to have one, so the case never silently skips.
@@ -328,21 +456,23 @@ for (const vp of [
     const offPage = await ctx.newPage();
     offPage.on('pageerror', (e) => errors.push(e.message));
     await offPage.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
-    await offPage.goto(`${base}#markets&city=${encodeURIComponent(offCity)}`);
+    await offPage.goto(`${base}#markets&tool=map&city=${encodeURIComponent(offCity)}`);
     await offPage.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
     await waitFull(offPage, offCity);
     const offItem = offPage.locator('.dev-item:not([hidden]):has(.dev-off)').first();
     await offItem.scrollIntoViewIfNeeded();
     const offName = await offItem.locator('.dev-name').textContent();
     await offItem.locator('.dev-pick').click();
-    const shown = await offItem.locator('.dev-detail .dev-pop-title').textContent().catch(() => null);
-    const expanded = await offItem.locator('.dev-pick').getAttribute('aria-expanded');
-    const links = await offItem.locator('.dev-detail .dev-links a').count();
+    const shown = await offPage.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null);
+    const current = await offItem.locator('.dev-pick').getAttribute('aria-current');
+    const links = await offPage.locator('.devx-panel .dev-links a').count();
+    const why = await offPage.locator('.devx-panel').textContent();
+    await offPage.keyboard.press('Escape');
+    const closed = await offPage.locator('.devx-panel').isHidden();
     await offItem.locator('.dev-pick').press('Enter');
-    const closed = (await offItem.locator('.dev-detail').count()) === 0;
-    await offItem.locator('.dev-pick').press('Enter');
-    const reopened = (await offItem.locator('.dev-detail').count()) === 1;
-    log(`${v}: a project not on the map (${offCity}) opens its details from the list`, shown === offName && expanded === 'true' && links >= 1 && closed && reopened, `"${offName}"`);
+    const reopened = (await offPage.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null)) === offName;
+    const noted = /not on the map|no map location|pending|await/i.test(why ?? '');
+    log(`${v}: a project not on the map (${offCity}) opens its details from the list`, shown === offName && current === 'true' && links >= 1 && noted && closed && reopened, `"${offName}": panel "${shown}", current ${current}, ${links} links, noted ${noted}, closed ${closed}, reopened ${reopened}`);
   } else {
     log(`${v}: a project not on the map opens its details from the list`, false, 'no project without coordinates in market.json to test with');
     }
@@ -350,10 +480,42 @@ for (const vp of [
   // each query must list exactly what the generated data says it should.
   const sa = byCity.get('San Antonio') ?? [];
   if (sa.length) {
-    await page.goto(`${base}#markets&city=San%20Antonio`);
+    await page.goto(`${base}#markets&tool=map&city=San%20Antonio`);
     await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
     await waitFull(page, 'San Antonio');
-    if (vp.mobile && !(await page.locator('.dev-filters').evaluate((d) => d.open))) await page.locator('.dev-filters-summary').click();
+    if (vp.mobile) {
+      // Phones: the list sits under the full-height map, so reach it through the visible control, not fill() on a hidden field.
+      const open = page.locator('.devx-to-list');
+      log(`${v}: a visible "Search & project list" control is on the map`, await open.isVisible());
+      await open.click();
+      await page.waitForTimeout(700);
+      const side = await page.evaluate(() => {
+        const r = document.querySelector('.devx-side').getBoundingClientRect();
+        const tabs = document.querySelector('nav.tabs')?.getBoundingClientRect();
+        const legend = document.querySelector('.devx-legend')?.getBoundingClientRect();
+        return { top: r.top, focused: document.activeElement?.closest('.devx-search') != null, legendShown: legend ? legend.height > 0 : false, tabsTop: tabs?.top ?? innerHeight, vh: innerHeight };
+      });
+      log(`${v}: it scrolls the search and list into view and focuses search`, side.top >= 0 && side.top < side.vh / 2 && side.focused, JSON.stringify(side));
+      log(`${v}: the category legend is shown with the list`, side.legendShown);
+      const firstName = await page.locator('.dev-list .dev-item .dev-name').first().textContent();
+      const before = await page.$$eval('.dev-list .dev-item:not([hidden])', (r) => r.length);
+      await page.keyboard.type(firstName);
+      await page.waitForTimeout(400);
+      const typed = await page.$$eval('.dev-list .dev-item:not([hidden]) .dev-name', (ns) => ns.length);
+      log(`${v}: typing in that search filters the list`, typed > 0 && typed < before, `${before} -> ${typed} listed`);
+      await page.locator('.dev-search input').fill('');
+      await page.waitForTimeout(300);
+      // The filter pill row scrolls sideways: every pill can be reached and used, and the page itself never scrolls sideways.
+      const pills = await page.evaluate(() => {
+        const row = document.querySelector('.devx-filters');
+        return { scrolls: row.scrollWidth > row.clientWidth, overflowX: getComputedStyle(row).overflowX, pageWide: document.documentElement.scrollWidth > innerWidth, n: row.querySelectorAll('select').length };
+      });
+      log(`${v}: the filter pill row scrolls sideways when it overflows; the page doesn't`, (!pills.scrolls || /auto|scroll/.test(pills.overflowX)) && !pills.pageWide, JSON.stringify(pills));
+      const last = page.locator('.devx-filters select').last();
+      await last.scrollIntoViewIfNeeded();
+      const lastBox = await last.boundingBox();
+      log(`${v}: the last filter pill can be scrolled into view`, lastBox != null && lastBox.x >= 0 && lastBox.x + lastBox.width <= vp.width + 1, JSON.stringify(lastBox));
+    }
     const merc = ['TABS2025017471', 'TABS2025017477'].map((id) => sa.find((p) => p.id === id));
     for (const p of merc.filter(Boolean)) {
       console.log(`  Merc in data: ${p.id} "${p.name}" $${p.cost} at ${p.address ?? 'no address'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(site point: ${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
@@ -432,9 +594,8 @@ for (const vp of [
       await page.locator('.dev-smaller-search').fill('');
     }
     if (wantSmall) {
-      const label = page.locator('.dev-filter-grid label', { hasText: 'Type of work' }).locator('select');
+      const label = page.locator('.devx-filters select[aria-label="Type of work"]');
       if (await label.count()) {
-        if (vp.mobile && !(await page.locator('.dev-filters').evaluate((d) => d.open))) await page.locator('.dev-filters-summary').click();
         await label.selectOption({ index: 1 });
         await page.waitForTimeout(300);
         log(`${v}: a filter hides the smaller-filing pins`, (await page.locator('.dev-map').getAttribute('data-small-pins')) === '0');
@@ -443,6 +604,24 @@ for (const vp of [
     }
     // Reporting is off until migration 0019 and DEVELOPMENT_REPORTS_ENABLED: no form, the map works as before.
     log(`${v}: no report form while reporting is off`, (await page.locator('.dev-report').count()) === 0);
+  }
+  // The market pages link into the workspace, and the city menu moves it to another metro.
+  const other = [...byCity.keys()].find((c) => c !== biggest);
+  await page.goto(`${base}#markets&city=${encodeURIComponent(biggest)}`);
+  const teaser = page.locator('.devx-teaser-open');
+  const teaserOk = await teaser.waitFor({ timeout: 15000 }).then(() => true, () => false);
+  if (teaserOk) {
+    await teaser.click();
+    await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 30000 });
+  }
+  log(`${v}: a city's market page opens its development map workspace`, teaserOk && /tool=map/.test(await page.evaluate(() => location.hash)) && (await page.locator('#dev-title').textContent()).includes(biggest));
+  if (other) {
+    const menu = page.locator('.devx-city-menu select');
+    const chips = page.locator('.devx-cities .chip', { hasText: other });
+    if (await menu.isVisible()) await menu.selectOption(other);
+    else await chips.first().click();
+    await page.waitForFunction((c) => document.querySelector('#dev-title')?.textContent.includes(c), other, { timeout: 15000 }).catch(() => null);
+    log(`${v}: the city ${(await menu.isVisible()) ? 'menu' : 'chips'} switch the map to ${other}`, (await page.locator('#dev-title').textContent()).includes(other) && (await page.evaluate(() => new URLSearchParams(location.hash.slice(1)).get('city'))) === other);
   }
   log(`${v}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();
@@ -463,7 +642,7 @@ for (const city of ['San Antonio', 'Houston'].filter((c) => byCity.has(c))) {
   let bytes = 0;
   cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength));
   const t0 = Date.now();
-  await page.goto(`${base}#markets&city=${encodeURIComponent(city)}`);
+  await page.goto(`${base}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null, null, { timeout: 180000 });
   const map = Date.now() - t0;
   const want = data.projects.filter((p) => p.city === city).length;
