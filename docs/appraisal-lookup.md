@@ -59,8 +59,8 @@ COVERAGE_TABLE
    accounts added, changed and removed against the previous hashes.
 4. **Per-district errors** go to `.appraisal-cache/report.json`; one district
    failing never stops the others.
-5. **Index** (`lookup.ts`). Records are grouped by district and the first two
-   characters of the street name (`MA` = Main, Market, ...), one JSON file per
+5. **Index** (`lookup.ts`). Records are grouped by district and the first three
+   characters of the street name (`MAI` = Main, Maize, ...), one JSON file per
    group. A lookup reads one group per district it might be in, never a whole
    county.
 6. **Match** (`address.ts`). Both sides are reduced to number, direction,

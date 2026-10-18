@@ -406,6 +406,9 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
   let lines = 0;
   let stopped = false;
   const sample: string[] = [];
+  // Some files repeat an account (Tarrant has a line per building); the first line is the account's.
+  const seen = new Set<string>();
+  let repeated = 0;
   const flush = async () => {
     await writeFile(join(chunks, `${n}.ndjson`), buffer.length ? `${buffer.join('\n')}\n` : '');
     state.chunksDone.push(n++);
@@ -422,7 +425,9 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
         return false;
       }
       const r = normalizeRow(d, row, { retrieved, dataset: url, taxYear });
-      if (r) {
+      if (r && seen.has(r.account)) repeated++;
+      else if (r) {
+        seen.add(r.account);
         buffer.push(JSON.stringify(r));
         state.records++;
       }
@@ -432,6 +437,7 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
     extraFiles
   );
   if (buffer.length) await flush();
+  if (repeated) log(`${d.id}: ${repeated} repeated account lines skipped`);
   for (const line of sample.slice(1, 6)) log(`${d.id}: raw ${JSON.stringify(line.slice(0, 400))}`);
   if (sample.length) log(`${d.id}: first raw line ${JSON.stringify(sample[0]!.replace(/ {3,}/g, (s) => `‹${s.length}›`).slice(0, 1500))}`);
   state.totalIds = Math.min(lines, opts.maxLines ?? Infinity);

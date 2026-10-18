@@ -14,7 +14,9 @@
  * so the report says how many accounts were added, changed and removed.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, rm, writeFile, appendFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile, appendFile } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { fetchJson } from '../lib/http.js';
 import type { District } from './districts.js';
@@ -266,21 +268,16 @@ export async function finish(dir: string, s: DistrictState, now: () => Date = ()
   return bytes;
 }
 
-/** Each finished record of a district, from the cache. */
+/** Each finished record of a district, from the cache, streamed line by line (a county can be over 1 GB). */
 export async function* cachedRecords(cacheDir: string, id: string): AsyncGenerator<AppraisalRecord> {
-  let body: string;
-  try {
-    body = await readFile(join(cacheDir, id, 'records.ndjson'), 'utf8');
-  } catch {
+  const dir = join(cacheDir, id);
+  let files = [join(dir, 'records.ndjson')];
+  if (!(await stat(files[0]!).catch(() => null))) {
     // An unfinished (pilot) run: read its chunks.
-    const chunks = join(cacheDir, id, 'chunks');
-    let names: string[] = [];
-    try {
-      names = (await readdir(chunks)).filter((n) => n.endsWith('.ndjson'));
-    } catch {
-      return;
-    }
-    body = (await Promise.all(names.map((n) => readFile(join(chunks, n), 'utf8')))).join('');
+    const names = await readdir(join(dir, 'chunks')).catch(() => [] as string[]);
+    files = names.filter((n) => n.endsWith('.ndjson')).sort((a, b) => parseInt(a) - parseInt(b)).map((n) => join(dir, 'chunks', n));
   }
-  for (const line of body.split('\n')) if (line) yield JSON.parse(line) as AppraisalRecord;
+  for (const file of files) {
+    for await (const line of createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity })) if (line) yield JSON.parse(line) as AppraisalRecord;
+  }
 }

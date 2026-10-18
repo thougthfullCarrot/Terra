@@ -111,8 +111,9 @@ async function index(): Promise<void> {
   for (const id of chosen) {
     const summary = await writeIndex(indexDir, id, cachedRecords(cacheDir, id));
     if (!summary.records) continue;
-    manifest.districts[id] = summary;
-    log(`${id}: ${summary.records} records, ${summary.unmatched} without a street address, ${summary.shards} groups, ${(summary.bytes / 1e6).toFixed(1)} MB`);
+    const { largest: _l, ...kept } = summary;
+    manifest.districts[id] = kept;
+    log(`${id}: ${summary.records} records, ${summary.unmatched} without a street address, ${summary.shards} groups, ${(summary.bytes / 1e6).toFixed(1)} MB, largest group ${(summary.largest / 1e6).toFixed(2)} MB`);
   }
   await writeFile(join(indexDir, 'manifest.json'), JSON.stringify(manifest, null, 1));
 }

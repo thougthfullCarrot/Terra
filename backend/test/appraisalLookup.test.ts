@@ -114,7 +114,7 @@ describe('index and lookup', () => {
   it('reads only the street group asked for, and reports a district it cannot read', async () => {
     const out = await mkdtemp(join(tmpdir(), 'appraisal-'));
     const summary = await writeIndex(out, 'bexar', [sample('1', '100 N MAIN AVE'), sample('2', '9 MARKET ST'), sample('3', 'LOT 4 BLK 2')]);
-    expect(summary).toMatchObject({ records: 3, unmatched: 1, shards: 1 });
+    expect(summary).toMatchObject({ records: 3, unmatched: 1, shards: 2 });
     const asked: string[] = [];
     const load = async (d: string, shard: string) => {
       asked.push(`${d}/${shard}`);
@@ -122,7 +122,7 @@ describe('index and lookup', () => {
       return JSON.parse(await readFile(join(out, d, `${shard}.json`), 'utf8')) as IndexRow[];
     };
     const { result, unavailable } = await lookup('100 North Main Avenue', ['bexar', 'comal'], load);
-    expect(asked.sort()).toEqual(['bexar/MA', 'comal/MA']);
+    expect(asked.sort()).toEqual(['bexar/MAI', 'comal/MAI']);
     expect(unavailable).toEqual(['comal']);
     expect(result.status === 'match' && result.records[0]!.account).toBe('1');
     expect(shardOf('')).toBe('_');
