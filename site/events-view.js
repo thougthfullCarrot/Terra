@@ -5,7 +5,9 @@
 // organizer's page.
 import { stateBox } from './labels.js';
 import {
+  canExport,
   dateParts,
+  nextSession,
   eventBadges,
   eventCounts,
   eventIcs,
@@ -148,7 +150,8 @@ function chip(label, city, count) {
 function item(event, index) {
   const card = el('article', 'card event-card');
   card.style.setProperty('--i', String(Math.min(index, 20)));
-  const parts = dateParts(event.start, zoneOf(event));
+  // A course's date block shows its next session.
+  const parts = dateParts(nextSession(event)?.start ?? event.start, zoneOf(event));
   if (parts) card.dataset.day = parts.ymd;
 
   const block = el('time', 'date-block');
@@ -187,26 +190,29 @@ function item(event, index) {
   const notes = [];
   if (event.registrationDeadline) notes.push(`Register by ${new Date(event.registrationDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: zoneOf(event) })}`);
   if (event.rescheduledFrom) notes.push(`Moved from ${new Date(event.rescheduledFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: zoneOf(event) })}`);
+  if (event.spanUnverified) notes.push('Runs over several weeks; the page lists no session dates, so check it before planning');
+  for (const c of event.conflicts ?? []) notes.push(`Check the page: ${c}`);
   if (event.stale && event.verifiedAt) notes.push(`Calendar unreachable; last verified ${new Date(event.verifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
   if (notes.length) body.append(el('p', 'event-notes', notes.join(' · ')));
 
   const actions = el('div', 'event-actions');
-  const add = el('button', 'secondary sm', 'Add to calendar');
+  const exportable = canExport(event);
+  const add = el('button', 'secondary sm', event.sessions?.length ? 'Add all sessions' : 'Add to calendar');
   add.type = 'button';
   add.title = 'Download an .ics file for Apple Calendar, Outlook or Google';
   add.addEventListener('click', () => download(event));
-  const google = el('a', 'link sm', 'Google Calendar');
+  const google = el('a', 'link sm', event.sessions?.length ? 'Google Calendar (next session)' : 'Google Calendar');
   google.href = googleCalendarUrl(event);
   google.target = '_blank';
   google.rel = 'noopener noreferrer';
-  if (event.registrationUrl && event.status !== 'cancelled') {
+  if (event.registrationUrl && event.status !== 'cancelled' && (!event.enrollment || event.enrollment === 'open')) {
     const reg = el('a', 'link sm', 'Register');
     reg.href = event.registrationUrl;
     reg.target = '_blank';
     reg.rel = 'noopener noreferrer';
     actions.append(reg);
   }
-  actions.append(add, google);
+  if (exportable) actions.append(add, google);
 
   card.append(block, body, actions);
   return card;

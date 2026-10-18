@@ -1,7 +1,7 @@
 import { fetchJson, fetchText } from '../lib/http.js';
 import { decodeXml } from '../news/googleNews.js';
 import { CITIES, type City } from '../types.js';
-import { addressCity, deadlineIn, eligibilityIn, guessFormat, joinDays, ldDetails, mergeListing, price, shortText, titleStatus, topicOf, type Details } from './enrich.js';
+import { addressCity, courseSessions, SERIES_SPAN_DAYS, deadlineIn, eligibilityIn, guessFormat, joinDays, ldDetails, mergeListing, price, shortText, titleStatus, topicOf, type Details } from './enrich.js';
 
 /**
  * Real estate networking and industry events for each Terra city, read from
@@ -55,6 +55,17 @@ export interface TerraEvent {
   verifiedAt?: string;
   /** True when the source could not be read this run and the event comes from an earlier build. */
   stale?: boolean;
+  /** A course or series sold as one registration: its dated sessions (start/end are the first and last). */
+  sessions?: Array<{ start: string; end: string | null }>;
+  /** Wording on the organizer's page that disagrees with itself (session counts), shown as a warning. */
+  conflicts?: string[];
+  /**
+   * For a course: open (first session ahead, registration not closed), closed (page says registration is closed),
+   * or in-progress (first session has passed; listed until its last session, not as something to sign up for).
+   */
+  enrollment?: 'open' | 'closed' | 'in-progress';
+  /** A listing spans a week or more and its page names no session dates: shown with its range, never exported as one block. */
+  spanUnverified?: boolean;
 }
 
 export type TimeZone = 'America/Chicago' | 'America/Denver';
@@ -87,6 +98,11 @@ export interface EventSource {
   sitemapPath?: string;
   /** Place each event in the market its address names (a group meeting in more than one city); source.city otherwise. */
   cityFromVenue?: boolean;
+  /**
+   * Venue or group wording that puts an event at a campus in another market (Texas A&M's law school is in
+   * Fort Worth, not College Station). Checked after the street address and before the source's own city.
+   */
+  places?: Array<[RegExp, City]>;
   /** localist, livewhale: the search words (a university calendar lists every event on campus). */
   keyword?: string;
 }
@@ -123,11 +139,26 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'unt', organizer: 'UNT', city: 'Dallas', kind: 'localist', base: 'https://calendar.unt.edu', keyword: 'real estate' },
   { key: 'utd', organizer: 'UT Dallas', city: 'Dallas', kind: 'localist', base: 'https://calendar.utdallas.edu', keyword: 'real estate' },
   { key: 'uta', organizer: 'UT Arlington', city: 'Fort Worth', kind: 'localist', base: 'https://events.uta.edu', keyword: 'real estate' },
-  { key: 'ut-austin', organizer: 'UT Austin', city: 'Austin', kind: 'localist', base: 'https://calendar.utexas.edu', keyword: 'real estate' },
+  // McCombs runs its working-professional MBA classes and alumni events in Dallas, Houston and San Antonio.
+  { key: 'ut-austin', organizer: 'UT Austin', city: 'Austin', kind: 'localist', base: 'https://calendar.utexas.edu', keyword: 'real estate', places: [[/\bDallas\b/i, 'Dallas'], [/\bHouston\b/i, 'Houston'], [/San Antonio/i, 'San Antonio']] },
   { key: 'tcu', organizer: 'TCU', city: 'Fort Worth', kind: 'localist', base: 'https://calendar.tcu.edu', keyword: 'real estate' },
   { key: 'trinity', organizer: 'Trinity University', city: 'San Antonio', kind: 'localist', base: 'https://events.trinity.edu', keyword: 'real estate' },
   // LiveWhale university calendars (public JSON search): Texas A&M (College Station) and Rice (Houston).
-  { key: 'tamu', organizer: 'Texas A&M', city: 'College Station', kind: 'livewhale', base: 'https://calendar.tamu.edu', keyword: 'real estate' },
+  {
+    key: 'tamu',
+    organizer: 'Texas A&M',
+    city: 'College Station',
+    kind: 'livewhale',
+    base: 'https://calendar.tamu.edu',
+    keyword: 'real estate',
+    // calendar.tamu.edu covers every campus: the School of Law (LEB, Law and Education Building) is downtown
+    // Fort Worth, TAMUG is Galveston, and the Health Science Center sites in Houston.
+    places: [
+      [/\bLEB\b|Law (?:and|&) Education Building|School of Law|· Law$/i, 'Fort Worth'],
+      [/\bTAMUG\b|Galveston|Pelican Island/i, 'Galveston'],
+      [/Texas Medical Center|\bTMC\b|\bHouston\b/i, 'Houston']
+    ]
+  },
   { key: 'rice', organizer: 'Rice University', city: 'Houston', kind: 'livewhale', base: 'https://events.rice.edu', keyword: 'real estate' },
   // Architecture chapters on The Events Calendar: only their networking, development and industry events.
   { key: 'aia-dallas', organizer: 'AIA Dallas', city: 'Dallas', kind: 'tribe', base: 'https://www.aiadallas.org', relevantOnly: true },
@@ -875,7 +906,7 @@ const defaultFetcher: Fetcher = {
 export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
   parseZone = zoneOf(source.city);
   try {
-    const events = tidy(await fetchRaw(source, now, fetcher, log));
+    const events = await withSessions(tidy(await fetchRaw(source, now, fetcher, log)), fetcher, log);
     const kept = events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
     return joinDays(kept.map((e) => finalize(e, source, now)));
   } finally {
@@ -888,11 +919,11 @@ export async function fetchSource(source: EventSource, now: Date, fetcher: Fetch
  * venue's address (not the organizer's office), topic, free, eligibility and deadline from the description, and
  * when it was verified.
  */
-export function finalize(e: TerraEvent, source: Pick<EventSource, 'key' | 'city'>, now: Date): TerraEvent {
+export function finalize(e: TerraEvent, source: Pick<EventSource, 'key' | 'city'> & { places?: EventSource['places'] }, now: Date): TerraEvent {
   const marked = titleStatus(e.title);
   const format = e.format ?? guessFormat(e);
   // A physical event goes to the market its street address names; a virtual one stays with its organizer's market.
-  const city = format === 'virtual' ? e.city : (addressCity(e.address) ?? addressCity(e.venue) ?? e.city);
+  const city = format === 'virtual' ? e.city : (addressCity(e.address) ?? addressCity(e.venue) ?? placeCity(e, source.places) ?? e.city);
   const timezone = zoneOf(city);
   const description = e.description ?? null;
   const out: TerraEvent = {
@@ -916,8 +947,26 @@ export function finalize(e: TerraEvent, source: Pick<EventSource, 'key' | 'city'
   if (deadline && new Date(deadline).getTime() <= new Date(e.start).getTime()) out.registrationDeadline = deadline;
   else delete out.registrationDeadline;
   if (out.registrationUrl && urlKey(out.registrationUrl) === urlKey(out.url)) delete out.registrationUrl;
+  if (out.sessions?.length) {
+    // A course whose first session has passed is in progress: listed until its last session, not as open to join.
+    if (new Date(out.sessions[0]!.start).getTime() < now.getTime()) out.enrollment = 'in-progress';
+    else if (out.enrollment !== 'closed') out.enrollment = 'open';
+  }
   for (const key of Object.keys(out) as Array<keyof TerraEvent>) if (out[key] === null && !['end', 'venue', 'cost'].includes(key)) delete out[key];
   return out;
+}
+
+/** The market a source's campus wording names for this venue or organizer group, if any. */
+export function placeCity(e: Pick<TerraEvent, 'venue' | 'organizer' | 'address'>, places: EventSource['places']): City | null {
+  // A venue written "Hotel Ella, Austin" names its city even without ", TX".
+  const tail = e.venue ? [...CITIES].find((c) => new RegExp(`,\\s*${c}\\s*$`, 'i').test(e.venue!)) : undefined;
+  if (tail) return tail;
+  if (!places) return null;
+  for (const text of [e.venue, e.address, e.organizer]) {
+    if (!text) continue;
+    for (const [pattern, city] of places) if (pattern.test(text)) return city;
+  }
+  return null;
 }
 
 async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (m: string) => void): Promise<TerraEvent[]> {
@@ -1047,6 +1096,53 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
     } catch (error) {
       log(`${link.url}: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+  return out;
+}
+
+function spanDays(e: Pick<TerraEvent, 'start' | 'end'>): number {
+  if (!e.end) return 0;
+  return Math.round((Date.parse(`${e.end.slice(0, 10)}T12:00:00Z`) - Date.parse(`${e.start.slice(0, 10)}T12:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * A listing that spans a week or more (a designation course "Oct 2 – Nov 6") is read from its own page: when the
+ * page lists the session dates, the event carries those sessions (and any wording that contradicts them);
+ * otherwise it is marked spanUnverified so no calendar export blocks out the whole range.
+ */
+export async function withSessions(events: TerraEvent[], fetcher: Fetcher, log: (m: string) => void, limit = 10): Promise<TerraEvent[]> {
+  let read = 0;
+  const out: TerraEvent[] = [];
+  for (const e of events) {
+    if (e.sessions || spanDays(e) < SERIES_SPAN_DAYS) {
+      out.push(e);
+      continue;
+    }
+    let found: ReturnType<typeof courseSessions> = null;
+    if (read < limit) {
+      read++;
+      try {
+        found = courseSessions(await fetcher.text(e.url), e.start.slice(0, 10), e.end!.slice(0, 10));
+      } catch (error) {
+        log(`${e.url}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (!found) {
+      out.push({ ...e, spanUnverified: true });
+      continue;
+    }
+    const sessions = found.sessions.map((s) => ({ start: centralIso(s.start)!, end: s.end ? centralIso(s.end) : null }));
+    const timed = found.sessions[0]!.start.length > 10;
+    const { dateOnly: _d, ...rest } = e;
+    out.push({
+      ...rest,
+      ...(timed ? {} : { dateOnly: true }),
+      start: sessions[0]!.start,
+      end: sessions.at(-1)!.end ?? sessions.at(-1)!.start,
+      sessions,
+      ...(found.conflicts.length ? { conflicts: found.conflicts } : {}),
+      ...(found.registrationClosed ? { enrollment: 'closed' as const } : {})
+    });
   }
   return out;
 }

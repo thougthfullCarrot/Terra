@@ -28,17 +28,23 @@ const ymd = (iso, tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).form
 const midnight = (iso, tz) => local(iso, tz, { hour: 'numeric', minute: '2-digit' }) === '12:00 AM';
 const multi = (e) => e.end && ymd(e.end, zone(e)) > ymd(e.start, zone(e));
 
+const plain = all.filter((e) => !e.sessions && !e.spanUnverified);
 const picks = {
-  evening: all.find((e) => !multi(e) && !midnight(e.start, zone(e)) && hour(e) >= 17 && e.format !== 'virtual'),
-  'all-day': all.find((e) => !multi(e) && midnight(e.start, zone(e))),
-  recurring: all.find((e) => e.seriesId),
-  'multi-day': all.find((e) => multi(e))
+  evening: plain.find((e) => !multi(e) && !midnight(e.start, zone(e)) && hour(e) >= 17 && e.format !== 'virtual'),
+  'all-day': plain.find((e) => !multi(e) && midnight(e.start, zone(e))),
+  recurring: plain.find((e) => e.seriesId),
+  'multi-day': plain.find((e) => multi(e)),
+  course: all.find((e) => e.sessions?.length)
 };
+const unverified = all.find((e) => e.spanUnverified);
+// The session that is next (or running now), as the card's date block and the Google link use it.
+const next = (e) => e.sessions.find((x) => new Date(x.end ?? x.start).getTime() >= now) ?? e.sessions.at(-1);
 
 /** The card's time line, worked out from the raw times. */
 function expectedWhen(e) {
   const tz = zone(e);
   const label = tz === 'America/Denver' ? 'MT' : 'CT';
+  if (e.sessions) return `${e.sessions.length} sessions, ${local(e.sessions[0].start, tz, { month: 'short', day: 'numeric' })} \u2013 ${local(e.sessions.at(-1).start, tz, { month: 'short', day: 'numeric' })}`;
   const t = (iso) => local(iso, tz, { hour: 'numeric', minute: '2-digit' });
   const d = (iso) => local(iso, tz, { month: 'short', day: 'numeric' });
   if (multi(e)) return midnight(e.start, tz) ? `${d(e.start)} – ${d(e.end)}` : `${d(e.start)} – ${d(e.end)} · starts ${t(e.start)} ${label}`;
@@ -49,6 +55,7 @@ function expectedWhen(e) {
 
 /** DTSTART/DTEND the .ics must carry: dates for all-day (DTEND the day after the last), UTC instants otherwise. */
 function expectedIcs(e) {
+  if (e.sessions) e = { ...e, ...next(e), sessions: undefined };
   const tz = zone(e);
   const stamp = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   if (midnight(e.start, tz)) {
@@ -95,6 +102,18 @@ for (const r of file.report ?? []) {
   console.log(`MARKET  ${r.city}: ${r.state}, ${r.sourcesOk}/${r.sourcesChecked} sources read, ${r.upcoming} upcoming, ${r.virtual} virtual, ${r.duplicatesRemoved} duplicates merged, ${r.stale} kept from earlier, last verified ${r.lastVerifiedAt ?? 'never'}`);
   for (const e of events.slice(0, 3)) console.log(`  SAMPLE  ${e.start} ${e.end ? `→ ${e.end} ` : ''}| ${e.title} | ${e.organizer} | ${e.venue ?? 'venue not listed'}${e.cost ? ` | ${e.cost}` : ''}${e.format ? ` | ${e.format}` : ''}${e.status ? ` | ${e.status}` : ''}${e.seriesId ? ' | repeats' : ''}`);
 }
+// Place audit: an event whose venue or address names a different market than the one it is listed under.
+const MARKETS = file.cities.map((c) => c.city);
+for (const e of all) {
+  if (e.format === 'virtual') continue;
+  const text = `${e.venue ?? ''} ${e.address ?? ''}`;
+  const named = MARKETS.filter((m) => m !== e.city && new RegExp(`\\b${m}\\b`, 'i').test(text));
+  if (named.length) console.log(`PLACE CHECK  "${e.title}" listed under ${e.city}, venue "${text.trim()}" names ${named.join(', ')}`);
+}
+const law = all.filter((e) => /\bLEB\b|Law (?:and|&) Education Building/i.test(`${e.venue ?? ''}`) && /Texas A&M/.test(e.organizer));
+for (const e of law) check(e.city === 'Fort Worth', `"${e.title}" (Texas A&M Law, ${e.venue}) is listed under Fort Worth, not ${e.city}`);
+for (const e of all.filter((x) => x.sessions)) console.log(`COURSE  "${e.title}" (${e.organizer}) ${e.sessions.length} sessions ${e.sessions.map((x) => x.start).join(', ')} enrollment ${e.enrollment}${e.conflicts ? ` CONFLICT ${e.conflicts.join(' ')}` : ''}`);
+for (const e of all.filter((x) => x.spanUnverified)) console.log(`LONG RANGE, NO SESSIONS  "${e.title}" (${e.organizer}) ${e.start} → ${e.end}`);
 for (const s of file.sources ?? []) if (s.ok === false) console.log(`SOURCE FAILED  ${s.organizer} (${s.city ?? 'all'}): ${s.error ?? ''}`);
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
@@ -124,9 +143,14 @@ for (const vp of [
     const want = expectedWhen(e);
     check(where.join(' · ').startsWith(want), `${vp.name} ${shape}: time line "${where.join(' · ')}" starts with "${want}"`);
     const block = await card.locator('time.date-block').innerText();
-    const day = local(e.start, zone(e), { day: 'numeric' });
+    const day = local(e.sessions ? next(e).start : e.start, zone(e), { day: 'numeric' });
     check(block.replace(/\s+/g, ' ').includes(day), `${vp.name} ${shape}: date block "${block.replace(/\s+/g, ' ')}" shows day ${day}`);
 
+    if (e.sessions) {
+      check(await card.locator('.badge-status, .badge-topic', { hasText: /Course/ }).count() > 0 || (await card.innerText()).includes('Registration closed'), `${vp.name} course: labelled as a course (${e.enrollment})`);
+      check(e.enrollment === 'open' || !(await card.locator('a', { hasText: 'Register' }).count()), `${vp.name} course: no Register link while ${e.enrollment}`);
+      for (const c of e.conflicts ?? []) check((await card.innerText()).includes(c), `${vp.name} course: shows the page conflict "${c}"`);
+    }
     const google = new URL(await card.locator('a', { hasText: 'Google Calendar' }).getAttribute('href'));
     const ics = expectedIcs(e);
     const dates = google.searchParams.get('dates');
@@ -136,8 +160,16 @@ for (const vp of [
     const [download] = await Promise.all([page.waitForEvent('download'), card.locator('button', { hasText: 'Add to calendar' }).click()]);
     const text = await readFile(await download.path(), 'utf8');
     check(text.includes(`${ics.start}\r\n`) && text.includes(`${ics.end}\r\n`), `${vp.name} ${shape}: .ics has ${ics.start} and ${ics.end}`);
+    if (e.sessions) check((text.match(/BEGIN:VEVENT/g) ?? []).length === e.sessions.length && !/VALUE=DATE/.test(text), `${vp.name} course: .ics has one timed entry per session (${e.sessions.length}), no all-day block`);
     check(text.includes(`URL:${e.url.replace(/([,;])/g, '\\$1')}`), `${vp.name} ${shape}: .ics links the event page`);
     if (shots) await card.screenshot({ path: join(shots, `${shape}-${vp.name}.png`) });
+  }
+
+  if (unverified) {
+    await page.goto(`${base}#events&city=${encodeURIComponent(unverified.city)}`);
+    await page.waitForSelector('#e-list .event-card', { timeout: 20000 });
+    const card = page.locator('.event-card').filter({ has: page.locator(`time[datetime="${unverified.start}"]`) }).filter({ hasText: unverified.title }).first();
+    check((await card.count()) && !(await card.locator('button', { hasText: 'Add to calendar' }).count()), `${vp.name}: "${unverified.title}" (no session dates) offers no calendar export`);
   }
 
   // Empty markets: the sentence must match the report (unreadable vs nothing found).

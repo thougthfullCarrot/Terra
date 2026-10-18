@@ -42,6 +42,25 @@ calendar feeds and pages only, no paid APIs, no logins.
   same way.
 - Multi-day: an event whose end is on a later day shows "Dec 1 – Dec 3". A calendar that
   lists one all-day row per day of the same page is joined into one event.
+- Courses and series: a listing that spans 7 days or more is not treated as one continuous
+  event. Terra reads its page; when the page lists session dates inside the range
+  ("Fridays: 10/2, 10/9, 10/16, 10/30, 11/6", "8:00 am to 5:00 pm") the event carries those
+  `sessions`. The card shows the session count and the next session, the .ics has one
+  timed entry per session, and the Google link adds the next session. Page wording that
+  disagrees with the dates ("4-Day Course" beside five dates) is kept in `conflicts` and
+  shown on the card; Terra does not pick one. `enrollment` is `in-progress` once the first
+  session has passed (no Register link; listed until the last session), `closed` when the
+  page says registration is closed, otherwise `open`. A long range whose page lists no
+  session dates is marked `spanUnverified`, shows a warning and offers no calendar export.
+
+## Where an event is
+
+- Physical events go to the market named by their street address (", TX"), then by a venue
+  that ends in a market name ("Hotel ZaZa, Houston"), then by the source's `places` rules
+  for campuses in other markets (Texas A&M School of Law / LEB is Fort Worth, TAMUG is
+  Galveston; UT Austin's McCombs classes in Dallas, Houston, San Antonio), and only then
+  the organizer's market. Virtual events stay with the organizer. The PR browser check
+  prints a `PLACE CHECK` line for any event whose venue names a different market.
 
 ## Duplicates, changes and conflicts
 

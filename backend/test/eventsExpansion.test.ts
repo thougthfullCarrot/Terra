@@ -116,7 +116,7 @@ describe('time zones', () => {
     expect(centralIso('2026-12-10 18:00', 'America/Denver')).toBe('2026-12-10T18:00:00-07:00');
     // The calendar export carries the right instant (UTC) and Google opens it in Mountain time.
     expect(eventIcs(e!, now)).toContain('DTSTART:20261029T233000Z');
-    expect(new URL(googleCalendarUrl(e!)).searchParams.get('ctz')).toBe('America/Denver');
+    expect(new URL(googleCalendarUrl(e!)!).searchParams.get('ctz')).toBe('America/Denver');
   });
 });
 
@@ -204,7 +204,7 @@ describe('evening, all-day, recurring and multi-day events', () => {
     expect(summit).toMatchObject({ start: '2026-12-01T00:00:00-06:00', end: '2026-12-03T00:00:00-06:00' });
     expect(eventWhen(summit!)).toBe('Dec 1 – Dec 3');
     expect(eventIcs(summit!, now)).toContain('DTEND;VALUE=DATE:20261204');
-    expect(new URL(googleCalendarUrl(summit!)).searchParams.get('dates')).toBe('20261201/20261204');
+    expect(new URL(googleCalendarUrl(summit!)!).searchParams.get('dates')).toBe('20261201/20261204');
   });
 
   it('expands weekly rules across the daylight-time change at the same local time', () => {

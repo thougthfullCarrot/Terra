@@ -245,3 +245,63 @@ function nextDay(ymd: string): string {
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
+
+// ---- Course series (one registration, several dated sessions) ----
+
+export interface CourseSessions {
+  /** Local "YYYY-MM-DD HH:MM" (or "YYYY-MM-DD" when no time is listed) per session, in order. */
+  sessions: Array<{ start: string; end: string | null }>;
+  /** Wording on the page that disagrees with the listed dates ("4-Day Course" beside five dates). */
+  conflicts: string[];
+  /** The page says registration is closed. */
+  registrationClosed: boolean;
+}
+
+const NUMBER_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+
+function clock(t: string): string | null {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?$/i.exec(t.trim());
+  if (!m) return null;
+  const h = (Number(m[1]) % 12) + (m[3]!.toLowerCase() === 'p' ? 12 : 0);
+  return `${String(h).padStart(2, '0')}:${m[2] ?? '00'}`;
+}
+
+/**
+ * The session dates a course page lists ("Fridays: 10/2, 10/9, 10/16, 10/30 and 11/6", 8:00 am to 5:00 pm),
+ * kept only when they fall between the listing's first and last day. Null when the page lists fewer than two
+ * dates in that span, so a long date range is never turned into sessions by guessing.
+ */
+export function courseSessions(pageText: string, firstDay: string, lastDay: string): CourseSessions | null {
+  const body = text(pageText);
+  const year = Number(firstDay.slice(0, 4));
+  const days = new Set<string>();
+  for (const [list = ''] of body.matchAll(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?:\s*(?:,|and|&)\s*(?:and\s+)?\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)+/gi)) {
+    for (const [, mo, d, y] of list.matchAll(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/g)) {
+      let yr = y ? Number(y.length === 2 ? `20${y}` : y) : year;
+      let day = `${yr}-${mo!.padStart(2, '0')}-${d!.padStart(2, '0')}`;
+      // A course that runs Dec into Jan: a month before the first day's month belongs to the next year.
+      if (!y && day < firstDay) {
+        yr += 1;
+        day = `${yr}-${mo!.padStart(2, '0')}-${d!.padStart(2, '0')}`;
+      }
+      if (day >= firstDay && day <= lastDay) days.add(day);
+    }
+  }
+  if (days.size < 2) return null;
+  const range = /(\d{1,2}(?::\d{2})?\s*[ap]\.?\s*m\.?)\s*(?:to|-|–|until)\s*(\d{1,2}(?::\d{2})?\s*[ap]\.?\s*m\.?)/i.exec(body);
+  const from = range ? clock(range[1]!) : null;
+  const to = range ? clock(range[2]!) : null;
+  const sorted = [...days].sort();
+  const sessions = sorted.map((day) => ({ start: from ? `${day} ${from}` : day, end: from && to ? `${day} ${to}` : null }));
+  const counts = new Map<number, string>();
+  for (const [phrase = '', n = ''] of body.matchAll(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[- ](?:full[- ])?(?:days?|sessions?|classes|weeks?)\b(?:\s+course)?/gi)) {
+    const count = Number(n) || NUMBER_WORDS[n.toLowerCase()];
+    if (/week/i.test(phrase)) continue; // "6-week course" counts weeks, not sessions
+    if (count && count !== sorted.length && !counts.has(count)) counts.set(count, phrase.trim());
+  }
+  const conflicts = [...counts.values()].map((phrase) => `The page says "${phrase}" but lists ${sorted.length} dates.`);
+  return { sessions, conflicts, registrationClosed: /registration\s+(?:is\s+)?closed/i.test(body) };
+}
+
+/** A listing that spans this many days or more is treated as a course or series, not one continuous event. */
+export const SERIES_SPAN_DAYS = 7;

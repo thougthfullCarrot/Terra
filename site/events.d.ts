@@ -23,6 +23,10 @@ export interface SiteEvent {
   stale?: boolean;
   verifiedAt?: string;
   rescheduledFrom?: string | null;
+  sessions?: Array<{ start: string; end: string | null }>;
+  conflicts?: string[];
+  enrollment?: 'open' | 'closed' | 'in-progress';
+  spanUnverified?: boolean;
 }
 
 export interface MarketReport {
@@ -55,12 +59,14 @@ export function eventEnds(event: { start: string; end?: string | null; timezone?
 export function groupByMonth(events: SiteEvent[]): Array<{ month: string; events: SiteEvent[] }>;
 export const ONLINE: string;
 export function eventDate(iso: string, tz?: string): string;
-export function eventWhen(event: SiteEvent): string;
+export function eventWhen(event: SiteEvent, now?: Date): string;
+export function nextSession(event: SiteEvent, now?: Date): { start: string; end: string | null } | null;
+export function canExport(event: SiteEvent): boolean;
 export function eventBadges(event: SiteEvent): Array<{ text: string; kind: string; title?: string }>;
 export function marketNote(file: EventsFile | null, city: string): { report: MarketReport | null; empty: string };
 export function zoneOf(event: Partial<SiteEvent> | null | undefined): string;
 export function zoneLabel(tz: string): string;
 export function dateParts(iso: string, tz?: string): { month: string; day: string; weekday: string; ymd: string } | null;
-export function eventIcs(event: SiteEvent, now?: Date): string;
-export function googleCalendarUrl(event: SiteEvent): string;
+export function eventIcs(event: SiteEvent, now?: Date): string | null;
+export function googleCalendarUrl(event: SiteEvent, now?: Date): string | null;
 export function monthGrid(month: string, events: SiteEvent[]): Array<{ day: number; ymd: string; has: boolean } | null>;

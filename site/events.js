@@ -107,8 +107,29 @@ export function eventDate(iso, tz = TZ) {
  * The time line of a card: "6:00 PM – 8:00 PM CT", "All day", "Time not listed", or for an event over several days
  * "Oct 20 – Oct 22" (with its start time when it has one).
  */
-export function eventWhen(event) {
+/** The session of a course that is next (or running now); the last one once all have passed. */
+export function nextSession(event, now = new Date()) {
+  const sessions = event.sessions ?? [];
+  return sessions.find((x) => eventEnds({ ...event, start: x.start, end: x.end, sessions: undefined }) >= now.getTime()) ?? sessions.at(-1) ?? null;
+}
+
+/** False for a long listing with no session dates: exporting it would block out every day of the range. */
+export function canExport(event) {
+  return !event.spanUnverified;
+}
+
+export function eventWhen(event, now = new Date()) {
   const tz = zoneOf(event);
+  if (event.sessions?.length) {
+    const short = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz });
+    const s = event.sessions;
+    const next = nextSession(event, now);
+    const first = s[0];
+    const clock = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+    const time = allDay(first.start, tz) ? '' : ` · ${clock(first.start)}${first.end ? ` \u2013 ${clock(first.end)}` : ''} ${zoneLabel(tz)}`;
+    const at = s.indexOf(next) + 1;
+    return `${s.length} sessions, ${short(first.start)} \u2013 ${short(s.at(-1).start)}${time} · next: session ${at}, ${short(next.start)}`;
+  }
   const start = dateParts(event.start, tz);
   const end = event.end ? dateParts(event.end, tz) : null;
   const clock = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
@@ -132,7 +153,11 @@ export function eventBadges(event) {
   else if (event.format === 'hybrid') out.push({ text: 'Hybrid', kind: 'format' });
   if (event.free) out.push({ text: 'Free', kind: 'price' });
   else if (event.cost) out.push({ text: event.cost, kind: 'price' });
-  if (event.topic) out.push({ text: event.topic, kind: 'topic' });
+  if (event.sessions?.length) {
+    const label = { 'in-progress': 'Course in progress', closed: 'Registration closed', open: 'Course \u00b7 open' }[event.enrollment] ?? 'Course';
+    out.push({ text: label, kind: event.enrollment === 'open' ? 'topic' : 'status', title: event.enrollment === 'in-progress' ? 'The first session has passed; listed until the last one.' : undefined });
+  }
+  if (event.topic && !event.sessions?.length) out.push({ text: event.topic, kind: 'topic' });
   if (event.eligibility && /student/i.test(event.eligibility)) out.push({ text: 'Student pricing', kind: 'eligibility', title: event.eligibility });
   return out;
 }
@@ -184,27 +209,32 @@ function icsText(value) {
 }
 
 /** An .ics file for one event, for any calendar app. */
+/**
+ * An .ics file for one event, for any calendar app. A course gets one entry per session (never one block over
+ * the whole range); a long listing with no session dates gets none (null).
+ */
 export function eventIcs(event, now = new Date()) {
-  const range = calendarRange(event);
+  if (!canExport(event)) return null;
   const where = eventPlace(event);
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Terra//Events//EN',
-    'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT',
-    `UID:${icsText(event.id || `${event.start}-${event.title}`)}@terra`,
-    `DTSTAMP:${utcStamp(now)}`,
-    range.allDay ? `DTSTART;VALUE=DATE:${range.start}` : `DTSTART:${range.start}`,
-    range.allDay ? `DTEND;VALUE=DATE:${range.end}` : `DTEND:${range.end}`,
-    `SUMMARY:${icsText(event.title)}`,
-    where ? `LOCATION:${icsText(where)}` : '',
-    `DESCRIPTION:${icsText(calendarDetails(event).join(' · '))}`,
-    event.status === 'cancelled' ? 'STATUS:CANCELLED' : 'STATUS:CONFIRMED',
-    event.url ? `URL:${icsText(event.url)}` : '',
-    'END:VEVENT',
-    'END:VCALENDAR'
-  ].filter(Boolean);
+  const parts = event.sessions?.length ? event.sessions.map((x, i) => ({ ...event, start: x.start, end: x.end, sessions: undefined, n: i + 1 })) : [event];
+  const vevent = (e) => {
+    const range = calendarRange(e);
+    const total = event.sessions?.length;
+    return [
+      'BEGIN:VEVENT',
+      `UID:${icsText(`${event.id || `${event.start}-${event.title}`}${e.n ? `-s${e.n}` : ''}`)}@terra`,
+      `DTSTAMP:${utcStamp(now)}`,
+      range.allDay ? `DTSTART;VALUE=DATE:${range.start}` : `DTSTART:${range.start}`,
+      range.allDay ? `DTEND;VALUE=DATE:${range.end}` : `DTEND:${range.end}`,
+      `SUMMARY:${icsText(total ? `${event.title} (session ${e.n} of ${total})` : event.title)}`,
+      where ? `LOCATION:${icsText(where)}` : '',
+      `DESCRIPTION:${icsText(calendarDetails(event).join(' · '))}`,
+      event.status === 'cancelled' ? 'STATUS:CANCELLED' : 'STATUS:CONFIRMED',
+      event.url ? `URL:${icsText(event.url)}` : '',
+      'END:VEVENT'
+    ];
+  };
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Terra//Events//EN', 'CALSCALE:GREGORIAN', ...parts.flatMap(vevent), 'END:VCALENDAR'].filter(Boolean);
   return `${lines.join('\r\n')}\r\n`;
 }
 
@@ -217,15 +247,19 @@ function eventPlace(event) {
 
 /** The organizer, the event page and the registration link, for a calendar entry's notes. */
 function calendarDetails(event) {
-  return [event.organizer, event.url, event.registrationUrl ? `Register: ${event.registrationUrl}` : ''].filter(Boolean);
+  return [event.organizer, event.url, event.registrationUrl && event.enrollment !== 'in-progress' && event.enrollment !== 'closed' ? `Register: ${event.registrationUrl}` : '', ...(event.conflicts ?? [])].filter(Boolean);
 }
 
 /** A Google Calendar "add event" link, prefilled; free and needs no key. */
-export function googleCalendarUrl(event) {
-  const range = calendarRange(event);
+export function googleCalendarUrl(event, now = new Date()) {
+  if (!canExport(event)) return null;
+  // Google takes one entry per link: a course links its next session.
+  const next = nextSession(event, now);
+  const range = calendarRange(next ? { ...event, start: next.start, end: next.end } : event);
+  const total = event.sessions?.length;
   const params = new URLSearchParams({
     action: 'TEMPLATE',
-    text: event.title ?? '',
+    text: next && total ? `${event.title} (session ${event.sessions.indexOf(next) + 1} of ${total})` : event.title ?? '',
     dates: `${range.start}/${range.end}`,
     details: calendarDetails(event).join('\n'),
     location: eventPlace(event),
