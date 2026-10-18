@@ -17,10 +17,11 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAddress, streetKey, formatStreet } from '../appraisal/address.js';
 import { collectBulk } from '../appraisal/bulk.js';
-import { cachedRecords, collectArcgis, type DistrictReport } from '../appraisal/collect.js';
+import { cachedRecords, collectArcgis, completeness, type DistrictReport } from '../appraisal/collect.js';
 import { DISTRICTS, district, type District } from '../appraisal/districts.js';
 import { lookup, shardOf, writeIndex, type IndexManifest, type IndexRow } from '../appraisal/lookup.js';
 import { normalizeRow } from '../appraisal/normalize.js';
+import { publishable } from '../appraisal/publish.js';
 import { fetchJson } from '../lib/http.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -112,10 +113,14 @@ async function index(): Promise<void> {
     const summary = await writeIndex(indexDir, id, cachedRecords(cacheDir, id));
     if (!summary.records) continue;
     const { largest: _l, ...kept } = summary;
-    manifest.districts[id] = kept;
+    const c = await completeness(cacheDir, id);
+    manifest.districts[id] = { ...kept, complete: c.complete, completeness: c.note };
+    if (!c.complete) log(`${id}: NOT COMPLETE (${c.note}); indexed for testing only, never publishable`);
     log(`${id}: ${summary.records} records, ${summary.unmatched} without a street address, ${summary.shards} groups, ${(summary.bytes / 1e6).toFixed(1)} MB, largest group ${(summary.largest / 1e6).toFixed(2)} MB`);
   }
   await writeFile(join(indexDir, 'manifest.json'), JSON.stringify(manifest, null, 1));
+  // Publication is off; this only shows what the gate would decide.
+  for (const p of publishable(manifest)) log(`publish ${p.district}: ${p.publish ? 'yes' : 'no'} (${p.reason})`);
 }
 
 const fileLoader = async (d: string, shard: string): Promise<IndexRow[] | null> => {
@@ -187,8 +192,13 @@ async function officialPage(url: string, r: IndexRow): Promise<{ url: string; ok
     const value = r.totalValue != null ? r.totalValue.toLocaleString('en-US') : '';
     const hasOwner = Boolean(ownerWord) && plain.includes(ownerWord);
     const hasValue = Boolean(value) && plain.includes(value);
-    const years = [...plain.matchAll(/\b(20[12]\d)\b/g)].map((m) => Number(m[1]));
-    return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, value $${value} ${hasValue ? 'found' : 'NOT found'}, newest year on page ${years.length ? Math.max(...years) : 'none'}` };
+    // A year only counts as published when its row carries dollar figures: BCAD's page lists the next tax year
+    // with "N/A" values (and a year selector) long before that year has any values.
+    const rows = [...plain.matchAll(/\b(20[12]\d)((?:\s+(?:\$[\d,]+|N\/A))+)/g)].map((m) => ({ year: Number(m[1]), valued: /\$/.test(m[2]!) }));
+    const valued = rows.filter((x) => x.valued).map((x) => x.year);
+    const empty = rows.filter((x) => !x.valued).map((x) => x.year);
+    const years = valued.length ? `newest year with values ${Math.max(...valued)}${empty.length ? ` (${[...new Set(empty)].join(', ')} listed without values)` : ''}` : 'no value history read';
+    return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, value $${value} ${hasValue ? 'found' : 'NOT found'}, ${years}` };
   } catch (error) {
     return { url, ok: false, note: `could not read: ${(error as Error).message}` };
   }

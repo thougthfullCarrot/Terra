@@ -22,7 +22,7 @@ export type IndexRow = Omit<AppraisalRecord, 'dataset' | 'district'>;
 
 export interface IndexManifest {
   built: string;
-  districts: Record<string, { records: number; unmatched: number; shards: number; bytes: number; taxYear: number | null; dataset: string }>;
+  districts: Record<string, { records: number; unmatched: number; shards: number; bytes: number; taxYear: number | null; dataset: string; complete?: boolean; completeness?: string }>;
 }
 
 /** Write a district's index under <out>/<district>/<shard>.json. */

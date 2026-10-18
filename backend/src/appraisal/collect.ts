@@ -129,6 +129,9 @@ export async function collectArcgis(d: District, opts: CollectOptions): Promise<
   }
   const fresh = !state || finished || opts.restart || (edited != null && state.sourceEdited !== edited);
   if (fresh) {
+    // Marked unfinished before anything else, so a run that dies from here on never leaves the earlier copy
+    // looking like a complete read of the new source.
+    if (state) await writeJson(statePath, { ...state, completedAt: null, sourceEdited: edited });
     await rm(chunks, { recursive: true, force: true });
     await mkdir(chunks, { recursive: true });
     const ids = await fetchJson<{ objectIds?: number[]; error?: { message?: string } }>(
@@ -312,6 +315,21 @@ export async function finish(dir: string, s: DistrictState, now: () => Date = ()
   if (previous) s.changes = changes;
   await writeJson(join(dir, 'state.json'), s);
   return bytes;
+}
+
+/**
+ * Whether a district's cached copy is a complete read of its current source. Only a read that finished, and that
+ * no newer source version has since replaced, counts: a pilot, an interrupted first read, or a finished copy whose
+ * source has changed since (a refresh in progress) is not complete, so it can never be published as a county.
+ */
+export async function completeness(cacheDir: string, id: string): Promise<{ complete: boolean; note: string }> {
+  const dir = join(cacheDir, id);
+  const state = await readJson<DistrictState>(join(dir, 'state.json'));
+  const finished = Boolean(await stat(join(dir, 'records.ndjson.gz')).catch(() => null));
+  if (!state) return { complete: false, note: 'never collected' };
+  if (state.completedAt && finished) return { complete: true, note: `complete read finished ${state.completedAt}` };
+  if (finished) return { complete: false, note: 'a newer source version is being read; the cached copy is from the earlier version' };
+  return { complete: false, note: 'no read of this district has finished (pilot or interrupted first read)' };
 }
 
 /** Each finished record of a district, from the cache, streamed line by line (a county can be over 1 GB). */

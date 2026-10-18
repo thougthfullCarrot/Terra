@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { gradeMatch, matchAddress, parseAddress } from '../src/appraisal/address.js';
-import { cachedRecords, collapse, collectArcgis } from '../src/appraisal/collect.js';
+import { cachedRecords, collapse, collectArcgis, completeness, finish } from '../src/appraisal/collect.js';
 import { district } from '../src/appraisal/districts.js';
 import { lookup, shardOf, writeIndex, type IndexRow } from '../src/appraisal/lookup.js';
 import { normalizeRow, ringCenter } from '../src/appraisal/normalize.js';
@@ -268,5 +268,53 @@ describe('Bexar agricultural land', () => {
     }, { retrieved: 'x', dataset: 'x' })!;
     expect(r).toMatchObject({ landValue: 267940, agMarketValue: 249510, agUseValue: 1200, improvementValue: 138060, totalValue: 406000 });
     expect(r.landValue! + r.improvementValue!).toBe(r.totalValue);
+  });
+});
+
+describe('completeness and publication', () => {
+  const setup = async (state: object | null, finished: boolean) => {
+    const { mkdir } = await import('node:fs/promises');
+    const { gzipSync } = await import('node:zlib');
+    const cache = await mkdtemp(join(tmpdir(), 'appraisal-'));
+    await mkdir(join(cache, 'harris'), { recursive: true });
+    if (state) await writeFile(join(cache, 'harris', 'state.json'), JSON.stringify(state));
+    if (finished) await writeFile(join(cache, 'harris', 'records.ndjson.gz'), gzipSync(''));
+    return cache;
+  };
+  it('counts only a finished read of the current source as complete', async () => {
+    expect((await completeness(await setup({ completedAt: '2026-10-18' }, true), 'harris')).complete).toBe(true);
+    expect(await completeness(await setup({ completedAt: null }, false), 'harris')).toMatchObject({ complete: false, note: expect.stringContaining('first read') });
+    expect(await completeness(await setup({ completedAt: null }, true), 'harris')).toMatchObject({ complete: false, note: expect.stringContaining('newer source') });
+    expect((await completeness(await setup(null, false), 'harris')).complete).toBe(false);
+  });
+  it('never publishes an incomplete, held or unlisted district, and nothing while publication is off', async () => {
+    const { publishable, PUBLICATION } = await import('../src/appraisal/publish.js');
+    const m = (complete: boolean) => ({ records: 1, unmatched: 0, shards: 1, bytes: 1, taxYear: 2026, dataset: 'x', complete, completeness: complete ? 'ok' : 'pilot' });
+    const manifest = { built: 'x', districts: { harris: m(true), dallas: m(false), bexar: m(true), comal: m(true) } };
+    expect(PUBLICATION.enabled).toBe(false);
+    expect(publishable(manifest).every((d) => !d.publish)).toBe(true);
+    const on = publishable(manifest, { ...PUBLICATION, enabled: true });
+    expect(Object.fromEntries(on.map((d) => [d.district, d.publish]))).toEqual({ harris: true, dallas: false, bexar: false, comal: false });
+    expect(on.find((d) => d.district === 'dallas')!.reason).toMatch(/^incomplete/);
+    expect(on.find((d) => d.district === 'bexar')!.reason).toMatch(/^held/);
+  });
+});
+
+describe('withheld records', () => {
+  it('drops an account the new read no longer has instead of carrying it over from the last copy', async () => {
+    const { mkdir } = await import('node:fs/promises');
+    const { gzipSync, gunzipSync } = await import('node:zlib');
+    const dir = await mkdtemp(join(tmpdir(), 'appraisal-'));
+    await mkdir(join(dir, 'chunks'), { recursive: true });
+    const rec = (account: string, owner: string) => JSON.stringify({ district: 'harris', account, owner, totalValue: 1 });
+    await writeFile(join(dir, 'records.ndjson.gz'), gzipSync(`${rec('A', 'X')}\n${rec('B', 'Y')}\n`));
+    await writeFile(join(dir, 'hashes.json'), JSON.stringify({ A: 'old', B: 'old' }));
+    // B was withheld (e.g. Tax Code 25.025) and A's owner redacted in the new export.
+    await writeFile(join(dir, 'chunks', '0.ndjson'), `${rec('A', 'CONFIDENTIAL')}\n`);
+    const state = { district: 'harris', completedAt: null, chunksDone: [0], records: 1 } as never;
+    await finish(dir, state);
+    const kept = gunzipSync(await readFile(join(dir, 'records.ndjson.gz'))).toString().trim().split('\n').map((l) => JSON.parse(l));
+    expect(kept).toEqual([expect.objectContaining({ account: 'A', owner: 'CONFIDENTIAL' })]);
+    expect((state as { changes: { removed: number } }).changes.removed).toBe(1);
   });
 });

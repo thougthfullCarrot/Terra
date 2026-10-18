@@ -20,7 +20,7 @@ on:
         default: false
   push:
     branches: [claude/project-thread-84a4bw]
-    paths: ['backend/src/appraisal/**', 'backend/src/bin/appraisal-lookup.ts', '.github/workflows/appraisal-lookup.yml']
+    paths: ['backend/src/appraisal/**', 'backend/src/bin/appraisal-*.ts', '.github/workflows/appraisal-lookup.yml']
 
 permissions:
   contents: read
@@ -116,6 +116,13 @@ jobs:
           done | tee -a /tmp/sizes.log
           for d in ../.appraisal-cache/index/*/; do echo "$d $(ls $d | wc -l) files, gz $(tar czf - -C $d . | wc -c) bytes"; done | tee -a /tmp/sizes.log
 
+      # Real-browser timing of index lookups (headless Chromium, DevTools network throttling, local static server).
+      - name: Measure lookups in a browser
+        if: always() && github.event_name == 'workflow_dispatch'
+        run: |
+          npx playwright-core install --with-deps chromium > /dev/null
+          npx tsx src/bin/appraisal-browser-bench.ts ../.appraisal-cache/index 2>&1 | tee /tmp/bench.log || true
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -131,7 +138,7 @@ jobs:
       - name: Summarize
         if: always()
         run: |
-          for f in collect index verify sizes probe; do echo "=== $f"; cat /tmp/$f.log 2>/dev/null | head -c 60000; done
+          for f in collect index verify sizes bench probe; do echo "=== $f"; cat /tmp/$f.log 2>/dev/null | head -c 60000; done
           {
             echo '## Appraisal lookup'
             echo '```'
