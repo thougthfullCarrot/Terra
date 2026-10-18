@@ -446,8 +446,6 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
   );
   if (buffer.length) await flush();
   if (repeated) log(`${d.id}: ${repeated} repeated account lines skipped`);
-  for (const line of sample.slice(1, 8)) log(`${d.id}: raw ${JSON.stringify(line.slice(0, 400))}`);
-  if (sample.length) log(`${d.id}: first raw line ${JSON.stringify(sample[0]!.replace(/ {3,}/g, (s) => `‹${s.length}›`).slice(0, 1500))}`);
   state.totalIds = Math.min(lines, opts.maxLines ?? Infinity);
   await writeFile(statePath, JSON.stringify(state));
   let bytes: number | undefined;

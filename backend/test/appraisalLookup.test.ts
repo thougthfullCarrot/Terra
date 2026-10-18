@@ -233,3 +233,17 @@ describe('export year', async () => {
     expect(newestExport(page, 'https://g.example/')?.taxYear).toBe(2026);
   });
 });
+
+describe('a failed collection', () => {
+  it('keeps serving the last finished copy while a new read is half done', async () => {
+    const { mkdir } = await import('node:fs/promises');
+    const { gzipSync } = await import('node:zlib');
+    const cache = await mkdtemp(join(tmpdir(), 'appraisal-'));
+    await mkdir(join(cache, 'bexar', 'chunks'), { recursive: true });
+    await writeFile(join(cache, 'bexar', 'records.ndjson.gz'), gzipSync(`${JSON.stringify({ account: 'OLD' })}\n`));
+    await writeFile(join(cache, 'bexar', 'chunks', '0.ndjson'), `${JSON.stringify({ account: 'PARTIAL' })}\n`);
+    const got: string[] = [];
+    for await (const r of cachedRecords(cache, 'bexar')) got.push(r.account);
+    expect(got).toEqual(['OLD']);
+  });
+});

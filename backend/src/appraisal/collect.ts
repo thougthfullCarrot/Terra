@@ -263,7 +263,10 @@ export async function finish(dir: string, s: DistrictState, now: () => Date = ()
   }
   if (previous) changes.removed = Object.keys(previous).filter((a) => !(a in hashes)).length;
   // Kept gzipped and without the chunks, so every district's cache together stays well under GitHub's 10 GB cache limit.
-  await pipeline(createReadStream(out), createGzip(), createWriteStream(join(dir, 'records.ndjson.gz')));
+  // Written beside the last finished copy and swapped in only when complete, so a run that dies here keeps it.
+  const gz = join(dir, 'records.ndjson.gz');
+  await pipeline(createReadStream(out), createGzip(), createWriteStream(`${gz}.tmp`));
+  await rename(`${gz}.tmp`, gz);
   await rm(out);
   await rm(join(dir, 'records.ndjson'), { force: true });
   await rm(chunks, { recursive: true, force: true });

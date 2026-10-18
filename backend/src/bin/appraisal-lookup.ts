@@ -232,7 +232,9 @@ async function verify(): Promise<void> {
       { kind: 'no result', address: none, expect: 'none' }
     ].filter(Boolean) as { kind: string; address: string; expect: string; accounts?: string[] }[];
     for (const c of cases) {
+      const started = performance.now();
       const { result, unavailable } = await lookup(c.address, [id], fileLoader);
+      const ms = performance.now() - started;
       const got = result.status === 'match' ? result.records.map((r) => r.account) : result.status === 'ambiguous' ? result.candidates.map((x) => x.record.account) : [];
       let official: { accounts: string[]; agrees: boolean; valuesAgree?: boolean; note?: string } | undefined;
       if (d.access === 'arcgis' && d.layer) {
@@ -256,7 +258,7 @@ async function verify(): Promise<void> {
       if (first?.sourceUrl && d.access === 'arcgis') page = await officialPage(first.sourceUrl, first);
       const row = { district: id, ...c, page, status: result.status, reason: 'reason' in result ? result.reason : undefined, got, passed: result.status === c.expect && (!c.accounts || [...c.accounts].sort().join() === [...got].sort().join()), official, unavailable, sample: result.status === 'match' ? result.records[0] : result.status === 'ambiguous' ? result.candidates[0]?.record : undefined };
       results.push(row);
-      log(`${id} ${c.kind}: "${c.address}" → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'}${page ? ` district page: ${page.note}` : ''}${official ? ` official ${official.agrees ? 'agrees' : 'DIFFERS'}${official.valuesAgree === false ? ' (values differ)' : ''}${official.note ? ` ${official.note}` : ''}` : ''}`);
+      log(`${id} ${c.kind}: "${c.address}" → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'} ${ms.toFixed(0)} ms${page ? ` district page: ${page.note}` : ''}${official ? ` official ${official.agrees ? 'agrees' : 'DIFFERS'}${official.valuesAgree === false ? ' (values differ)' : ''}${official.note ? ` ${official.note}` : ''}` : ''}`);
     }
   }
   await writeFile(join(cacheDir, 'verify.json'), JSON.stringify(results, null, 1));
