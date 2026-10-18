@@ -297,6 +297,9 @@ export function courseSessions(pageText: string, firstDay: string, lastDay: stri
   for (const [phrase = '', n = ''] of body.matchAll(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[- ](?:full[- ])?(?:days?|sessions?|classes|weeks?)\b(?:\s+course)?/gi)) {
     const count = Number(n) || NUMBER_WORDS[n.toLowerCase()];
     if (/week/i.test(phrase)) continue; // "6-week course" counts weeks, not sessions
+    // Only a count of the course's own meetings ("4-Day Course", "four Full Days", "6 sessions"), never a
+    // policy period such as "less than 30 days prior to the event".
+    if (!/session|class|full|course/i.test(phrase)) continue;
     if (count && count !== sorted.length && !counts.has(count)) counts.set(count, phrase.trim());
   }
   const conflicts = [...counts.values()].map((phrase) => `The page says "${phrase}" but lists ${sorted.length} dates.`);

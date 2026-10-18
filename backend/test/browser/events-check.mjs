@@ -107,7 +107,7 @@ const MARKETS = file.cities.map((c) => c.city);
 for (const e of all) {
   if (e.format === 'virtual') continue;
   const text = `${e.venue ?? ''} ${e.address ?? ''}`;
-  const named = MARKETS.filter((m) => m !== e.city && new RegExp(`\\b${m}\\b`, 'i').test(text));
+  const named = MARKETS.filter((m) => m !== e.city && new RegExp(`\\b${m}\\b(?!\\s+(?:St|Street|Ave|Avenue|Blvd|Rd|Road|Hwy)\\b)`, 'i').test(text));
   if (named.length) console.log(`PLACE CHECK  "${e.title}" listed under ${e.city}, venue "${text.trim()}" names ${named.join(', ')}`);
 }
 const law = all.filter((e) => /\bLEB\b|Law (?:and|&) Education Building/i.test(`${e.venue ?? ''}`) && /Texas A&M/.test(e.organizer));
@@ -157,7 +157,7 @@ for (const vp of [
     check(dates === `${ics.start.split(':')[1]}/${ics.end.split(':')[1]}`, `${vp.name} ${shape}: Google dates ${dates}`);
     check(google.searchParams.get('ctz') === zone(e), `${vp.name} ${shape}: Google zone ${google.searchParams.get('ctz')}`);
 
-    const [download] = await Promise.all([page.waitForEvent('download'), card.locator('button', { hasText: 'Add to calendar' }).click()]);
+    const [download] = await Promise.all([page.waitForEvent('download'), card.locator('button', { hasText: /Add (to calendar|all sessions)/ }).click()]);
     const text = await readFile(await download.path(), 'utf8');
     check(text.includes(`${ics.start}\r\n`) && text.includes(`${ics.end}\r\n`), `${vp.name} ${shape}: .ics has ${ics.start} and ${ics.end}`);
     if (e.sessions) check((text.match(/BEGIN:VEVENT/g) ?? []).length === e.sessions.length && !/VALUE=DATE/.test(text), `${vp.name} course: .ics has one timed entry per session (${e.sessions.length}), no all-day block`);
@@ -169,7 +169,7 @@ for (const vp of [
     await page.goto(`${base}#events&city=${encodeURIComponent(unverified.city)}`);
     await page.waitForSelector('#e-list .event-card', { timeout: 20000 });
     const card = page.locator('.event-card').filter({ has: page.locator(`time[datetime="${unverified.start}"]`) }).filter({ hasText: unverified.title }).first();
-    check((await card.count()) && !(await card.locator('button', { hasText: 'Add to calendar' }).count()), `${vp.name}: "${unverified.title}" (no session dates) offers no calendar export`);
+    check((await card.count()) && !(await card.locator('button', { hasText: /Add (to calendar|all sessions)/ }).count()), `${vp.name}: "${unverified.title}" (no session dates) offers no calendar export`);
   }
 
   // Empty markets: the sentence must match the report (unreadable vs nothing found).

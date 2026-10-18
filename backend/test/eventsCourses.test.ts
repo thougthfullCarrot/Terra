@@ -116,3 +116,10 @@ describe('campus calendars put events at the venue, not the main campus', () => 
     expect(finalize({ ...e, venue: 'Virtual', format: 'virtual' }, uta, now).city).toBe('Austin');
   });
 });
+
+describe('course conflict wording', () => {
+  it('a refund period is not read as a session count', () => {
+    const page = 'Fridays: 10/2, 10/9, 10/16, 10/30, 11/6. Refunds are not available less than 30 days prior to the event date. 8:00 am to 5:00 pm';
+    expect(courseSessions(page, '2026-10-02', '2026-11-06')!.conflicts).toEqual([]);
+  });
+});
