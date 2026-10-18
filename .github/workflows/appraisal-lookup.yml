@@ -1,0 +1,103 @@
+# County appraisal district collection and address lookup (docs/appraisal-lookup.md).
+# Reads each district into a cache that survives between runs (actions/cache),
+# so a run that times out or is cancelled resumes where it stopped, and a
+# district whose source hasn't changed is skipped. Writes nothing to the
+# website or any database; results land in the run summary and an artifact.
+name: Appraisal lookup
+
+on:
+  workflow_dispatch:
+    inputs:
+      districts:
+        description: Comma-separated district ids (blank = all)
+        default: ''
+      max_chunks:
+        description: Stop each ArcGIS district after this many requests (blank = all)
+        default: ''
+  push:
+    branches: [claude/project-thread-84a4bw]
+    paths: ['backend/src/appraisal/**', 'backend/src/bin/appraisal-lookup.ts', '.github/workflows/appraisal-lookup.yml']
+
+concurrency:
+  group: appraisal-lookup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DISTRICTS: ${{ inputs.districts || 'bexar,dallas,tarrant,travis,harris,el-paso,comal,brazos,galveston,lubbock,midland' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Restore the cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .appraisal-cache
+          key: appraisal-lookup-none
+          restore-keys: ${{ github.event_name == 'push' && 'appraisal-lookup-quick-' || 'appraisal-lookup-full-' }}
+
+      - name: Probe official sources
+        run: npm run --silent appraisal -- probe --districts "$DISTRICTS" --cache ../.appraisal-cache > /tmp/probe.log 2>&1 || true
+
+      - name: Collect
+        id: collect
+        run: |
+          set -o pipefail
+          extra=""
+          # A push runs a quick check (3 requests per district, 20k Harris lines); a manual run reads everything.
+          if [ "${{ github.event_name }}" = "push" ]; then extra="--max-chunks 3 --max-lines 20000 --restart";
+          elif [ -n "${{ inputs.max_chunks }}" ]; then extra="--max-chunks ${{ inputs.max_chunks }}"; fi
+          npm run --silent appraisal -- collect --districts "$DISTRICTS" --cache ../.appraisal-cache $extra 2>&1 | tee /tmp/collect.log
+
+      - name: Save the cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .appraisal-cache
+          key: appraisal-lookup-${{ github.event_name == 'push' && 'quick-' || 'full-' }}${{ github.run_id }}
+
+      - name: Build the index and verify
+        if: always()
+        run: |
+          set -o pipefail
+          npm run --silent appraisal -- index --districts "$DISTRICTS" --cache ../.appraisal-cache 2>&1 | tee /tmp/index.log
+          npm run --silent appraisal -- verify --districts "$DISTRICTS" --cache ../.appraisal-cache > /tmp/verify.log 2>&1 || true
+          grep -E 'PASS|FAIL' /tmp/verify.log || true
+          du -sh ../.appraisal-cache/* ../.appraisal-cache/index/* 2>/dev/null | tee /tmp/sizes.log
+          for d in ../.appraisal-cache/index/*/; do echo "$d $(ls $d | wc -l) files, gz $(tar czf - -C $d . | wc -c) bytes"; done | tee -a /tmp/sizes.log
+          for d in ../.appraisal-cache/*/chunks; do head -c 1500 $(ls $d/*.ndjson | head -1); echo; done > /tmp/samples.log 2>/dev/null || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appraisal-lookup-${{ github.run_id }}
+          path: |
+            .appraisal-cache/report.json
+            .appraisal-cache/probe.json
+            .appraisal-cache/verify.json
+            .appraisal-cache/index/manifest.json
+          retention-days: 14
+
+      - name: Summarize
+        if: always()
+        run: |
+          for f in collect index verify sizes samples probe; do echo "=== $f"; cat /tmp/$f.log 2>/dev/null | head -c 60000; done
+          {
+            echo '## Appraisal lookup'
+            echo '```'
+            cat /tmp/collect.log /tmp/index.log /tmp/sizes.log 2>/dev/null | tail -n 120
+            grep -E 'PASS|FAIL' /tmp/verify.log 2>/dev/null
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
