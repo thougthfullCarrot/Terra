@@ -41,10 +41,10 @@ From the full run on 2026-10-18 (all 31 verify cases passed):
 
 | District (market) | Official site / search | Source TERRA reads | Records | Tax year | Values | Coords | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Bexar (San Antonio) | bcad.org / bexar.trueautomation.com | SARA ArcGIS copy of BCAD roll (Dec 2025 open-records data); BCAD has no public export | 705,976 | 2025 | land, impr, market | yes | Supported. BCAD pages now show 2026 values, so values are a year behind. Bexar County's own layer (maps.bexar.org) is the 2019 roll, not used |
+| Bexar (San Antonio) | bcad.org / bexar.trueautomation.com | SARA ArcGIS copy of BCAD roll (Dec 2025 open-records data); BCAD has no public export | 705,142 accounts (705,976 rows; repeated per-owner rows collapsed) | 2025 | land, impr, market | yes | Supported. BCAD pages now show 2026 values, so values are a year behind. Bexar County's own layer (maps.bexar.org) is the 2019 roll, not used |
 | Harris (Houston) | hcad.org | HCAD Real_acct_owner.zip (real_acct + owners) | 1,628,377 | 2026 | land, bldg, appraised | no | Supported |
 | Dallas (Dallas) | dallascad.org | DCAD 2026 certified data product (ACCOUNT_INFO + ACCOUNT_APPRL_YEAR) | 705,536 | 2026 | land, impr, market | no | Supported (BPP excluded). Site's ArcGIS copy is still 2025 |
-| Tarrant (Fort Worth) | tad.org | TAD PropertyData (Delimited) | 1,011,022 | 2026 | land, impr, appraised | no | Supported (real property only). Site's Fort Worth view is 2024 |
+| Tarrant (Fort Worth) | tad.org | TAD PropertyData (Delimited) | 1,011,964 | 2026 | land, impr, appraised | no | Supported (real property only). Site's Fort Worth view is 2024 |
 | Travis (Austin) | traviscad.org / travis.prodigycad.com | TCAD 2026 certified PACS export | 453,705 | 2026 | land, impr, appraised | no | Supported; year built/building area not read yet |
 | El Paso (El Paso) | epcad.org | EPCAD Property Search dumps (Azure blob, linked from Open Government) | 408,265 | 2027 file | none | no | Partial: addresses and some owners only. The dumps' roll table has no values yet, owner join matches 76k of 408k, and the certified export (export.epcad.org) answers 403 to TERRA's collector. Files are labelled "development use only" |
 | Brazos (College Station) | brazoscad.org | Brazos CAD 2025 certified export (PACS) | 83,748 | 2025 | land, impr, appraised | no | Supported; 2026 export not posted yet (only its layout) |
@@ -123,7 +123,7 @@ a `fromPage(<downloads page>)` source in `bulk.ts`.
 | Full collection, all districts in parallel | 12 min (Bexar's 706 ArcGIS requests are the long pole; bulk districts 2 to 2.5 min each) |
 | Index build + verify | 1.7 min |
 | Re-run with nothing changed | under 1 min of collection (unchanged districts skipped; Bexar re-checks its layer date) |
-| Records | 5.58 million accounts across 8 districts |
+| Records | 5.18 million accounts across 8 districts (an earlier 5.58M figure was an addition error) |
 | Actions cache (gzipped records + state) | about 390 MB (repo limit is 10 GB, shared with the site build); older appraisal caches are deleted each run |
 | Downloads per full refresh | about 1.5 GB (not cached; fetched only when a file changes) |
 | Index, uncompressed / gzipped | 2.0 GB / 230 MB (Harris 73 MB gz, Bexar 42 MB gz) |
