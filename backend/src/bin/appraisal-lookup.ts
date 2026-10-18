@@ -206,6 +206,13 @@ async function officialPage(url: string, r: IndexRow): Promise<{ url: string; ok
  * tells two streets apart, and a house number nobody has. Check each against
  * the live layer: the same accounts, the same values.
  */
+/** A record with its owner and mailing address left out, for reports that may be read outside TERRA. */
+function withoutPeople<T extends { owner?: unknown; mailing?: unknown }>(r: T | undefined): Omit<T, 'owner' | 'mailing'> | undefined {
+  if (!r) return undefined;
+  const { owner: _o, mailing: _m, ...rest } = r;
+  return rest;
+}
+
 async function verify(): Promise<void> {
   const policy = (arg('--policy') ?? 'full') as Policy;
   if (policy !== 'full' && policy !== 'quick') throw new Error('--policy is full or quick');
@@ -273,13 +280,12 @@ async function verify(): Promise<void> {
         page: !page ? { state: 'skipped', note: first ? 'no account page for this district' : 'no single match to look up' } : page.closed ? { state: 'unavailable', note: page.note } : { state: page.ok ? 'pass' : 'fail', note: page.note }
       };
       const problems = failures(checks, policy);
-      const row = { district: id, ...c, page, status: result.status, reason: 'reason' in result ? result.reason : undefined, got, checks, passed: problems.length === 0, problems, official, unavailable, sample: result.status === 'match' ? result.records[0] : result.status === 'ambiguous' ? result.candidates[0]?.record : undefined };
+      const row = { district: id, ...c, page, status: result.status, reason: 'reason' in result ? result.reason : undefined, got, checks, passed: problems.length === 0, problems, official, unavailable, sample: withoutPeople(result.status === 'match' ? result.records[0] : result.status === 'ambiguous' ? result.candidates[0]?.record : undefined) };
       results.push(row);
-      log(`${id} ${c.kind}: "${c.address}" → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'} ${ms.toFixed(0)} ms; ${label(checks)}`);
+      log(`${id} ${c.kind}: → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'} ${ms.toFixed(0)} ms; ${label(checks)}`);
     }
   }
   await writeFile(join(cacheDir, 'verify.json'), JSON.stringify(results, null, 1));
-  console.log(JSON.stringify(results, null, 1));
   const status = runStatus(results as unknown as { checks: CaseChecks }[], policy);
   log(`VERIFY ${status.exitCode ? 'FAIL' : 'PASS'} ${status.summary}`);
   process.exitCode = status.exitCode;
