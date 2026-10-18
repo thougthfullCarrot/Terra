@@ -338,7 +338,11 @@ jobs:
       # pick against the real build without downloading the site.
       - name: Show the deal of the week file
         if: always()
-        run: jq -c . ../site/property/deal.json 2>/dev/null | sed 's/^/DEAL_JSON /' || true
+        run: |
+          jq -c . ../site/property/deal.json 2>/dev/null | sed 's/^/DEAL_JSON /' || true
+          # Hashes of the file as written and of its canonical form (keys sorted, compact), to match a copy against.
+          sha256sum ../site/property/deal.json 2>/dev/null | sed 's/^/DEAL_SHA256_FILE /' || true
+          jq -cS . ../site/property/deal.json 2>/dev/null | sha256sum | sed 's/^/DEAL_SHA256_CANONICAL /' || true
 
       - name: Cache the property files
         if: steps.property.outcome == 'success'
