@@ -22,6 +22,10 @@ on:
     branches: [claude/project-thread-84a4bw]
     paths: ['backend/src/appraisal/**', 'backend/src/bin/appraisal-lookup.ts', '.github/workflows/appraisal-lookup.yml']
 
+permissions:
+  contents: read
+  actions: write
+
 concurrency:
   group: appraisal-lookup-${{ github.ref }}
   cancel-in-progress: false
@@ -65,6 +69,12 @@ jobs:
           if [ "${{ inputs.force }}" = "true" ]; then extra="$extra --force"; fi
           npm run --silent appraisal -- collect --districts "$DISTRICTS" --cache ../.appraisal-cache $extra 2>&1 | tee /tmp/collect.log
 
+      # The index is rebuilt each run and the downloads are fetched again only when they change,
+      # so neither is cached: the repo's caches share a 10 GB limit with the site build's.
+      - name: Drop what needn't be cached
+        if: always()
+        run: rm -rf ../.appraisal-cache/index ../.appraisal-cache/*/source.zip* ../.appraisal-cache/el-paso/*.zip*
+
       - name: Save the cache
         if: always()
         uses: actions/cache/save@v4
@@ -72,7 +82,26 @@ jobs:
           path: .appraisal-cache
           key: appraisal-lookup-${{ github.event_name == 'push' && 'quick-' || 'full-' }}${{ github.run_id }}
 
-      - name: Build the index and verify
+      # Older appraisal-lookup caches are superseded by the one just saved; delete them so they don't push the
+      # site build's caches out of the 10 GB limit.
+      - name: Delete older appraisal lookup caches
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list --repo "$GITHUB_REPOSITORY" --key appraisal-lookup- --limit 100 --json id,key,sizeInBytes,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[] | "\(.id) \(.key) \(.sizeInBytes)"' > /tmp/caches.txt || true
+          cat /tmp/caches.txt
+          kind="${{ github.event_name == 'push' && 'quick' || 'full' }}"
+          newest=$(grep " appraisal-lookup-$kind-" /tmp/caches.txt | head -1 | cut -d' ' -f1)
+          while read -r id key size; do
+            if [ "$id" != "$newest" ] && { [[ "$key" == appraisal-lookup-$kind-* ]] || [[ "$key" =~ ^appraisal-lookup-[0-9]+$ ]]; }; then
+              gh cache delete "$id" --repo "$GITHUB_REPOSITORY" && echo "deleted $key ($size bytes)"
+            fi
+          done < /tmp/caches.txt
+          echo "All caches in the repo:"; gh cache list --repo "$GITHUB_REPOSITORY" --limit 100 || true
+
+      - name: Rebuild the index and verify
         if: always()
         run: |
           set -o pipefail

@@ -14,7 +14,9 @@
  * so the report says how many accounts were added, changed and removed.
  */
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import { createGunzip, createGzip } from 'node:zlib';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile, appendFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
@@ -260,7 +262,11 @@ export async function finish(dir: string, s: DistrictState, now: () => Date = ()
     }
   }
   if (previous) changes.removed = Object.keys(previous).filter((a) => !(a in hashes)).length;
-  await rename(out, join(dir, 'records.ndjson'));
+  // Kept gzipped and without the chunks, so every district's cache together stays well under GitHub's 10 GB cache limit.
+  await pipeline(createReadStream(out), createGzip(), createWriteStream(join(dir, 'records.ndjson.gz')));
+  await rm(out);
+  await rm(join(dir, 'records.ndjson'), { force: true });
+  await rm(chunks, { recursive: true, force: true });
   await writeJson(join(dir, 'hashes.json'), hashes);
   s.completedAt = now().toISOString();
   if (previous) s.changes = changes;
@@ -271,8 +277,12 @@ export async function finish(dir: string, s: DistrictState, now: () => Date = ()
 /** Each finished record of a district, from the cache, streamed line by line (a county can be over 1 GB). */
 export async function* cachedRecords(cacheDir: string, id: string): AsyncGenerator<AppraisalRecord> {
   const dir = join(cacheDir, id);
-  let files = [join(dir, 'records.ndjson')];
-  if (!(await stat(files[0]!).catch(() => null))) {
+  const finished = join(dir, 'records.ndjson.gz');
+  let files: string[] = [];
+  if (await stat(finished).catch(() => null)) {
+    for await (const line of createInterface({ input: createReadStream(finished).pipe(createGunzip()), crlfDelay: Infinity })) if (line) yield JSON.parse(line) as AppraisalRecord;
+    return;
+  } else {
     // An unfinished (pilot) run: read its chunks.
     const names = await readdir(join(dir, 'chunks')).catch(() => [] as string[]);
     files = names.filter((n) => n.endsWith('.ndjson')).sort((a, b) => parseInt(a) - parseInt(b)).map((n) => join(dir, 'chunks', n));

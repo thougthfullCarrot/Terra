@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { gradeMatch, matchAddress, parseAddress } from '../src/appraisal/address.js';
-import { collectArcgis } from '../src/appraisal/collect.js';
+import { cachedRecords, collectArcgis } from '../src/appraisal/collect.js';
 import { district } from '../src/appraisal/districts.js';
 import { lookup, shardOf, writeIndex, type IndexRow } from '../src/appraisal/lookup.js';
 import { normalizeRow, ringCenter } from '../src/appraisal/normalize.js';
@@ -162,9 +162,10 @@ describe('collectArcgis', () => {
     expect(second.records).toBe(2500);
     const third = await collectArcgis(district('bexar'), { ...opts, fetchImpl: fakeServer(null) });
     expect(third.status).toBe('unchanged');
-    const lines = (await readFile(join(cacheDir, 'bexar', 'records.ndjson'), 'utf8')).trim().split('\n');
-    expect(lines).toHaveLength(2500);
-    expect(JSON.parse(lines[0]!)).toMatchObject({ account: '1', lat: 29.001, lng: -98.001 });
+    const rows = [];
+    for await (const r of cachedRecords(cacheDir, 'bexar')) rows.push(r);
+    expect(rows).toHaveLength(2500);
+    expect(rows[0]).toMatchObject({ account: '1', lat: 29.001, lng: -98.001 });
   });
 
   it('counts added, changed and removed accounts on a forced reread', async () => {

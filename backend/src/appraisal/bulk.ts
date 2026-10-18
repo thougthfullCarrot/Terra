@@ -451,7 +451,12 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
   state.totalIds = Math.min(lines, opts.maxLines ?? Infinity);
   await writeFile(statePath, JSON.stringify(state));
   let bytes: number | undefined;
-  if (!stopped) bytes = await finish(dir, state, now);
+  if (!stopped) {
+    bytes = await finish(dir, state, now);
+    // The next run checks the file's date before downloading, so the zips needn't be kept.
+    await rm(zip, { force: true });
+    for (const path of Object.values(extraFiles)) await rm(path, { force: true });
+  }
   return {
     district: d.id,
     status: stopped ? 'partial' : 'complete',
