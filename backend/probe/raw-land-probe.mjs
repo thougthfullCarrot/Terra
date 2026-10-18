@@ -5,8 +5,8 @@
 import * as turf from '@turf/turf';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { pageByOid, checkCount, checkFeatures, mustComplete } from './arcgis-read.mjs';
-import { bexarLandMarket, joinValues, zoningShares, zoningAttrKey } from './parcel-metrics.mjs';
+import { pageByOid, checkCount, checkFeatures, mustComplete, readFiltered } from './arcgis-read.mjs';
+import { bexarLandMarket, joinValues, zoningShares, zoningAttrKey, zoningCoverage, overlapClass } from './parcel-metrics.mjs';
 
 const UA = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
 const out = (k, v) => console.log(`\n### ${k}\n` + String(JSON.stringify(v ?? null)).slice(0, 30000));
@@ -38,6 +38,8 @@ const area = (g) => turf.area(g) * SQM_TO_SQFT;
 const rng = ((s) => () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32))(20261018); // seeded, reproducible
 const sampleOf = (arr, k) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, k); };
 const esriPoly = (g) => ({ rings: (g.geometry.type === 'Polygon' ? [g.geometry.coordinates] : g.geometry.coordinates).flat(), spatialReference: { wkid: 4326 } });
+/** Spatial read where the count and the pages share one filter (count-validated). */
+const spatial = (layer, geom, fields, size) => readFiltered(get, (p) => q(layer, p).replace('f=json', p.returnCountOnly ? 'f=json' : 'f=geojson'), { where: '1=1', geometry: JSON.stringify(esriPoly(geom)), geometryType: 'esriGeometryPolygon', inSR: '4326', spatialRel: 'esriSpatialRelIntersects' }, { size, fields, extra: { returnGeometry: 'true', outSR: '4326' } });
 const unionAll = (fs) => (fs.length === 1 ? fs[0] : turf.union(turf.featureCollection(fs)));
 const gkey = (f) => createHash('sha1').update(JSON.stringify(f.geometry?.coordinates ?? null)).digest('hex').slice(0, 16);
 /** One outline per account: owner-repeated rows carry identical geometry, distinct pieces are unioned. */
@@ -99,29 +101,29 @@ out('D.outlineSample', { population: agreeing.length, sampled: dSample.length, c
 const valuesOnly = [...joined].filter(([, j]) => j.mapped === false).map(([id]) => id);
 const eSample = sampleOf(valuesOnly, 300);
 const eSa = outlines(SA, 'Prop_id', eSample, 'SARA outlines (values-only)');
-const classes = {}; const ex = {}; let pointAgrees = 0, pointChecked = 0;
+const classes = {}; const ex = {}; const fractions = []; let pointAgrees = 0, pointChecked = 0;
 for (const id of eSample) {
-  const p = eSa.get(id); let cls;
+  const p = eSa.get(id); let cls, frac = null;
   if (!p) cls = 'no SARA outline returned';
   else {
-    const hits = mustComplete(pageByOid(get, (last, n) => q(CB, { where: `OBJECTID > ${last}`, geometry: JSON.stringify(esriPoly(p)), geometryType: 'esriGeometryPolygon', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: 'OBJECTID,PropID', returnGeometry: 'true', outSR: '4326', orderByFields: 'OBJECTID ASC', resultRecordCount: String(n) }).replace('f=json', 'f=geojson'), { size: 500 }), `CoSA overlap ${id}`).features;
-    let share = 0;
-    try { const parts = hits.map((h) => turf.intersect(turf.featureCollection([p, h]))).filter(Boolean); share = parts.length ? area(unionAll(parts)) / area(p) : 0; } catch { cls = 'geometry error'; }
-    // the old method, for comparison: does an interior point (not a vertex mean) fall in a CoSA polygon?
-    const pt = turf.pointOnFeature(p); pointChecked++;
-    const ptHit = hits.some((h) => turf.booleanPointInPolygon(pt, h));
-    if ((share >= 0.01) === ptHit) pointAgrees++;
-    if (!cls) {
-      const otherIds = [...new Set(hits.map((h) => h.properties.PropID))];
-      if (share < 0.01) cls = 'no CoSA polygon overlaps (coverage gap)';
-      else if (share >= 0.5) cls = otherIds.some((x) => x > 0 && !saBy.has(x)) ? 'covered by CoSA account(s) absent from 2025 values (renumbered/replatted candidate)' : 'covered by other 2025 accounts (overlapping records)';
-      else cls = 'partly overlapped';
+    const read = spatial(CB, p, 'OBJECTID,PropID', 500);
+    if (read.status !== 'complete') cls = `overlap unavailable (CoSA read ${read.status})`;
+    else {
+      const hits = read.features;
+      try { const parts = hits.map((h) => turf.intersect(turf.featureCollection([p, h]))).filter(Boolean); frac = parts.length ? area(unionAll(parts)) / area(p) : 0; } catch { frac = null; }
+      cls = overlapClass(frac);
+      if (frac != null) {
+        fractions.push([id, frac]);
+        const pt = turf.pointOnFeature(p); pointChecked++;
+        if ((frac > 0) === hits.some((h) => turf.booleanPointInPolygon(pt, h))) pointAgrees++;
+        if (frac >= 0.5) cls += [...new Set(hits.map((h) => h.properties.PropID))].some((x) => x > 0 && !saBy.has(x)) ? ' (covering CoSA account absent from 2025 values)' : ' (covering accounts present in 2025 values)';
+      }
     }
   }
   classes[cls] = (classes[cls] ?? 0) + 1; (ex[cls] ??= []).length < 8 && ex[cls].push(id);
 }
-const cut = (n) => { const p = n / eSample.length, se = Math.sqrt(p * (1 - p) / eSample.length); return [+(p - 1.96 * se).toFixed(3), +(p + 1.96 * se).toFixed(3)]; };
-out('E.valuesOnlySample', { population: valuesOnly.length, sampled: eSample.length, classes, approx95pctIntervalShare: Object.fromEntries(Object.entries(classes).map(([k, v]) => [k, cut(v)])), interiorPointAgreesWithPolygonOverlap: `${pointAgrees}/${pointChecked}`, exampleIds: ex });
+const cut = (n) => { const p = n / eSample.length, se = Math.sqrt(p * (1 - p) / eSample.length); return [+Math.max(0, p - 1.96 * se).toFixed(3), +Math.min(1, p + 1.96 * se).toFixed(3)]; };
+out('E.valuesOnlySample', { population: valuesOnly.length, sampled: eSample.length, classes, approx95pctIntervalShare: Object.fromEntries(Object.entries(classes).map(([k, v]) => [k, cut(v)])), positiveOverlapFractions: fractions.filter(([, f]) => f > 0).map(([id, f]) => [id, +f.toPrecision(4)]), interiorPointAgreesWithOverlapGt0: `${pointAgrees}/${pointChecked}`, exampleIds: ex });
 
 // ---------- F. zoning: per-parcel recheck and dense downtown scan, strict reads, attribute-aware dedupe
 const ZF = 'OBJECTID,Zoning,Base,SpecDistrict,SpecCondition,CaseNo,OrdinanceKey,ModifiedDate';
@@ -129,11 +131,12 @@ const zRes = [];
 for (const id of [102742, 100293, 561765, 110179, 100288, 100297, 100431, 333888]) {
   const pf = outlines(CB, 'PropID', [id], `parcel ${id}`).get(id);
   if (!pf) { zRes.push({ id, status: 'parcel not found' }); continue; }
-  const zf = mustComplete(pageByOid(get, (last, n) => q(Z, { where: `OBJECTID > ${last}`, geometry: JSON.stringify(esriPoly(pf)), geometryType: 'esriGeometryPolygon', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: ZF, returnGeometry: 'true', outSR: '4326', orderByFields: 'OBJECTID ASC', resultRecordCount: String(n) }).replace('f=json', 'f=geojson'), { size: 1000 }), `zoning ${id}`).features;
-  const pieces = []; const inter = [];
-  for (const z of zf) { let i; try { i = turf.intersect(turf.featureCollection([pf, z])); } catch { zRes.push({ id, geometryErrorOn: z.properties.OBJECTID }); continue; } if (!i) continue; inter.push(i); pieces.push({ code: z.properties.Zoning, sqft: area(i), geomKey: gkey(z), attrKey: zoningAttrKey(z.properties) }); }
-  const s = zoningShares(area(pf), pieces, inter.length ? area(unionAll(inter)) : 0);
-  zRes.push({ id, polygonsRead: zf.length, status: s.status, uncovered: +s.uncoveredShare.toFixed(4), overlap: +s.overlapShare.toFixed(4), duplicates: s.duplicatePieces, conflict: s.conflict, districts: s.districts.map((d) => [d.code, +d.share.toFixed(4)]) });
+  const read = spatial(Z, pf, ZF, 1000);
+  const pieces = [], inter = [];
+  for (const z of read.features) { let x; try { x = turf.intersect(turf.featureCollection([pf, z])); } catch (e) { pieces.push({ error: String(e.message).slice(0, 80), oid: z.properties.OBJECTID }); continue; } if (!x) continue; inter.push(x); pieces.push({ code: z.properties.Zoning, sqft: area(x), geomKey: gkey(z), attrKey: zoningAttrKey(z.properties) }); }
+  let u = 0; try { u = inter.length ? area(unionAll(inter)) : 0; } catch (e) { pieces.push({ error: 'union failed' }); }
+  const s = zoningCoverage(area(pf), read.status, pieces, u);
+  zRes.push(s.status === 'coverage unavailable' ? { id, status: s.status, reason: s.reason, read: read.status, readReason: read.reason } : { id, read: read.status, polygonsRead: read.features.length, status: s.status, uncovered: +s.uncoveredShare.toFixed(4), overlap: +s.overlapShare.toFixed(4), duplicates: s.duplicatePieces, conflict: s.conflict, districts: s.districts.map((d) => [d.code, +d.share.toFixed(4)]) });
 }
 out('F.zoningPerParcel', zRes);
 

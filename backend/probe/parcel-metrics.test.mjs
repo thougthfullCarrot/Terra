@@ -199,3 +199,21 @@ test('Bexar land market value is unavailable when components do not reconcile', 
 test('Bexar reported zero land value with reconciling total stays zero', () => {
   assert.equal(bexarLandMarket({ Market_val: 0, Land_hstd_val: 0, Land_non_hstd_val: 0, Imprv_hstd_val: 0, Imprv_non_hstd_val: 0, AG_Market: 0 }).landMarket, 0);
 });
+
+import { zoningCoverage, overlapClass } from './parcel-metrics.mjs';
+test('coverage: one failed intersection makes the parcel unavailable, never partial success', () => {
+  const r = zoningCoverage(100, 'complete', [{ code: 'C-2', sqft: 90, geomKey: 'a' }, { error: 'TopologyException' }], 90);
+  assert.equal(r.status, 'coverage unavailable'); assert.equal(r.districts, undefined);
+});
+test('coverage: an incomplete or failed zoning read is unavailable', () => {
+  assert.equal(zoningCoverage(100, 'incomplete', [{ code: 'C-2', sqft: 100 }], 100).status, 'coverage unavailable');
+  assert.equal(zoningCoverage(100, 'failed', [], 0).status, 'coverage unavailable');
+});
+test('coverage: complete read with all pieces is computed normally', () => {
+  assert.equal(zoningCoverage(100, 'complete', [{ code: 'C-2', sqft: 100 }], 100).status, 'single district');
+  assert.equal(zoningCoverage(100, 'complete', [], 0).status, 'no zoning intersects parcel');
+});
+test('overlap: exact zero is separate from small positive overlap', () => {
+  assert.equal(overlapClass(0), 'zero overlap'); assert.equal(overlapClass(1e-6), 'positive overlap below 1%'); assert.equal(overlapClass(0.0099), 'positive overlap below 1%');
+  assert.equal(overlapClass(0.01), 'overlap 1% to 50%'); assert.equal(overlapClass(0.5), 'overlap 50% or more'); assert.equal(overlapClass(NaN), 'overlap unavailable'); assert.equal(overlapClass(null), 'overlap unavailable');
+});

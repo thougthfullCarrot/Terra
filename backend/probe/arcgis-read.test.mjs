@@ -58,3 +58,22 @@ test('count responses are validated', () => {
   assert.throws(() => checkCount({ error: { code: 400 } }), /service error/);
   assert.throws(() => checkCount({ _err: 'x' }), /request failed/);
 });
+
+import { readFiltered } from './arcgis-read.mjs';
+test('readFiltered uses the identical spatial filter for count and pages, and checks the count', () => {
+  const seen = [];
+  const filter = { where: '1=1', geometry: '{"rings":[[[0,0],[1,0],[1,1],[0,0]]]}', geometryType: 'esriGeometryPolygon', spatialRel: 'esriSpatialRelIntersects', inSR: '4326' };
+  const get = (u) => { const p = JSON.parse(u); seen.push(p); if (p.returnCountOnly) return { count: 3 }; const last = Number(p.where.match(/OBJECTID > (-?\d+)/)[1]); return { features: rows.filter((r) => r.attributes.OBJECTID > last && r.attributes.OBJECTID <= 3) }; };
+  const r = readFiltered(get, (p) => JSON.stringify(p), filter, { size: 2 });
+  assert.equal(r.status, 'complete'); assert.equal(r.features.length, 3);
+  for (const p of seen) for (const k of ['geometry', 'geometryType', 'spatialRel', 'inSR']) assert.equal(p[k], filter[k], k);
+  assert.ok(seen.slice(1).every((p) => p.where.startsWith('(1=1) AND OBJECTID >')));
+});
+test('readFiltered: features fewer than the spatial count is incomplete', () => {
+  const get = (u) => (JSON.parse(u).returnCountOnly ? { count: 5 } : { features: rows.slice(0, 2) });
+  assert.equal(readFiltered(get, (p) => JSON.stringify(p), { where: '1=1' }, { size: 10 }).status, 'incomplete');
+});
+test('readFiltered: a failed count is a failed read', () => {
+  const get = (u) => (JSON.parse(u).returnCountOnly ? { error: { code: 400 } } : { features: [] });
+  assert.equal(readFiltered(get, (p) => JSON.stringify(p), { where: '1=1' }).status, 'failed');
+});

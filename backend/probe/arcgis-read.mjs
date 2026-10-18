@@ -63,3 +63,14 @@ export function mustComplete(res, what) {
   if (res.status !== 'complete') throw new ReadError(`${what}: ${res.status} (${res.reason})`);
   return res;
 }
+
+/**
+ * Count-validated read: the count query and every page query use the SAME filter (where, geometry,
+ * spatialRel, ...). query(params) returns a URL. A failed count is a failed read.
+ */
+export function readFiltered(get, query, filter, { size = 2000, fields = 'OBJECTID', extra = {}, maxPages } = {}) {
+  let expectCount;
+  try { expectCount = checkCount(get(query({ ...filter, returnCountOnly: 'true' }))); } catch (e) { return { status: 'failed', reason: `count: ${e.message}`, features: [], pages: 0 }; }
+  const where = filter.where ?? '1=1';
+  return pageByOid(get, (last, n) => query({ ...filter, where: `(${where}) AND OBJECTID > ${last}`, outFields: fields, orderByFields: 'OBJECTID ASC', resultRecordCount: String(n), ...extra }), { size, expectCount, maxPages });
+}

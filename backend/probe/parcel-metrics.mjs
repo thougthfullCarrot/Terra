@@ -205,3 +205,26 @@ export function bexarLandMarket(r, { nullAsZero = [] } = {}) {
   if (Math.abs(L + I - market) >= 1) return { landMarket: null, reconciles: false, missing };
   return { landMarket: L, improvementMarket: I, reconciles: true, missing };
 }
+
+/**
+ * Zoning coverage for one parcel from per-polygon intersection results. pieces: [{ code, sqft,
+ * geomKey, attrKey }] or [{ error }] for a polygon whose intersection failed. readStatus is the
+ * status of the zoning read. Any failure makes the whole parcel 'coverage unavailable': a result
+ * is never built from the pieces that happened to succeed.
+ */
+export function zoningCoverage(parcelSqft, readStatus, pieces, unionSqft) {
+  if (readStatus !== 'complete') return { status: 'coverage unavailable', reason: `zoning read ${readStatus}` };
+  const failed = pieces.filter((p) => p.error);
+  if (failed.length) return { status: 'coverage unavailable', reason: `${failed.length} intersection(s) failed` };
+  if (!(parcelSqft > 0) || !Number.isFinite(unionSqft)) return { status: 'coverage unavailable', reason: 'no parcel area' };
+  return zoningShares(parcelSqft, pieces, unionSqft);
+}
+
+/** Overlap class keeps exactly zero apart from small positive overlap; the fraction itself is always reported. */
+export function overlapClass(fraction) {
+  if (fraction == null || !Number.isFinite(fraction)) return 'overlap unavailable';
+  if (fraction === 0) return 'zero overlap';
+  if (fraction < 0.01) return 'positive overlap below 1%';
+  if (fraction < 0.5) return 'overlap 1% to 50%';
+  return 'overlap 50% or more';
+}
