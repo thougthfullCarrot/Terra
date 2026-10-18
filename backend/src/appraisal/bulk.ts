@@ -156,7 +156,12 @@ async function pacs(zip: string, onRow: (row: Row) => Promise<unknown> | unknown
 export function newestExport(page: string, base: string): { url: string; taxYear: number } | null {
   const links = [...page.matchAll(/href=["']([^"']+\.zip)["']/gi)]
     .map((m) => new URL(m[1]!.replace(/&amp;/g, '&'), base).href)
-    .filter((u) => /certified|export|appraisal|roll/i.test(decodeURIComponent(u)) && !/supplement|personal|mineral|bpp|layout|totals|protest|sales/i.test(decodeURIComponent(u)));
+    .filter((u) => {
+      const name = decodeURIComponent(u.split('/').pop()!);
+      // "2026-Export-Layout.zip" is only the layout; "2026-CERTIFIED-ROLL-WEB-EXPORT-W-EXPORT-LAYOUT.zip" is the roll with it.
+      if (/layout/i.test(name) && !/roll|cert/i.test(name)) return false;
+      return /certified|certification|export|appraisal|roll/i.test(name) && !/supplement|personal|mineral|bpp|totals|protest|sales/i.test(name);
+    });
   const ranked = links
     // The year in the file name, not the upload folder (/2023/07/2026-CERTIFIED.zip is the 2026 roll).
     .map((url) => ({ url, taxYear: Math.max(0, ...[...decodeURIComponent(url.split('/').pop()!).matchAll(/20\d\d/g)].map((m) => Number(m[0]))) }))
@@ -176,9 +181,84 @@ function fromPage(page: string): Source['resolve'] {
 }
 
 interface Source {
-  /** The file to download now and the tax year it holds. */
-  resolve: (year: number) => Promise<{ url: string; taxYear: number }>;
-  read: (zip: string, onRow: (row: Row) => Promise<unknown> | unknown, sample: string[]) => Promise<void>;
+  /** The file to download now and the tax year it holds; `extra` names more files read with it. */
+  resolve: (year: number) => Promise<{ url: string; taxYear: number; extra?: Record<string, string> }>;
+  read: (zip: string, onRow: (row: Row) => Promise<unknown> | unknown, sample: string[], extra: Record<string, string>) => Promise<void>;
+}
+
+const EPCAD = 'https://propertysearch.blob.core.windows.net/abepublicfiles/';
+/** Column order of EPCAD's ~-delimited dumps, from its Schemas.txt. */
+export const EPCAD_COLUMNS: Record<string, string[]> = {
+  Properties: ['dbId', 'PropertyId', 'LegalDescription', 'AgentCode', 'GeoID', 'Type', 'PropertyUseCode', 'PropertyUseDescription', 'Location_Address', 'Location_Neighborhood', 'Location_NeighborhoodCD', 'Location_Mapsco', 'Location_MapID', 'Year'],
+  Owners: ['dbId', 'Name', 'OwnerID', 'MailingAddress', 'PercentOwnership', 'Excemptions', 'Property_dbId', 'Year', 'CareOf'],
+  Rolls: ['RollId', 'Year', 'Improvements', 'LandMarket', 'AgValuation', 'Appraised', 'HSCap', 'Assessed', 'Property_dbId'],
+  Lands: ['LandId', 'Type', 'Description', 'Acres', 'SquareFootage', 'EffFront', 'EffDepth', 'MarketValue', 'ProdValue', 'Property_dbId', 'Year'],
+  Improvements: ['ImprovementId', 'Type', 'StateCode', 'LivingArea', 'Value', 'Description', 'ClassCD', 'ExteriorWall', 'YearBuilt', 'SquareFootage', 'Year', 'Property_dbId', 'BuildingId', 'TypeCD']
+};
+
+/** Rows of one EPCAD dump: ~ between columns, in Schemas.txt order (a header line, if any, is skipped). */
+async function epcadRows(zip: string, table: string, onRow: (row: Row) => unknown, sample?: string[]): Promise<void> {
+  const cols = EPCAD_COLUMNS[table]!;
+  const entry = (await zipEntries(zip)).find((n) => !n.endsWith('/'))!;
+  let first = true;
+  await zipLines(zip, entry, (line) => {
+    if (!line.trim()) return;
+    const v = line.replace(/\r$/, '').split('~');
+    if (first) {
+      first = false;
+      sample?.push(`${table}: ${line.slice(0, 400)}`);
+      if (v[0] === cols[0]) return;
+    }
+    const row: Row = {};
+    cols.forEach((c, i) => (row[c] = v[i] ?? ''));
+    return onRow(row);
+  });
+}
+
+async function readEpcad(properties: string, onRow: (row: Row) => unknown, sample: string[], extra: Record<string, string>): Promise<void> {
+  // Each table is keyed by the property's database id; the newest year wins where a table holds several.
+  const newer = (a: Row | undefined, b: Row) => !a || Number(b.Year || 0) > Number(a.Year || 0);
+  const owners = new Map<string, Row>();
+  await epcadRows(extra.Owners!, 'Owners', (r) => {
+    const had = owners.get(r.Property_dbId!);
+    // The largest share in the newest year is the owner of record.
+    if (newer(had, r) || (had!.Year === r.Year && Number(r.PercentOwnership || 0) > Number(had!.PercentOwnership || 0))) owners.set(r.Property_dbId!, r);
+  }, sample);
+  const rolls = new Map<string, Row>();
+  await epcadRows(extra.Rolls!, 'Rolls', (r) => {
+    if (newer(rolls.get(r.Property_dbId!), r)) rolls.set(r.Property_dbId!, r);
+  }, sample);
+  const land = new Map<string, number>();
+  await epcadRows(extra.Lands!, 'Lands', (r) => {
+    const sqft = Number(r.SquareFootage || 0) || Number(r.Acres || 0) * 43_560;
+    if (sqft) land.set(r.Property_dbId!, (land.get(r.Property_dbId!) ?? 0) + sqft);
+  }, sample);
+  const imps = new Map<string, { area: number; built: number | null; code: string }>();
+  await epcadRows(extra.Improvements!, 'Improvements', (r) => {
+    const had = imps.get(r.Property_dbId!) ?? { area: 0, built: null, code: '' };
+    const built = Number(r.YearBuilt || 0) || null;
+    imps.set(r.Property_dbId!, { area: had.area + (Number(r.LivingArea || 0) || 0), built: built && (!had.built || built < had.built) ? built : had.built, code: had.code || r.StateCode || '' });
+  }, sample);
+  await epcadRows(properties, 'Properties', (p) => {
+    if (p.Type && !/^r/i.test(p.Type)) return;
+    const k = p.dbId!;
+    const o = owners.get(k);
+    const roll = rolls.get(k);
+    const imp = imps.get(k);
+    return onRow({
+      ...p,
+      OwnerName: o?.Name ?? '',
+      MailingAddress: o?.MailingAddress ?? '',
+      LandMarket: roll?.LandMarket ?? '',
+      Improvements: roll?.Improvements ?? '',
+      Appraised: roll?.Appraised ?? '',
+      RollYear: roll?.Year || p.Year || '',
+      LandSqft: land.has(k) ? String(Math.round(land.get(k)!)) : '',
+      LivingArea: imp?.area ? String(imp.area) : '',
+      YearBuilt: imp?.built ? String(imp.built) : '',
+      StateCode: imp?.code ?? ''
+    });
+  }, sample);
 }
 
 export const BULK_SOURCES: Record<string, Source> = {
@@ -256,9 +336,12 @@ export const BULK_SOURCES: Record<string, Source> = {
   galveston: { resolve: fromPage('https://galvestoncad.org/preliminary-and-certified-roll-export-data/'), read: pacs },
   'el-paso': {
     async resolve(year) {
-      return { url: `https://export.epcad.org/datasets/${year}_Certified_Export_Files.zip`, taxYear: year };
+      // The dumps carry next year's number in their names (Properties2027Dump.zip in 2026) and hold current values.
+      const y = year + 1;
+      const file = (t: string) => `${EPCAD}${t}${y}Dump.zip`;
+      return { url: file('Properties'), taxYear: year, extra: { Owners: file('Owners'), Rolls: file('Rolls'), Lands: file('Lands'), Improvements: file('Improvements') } };
     },
-    read: pacs
+    read: readEpcad
   }
 };
 
@@ -272,7 +355,7 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
   const dir = join(opts.cacheDir, d.id);
   const chunks = join(dir, 'chunks');
   await mkdir(dir, { recursive: true });
-  const { url, taxYear } = await source.resolve(now().getUTCFullYear());
+  const { url, taxYear, extra = {} } = await source.resolve(now().getUTCFullYear());
   const modified = (await lastModified(url)) || null;
   // A file posted under a new name is a new roll even when the server sends no date.
   const version = `${url} ${modified ?? ''}`.trim();
@@ -292,6 +375,16 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
     await run('curl', ['-sSfL', '--retry', '4', '--retry-delay', '15', '-A', BROWSER, '-m', '2400', '-o', `${zip}.part`, url], { maxBuffer: 1 << 20 });
     await run('mv', [`${zip}.part`, zip]);
   } else log(`${d.id}: reading the saved download`);
+  const extraFiles: Record<string, string> = {};
+  for (const [name, link] of Object.entries(extra)) {
+    const path = join(dir, `${name}.zip`);
+    if (!(await stat(path).catch(() => null)) || previous?.sourceEdited !== version) {
+      log(`${d.id}: downloading ${link}`);
+      await run('curl', ['-sSfL', '--retry', '4', '--retry-delay', '15', '-A', BROWSER, '-m', '2400', '-o', `${path}.part`, link], { maxBuffer: 1 << 20 });
+      await run('mv', [`${path}.part`, path]);
+    }
+    extraFiles[name] = path;
+  }
   // Saved before reading, so a run that dies here reads the same file next time.
   await writeFile(statePath, JSON.stringify({ ...(previous ?? {}), sourceEdited: version, completedAt: null }));
   await rm(chunks, { recursive: true, force: true });
@@ -328,9 +421,11 @@ export async function collectBulk(d: District, opts: CollectOptions & { maxLines
       }
       if (buffer.length >= CHUNK_LINES) await flush();
     },
-    sample
+    sample,
+    extraFiles
   );
   if (buffer.length) await flush();
+  for (const line of sample.slice(1, 6)) log(`${d.id}: raw ${JSON.stringify(line.slice(0, 400))}`);
   if (sample.length) log(`${d.id}: first raw line ${JSON.stringify(sample[0]!.replace(/ {3,}/g, (s) => `‹${s.length}›`).slice(0, 1500))}`);
   state.totalIds = Math.min(lines, opts.maxLines ?? Infinity);
   await writeFile(statePath, JSON.stringify(state));

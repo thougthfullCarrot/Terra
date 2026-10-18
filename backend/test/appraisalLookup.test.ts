@@ -91,10 +91,10 @@ describe('normalizeRow', () => {
   it('maps Bexar county layer fields and keeps situs and mailing apart', () => {
     const r = normalizeRow(
       district('bexar'),
-      { PropID: 12345, Situs: '100 N MAIN AVE', Owner: 'EXAMPLE LLC', AddrLn1: 'PO BOX 1', AddrCity: 'DALLAS', AddrSt: 'TX', Zip: '75201', LandVal: 100, ImprVal: 900, TotVal: 1000, YrBlt: 1999, State_cd: 'F1', Acres: 1, TOT_GBA: 5000 },
+      { Prop_id: 12345, Prop_yr: 2025, Situs: '100 N MAIN AVE', Owner_name: 'EXAMPLE LLC', Addr_line1: 'PO BOX 1', Addr_city: 'DALLAS', Addr_state: 'TX', Zip: '75201', Land_hstd_val: 40, Land_non_hstd_val: 60, Imprv_hstd_val: 0, Imprv_non_hstd_val: 900, Market_val: 1000, Yr_blt: 1999, State_cd: 'F1', Land_acres: 1, Sq_ft: 5000 },
       { retrieved: '2026-10-18', dataset: 'layer' }
     )!;
-    expect(r).toMatchObject({ account: '12345', situs: '100 N MAIN AVE', owner: 'EXAMPLE LLC', mailing: 'PO BOX 1, DALLAS, TX, 75201', landValue: 100, improvementValue: 900, totalValue: 1000, landSqft: 43560, buildingSqft: 5000, yearBuilt: 1999, stateCode: 'F1', valueBasis: 'market' });
+    expect(r).toMatchObject({ account: '12345', situs: '100 N MAIN AVE', owner: 'EXAMPLE LLC', mailing: 'PO BOX 1, DALLAS, TX, 75201', landValue: 100, improvementValue: 900, totalValue: 1000, landSqft: 43560, buildingSqft: 5000, yearBuilt: 1999, stateCode: 'F1', valueBasis: 'market', taxYear: 2025 });
     expect(r.sourceUrl).toContain('prop_id=12345');
   });
   it('skips rows without an account', () => {
@@ -137,7 +137,7 @@ describe('collectArcgis', () => {
     const impl = (async (url: string, init?: RequestInit) => {
       const u = String(url);
       const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } });
-      if (u.startsWith(`${layer}?f=json`)) return json({ maxRecordCount: 1000, objectIdField: 'OBJECTID', editingInfo: { lastEditDate: 42 }, fields: [{ name: 'PropID' }, { name: 'Situs' }, { name: 'TotVal' }] });
+      if (u.startsWith(`${layer}?f=json`)) return json({ maxRecordCount: 1000, objectIdField: 'OBJECTID', editingInfo: { lastEditDate: 42 }, fields: [{ name: 'Prop_id' }, { name: 'Situs' }, { name: 'Market_val' }] });
       if (u.includes('returnIdsOnly')) return json({ objectIds: ids });
       const form = new URLSearchParams(String(init?.body ?? ''));
       const asked = form.get('objectIds')!.split(',').map(Number);
@@ -145,7 +145,7 @@ describe('collectArcgis', () => {
         fails = null;
         return new Response('down', { status: 400 });
       }
-      return json({ features: asked.map((id) => ({ attributes: { PropID: id, Situs: `${id} MAIN ST`, TotVal: id }, geometry: { rings: [[[-98, 29], [-98.002, 29.002]]] } })) });
+      return json({ features: asked.map((id) => ({ attributes: { Prop_id: id, Situs: `${id} MAIN ST`, Market_val: id }, geometry: { rings: [[[-98, 29], [-98.002, 29.002]]] } })) });
     }) as unknown as typeof fetch;
     return impl;
   }
@@ -203,7 +203,7 @@ describe('bulk readers', async () => {
     put('appraised_val', '000000000003500');
     const row = pacsRow(line.join(''));
     expect(row).toMatchObject({ situs: '100 N MESA ST', land_val: '1500', imprv_val: '2000', py_owner_name: 'EXAMPLE LP', prop_val_yr: '2026' });
-    const r = normalizeRow(district('el-paso'), { ...row, prop_id: '12345' }, { retrieved: 'x', dataset: 'x' })!;
+    const r = normalizeRow(district('travis'), { ...row, prop_id: '12345' }, { retrieved: 'x', dataset: 'x' })!;
     expect(r).toMatchObject({ account: '12345', situs: '100 N MESA ST', landValue: 1500, improvementValue: 2000, totalValue: 3500, taxYear: 2026 });
   });
   it('picks the newest certified roll export from a downloads page', () => {
@@ -216,7 +216,7 @@ describe('bulk readers', async () => {
 
 describe('roll quirks', () => {
   it('cuts a city run into the street line', () => {
-    const r = normalizeRow(district('bexar'), { PropID: 1, Situs: '11502 TANGLEBRIAR TRL AUSTIN 78750', SITUS_CITY: 'AUSTIN' }, { retrieved: 'x', dataset: 'x' })!;
+    const r = normalizeRow(district('bexar'), { Prop_id: 1, Situs: '11502 TANGLEBRIAR TRL AUSTIN 78750', SITUS_CITY: 'AUSTIN' }, { retrieved: 'x', dataset: 'x' })!;
     expect(r.situs).toBe('11502 TANGLEBRIAR TRL');
   });
   it('treats a differently written city as a weaker match, not a miss', () => {

@@ -8,6 +8,14 @@ export function reader(row: Record<string, unknown>): (names: string[] | undefin
   const lower = new Map(Object.keys(row).map((k) => [k.toLowerCase(), k]));
   return (names) => {
     for (const name of names ?? []) {
+      // 'A+B' sums two fields (homestead and non-homestead land, say); missing parts count as 0.
+      if (name.includes('+')) {
+        const parts = name.split('+').map((n) => lower.get(n.toLowerCase())).filter((k): k is string => k != null);
+        if (!parts.length) continue;
+        const values = parts.map((k) => Number(String(row[k] ?? '').replace(/[$,\s]/g, ''))).filter(Number.isFinite);
+        if (values.length) return values.reduce((a, b) => a + b, 0);
+        continue;
+      }
       const key = lower.get(name.toLowerCase());
       if (key == null) continue;
       const v = row[key];
@@ -21,7 +29,10 @@ export function reader(row: Record<string, unknown>): (names: string[] | undefin
 export function resolvedFields(fields: FieldMap, available: string[]): Record<string, string | null> {
   const lower = new Map(available.map((k) => [k.toLowerCase(), k]));
   return Object.fromEntries(
-    Object.entries(fields).map(([key, names]) => [key, (names as string[]).map((n) => lower.get(n.toLowerCase())).find(Boolean) ?? null])
+    Object.entries(fields).map(([key, names]) => [
+      key,
+      (names as string[]).map((n) => (n.includes('+') ? (n.split('+').every((x) => lower.has(x.toLowerCase())) ? n : undefined) : lower.get(n.toLowerCase()))).find(Boolean) ?? null
+    ])
   );
 }
 
