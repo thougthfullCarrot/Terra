@@ -12,7 +12,8 @@
  * Writes <cache>/report.json with one entry per district: what was read,
  * what failed, and why. Exits non-zero only when every district asked for failed.
  */
-import { failures, label, runStatus, type CaseChecks, type Policy } from '../appraisal/verdict.js';
+import { failures, label, pageValue, runStatus, type CaseChecks, type Policy } from '../appraisal/verdict.js';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -192,17 +193,8 @@ async function officialPage(url: string, r: IndexRow): Promise<{ url: string; ok
     const ownerWord = (r.owner ?? '').toUpperCase().split(/\s+/).find((w) => w.length > 2) ?? '';
     const value = r.totalValue != null ? r.totalValue.toLocaleString('en-US') : '';
     const hasOwner = Boolean(ownerWord) && plain.includes(ownerWord);
-    // A year only counts as published when its row carries dollar figures: BCAD's page lists the next tax year
-    // with "N/A" values (and a year selector) long before that year has any values.
-    const rows = [...plain.matchAll(/\b(20[12]\d)((?:\s+(?:\$[\d,]+|N\/A))+)/g)].map((m) => ({ year: Number(m[1]), valued: /\$/.test(m[2]!), text: m[2]! }));
-    // The value is looked for in the row of the roll year TERRA holds, so a page already showing a newer year is
-    // compared like for like; a page with no year rows is searched whole.
-    const yearRow = rows.find((x) => x.year === r.taxYear && x.valued);
-    const hasValue = Boolean(value) && (yearRow ? yearRow.text.includes(value) : plain.includes(value));
-    const valued = rows.filter((x) => x.valued).map((x) => x.year);
-    const empty = rows.filter((x) => !x.valued).map((x) => x.year);
-    const years = valued.length ? `newest year with values ${Math.max(...valued)}${empty.length ? ` (${[...new Set(empty)].join(', ')} listed without values)` : ''}` : 'no value history read';
-    return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, value $${value} ${hasValue ? 'found' : 'NOT found'}${yearRow ? ` in the ${r.taxYear} row` : ''}, ${years}` };
+    const { hasValue, compared, years } = pageValue(plain, r.totalValue, r.taxYear, r.valueBasis);
+    return { url, ok: hasOwner && hasValue, note: `owner ${hasOwner ? 'found' : 'NOT found'}, ${r.valueBasis ?? 'unknown-basis'} value $${value} ${hasValue ? 'matches' : 'does NOT match'} the ${r.taxYear} row (${compared ?? 'not compared'}), ${years}` };
   } catch (error) {
     return { url, ok: false, closed: true, note: `could not read: ${(error as Error).message}` };
   }
@@ -214,6 +206,13 @@ async function officialPage(url: string, r: IndexRow): Promise<{ url: string; ok
  * tells two streets apart, and a house number nobody has. Check each against
  * the live layer: the same accounts, the same values.
  */
+/** A record with its owner and mailing address left out, for reports that may be read outside TERRA. */
+function withoutPeople<T extends { owner?: unknown; mailing?: unknown }>(r: T | undefined): Omit<T, 'owner' | 'mailing'> | undefined {
+  if (!r) return undefined;
+  const { owner: _o, mailing: _m, ...rest } = r;
+  return rest;
+}
+
 async function verify(): Promise<void> {
   const policy = (arg('--policy') ?? 'full') as Policy;
   if (policy !== 'full' && policy !== 'quick') throw new Error('--policy is full or quick');
@@ -281,20 +280,82 @@ async function verify(): Promise<void> {
         page: !page ? { state: 'skipped', note: first ? 'no account page for this district' : 'no single match to look up' } : page.closed ? { state: 'unavailable', note: page.note } : { state: page.ok ? 'pass' : 'fail', note: page.note }
       };
       const problems = failures(checks, policy);
-      const row = { district: id, ...c, page, status: result.status, reason: 'reason' in result ? result.reason : undefined, got, checks, passed: problems.length === 0, problems, official, unavailable, sample: result.status === 'match' ? result.records[0] : result.status === 'ambiguous' ? result.candidates[0]?.record : undefined };
+      const row = { district: id, ...c, page, status: result.status, reason: 'reason' in result ? result.reason : undefined, got, checks, passed: problems.length === 0, problems, official, unavailable, sample: withoutPeople(result.status === 'match' ? result.records[0] : result.status === 'ambiguous' ? result.candidates[0]?.record : undefined) };
       results.push(row);
-      log(`${id} ${c.kind}: "${c.address}" → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'} ${ms.toFixed(0)} ms; ${label(checks)}`);
+      log(`${id} ${c.kind}: → ${result.status} (${got.length}) ${row.passed ? 'PASS' : 'FAIL'} ${ms.toFixed(0)} ms; ${label(checks)}`);
     }
   }
   await writeFile(join(cacheDir, 'verify.json'), JSON.stringify(results, null, 1));
-  console.log(JSON.stringify(results, null, 1));
   const status = runStatus(results as unknown as { checks: CaseChecks }[], policy);
   log(`VERIFY ${status.exitCode ? 'FAIL' : 'PASS'} ${status.summary}`);
   process.exitCode = status.exitCode;
 }
 
+/**
+ * Compare named accounts field by field: the live layer's raw value fields and the district's own account page's
+ * labeled value rows, with when each was read. Prints value fields only (no owner or mailing names).
+ *   npm run appraisal -- compare --districts bexar --accounts 249983,160179
+ */
+async function compare(): Promise<void> {
+  const accounts = (arg('--accounts') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const out: Record<string, unknown>[] = [];
+  for (const id of chosen) {
+    const d = district(id);
+    if (!d.layer || !d.accountUrl) continue;
+    const key = d.fields!.account;
+    for (const account of accounts) {
+      let raw: Record<string, unknown>[] = [];
+      let layerError: string | undefined;
+      // Each candidate account field is tried alone: a layer rejects a query naming a field it lacks.
+      for (const where of key.flatMap((f) => [`${f}=${Number(account) || 0}`, `${f}='${account.replace(/'/g, "''")}'`])) try {
+        if (raw.length) break;
+        const body = await fetchJson<{ features?: { attributes: Record<string, unknown> }[]; error?: unknown }>(
+          `${d.layer}/query?${new URLSearchParams({ f: 'json', where, outFields: '*', returnGeometry: 'false' })}`,
+          { timeoutMs: 60_000, retries: 3 }
+        );
+        if (body.error) { layerError = JSON.stringify(body.error); continue; }
+        layerError = undefined;
+        raw = (body.features ?? []).map((f) => Object.fromEntries(Object.entries(f.attributes).filter(([k]) => /val|land|impr|ag_|mkt|market|yr|year|cap|exempt|appr|assess|hs|state_cd|prop|acre|edit|date/i.test(k) && !/own|name|addr|mail/i.test(k))));
+      } catch (error) {
+        layerError = (error as Error).message;
+      }
+      const layerRead = new Date().toISOString();
+      const url = d.accountUrl.replace('{account}', account);
+      let pageRows: string[] = [];
+      let pageNote = '';
+      let pageCheck: ReturnType<typeof pageValue> | undefined;
+      let pageSha256: string | undefined;
+      try {
+        const u = new URL(url);
+        const robots = await fetch(new URL('/robots.txt', u).href, { signal: AbortSignal.timeout(20_000) }).then((x) => (x.ok ? x.text() : ''));
+        if (!robotsAllow(robots, u.pathname + u.search)) throw new Error('robots.txt disallows the account page');
+        await new Promise((done) => setTimeout(done, 2000));
+        const res = await fetch(url, { headers: { 'user-agent': 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)' }, signal: AbortSignal.timeout(30_000) });
+        const html = await res.text();
+        pageNote = `HTTP ${res.status}, ${html.length} bytes`;
+        pageSha256 = createHash('sha256').update(html).digest('hex');
+        // The same check the full run makes, on the layer's own figures for this account.
+        const first = raw[0] ?? {};
+        const total = Number(first[d.fields!.totalValue?.[0] ?? '']);
+        const year = Number(first.Prop_yr ?? first.prop_yr);
+        const plain = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').toUpperCase();
+        pageCheck = pageValue(plain, Number.isFinite(total) ? total : null, Number.isFinite(year) ? year : null, d.valueBasis ?? null);
+        // Every table row that carries a dollar figure or names a value, with its cells kept apart by " | ".
+        pageRows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+          .map((m) => [...m[1]!.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((c) => c[1]!.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/\s+/g, ' ').trim()).join(' | '))
+          .filter((r) => /\$|value|appraised|assessed|cap|year/i.test(r) && !/owner|mailing|name:/i.test(r));
+      } catch (error) {
+        pageNote = `could not read: ${(error as Error).message}`;
+      }
+      out.push({ district: id, account, layer: d.layer, layerRead, layerError, raw, page: url, pageRead: new Date().toISOString(), pageNote, pageSha256, pageCheck, pageRows });
+    }
+  }
+  await writeFile(join(cacheDir, 'compare.json'), JSON.stringify(out, null, 1));
+  console.log(`COMPARE ${JSON.stringify(out)}`);
+}
+
 const command = process.argv[2];
-const commands: Record<string, () => Promise<void>> = { probe, collect, index, lookup: lookupCmd, verify };
+const commands: Record<string, () => Promise<void>> = { probe, collect, index, lookup: lookupCmd, verify, compare };
 if (!command || !commands[command]) {
   console.error(`usage: appraisal <${Object.keys(commands).join('|')}>`);
   process.exit(2);

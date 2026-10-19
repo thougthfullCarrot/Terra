@@ -262,13 +262,16 @@ describe('collapse', () => {
 });
 
 describe('Bexar agricultural land', () => {
-  it('counts ag market value in land, keeps productivity value apart, and reconciles to the market total', () => {
+  it('counts ag market value in land, keeps productivity value apart, and reconciles to the market total (SARA raw 2025, read 2026-10-19)', () => {
     const r = normalizeRow(district('bexar'), {
-      Prop_id: 175721, Situs: '1 TEST RD', Land_hstd_val: 0, Land_non_hstd_val: 18430, AG_Market: 249510, AG_Use_val: 1200,
+      Prop_id: 175721, Situs: '1 TEST RD', Land_hstd_val: 18430, Land_non_hstd_val: 0, AG_Market: 249510, AG_Use_val: 600,
       Imprv_hstd_val: 138060, Imprv_non_hstd_val: 0, Market_val: 406000, Prop_yr: 2025
     }, { retrieved: 'x', dataset: 'x' })!;
-    expect(r).toMatchObject({ landValue: 267940, agMarketValue: 249510, agUseValue: 1200, improvementValue: 138060, totalValue: 406000 });
+    expect(r).toMatchObject({ landValue: 267940, agMarketValue: 249510, agUseValue: 600, improvementValue: 138060, totalValue: 406000 });
     expect(r.landValue! + r.improvementValue!).toBe(r.totalValue);
+    // BCAD's 2025 Appraised (157,090) swaps ag market for ag use value; TERRA's market total must not equal it.
+    expect(r.totalValue! - r.agMarketValue! + r.agUseValue!).toBe(157090);
+    expect(r.totalValue).not.toBe(157090);
   });
 });
 
@@ -322,7 +325,7 @@ describe('withheld records', () => {
 
 describe('collectArcgis proves each reply covers what it asked for', () => {
   const layer = district('bexar').layer!;
-  type Mode = { reply: (asked: number[]) => { features: number[]; flagged?: boolean }; exists?: (id: number) => boolean; ids?: number[]; count?: number; editAfter?: number };
+  type Mode = { reply: (asked: number[]) => { features: number[]; flagged?: boolean }; exists?: (id: number) => boolean; confirm?: (asked: number[]) => unknown; ids?: number[]; count?: number; editAfter?: number };
   function server(m: Mode) {
     const ids = m.ids ?? [1, 2, 3];
     let infoCalls = 0;
@@ -338,7 +341,12 @@ describe('collectArcgis proves each reply covers what it asked for', () => {
       if (u.includes('returnIdsOnly')) return json({ objectIds: ids });
       const form = new URLSearchParams(String(init?.body ?? ''));
       const asked = form.get('objectIds')!.split(',').map(Number);
-      if (form.get('returnIdsOnly')) return json({ objectIds: asked.filter((id) => (m.exists ?? (() => true))(id)) });
+      if (form.get('returnIdsOnly')) {
+        if (m.confirm) return json(m.confirm(asked));
+        const left = asked.filter((id) => (m.exists ?? (() => true))(id));
+        // ArcGIS answers an id query that matches nothing with objectIds: null.
+        return json({ objectIdFieldName: 'OBJECTID', objectIds: left.length ? left : null });
+      }
       const { features, flagged } = m.reply(asked);
       return json({
         features: features.map((id) => ({ attributes: { OBJECTID: id, Prop_id: id, Situs: `${id} MAIN ST`, Market_val: id }, geometry: { rings: [[[-98, 29], [-98.002, 29.002]]] } })),
@@ -386,6 +394,26 @@ describe('collectArcgis proves each reply covers what it asked for', () => {
     const r = await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }), exists: (id) => id !== 3 });
     expect(r.report.status).toBe('complete');
     expect(r.accounts.sort()).toEqual(['1', '2']);
+  });
+  it('confirms a deletion from an explicit empty id list too', async () => {
+    const r = await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }), confirm: () => ({ objectIdFieldName: 'OBJECTID', objectIds: [] }) });
+    expect(r.report.status).toBe('complete');
+    expect(r.accounts.sort()).toEqual(['1', '2']);
+  });
+  it.each([
+    ['an empty object', () => ({})],
+    ['no objectIds', () => ({ objectIdFieldName: 'OBJECTID' })],
+    ['no id field name', () => ({ objectIds: null })],
+    ['another id field', () => ({ objectIdFieldName: 'FID', objectIds: null })],
+    ['objectIds that is not a list', () => ({ objectIdFieldName: 'OBJECTID', objectIds: '3' })],
+    ['a non-integer id', () => ({ objectIdFieldName: 'OBJECTID', objectIds: [3.5] })],
+    ['an id that was not asked about', () => ({ objectIdFieldName: 'OBJECTID', objectIds: [99] })],
+    ['a duplicated id', (a: number[]) => ({ objectIdFieldName: 'OBJECTID', objectIds: [a[0], a[0]] })],
+    ['a truncated id list', () => ({ objectIdFieldName: 'OBJECTID', objectIds: null, exceededTransferLimit: true })],
+    ['an error reply', () => ({ error: { code: 400, message: 'Unable to perform query' } })],
+    ['a reply that is not an object', () => [3]]
+  ] as [string, (asked: number[]) => unknown][])('does not count missing records as deleted on %s', async (_name, confirm) => {
+    notDone(await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }), confirm }));
   });
   it('does not finish a read that spanned a layer edit', async () => {
     notDone(await run({ reply: (asked) => ({ features: asked }), editAfter: 43 }));
@@ -497,5 +525,61 @@ describe('verification policy', async () => {
     expect(s.exitCode).toBe(0);
     expect(s.summary).toMatch(/^QUICK check .*not full verification/);
     expect(failures({ ...ok, index: { state: 'fail' } }, 'quick')).toHaveLength(1);
+  });
+});
+
+describe('account page value rows', async () => {
+  const { pageValue } = await import('../src/appraisal/verdict.js');
+  // BCAD's page for account 249983, read 2026-10-18 (value rows only): the Appraised column has no "$".
+  const header = 'YEAR IMPROVEMENTS LAND MARKET AG VALUATION APPRAISED HS CAP ASSESSED';
+  const bcad = `TAX YEAR: 2027 - VALUES NOT AVAILABLE 2026 2025 2024 2023 TOTAL VALUE: $129,530 ${header} 2026 $69,430 $60,100 0 129,530 $0 $129,530 2025 $65,570 $60,100 0 125,670 $0 $125,670 2024 $71,230 $56,180 0 127,410 $0 $127,410`;
+
+  it("matches a market value to Improvements + Land Market in TERRA's tax-year row", () => {
+    const got = pageValue(bcad, 125_670, 2025, 'market');
+    expect(got.hasValue).toBe(true);
+    expect(got.yearRow?.year).toBe(2025);
+    expect(got.compared).toBe('Improvements + Land Market 125,670');
+    expect(got.years).toMatch(/newest year with values 2026/);
+  });
+  it('matches an appraised value to the Appraised column, printed without $', () => {
+    expect(pageValue(bcad, 125_670, 2025, 'appraised').hasValue).toBe(true);
+  });
+  it('still fails a value that is only in another year', () => {
+    expect(pageValue(bcad, 129_530, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(bcad, 127_410, 2025, 'market').hasValue).toBe(false);
+  });
+  it('does not take a digit run inside a larger figure as a match', () => {
+    expect(pageValue(bcad, 25_670, 2025, 'market').hasValue).toBe(false);
+  });
+  it('fails when the requested year has no row, even if the value is elsewhere on the page', () => {
+    const got = pageValue(bcad, 127_410, 2023, 'market');
+    expect(got.hasValue).toBe(false);
+    expect(got.compared).toBe('no 2023 row');
+    expect(pageValue(`TOTAL VALUE: $125,670 ${header}`, 125_670, 2025, 'market').hasValue).toBe(false);
+  });
+  it('does not accept a value that only equals the land or improvements cell', () => {
+    expect(pageValue(bcad, 60_100, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(bcad, 65_570, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(bcad, 60_100, 2025, 'appraised').hasValue).toBe(false);
+  });
+  it('does not treat Appraised or Assessed as market value', () => {
+    // Homestead with a cap: market 300,000, appraised 280,000, assessed 280,000.
+    const capped = `${header} 2025 $200,000 $100,000 0 280,000 $20,000 $280,000`;
+    expect(pageValue(capped, 280_000, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(capped, 300_000, 2025, 'market').hasValue).toBe(true);
+    expect(pageValue(capped, 280_000, 2025, 'appraised').hasValue).toBe(true);
+  });
+  it('counts ag market inside Land Market (BCAD 175721, read raw 2026-10-19)', () => {
+    // SARA 2025: Imprv_hstd 138,060, Land_hstd 18,430, AG_Market 249,510, AG_Use 600, Market_val 406,000.
+    const ag = `${header} 2026 $130,000 $255,000 500 148,040 $0 $148,040 2025 $138,060 $267,940 600 157,090 $0 $157,090 2024 $170,020 $235,980 880 187,130 $14,658 $172,472`;
+    expect(pageValue(ag, 406_000, 2025, 'market').hasValue).toBe(true);
+    // Appraised uses the ag use value (406,000 - 249,510 + 600) and must not pass as market.
+    expect(pageValue(ag, 157_090, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(ag, 157_090, 2025, 'appraised').hasValue).toBe(true);
+  });
+  it('fails without the column header or with an unknown basis', () => {
+    const row = '2025 $65,570 $60,100 0 125,670 $0 $125,670';
+    expect(pageValue(row, 125_670, 2025, 'market').compared).toBe('no column header');
+    expect(pageValue(bcad, 125_670, 2025, null).hasValue).toBe(false);
   });
 });

@@ -18,6 +18,9 @@ on:
         description: Read again even where the source hasn't changed
         type: boolean
         default: false
+      compare_accounts:
+        description: Only compare these accounts (comma-separated) with the district's own pages; collects nothing
+        default: ''
   push:
     branches: [claude/project-thread-84a4bw]
     paths: ['backend/src/appraisal/**', 'backend/src/bin/appraisal-*.ts', '.github/workflows/appraisal-lookup.yml']
@@ -31,7 +34,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A field-by-field comparison of named accounts against the district's own pages; reads no roll, saves no cache.
+  compare:
+    if: inputs.compare_accounts != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: mkdir -p ../.appraisal-cache && npm run --silent appraisal -- compare --districts "${{ inputs.districts || 'bexar' }}" --accounts "${{ inputs.compare_accounts }}" --cache ../.appraisal-cache
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appraisal-compare-${{ github.run_id }}
+          path: .appraisal-cache/compare.json
+          retention-days: 14
+
   collect:
+    if: inputs.compare_accounts == ''
     runs-on: ubuntu-latest
     timeout-minutes: 150
     defaults:

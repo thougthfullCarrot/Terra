@@ -52,3 +52,8 @@ export interface AppraisalRecord {
 
 export const OWNER_CAUTION = 'Owner of record on the appraisal roll; it may not be the beneficial owner.';
 export const VALUE_CAUTION = 'Appraised for property tax; not a sale price or market value.';
+/** District wording that replaces VALUE_CAUTION, shared with Raw Land so both features say the same thing (Rod, 2026-10-18). */
+export const DISTRICT_VALUE_CAUTION: Record<string, string> = {
+  bexar: 'BCAD tax-roll market value (2025), not an asking price or current market estimate.'
+};
+export const valueCaution = (district: string): string => DISTRICT_VALUE_CAUTION[district] ?? VALUE_CAUTION;
