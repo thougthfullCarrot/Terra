@@ -18,7 +18,7 @@
   --chip: var(--sunk);
   --chip-hover: oklch(0.95 0.004 80);
   --acc-l: 0.57;
-  --acc-h: 42;
+  --acc-h: 265;
   --tint-a: 0.08;
   --accent: oklch(var(--acc-l) 0.15 var(--acc-h));
   --accent-hover: oklch(calc(var(--acc-l) - 0.06) 0.15 var(--acc-h));
@@ -51,16 +51,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: oklch(0.16 0.004 60);
-    --surface: oklch(0.16 0.004 60);
-    --sunk: oklch(0.2 0.004 60);
+    --bg: oklch(0.15 0.008 50);
+    --surface: oklch(0.175 0.009 50);
+    --sunk: oklch(0.2 0.01 50);
     --ink: oklch(0.95 0.003 80);
     --ink2: oklch(0.8 0.003 80);
     --muted: oklch(0.66 0.003 80);
-    --line: oklch(0.95 0.003 80 / 0.12);
+    --line: oklch(1 0 0 / 0.09);
     --line2: oklch(0.95 0.003 80 / 0.07);
     --chip-hover: oklch(0.24 0.004 60);
-    --acc-l: 0.72;
+    --acc-l: 0.7;
     --tint-a: 0.14;
     --on-tint: oklch(0.8 0.1 var(--acc-h));
     --on-accent: oklch(0.16 0.01 60);
@@ -77,16 +77,16 @@
 }
 
 :root[data-theme='dark'] {
-  --bg: oklch(0.16 0.004 60);
-  --surface: oklch(0.16 0.004 60);
-  --sunk: oklch(0.2 0.004 60);
+  --bg: oklch(0.15 0.008 50);
+  --surface: oklch(0.175 0.009 50);
+  --sunk: oklch(0.2 0.01 50);
   --ink: oklch(0.95 0.003 80);
   --ink2: oklch(0.8 0.003 80);
   --muted: oklch(0.66 0.003 80);
-  --line: oklch(0.95 0.003 80 / 0.12);
+  --line: oklch(1 0 0 / 0.09);
   --line2: oklch(0.95 0.003 80 / 0.07);
   --chip-hover: oklch(0.24 0.004 60);
-  --acc-l: 0.72;
+  --acc-l: 0.7;
   --tint-a: 0.14;
   --on-tint: oklch(0.8 0.1 var(--acc-h));
   --on-accent: oklch(0.16 0.01 60);
@@ -7876,9 +7876,9 @@ nav.market-tools a.chip[aria-current='page'] {
   height: 11px;
 }
 
-/* Map pins: one size for every project, a solid disc with a contrasting border and a soft shadow. */
+/* Map pins (Halo): a dark disc with a ring and glyph in the category color. */
 .devx-pin-icon,
-.devx-cluster-icon {
+.devx-speck-icon {
   display: grid;
   place-items: center;
   background: none;
@@ -7886,8 +7886,12 @@ nav.market-tools a.chip[aria-current='page'] {
   border-radius: 50%;
 }
 
-.devx-pin-icon:focus-visible,
-.devx-cluster-icon:focus-visible {
+.devx-pill-icon {
+  display: block;
+  border-radius: 999px;
+}
+
+.devx-pin-icon:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -2px;
 }
@@ -7897,60 +7901,131 @@ nav.market-tools a.chip[aria-current='page'] {
   place-items: center;
   width: 30px;
   height: 30px;
-  border: 2px solid #ffffff;
+  color: color-mix(in srgb, var(--cat) 82%, #ffffff);
+  background: radial-gradient(circle, color-mix(in srgb, var(--cat) 22%, #16140f) 0%, #16140f 75%);
+  border: 2px solid var(--cat);
   border-radius: 50%;
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.35), 0 0 0 1px oklch(0 0 0 / 0.18);
+  box-shadow: 0 2px 6px oklch(0 0 0 / 0.45);
   transition: transform 0.12s ease;
 }
 
 .devx-pin svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
-/* Approximate: a paler disc and a dashed dark border, so it never reads as an exact site. */
+/* Approximate: a dashed, paler ring, so it never reads as an exact site. */
 .devx-pin.approx {
-  background: color-mix(in srgb, var(--cat) 58%, #ffffff);
-  border: 2px dashed #1b1917;
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
-}
-
-.devx-pin.approx.devx-cat:not(.devx-glyph-dark) {
-  --glyph: #1b1917;
+  color: color-mix(in srgb, var(--cat) 55%, #ffffff);
+  border: 2px dashed color-mix(in srgb, var(--cat) 60%, #ffffff);
 }
 
 .devx-pin-icon.lit .devx-pin {
   transform: scale(1.15);
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #1b1917, 0 2px 6px oklch(0 0 0 / 0.4);
+  box-shadow: 0 0 0 2px #16140f, 0 0 0 4px var(--cat), 0 2px 8px oklch(0 0 0 / 0.5);
 }
 
 .devx-pin-icon.chosen .devx-pin {
   transform: scale(1.25);
-  box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px var(--accent), 0 3px 8px oklch(0 0 0 / 0.45);
+  box-shadow: 0 0 0 3px #16140f, 0 0 0 6px var(--accent), 0 3px 10px oklch(0 0 0 / 0.55);
 }
 
-.devx-cluster {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  background: var(--ring, #9b958d);
+/* Price pills: the Halo disc and the filed cost, with a small tail onto the spot. */
+.devx-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 2px 11px 2px 2px;
+  font: 600 12.5px var(--ui);
+  color: #f3efe8;
+  white-space: nowrap;
+  background: #16140f;
+  border: 1.5px solid var(--cat);
+  border-radius: 999px;
+  box-shadow: 0 2px 7px oklch(0 0 0 / 0.45);
+  transition: transform 0.12s ease;
+  transform-origin: 15px 100%;
+}
+
+.devx-pill::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  bottom: -6px;
+  width: 8px;
+  height: 8px;
+  background: #16140f;
+  border-right: 1.5px solid var(--cat);
+  border-bottom: 1.5px solid var(--cat);
+  transform: rotate(45deg);
+}
+
+.devx-pill .devx-pin {
+  width: 24px;
+  height: 24px;
+  border-width: 1.5px;
+  box-shadow: none;
+}
+
+.devx-pill .devx-pin svg {
+  width: 13px;
+  height: 13px;
+}
+
+.devx-pill.approx {
+  border-style: dashed;
+}
+
+.devx-pill-icon.lit .devx-pill {
+  transform: scale(1.08);
+  background: #2a2620;
+}
+
+.devx-pill-icon.chosen .devx-pill {
+  color: #16140f;
+  background: #f3efe8;
+  box-shadow: 0 0 0 3px var(--accent), 0 3px 10px oklch(0 0 0 / 0.55);
+}
+
+.devx-pill-icon.chosen .devx-pill::after {
+  background: #f3efe8;
+}
+
+.devx-pill-icon.lit .devx-pin,
+.devx-pill-icon.chosen .devx-pin {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Specks: projects waiting for room to show their pill. */
+.devx-speck {
+  width: 7px;
+  height: 7px;
+  background: var(--cat);
   border-radius: 50%;
-  box-shadow: 0 0 0 2px #ffffff, 0 2px 5px oklch(0 0 0 / 0.35);
+  opacity: 0.75;
+  box-shadow: 0 0 0 1px oklch(0 0 0 / 0.5);
 }
 
-.devx-cluster b {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  font: 600 13px var(--ui);
-  color: #1b1917;
-  background: #ffffff;
-  border-radius: 50%;
+.devx-speck.approx {
+  background: none;
+  border: 1.5px dashed var(--cat);
 }
 
-.devx-cluster-icon.lit .devx-cluster {
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #1b1917, 0 2px 6px oklch(0 0 0 / 0.4);
+.devx-speck-icon.lit .devx-speck {
+  opacity: 1;
+  transform: scale(1.8);
+}
+
+/* Night basemap: OpenStreetMap tiles darkened in the browser, no extra tile service. */
+.devx .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.92) saturate(0.6);
+}
+
+.devx .leaflet-container {
+  background: #16140f;
 }
 
 .devx .leaflet-overlay-pane .devx-leader {
@@ -7982,7 +8057,6 @@ nav.market-tools a.chip[aria-current='page'] {
   gap: 8px;
 }
 
-.devx-key-cluster,
 .devx-key-approx {
   flex: none;
   display: grid;
@@ -7992,14 +8066,23 @@ nav.market-tools a.chip[aria-current='page'] {
   border-radius: 50%;
 }
 
-.devx-key-cluster {
-  font: 600 10px var(--ui);
-  color: var(--ink);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 3px var(--muted);
+.devx-key-pill {
+  flex: none;
+  padding: 2px 8px;
+  font: 600 10.5px var(--ui);
+  color: #f3efe8;
+  background: #16140f;
+  border: 1.5px solid var(--muted);
+  border-radius: 999px;
 }
 
 .devx-key-approx {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   background: var(--sunk);
   border: 2px dashed var(--ink);
 }
@@ -9837,4 +9920,333 @@ select option:disabled {
 
 .deal-none p {
   margin: 0 0 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   Terrain landing (concept D): a dark band with contour lines (terrain.js),
+   a cursor light, a serif headline and a grid of live counts. Signed out only.
+   --------------------------------------------------------------------------- */
+
+body:has(#gate:not([hidden])) {
+  overflow-x: clip;
+}
+
+#gate.hero {
+  --t-bg: oklch(0.17 0.01 50);
+  --t-ink: oklch(0.95 0.01 80);
+  --t-soft: oklch(0.95 0.01 80 / 0.7);
+  --t-faint: oklch(0.95 0.01 80 / 0.55);
+  --t-box: oklch(1 0 0 / 0.045);
+  --t-edge: oklch(1 0 0 / 0.09);
+  --t-acc: oklch(0.68 0.14 265);
+  --terrain-major: oklch(0.68 0.14 265 / 0.55);
+  --terrain-minor: oklch(0.95 0.01 80 / 0.13);
+  --mx: 50%;
+  --my: 30%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: -40px calc(50% - 50vw) 0;
+  padding: 88px max(16px, calc(50vw - 620px)) 72px;
+  color: var(--t-ink);
+  background: var(--t-bg);
+}
+
+#gate.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(440px circle at var(--mx) var(--my), oklch(0.68 0.14 265 / 0.26), transparent 70%);
+}
+
+.terrain-topo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+#gate .eyebrow {
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
+  color: var(--t-acc);
+}
+
+#gate h1 {
+  font-weight: 600;
+  font-size: clamp(42px, 5.8vw, 78px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+#gate .lede {
+  color: var(--t-soft);
+}
+
+#gate .pill-form {
+  background: oklch(1 0 0 / 0.06);
+  border-color: oklch(1 0 0 / 0.16);
+}
+
+#gate .pill-form input {
+  color: var(--t-ink);
+}
+
+#gate .pill-form input::placeholder {
+  color: var(--t-faint);
+}
+
+#gate .primary {
+  color: oklch(0.16 0.01 60);
+  background: var(--t-acc);
+}
+
+#gate .hero-note,
+#gate .meta {
+  color: var(--t-faint);
+}
+
+#gate .hero-note .tour-link {
+  color: var(--t-acc);
+}
+
+.terrain-bento {
+  flex: 1 1 380px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 500px;
+}
+
+.bento-box {
+  --bx: 50%;
+  --by: 50%;
+  --rx: 0deg;
+  --ry: 0deg;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  padding: 16px;
+  background: var(--t-box);
+  border: 1px solid var(--t-edge);
+  border-radius: 14px;
+  transition: border-color 0.25s var(--ease), transform 0.25s var(--ease);
+}
+
+.bento-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(220px circle at var(--bx) var(--by), oklch(1 0 0 / 0.1), transparent 65%);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+}
+
+.bento-box:hover {
+  border-color: oklch(0.68 0.14 265 / 0.6);
+  transform: perspective(700px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-2px);
+}
+
+.bento-box:hover::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bento-box:hover {
+    transform: none;
+  }
+}
+
+.bento-box.wide {
+  grid-column: 1 / -1;
+}
+
+.bento-box p {
+  margin: 0;
+}
+
+.bento-k {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t-faint);
+}
+
+.bento-v {
+  margin-top: 6px !important;
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.bento-s {
+  margin-top: 2px !important;
+  font-size: 13px;
+  color: var(--t-soft);
+}
+
+.bento-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bento-list li {
+  padding: 4px 10px;
+  font-size: 13px;
+  border: 1px solid var(--t-edge);
+  border-radius: 999px;
+}
+
+.brand-mark {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent);
+}
+
+.brand-mark::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1.5px solid var(--on-accent);
+  border-top-width: 4px;
+  border-radius: 2px;
+}
+
+.brand {
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  #gate.hero {
+    margin-top: -24px;
+    padding-top: 48px;
+    padding-bottom: 48px;
+  }
+
+  .terrain-bento {
+    flex-basis: 100%;
+  }
+
+  .bento-v {
+    font-size: 24px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Night console (signed in): a Terrain band of contour lines behind the top of
+   each page, a cursor light, cards that glow and lean toward the cursor, and
+   compact rows. Dark is the default theme; light still works from the toggle.
+   --------------------------------------------------------------------------- */
+
+#main {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-topo {
+  position: absolute;
+  top: 0;
+  left: calc(50% - 50vw);
+  z-index: -1;
+  width: 100vw;
+  height: 320px;
+  pointer-events: none;
+  opacity: 0.55;
+  --terrain-major: oklch(var(--acc-l) 0.14 var(--acc-h) / 0.5);
+  --terrain-minor: oklch(0.95 0.01 80 / 0.1);
+  -webkit-mask-image: linear-gradient(#000 40%, transparent);
+  mask-image: linear-gradient(#000 40%, transparent);
+}
+
+:root[data-theme='light'] .app-topo {
+  --terrain-minor: oklch(0.19 0.005 60 / 0.08);
+}
+
+body:has(#gate:not([hidden])) .app-topo {
+  display: none;
+}
+
+#main::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(50% - 50vw);
+  z-index: -1;
+  width: 100vw;
+  height: 320px;
+  pointer-events: none;
+  background: radial-gradient(380px circle at var(--mx, -999px) var(--my, -999px), oklch(var(--acc-l) 0.14 var(--acc-h) / 0.18), transparent 70%);
+}
+
+body:has(#gate:not([hidden])) #main::before {
+  display: none;
+}
+
+.page-title,
+.section-title {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.page-count,
+.tab-count,
+.stat-value {
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  --bx: 50%;
+  --by: 50%;
+  --rx: 0deg;
+  --ry: 0deg;
+  overflow: hidden;
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(220px circle at var(--bx) var(--by), oklch(var(--acc-l) 0.14 var(--acc-h) / 0.13), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+}
+
+.card:hover::after {
+  opacity: 1;
+}
+
+.list > .card:hover {
+  border-color: oklch(var(--acc-l) 0.14 var(--acc-h) / 0.6);
+  transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-1px);
+}
+
+.list {
+  gap: 6px;
+}
+
+.list > .card {
+  padding: 12px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list > .card:hover {
+    transform: none;
+  }
 }

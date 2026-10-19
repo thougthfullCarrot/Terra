@@ -351,28 +351,28 @@ for (const vp of [
   await page.locator('.dev-card').scrollIntoViewIfNeeded();
   // Click a pin that is actually on screen and on top: the first one in the
   // document can sit outside the phone's map view or under another pin.
-  // Clusters hold exactly the filtered pins, and a project inside a cluster opens from the list.
+  // Price pills and specks hold no more than the filtered pins, and a project shown only as a speck opens from the list.
   await setF({});
   await page.waitForTimeout(400);
   const grouped = await page.evaluate(() => {
     const map = document.querySelector('.dev-map');
     const icons = new Set([...document.querySelectorAll('.devx-pin-icon')].map((n) => n.dataset.id));
-    const inClusters = [...document.querySelectorAll('.devx-cluster')].reduce((n, c) => n + Number(c.dataset.count), 0);
-    // A located project with no icon of its own sits in a cluster (or off screen).
+    const inClusters = Number(map.dataset.specks);
+    // A located project with no icon of its own is a speck (or off screen).
     const row = [...document.querySelectorAll('.dev-list .dev-item')].find((r) => !r.querySelector('.dev-off') && !icons.has(r.dataset.id));
-    return { clusters: Number(map.dataset.clusters), inClusters, onPage: inClusters + icons.size, drawn: Number(map.dataset.drawn), id: row?.dataset.id, name: row?.querySelector('.dev-name').textContent };
+    return { clusters: Number(map.dataset.specks), inClusters, onPage: inClusters + icons.size, drawn: Number(map.dataset.drawn), id: row?.dataset.id, name: row?.querySelector('.dev-name').textContent };
   });
-  log(`${v}: clusters and icons on the page hold no more than the ${grouped.drawn} pins`, grouped.clusters > 0 && grouped.onPage <= grouped.drawn, `${grouped.clusters} clusters holding ${grouped.inClusters}, ${grouped.onPage} on the page`);
+  log(`${v}: price pills and specks on the page hold no more than the ${grouped.drawn} pins`, grouped.clusters > 0 && grouped.onPage <= grouped.drawn, `${grouped.clusters} specks, ${grouped.onPage} on the page`);
   if (grouped.id) {
     await page.locator(`.dev-item[data-id="${grouped.id}"] .dev-pick`).first().click();
     await page.waitForTimeout(1200);
     const opened = await page.evaluate((id) => ({ title: document.querySelector('.devx-panel:not([hidden]) .dev-pop-title')?.textContent, chosen: document.querySelector('.devx-pin-icon.chosen')?.dataset.id }), grouped.id);
-    log(`${v}: picking a clustered project in the list opens it and draws its own highlighted icon`, opened.title === grouped.name && opened.chosen === grouped.id, `"${grouped.name}"`);
+    log(`${v}: picking a speck project in the list opens it and draws its own highlighted icon`, opened.title === grouped.name && opened.chosen === grouped.id, `"${grouped.name}"`);
     await page.locator('.devx-close').click();
-  } else log(`${v}: picking a clustered project in the list opens it and draws its own highlighted icon`, false, 'no clustered project found');
+  } else log(`${v}: picking a speck project in the list opens it and draws its own highlighted icon`, false, 'no speck project found');
   await setF({ cost: '25to100' });
   await page.locator('.dev-map').scrollIntoViewIfNeeded();
-  // Nearby pins share a counted cluster until zoomed in, so click clusters until a project icon is on screen.
+  // The biggest projects are price pills; click specks to zoom in until a project icon is on screen.
   const onTop = (selector) =>
     page.evaluate((selector) => {
       const box = document.querySelector('.dev-map').getBoundingClientRect();
@@ -386,13 +386,14 @@ for (const vp of [
     }, selector);
   let spot = await onTop('.devx-pin-icon');
   for (let i = 0; !spot && i < 8; i++) {
-    const cluster = await onTop('.devx-cluster-icon');
-    if (!cluster) break;
-    await page.mouse.click(cluster.x, cluster.y);
+    // Specks are drawn on a canvas, so zoom in with the map's own button instead.
+    const plus = page.locator('.dev-map .leaflet-control-zoom-in');
+    if (!(await plus.count())) break;
+    await plus.click();
     await page.waitForTimeout(800);
     spot = await onTop('.devx-pin-icon');
   }
-  log(`${v}: clicking clusters zooms in to individual category icons`, Boolean(spot));
+  log(`${v}: price pills or zoomed-in category icons are on screen to click`, Boolean(spot));
   console.log(`  ${v}: clicking the pin at ${spot ? `${Math.round(spot.x)},${Math.round(spot.y)}` : 'none on screen; first in page'}`);
   if (spot) await page.mouse.click(spot.x, spot.y);
   else await page.locator('.dev-map .devx-pin-icon').first().click({ force: true });
