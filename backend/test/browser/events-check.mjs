@@ -48,6 +48,7 @@ function expectedWhen(e) {
   const t = (iso) => local(iso, tz, { hour: 'numeric', minute: '2-digit' });
   const d = (iso) => local(iso, tz, { month: 'short', day: 'numeric' });
   if (multi(e)) return midnight(e.start, tz) ? `${d(e.start)} – ${d(e.end)}` : `${d(e.start)} – ${d(e.end)} · starts ${t(e.start)} ${label}`;
+  if (e.timeUnconfirmed) return 'Time not confirmed';
   if (midnight(e.start, tz)) return e.dateOnly ? 'Time not listed' : 'All day';
   const end = e.end && !midnight(e.end, tz) && new Date(e.end) > new Date(e.start) ? ` – ${t(e.end)}` : '';
   return `${t(e.start)}${end} ${label}`;
@@ -120,9 +121,11 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 if (shots) await mkdir(shots, { recursive: true });
 for (const vp of [
   { name: 'desktop', width: 1366, height: 1000 },
-  { name: 'phone', width: 390, height: 844, mobile: true }
+  { name: 'phone', width: 390, height: 844, mobile: true },
+  // 200% browser zoom on a 1366px window: the page lays out at 683 CSS px.
+  { name: 'zoom200', width: 683, height: 500, scale: 2 }
 ]) {
-  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.mobile, hasTouch: !!vp.mobile, acceptDownloads: true });
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.mobile, hasTouch: !!vp.mobile, deviceScaleFactor: vp.scale ?? 1, acceptDownloads: true });
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const page = await ctx.newPage();
   const errors = [];
@@ -133,7 +136,7 @@ for (const vp of [
     const city = e.format === 'virtual' ? 'Online' : e.city;
     await page.goto(`${base}#events&city=${encodeURIComponent(city)}`);
     await page.waitForSelector('#e-list .event-card, #e-list .state', { timeout: 20000 });
-    const card = page.locator('.event-card', { has: page.locator('.event-title', { hasText: e.title }) }).filter({ has: page.locator(`time[datetime="${e.start}"]`) }).first();
+    const card = page.locator('.event-card', { has: page.locator('.event-title', { hasText: e.title }) }).filter({ has: page.locator(`time[datetime="${e.sessions ? next(e).start : e.start}"]`) }).first();
     if (!(await card.count())) {
       fail(`${vp.name} ${shape}: card for "${e.title}" not shown under ${city}`);
       continue;
@@ -193,6 +196,21 @@ for (const vp of [
       .slice(0, 3)
       .map((n) => `${n.tagName.toLowerCase()}.${[...n.classList].join('.')} "${(n.textContent || '').trim().slice(0, 50)}"`);
   });
+  // Date blocks: month, day and weekday sit inside the card's padding, none clipped.
+  const clipped = await page.evaluate(() =>
+    [...document.querySelectorAll('#e-list .event-card')].flatMap((card) => {
+      const c = card.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(card).paddingLeft) + parseFloat(getComputedStyle(card).borderLeftWidth);
+      return [...card.querySelectorAll('.date-block > *')]
+        .filter((k) => { const q = k.getBoundingClientRect(); return q.left < c.left + pad - 0.5 || q.right > c.right || k.scrollWidth > k.clientWidth + 1 || pad < 8; })
+        .map((k) => `"${k.textContent}" in "${card.querySelector('.event-title')?.textContent?.slice(0, 40)}"`);
+    })
+  );
+  check(!clipped.length, `${vp.name}: every date block clear of the card edge${clipped.length ? ` (clipped: ${clipped.slice(0, 3).join(', ')})` : ''}`);
+  // Order: the dates the cards show never go backwards (a course shows and sorts by its next session).
+  const shown = await page.$$eval('#e-list .event-card time.date-block', (ts) => ts.map((t) => t.dateTime));
+  const back = shown.findIndex((d, i) => i && new Date(d) < new Date(shown[i - 1]));
+  check(back < 0, `${vp.name}: ${shown.length} cards in the order of the dates they show${back < 0 ? '' : ` (${shown[back - 1]} before ${shown[back]})`}`);
   check(overflow <= 1, `${vp.name}: no sideways scroll (${overflow}px)${wide.length ? ` widest: ${wide.join(' | ')}` : ''}`);
   await page.locator('.events-report summary').click();
   check((await page.locator('.events-report-list li').count()) === (file.report ?? []).length, `${vp.name}: collection report lists every market`);

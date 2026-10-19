@@ -7,7 +7,7 @@ import { stateBox } from './labels.js';
 import {
   canExport,
   dateParts,
-  nextSession,
+  occurrenceStart,
   eventBadges,
   eventCounts,
   eventIcs,
@@ -98,7 +98,7 @@ function render() {
   } else {
     let i = 0;
     $('e-list').replaceChildren(
-      ...groupByMonth(events).map((group) => {
+      ...groupByMonth(events, now).map((group) => {
         const section = el('section', 'events-month');
         section.append(el('h3', 'eyebrow events-month-title', group.month), ...group.events.map((e) => item(e, i++)));
         return section;
@@ -151,11 +151,12 @@ function item(event, index) {
   const card = el('article', 'card event-card');
   card.style.setProperty('--i', String(Math.min(index, 20)));
   // A course's date block shows its next session.
-  const parts = dateParts(nextSession(event)?.start ?? event.start, zoneOf(event));
+  const shown = occurrenceStart(event);
+  const parts = dateParts(shown, zoneOf(event));
   if (parts) card.dataset.day = parts.ymd;
 
   const block = el('time', 'date-block');
-  block.dateTime = event.start;
+  block.dateTime = shown;
   if (parts) block.append(el('small', '', parts.month), el('b', '', parts.day), el('span', '', parts.weekday));
 
   const body = el('div', 'event-body');
@@ -233,7 +234,7 @@ function download(event) {
 /** The mini month calendar beside the list: days with an event are marked and jump to it. */
 function drawCalendar(events) {
   const side = $('e-side');
-  const day = (e) => dateParts(e.start, zoneOf(e))?.ymd;
+  const day = (e) => dateParts(occurrenceStart(e), zoneOf(e))?.ymd;
   const months = [...new Set(events.map((e) => day(e)?.slice(0, 7)).filter(Boolean))];
   side.hidden = !months.length;
   if (!months.length) return;
