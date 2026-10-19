@@ -112,6 +112,12 @@ describe('jurisdiction', () => {
   it('only the explicit Unincorporated polygon makes land unincorporated, even where OCL is absent', () => { expect(st(sq(X + 41 * U, Y, U)).status).toBe(LABELS.unincorporated); expect(st(sq(X + 45 * U, Y + 5 * U, U)).status).toBe(LABELS.unincorporated); });
   it('a gap outside every polygon stays unknown, never inferred unincorporated', () => { expect(st(sq(X + 32 * U, Y, U)).status).toBe(LABELS.jurisdictionUnknown); expect(st(sq(X + 80 * U, Y, U)).status).toBe(LABELS.jurisdictionUnknown); });
   it('a parcel straddling the Unincorporated polygon and a gap is unincorporated with an unknown-part note', () => { const r = st(sq(X + 49.5 * U, Y, U)); expect(r.status).toBe(LABELS.unincorporated); expect(r.note).toMatch(/outside every county boundary polygon/); });
+  it('a MultiPolygon Unincorporated area counts in each of its parts', () => {
+    const mp: Poly = { type: 'Feature', properties: { city: 'Unincorporated' }, geometry: { type: 'MultiPolygon', coordinates: [sq(X + 100 * U, Y, 2 * U).geometry.coordinates as number[][][], sq(X + 110 * U, Y, 2 * U).geometry.coordinates as number[][][]] } };
+    const ix = new PolygonIndex([mp]);
+    expect(zoningStatus('complete', cityShares(sq(X + 110.5 * U, Y + 0.5 * U, U), ix), null).status).toBe(LABELS.unincorporated);
+    expect(zoningStatus('complete', cityShares(sq(X + 105 * U, Y, U), ix), null).status).toBe(LABELS.jurisdictionUnknown);
+  });
   it('military polygons keep their own classification', () => expect(st(sq(X + 61 * U, Y + 21 * U, U)).status).toBe('Lackland AFB: military installation, no city zoning'));
   it('inside a non-integrated city shows that city status, not unincorporated', () => expect(st(sq(X + 21 * U, Y, U)).status).toBe('Alamo Heights: published as PDF only'));
   it('inside San Antonio with no zoning is "not found", not unincorporated', () => expect(st(sq(X + 2 * U, Y, U), new PolygonIndex([])).status).toBe(LABELS.zoningNotFound));
