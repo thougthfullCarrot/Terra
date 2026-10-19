@@ -36,18 +36,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif&family=Geist+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
     <script type="module" src="app.js"></script>
+    <script type="module" src="terrain.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="appbar">
       <div class="appbar-inner">
         <a class="brand" href="./" aria-label="Terra home">
-          <span class="brand-name">terra</span>
+          <span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Terra</span>
           <span class="brand-tag">Texas CRE</span>
         </a>
         <!-- Signed out: jumps to the landing sections. -->
@@ -86,10 +87,11 @@
     <main class="page" id="main" tabindex="-1">
       <!-- Shown when accounts are configured and nobody is signed in: the landing hero with the sign-in form. -->
       <section id="gate" class="hero" hidden aria-labelledby="gate-title">
+        <canvas class="terrain-topo" id="terrain-topo" aria-hidden="true"></canvas>
         <div class="hero-copy">
           <p class="eyebrow accent">Texas · commercial real estate · entry level</p>
-          <h1 id="gate-title">Your first job in Texas commercial real estate.</h1>
-          <p class="lede">Internships and roles asking for 0-2 years, read straight from firm career boards every two hours.</p>
+          <h1 id="gate-title">Learn the ground before you work it.</h1>
+          <p class="lede">Your first job in Texas commercial real estate: internships and roles asking for 0-2 years, read straight from firm career boards every two hours, with the markets and projects behind them.</p>
           <form id="signin" class="signin pill-form" novalidate>
             <label>
               <span class="visually-hidden">Email</span>
@@ -108,19 +110,13 @@
           <p class="hero-note"><span id="gate-lede">Terra is free for students. Sign in with your college (.edu) email.</span> <button type="button" class="link tour-link" id="pitch-open">New here? Take the 1-minute tour</button></p>
           <p class="meta" id="teaser" aria-live="polite"></p>
         </div>
-        <aside class="hero-aside" aria-label="Example job card">
-          <div class="hero-aside-head"><span>What you'll see</span><span>Example</span></div>
-          <article class="sample-job">
-            <div class="sample-top"><span class="accent">Best match · Austin · ARGUS · senior</span><b class="sample-score">94<small>%</small></b></div>
-            <div class="sample-head">
-              <span class="monogram" aria-hidden="true">AF</span>
-              <div><h3>Acquisitions Analyst Intern</h3><p class="muted">Example firm · Austin</p></div>
-            </div>
-            <ul class="chips"><li class="kind">Internship</li><li>Investment</li><li class="pay">$25/hr</li></ul>
-            <div class="sample-foot"><span class="muted">Posted today</span><span class="accent">Apply at the firm →</span></div>
-          </article>
-          <p class="hint">An example for illustration. Sign in to see the real jobs.</p>
-        </aside>
+        <div class="terrain-bento" aria-label="Terra right now">
+          <div class="bento-box"><p class="bento-k">Open roles</p><p class="bento-v" id="bento-roles">—</p><p class="bento-s" id="bento-updated">Entry level, 0-2 years</p></div>
+          <div class="bento-box"><p class="bento-k">Firms hiring</p><p class="bento-v" id="bento-firms">—</p><p class="bento-s">Read from their own career boards</p></div>
+          <div class="bento-box"><p class="bento-k">Texas markets</p><p class="bento-v">11</p><p class="bento-s">Rents, vacancy, permits and projects</p></div>
+          <div class="bento-box"><p class="bento-k">For students</p><p class="bento-v">$0</p><p class="bento-s">With a college (.edu) email</p></div>
+          <div class="bento-box wide" id="bento-top-box" hidden><p class="bento-k">Hiring most right now</p><ol class="bento-list" id="bento-top"></ol></div>
+        </div>
       </section>
 
       <!-- Signed out: what Terra is, shown under the sign-in form. -->

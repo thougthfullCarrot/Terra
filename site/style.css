@@ -9838,3 +9838,201 @@ select option:disabled {
 .deal-none p {
   margin: 0 0 10px;
 }
+
+/* ---------------------------------------------------------------------------
+   Terrain landing (concept D): a dark band with contour lines (terrain.js),
+   a cursor light, a serif headline and a grid of live counts. Signed out only.
+   --------------------------------------------------------------------------- */
+
+body:has(#gate:not([hidden])) {
+  overflow-x: clip;
+}
+
+#gate.hero {
+  --t-bg: oklch(0.17 0.01 50);
+  --t-ink: oklch(0.95 0.01 80);
+  --t-soft: oklch(0.95 0.01 80 / 0.7);
+  --t-faint: oklch(0.95 0.01 80 / 0.55);
+  --t-box: oklch(1 0 0 / 0.045);
+  --t-edge: oklch(1 0 0 / 0.09);
+  --t-acc: oklch(0.72 0.15 42);
+  --terrain-major: oklch(0.72 0.15 42 / 0.5);
+  --terrain-minor: oklch(0.95 0.01 80 / 0.13);
+  --mx: 50%;
+  --my: 30%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: -40px calc(50% - 50vw) 0;
+  padding: 88px max(16px, calc(50vw - 620px)) 72px;
+  color: var(--t-ink);
+  background: var(--t-bg);
+}
+
+#gate.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(440px circle at var(--mx) var(--my), oklch(0.72 0.15 42 / 0.22), transparent 70%);
+}
+
+.terrain-topo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+#gate .eyebrow {
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
+  color: var(--t-acc);
+}
+
+#gate h1 {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(46px, 6.6vw, 88px);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+#gate .lede {
+  color: var(--t-soft);
+}
+
+#gate .pill-form {
+  background: oklch(1 0 0 / 0.06);
+  border-color: oklch(1 0 0 / 0.16);
+}
+
+#gate .pill-form input {
+  color: var(--t-ink);
+}
+
+#gate .pill-form input::placeholder {
+  color: var(--t-faint);
+}
+
+#gate .primary {
+  color: oklch(0.16 0.01 60);
+  background: var(--t-acc);
+}
+
+#gate .hero-note,
+#gate .meta {
+  color: var(--t-faint);
+}
+
+#gate .hero-note .tour-link {
+  color: var(--t-acc);
+}
+
+.terrain-bento {
+  flex: 1 1 380px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 500px;
+}
+
+.bento-box {
+  min-width: 0;
+  padding: 16px;
+  background: var(--t-box);
+  border: 1px solid var(--t-edge);
+  border-radius: 14px;
+  transition: border-color 0.25s var(--ease);
+}
+
+.bento-box:hover {
+  border-color: oklch(0.72 0.15 42 / 0.55);
+}
+
+.bento-box.wide {
+  grid-column: 1 / -1;
+}
+
+.bento-box p {
+  margin: 0;
+}
+
+.bento-k {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t-faint);
+}
+
+.bento-v {
+  margin-top: 6px !important;
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.bento-s {
+  margin-top: 2px !important;
+  font-size: 13px;
+  color: var(--t-soft);
+}
+
+.bento-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bento-list li {
+  padding: 4px 10px;
+  font-size: 13px;
+  border: 1px solid var(--t-edge);
+  border-radius: 999px;
+}
+
+.brand-mark {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent);
+}
+
+.brand-mark::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1.5px solid var(--on-accent);
+  border-top-width: 4px;
+  border-radius: 2px;
+}
+
+.brand {
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  #gate.hero {
+    margin-top: -24px;
+    padding-top: 48px;
+    padding-bottom: 48px;
+  }
+
+  .terrain-bento {
+    flex-basis: 100%;
+  }
+
+  .bento-v {
+    font-size: 24px;
+  }
+}
