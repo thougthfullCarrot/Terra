@@ -152,6 +152,17 @@ for (const vp of [
     if (e.sessions) {
       check(await card.locator('.badge-status, .badge-topic', { hasText: /Course/ }).count() > 0 || (await card.innerText()).includes('Registration closed'), `${vp.name} course: labelled as a course (${e.enrollment})`);
       check(e.enrollment === 'open' || !(await card.locator('a', { hasText: 'Register' }).count()), `${vp.name} course: no Register link while ${e.enrollment}`);
+      // Month heading and mini calendar follow the same next-session date as the card.
+      const nd = ymd(next(e).start, zone(e));
+      const heading = await card.evaluate((n) => n.closest('.events-month')?.querySelector('.events-month-title')?.textContent ?? '');
+      const wantMonth = local(next(e).start, zone(e), { month: 'long', year: 'numeric' });
+      check(heading === wantMonth, `${vp.name} course: listed under "${heading}", the month of its next session (${wantMonth})`);
+      for (let i = 0; i < 12 && !(await page.locator(`#e-cal button[aria-label^="${nd}:"]`).count()); i++) {
+        const fwd = page.locator('#e-cal .cal-nav').last();
+        if (await fwd.isDisabled()) break;
+        await fwd.click();
+      }
+      check((await page.locator(`#e-cal button[aria-label^="${nd}:"]`).count()) > 0, `${vp.name} course: mini calendar marks ${nd}, its next session`);
       for (const c of e.conflicts ?? []) check((await card.innerText()).includes(c), `${vp.name} course: shows the page conflict "${c}"`);
     }
     const google = new URL(await card.locator('a', { hasText: 'Google Calendar' }).getAttribute('href'));
@@ -173,6 +184,25 @@ for (const vp of [
     await page.waitForSelector('#e-list .event-card', { timeout: 20000 });
     const card = page.locator('.event-card').filter({ has: page.locator(`time[datetime="${unverified.start}"]`) }).filter({ hasText: unverified.title }).first();
     check((await card.count()) && !(await card.locator('button', { hasText: /Add (to calendar|all sessions)/ }).count()), `${vp.name}: "${unverified.title}" (no session dates) offers no calendar export`);
+  }
+
+  // Times a page lists as TBD: the card says so and both exports keep the date with a note, no clock time.
+  for (const u of all.filter((x) => x.timeUnconfirmed).slice(0, 3)) {
+    await page.goto(`${base}#events&city=${encodeURIComponent(u.city)}`);
+    await page.waitForSelector('#e-list .event-card', { timeout: 20000 });
+    const card = page.locator('.event-card').filter({ has: page.locator(`time[datetime="${u.start}"]`) }).filter({ hasText: u.title }).first();
+    if (!(await card.count())) {
+      fail(`${vp.name}: card for "${u.title}" (time TBD) not shown`);
+      continue;
+    }
+    const day = ymd(u.start, zone(u)).replace(/-/g, '');
+    check((await card.locator('.event-where').innerText()).startsWith('Time not confirmed') && !/\b\d{1,2}:\d{2}\b/.test(await card.locator('.event-where').innerText()), `${vp.name}: "${u.title}" (${u.organizer}) reads "Time not confirmed"`);
+    const g = new URL(await card.locator('a', { hasText: 'Google Calendar' }).getAttribute('href'));
+    check(g.searchParams.get('dates').startsWith(`${day}/`) && /Time not confirmed/.test(g.searchParams.get('details')), `${vp.name}: "${u.title}" Google link ${g.searchParams.get('dates')}, notes the time is not confirmed`);
+    const [dl] = await Promise.all([page.waitForEvent('download'), card.locator('button', { hasText: 'Add to calendar' }).click()]);
+    const t = await readFile(await dl.path(), 'utf8');
+    check(t.includes(`DTSTART;VALUE=DATE:${day}\r\n`) && /Time not confirmed/.test(t), `${vp.name}: "${u.title}" .ics is date-only (${day}) and notes the time is not confirmed`);
+    check(!(await card.innerText()).includes('Moved from') && !(await card.innerText()).includes('Rescheduled'), `${vp.name}: "${u.title}" is not labelled as moved`);
   }
 
   // Empty markets: the sentence must match the report (unreadable vs nothing found).

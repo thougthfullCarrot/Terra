@@ -175,7 +175,8 @@ for (const [canvasId, hostId] of [['terrain-topo', 'gate'], ['app-topo', 'main']
   };
   host.addEventListener('pointermove', (event) => {
     // Touch and pen have no hover: no light left stranded where a finger lifted, and no lean.
-    if (event.pointerType !== 'mouse') return;
+    // Reduced motion: no light chasing the pointer either (the bands and cards stay still too).
+    if (event.pointerType !== 'mouse' || still) return;
     last = { x: event.clientX, y: event.clientY };
     place();
     lean(event);

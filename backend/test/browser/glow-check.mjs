@@ -90,6 +90,16 @@ await page.touchscreen.tap(120, 200);
 check(!(await glowAt(page)), 'phone: a tap leaves no cursor glow');
 await ctx.close();
 
+// Reduced motion: the light does not follow the pointer.
+const still = await browser.newContext({ viewport: { width: 1366, height: 900 }, reducedMotion: 'reduce' });
+await still.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+const quiet = await still.newPage();
+await quiet.goto(`${base}#events`);
+await quiet.waitForSelector('#main', { timeout: 20000 });
+await quiet.mouse.move(400, 120);
+check(!(await glowAt(quiet)), 'reduced motion: no glow follows the pointer');
+await still.close();
+
 await browser.close();
 server.close();
 console.log(failed ? `\n${failed} checks failed` : '\nAll checks passed');
