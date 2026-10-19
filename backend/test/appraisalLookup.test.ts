@@ -541,6 +541,14 @@ describe('account page value rows', async () => {
     expect(pageValue(capped, 300_000, 2025, 'market').hasValue).toBe(true);
     expect(pageValue(capped, 280_000, 2025, 'appraised').hasValue).toBe(true);
   });
+  it('counts ag market inside Land Market (BCAD 175721, read raw 2026-10-19)', () => {
+    // SARA 2025: Imprv_hstd 138,060, Land_hstd 18,430, AG_Market 249,510, AG_Use 600, Market_val 406,000.
+    const ag = `${header} 2026 $130,000 $255,000 500 148,040 $0 $148,040 2025 $138,060 $267,940 600 157,090 $0 $157,090 2024 $170,020 $235,980 880 187,130 $14,658 $172,472`;
+    expect(pageValue(ag, 406_000, 2025, 'market').hasValue).toBe(true);
+    // Appraised uses the ag use value (406,000 - 249,510 + 600) and must not pass as market.
+    expect(pageValue(ag, 157_090, 2025, 'market').hasValue).toBe(false);
+    expect(pageValue(ag, 157_090, 2025, 'appraised').hasValue).toBe(true);
+  });
   it('fails without the column header or with an unknown basis', () => {
     const row = '2025 $65,570 $60,100 0 125,670 $0 $125,670';
     expect(pageValue(row, 125_670, 2025, 'market').compared).toBe('no column header');
