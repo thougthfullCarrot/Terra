@@ -10250,3 +10250,29 @@ body:has(#gate:not([hidden])) #main::before {
     transform: none;
   }
 }
+
+/* Events: the date column. The news-list rule above takes a card's side padding away, which put the month,
+   day and weekday against the card's left border (and the 64px column was narrower than the 72px block).
+   Give the column room for its widest date and keep side padding on every screen size and zoom. */
+#e-list .event-card {
+  grid-template-columns: minmax(4.5rem, max-content) minmax(0, 1fr) auto;
+  padding-inline: 16px;
+}
+
+#e-list .date-block {
+  min-width: 4.5rem;
+  padding-inline: 4px 0;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  #e-list .event-card {
+    grid-template-columns: minmax(3.75rem, max-content) minmax(0, 1fr);
+    padding-inline: 12px;
+  }
+
+  #e-list .date-block {
+    min-width: 3.75rem;
+  }
+}

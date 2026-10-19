@@ -211,6 +211,7 @@ export function mergeListing(first: TerraEvent, second: TerraEvent): TerraEvent 
     out.start = second.start;
     out.end = first.end ?? second.end;
     delete out.dateOnly;
+    delete out.timeUnconfirmed;
   }
   return out;
 }

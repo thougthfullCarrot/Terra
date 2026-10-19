@@ -26,6 +26,8 @@ export interface TerraEvent {
   source?: string;
   /** True when the source gave only dates (no clock time): shown as "Time not listed", not "All day". */
   dateOnly?: boolean;
+  /** True when the page says the time is TBD or prints none: shown as "Time not confirmed", never a guessed clock time. */
+  timeUnconfirmed?: boolean;
   /** IANA zone of the venue's local times: America/Chicago, or America/Denver for El Paso. */
   timezone?: TimeZone;
   /** Where to register when it differs from the event page (offers.url, ticket links). */
@@ -850,7 +852,7 @@ export function sitemapEventUrls(xml: string, base: string, path: string, now: D
 }
 
 /** Title, start and venue from schema.org microdata (CREW: <time itemProp="startDate" dateTime="...">). */
-export function parseMicrodataEvent(html: string): { title: string; start: string; venue: string | null } | null {
+export function parseMicrodataEvent(html: string): { title: string; start: string; venue: string | null; dateOnly?: true; timeUnconfirmed?: true } | null {
   const dt = /itemprop="startDate"[^>]*datetime="([^"]+)"/i.exec(html)?.[1] ?? /datetime="([^"]+)"[^>]*itemprop="startDate"/i.exec(html)?.[1];
   const start = dt ? normalizeDate(dt.replace(/\.\d+(?=[+-]\d{2}:?\d{2}$|Z$)/, '')) : null;
   const title = decodeText(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i.exec(html)?.[1] ?? /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1] ?? '');
@@ -858,6 +860,13 @@ export function parseMicrodataEvent(html: string): { title: string; start: strin
   // The meta row after the date: time, then the venue name.
   const items = [...html.matchAll(/class="event--meta-item"[^>]*>([\s\S]*?)<\/span>(?=<span|<\/div)/gi)].map((m) => decodeText(m[1] ?? ''));
   const venue = items.find((t) => t && !/\d{1,2}:\d{2}|\bTBD\b|^\w{3} \d{1,2}, \d{4}$/i.test(t)) ?? null;
+  // A page that prints "TBD" (or no clock time) still carries a startDate stamp, which is not the event's time
+  // (CREW Austin's 2026 Holiday Party: "Dec 3, 2026 from TBD" with a 10:50 AM stamp). Keep only its date.
+  if (!items.some((t) => /\d{1,2}:\d{2}\s*[AP]M/i.test(t))) {
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(start));
+    const midnight = centralIso(day);
+    if (midnight) return { title, start: midnight, venue, dateOnly: true, timeUnconfirmed: true };
+  }
   return { title, start, venue };
 }
 
@@ -1374,7 +1383,8 @@ function withReschedule(e: TerraEvent, before: TerraEvent | undefined): TerraEve
   // Only a different local day is a move: a listing that gains its clock time (midnight → 8 AM, or a course's
   // first session read from its page) is the same event on the same day.
   const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: e.timezone ?? zoneOf(e.city) }).format(new Date(iso));
-  const moved = (x: string | null | undefined): x is string => Boolean(x) && (day(x!) !== day(e.start) || !isMidnight(x!));
+  // A page that now says its time is TBD has not moved either: the old clock time was never confirmed.
+  const moved = (x: string | null | undefined): x is string => Boolean(x) && (day(x!) !== day(e.start) || (!isMidnight(x!) && !e.timeUnconfirmed));
   const from = [before.start !== e.start ? before.start : null, before.rescheduledFrom].find(moved);
   return from ? { ...e, rescheduledFrom: from, status: e.status ?? 'rescheduled' } : e;
 }

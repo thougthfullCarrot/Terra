@@ -38,7 +38,17 @@ export function filterEvents(file, { city = '' } = {}, now = new Date()) {
       out.push(event);
     }
   }
-  return out.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  // A course sorts by the session its date block shows (its next one), not by its first session.
+  const at = (e) => new Date(occurrenceStart(e, now)).getTime();
+  return out.sort((a, b) => at(a) - at(b));
+}
+
+/**
+ * The start the list shows for an event: a course's next (or running) session, otherwise its own start. The date
+ * block, the sort order, the month headings and the mini calendar all use this one date.
+ */
+export function occurrenceStart(event, now = new Date()) {
+  return (event?.sessions?.length && nextSession(event, now)?.start) || event?.start;
 }
 
 /**
@@ -83,10 +93,10 @@ export function zoneLabel(tz) {
 }
 
 /** [{ month: "October 2026", events }] in start order. */
-export function groupByMonth(events) {
+export function groupByMonth(events, now = new Date()) {
   const groups = [];
   for (const event of events) {
-    const month = new Date(event.start).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: zoneOf(event) });
+    const month = new Date(occurrenceStart(event, now)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: zoneOf(event) });
     const last = groups[groups.length - 1];
     if (last?.month === month) last.events.push(event);
     else groups.push({ month, events: [event] });
@@ -139,6 +149,7 @@ export function eventWhen(event, now = new Date()) {
     const range = `${short(event.start)} \u2013 ${short(event.end)}`;
     return startTime ? `${range} · starts ${startTime} ${zoneLabel(tz)}` : range;
   }
+  if (event.timeUnconfirmed) return 'Time not confirmed';
   if (!startTime) return event.dateOnly ? 'Time not listed' : 'All day';
   const endTime = event.end && !allDay(event.end, tz) && new Date(event.end) > new Date(event.start) ? clock(event.end) : '';
   return `${startTime}${endTime ? ` \u2013 ${endTime}` : ''} ${zoneLabel(tz)}`;
@@ -247,7 +258,7 @@ function eventPlace(event) {
 
 /** The organizer, the event page and the registration link, for a calendar entry's notes. */
 function calendarDetails(event) {
-  return [event.organizer, event.url, event.registrationUrl && event.enrollment !== 'in-progress' && event.enrollment !== 'closed' ? `Register: ${event.registrationUrl}` : '', ...(event.conflicts ?? [])].filter(Boolean);
+  return [event.timeUnconfirmed ? 'Time not confirmed: check the event page' : '', event.organizer, event.url, event.registrationUrl && event.enrollment !== 'in-progress' && event.enrollment !== 'closed' ? `Register: ${event.registrationUrl}` : '', ...(event.conflicts ?? [])].filter(Boolean);
 }
 
 /** A Google Calendar "add event" link, prefilled; free and needs no key. */
@@ -273,11 +284,11 @@ export function googleCalendarUrl(event, now = new Date()) {
  * A month grid for the mini calendar: leading blanks for the days before the
  * 1st, then each day with whether an event starts on it. month is 'YYYY-MM'.
  */
-export function monthGrid(month, events) {
+export function monthGrid(month, events, now = new Date()) {
   const [year, mon] = month.split('-').map(Number);
   const first = new Date(Date.UTC(year, mon - 1, 1));
   const days = new Date(Date.UTC(year, mon, 0)).getUTCDate();
-  const on = new Set(events.map((e) => dateParts(e.start, zoneOf(e))?.ymd).filter(Boolean));
+  const on = new Set(events.map((e) => dateParts(occurrenceStart(e, now), zoneOf(e))?.ymd).filter(Boolean));
   const cells = Array.from({ length: first.getUTCDay() }, () => null);
   for (let day = 1; day <= days; day++) {
     const ymd = `${month}-${String(day).padStart(2, '0')}`;

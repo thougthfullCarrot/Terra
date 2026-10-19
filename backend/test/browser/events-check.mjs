@@ -48,6 +48,7 @@ function expectedWhen(e) {
   const t = (iso) => local(iso, tz, { hour: 'numeric', minute: '2-digit' });
   const d = (iso) => local(iso, tz, { month: 'short', day: 'numeric' });
   if (multi(e)) return midnight(e.start, tz) ? `${d(e.start)} – ${d(e.end)}` : `${d(e.start)} – ${d(e.end)} · starts ${t(e.start)} ${label}`;
+  if (e.timeUnconfirmed) return 'Time not confirmed';
   if (midnight(e.start, tz)) return e.dateOnly ? 'Time not listed' : 'All day';
   const end = e.end && !midnight(e.end, tz) && new Date(e.end) > new Date(e.start) ? ` – ${t(e.end)}` : '';
   return `${t(e.start)}${end} ${label}`;
@@ -120,9 +121,11 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 if (shots) await mkdir(shots, { recursive: true });
 for (const vp of [
   { name: 'desktop', width: 1366, height: 1000 },
-  { name: 'phone', width: 390, height: 844, mobile: true }
+  { name: 'phone', width: 390, height: 844, mobile: true },
+  // 200% browser zoom on a 1366px window: the page lays out at 683 CSS px.
+  { name: 'zoom200', width: 683, height: 500, scale: 2 }
 ]) {
-  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.mobile, hasTouch: !!vp.mobile, acceptDownloads: true });
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: !!vp.mobile, hasTouch: !!vp.mobile, deviceScaleFactor: vp.scale ?? 1, acceptDownloads: true });
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   const page = await ctx.newPage();
   const errors = [];
@@ -133,7 +136,7 @@ for (const vp of [
     const city = e.format === 'virtual' ? 'Online' : e.city;
     await page.goto(`${base}#events&city=${encodeURIComponent(city)}`);
     await page.waitForSelector('#e-list .event-card, #e-list .state', { timeout: 20000 });
-    const card = page.locator('.event-card', { has: page.locator('.event-title', { hasText: e.title }) }).filter({ has: page.locator(`time[datetime="${e.start}"]`) }).first();
+    const card = page.locator('.event-card', { has: page.locator('.event-title', { hasText: e.title }) }).filter({ has: page.locator(`time[datetime="${e.sessions ? next(e).start : e.start}"]`) }).first();
     if (!(await card.count())) {
       fail(`${vp.name} ${shape}: card for "${e.title}" not shown under ${city}`);
       continue;
@@ -149,6 +152,17 @@ for (const vp of [
     if (e.sessions) {
       check(await card.locator('.badge-status, .badge-topic', { hasText: /Course/ }).count() > 0 || (await card.innerText()).includes('Registration closed'), `${vp.name} course: labelled as a course (${e.enrollment})`);
       check(e.enrollment === 'open' || !(await card.locator('a', { hasText: 'Register' }).count()), `${vp.name} course: no Register link while ${e.enrollment}`);
+      // Month heading and mini calendar follow the same next-session date as the card.
+      const nd = ymd(next(e).start, zone(e));
+      const heading = await card.evaluate((n) => n.closest('.events-month')?.querySelector('.events-month-title')?.textContent ?? '');
+      const wantMonth = local(next(e).start, zone(e), { month: 'long', year: 'numeric' });
+      check(heading === wantMonth, `${vp.name} course: listed under "${heading}", the month of its next session (${wantMonth})`);
+      for (let i = 0; i < 12 && !(await page.locator(`#e-cal button[aria-label^="${nd}:"]`).count()); i++) {
+        const fwd = page.locator('#e-cal .cal-nav').last();
+        if (await fwd.isDisabled()) break;
+        await fwd.click();
+      }
+      check((await page.locator(`#e-cal button[aria-label^="${nd}:"]`).count()) > 0, `${vp.name} course: mini calendar marks ${nd}, its next session`);
       for (const c of e.conflicts ?? []) check((await card.innerText()).includes(c), `${vp.name} course: shows the page conflict "${c}"`);
     }
     const google = new URL(await card.locator('a', { hasText: 'Google Calendar' }).getAttribute('href'));
@@ -172,6 +186,25 @@ for (const vp of [
     check((await card.count()) && !(await card.locator('button', { hasText: /Add (to calendar|all sessions)/ }).count()), `${vp.name}: "${unverified.title}" (no session dates) offers no calendar export`);
   }
 
+  // Times a page lists as TBD: the card says so and both exports keep the date with a note, no clock time.
+  for (const u of all.filter((x) => x.timeUnconfirmed).slice(0, 3)) {
+    await page.goto(`${base}#events&city=${encodeURIComponent(u.city)}`);
+    await page.waitForSelector('#e-list .event-card', { timeout: 20000 });
+    const card = page.locator('.event-card').filter({ has: page.locator(`time[datetime="${u.start}"]`) }).filter({ hasText: u.title }).first();
+    if (!(await card.count())) {
+      fail(`${vp.name}: card for "${u.title}" (time TBD) not shown`);
+      continue;
+    }
+    const day = ymd(u.start, zone(u)).replace(/-/g, '');
+    check((await card.locator('.event-where').innerText()).startsWith('Time not confirmed') && !/\b\d{1,2}:\d{2}\b/.test(await card.locator('.event-where').innerText()), `${vp.name}: "${u.title}" (${u.organizer}) reads "Time not confirmed"`);
+    const g = new URL(await card.locator('a', { hasText: 'Google Calendar' }).getAttribute('href'));
+    check(g.searchParams.get('dates').startsWith(`${day}/`) && /Time not confirmed/.test(g.searchParams.get('details')), `${vp.name}: "${u.title}" Google link ${g.searchParams.get('dates')}, notes the time is not confirmed`);
+    const [dl] = await Promise.all([page.waitForEvent('download'), card.locator('button', { hasText: 'Add to calendar' }).click()]);
+    const t = await readFile(await dl.path(), 'utf8');
+    check(t.includes(`DTSTART;VALUE=DATE:${day}\r\n`) && /Time not confirmed/.test(t), `${vp.name}: "${u.title}" .ics is date-only (${day}) and notes the time is not confirmed`);
+    check(!(await card.innerText()).includes('Moved from') && !(await card.innerText()).includes('Rescheduled'), `${vp.name}: "${u.title}" is not labelled as moved`);
+  }
+
   // Empty markets: the sentence must match the report (unreadable vs nothing found).
   for (const r of file.report ?? []) {
     if (r.state === 'events') continue;
@@ -193,6 +226,21 @@ for (const vp of [
       .slice(0, 3)
       .map((n) => `${n.tagName.toLowerCase()}.${[...n.classList].join('.')} "${(n.textContent || '').trim().slice(0, 50)}"`);
   });
+  // Date blocks: month, day and weekday sit inside the card's padding, none clipped.
+  const clipped = await page.evaluate(() =>
+    [...document.querySelectorAll('#e-list .event-card')].flatMap((card) => {
+      const c = card.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(card).paddingLeft) + parseFloat(getComputedStyle(card).borderLeftWidth);
+      return [...card.querySelectorAll('.date-block > *')]
+        .filter((k) => { const q = k.getBoundingClientRect(); return q.left < c.left + pad - 0.5 || q.right > c.right || k.scrollWidth > k.clientWidth + 1 || pad < 8; })
+        .map((k) => `"${k.textContent}" in "${card.querySelector('.event-title')?.textContent?.slice(0, 40)}"`);
+    })
+  );
+  check(!clipped.length, `${vp.name}: every date block clear of the card edge${clipped.length ? ` (clipped: ${clipped.slice(0, 3).join(', ')})` : ''}`);
+  // Order: the dates the cards show never go backwards (a course shows and sorts by its next session).
+  const shown = await page.$$eval('#e-list .event-card time.date-block', (ts) => ts.map((t) => t.dateTime));
+  const back = shown.findIndex((d, i) => i && new Date(d) < new Date(shown[i - 1]));
+  check(back < 0, `${vp.name}: ${shown.length} cards in the order of the dates they show${back < 0 ? '' : ` (${shown[back - 1]} before ${shown[back]})`}`);
   check(overflow <= 1, `${vp.name}: no sideways scroll (${overflow}px)${wide.length ? ` widest: ${wide.join(' | ')}` : ''}`);
   await page.locator('.events-report summary').click();
   check((await page.locator('.events-report-list li').count()) === (file.report ?? []).length, `${vp.name}: collection report lists every market`);

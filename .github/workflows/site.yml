@@ -397,6 +397,16 @@ jobs:
           node test/browser/events-check.mjs ../site /tmp/events-shots 2>&1 | tee /tmp/events-check.log
           { echo '## Events tab check'; echo '```'; cat /tmp/events-check.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
+      # Pull requests only: the cursor light stays under the pointer after scrolling, resizing, 200% zoom and
+      # switching tabs, and a tap leaves none behind.
+      - name: Check the cursor glow
+        if: github.event_name == 'pull_request'
+        run: |
+          npx playwright-core install --with-deps chromium > /dev/null
+          set -o pipefail
+          node test/browser/glow-check.mjs ../site 2>&1 | tee /tmp/glow-check.log
+          { echo '## Cursor glow check'; echo '```'; cat /tmp/glow-check.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Keep the events check screenshots
         if: always() && github.event_name == 'pull_request' && hashFiles('site/events.json') != ''
         uses: actions/upload-artifact@v4

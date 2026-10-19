@@ -156,18 +156,38 @@ for (const [canvasId, hostId] of [['terrain-topo', 'gate'], ['app-topo', 'main']
   if (!c || !host) continue;
   const layer = terrain(c, host);
   layers.push(layer);
-  host.addEventListener('pointermove', (event) => {
+  // The cursor light is drawn by host::before, a full-viewport-wide band that starts left of the host when the
+  // page is narrower than the window, so --mx/--my are measured from that band's own corner (read back from its
+  // computed left/top), not the host's. Re-placed on scroll and resize too, so it stays under a still pointer.
+  let last = null;
+  const place = () => {
+    if (!last) return;
     const r = c.getBoundingClientRect();
     const h = host.getBoundingClientRect();
-    layer.mx = event.clientX - r.left;
-    layer.my = event.clientY - r.top;
-    host.style.setProperty('--mx', `${event.clientX - h.left}px`);
-    host.style.setProperty('--my', `${event.clientY - h.top}px`);
+    const band = getComputedStyle(host, '::before');
+    const left = h.left + (parseFloat(band.left) || 0);
+    const top = h.top + (parseFloat(band.top) || 0);
+    layer.mx = last.x - r.left;
+    layer.my = last.y - r.top;
+    host.style.setProperty('--mx', `${last.x - left}px`);
+    host.style.setProperty('--my', `${last.y - top}px`);
     if (!still) redraw();
+  };
+  host.addEventListener('pointermove', (event) => {
+    // Touch and pen have no hover: no light left stranded where a finger lifted, and no lean.
+    // Reduced motion: no light chasing the pointer either (the bands and cards stay still too).
+    if (event.pointerType !== 'mouse' || still) return;
+    last = { x: event.clientX, y: event.clientY };
+    place();
     lean(event);
   });
+  addEventListener('scroll', place, { passive: true });
+  addEventListener('resize', place);
   host.addEventListener('pointerleave', () => {
+    last = null;
     layer.mx = layer.my = -1e4;
+    host.style.removeProperty('--mx');
+    host.style.removeProperty('--my');
     redraw();
   });
 }
