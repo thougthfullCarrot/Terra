@@ -276,6 +276,33 @@ async function checkedInventory(ids: { objectIds?: number[]; exceededTransferLim
 }
 
 /**
+ * The ids a returnIdsOnly reply says still exist, out of those asked about. Deletion is only confirmed by a reply
+ * that is plainly an id list: objectIdFieldName naming the layer's id field, and objectIds as an array of the
+ * asked-for integers or null (ArcGIS's documented answer when none match). Anything else (an error, {}, a missing
+ * or misnamed field, a non-integer, duplicate or unasked-for id, or a truncated list) throws, so missing records
+ * are never counted as deleted on an unreadable reply.
+ */
+export function confirmedIds(reply: unknown, oidField: string, asked: Set<number>): number[] {
+  if (!reply || typeof reply !== 'object' || Array.isArray(reply)) throw new Error('checking missing ids: reply is not an object');
+  const r = reply as { error?: { message?: string }; objectIdFieldName?: unknown; objectIds?: unknown; exceededTransferLimit?: unknown };
+  if (r.error) throw new Error(`checking missing ids: ${r.error.message ?? 'error'}`);
+  if (r.exceededTransferLimit) throw new Error('checking missing ids: the id list was truncated');
+  if (typeof r.objectIdFieldName !== 'string' || r.objectIdFieldName.toLowerCase() !== oidField.toLowerCase())
+    throw new Error(`checking missing ids: reply names id field ${JSON.stringify(r.objectIdFieldName)}, not ${oidField}`);
+  if (!('objectIds' in r)) throw new Error('checking missing ids: reply has no objectIds');
+  if (r.objectIds === null) return [];
+  if (!Array.isArray(r.objectIds)) throw new Error('checking missing ids: objectIds is not a list');
+  const seen = new Set<number>();
+  for (const id of r.objectIds) {
+    if (!Number.isInteger(id)) throw new Error(`checking missing ids: invalid id ${JSON.stringify(id)}`);
+    if (!asked.has(id as number)) throw new Error(`checking missing ids: id ${id} was not asked about`);
+    if (seen.has(id as number)) throw new Error(`checking missing ids: id ${id} listed twice`);
+    seen.add(id as number);
+  }
+  return [...seen];
+}
+
+/**
  * Read one slice of object ids and prove the answer covers it: every returned feature must be a requested id,
  * once. Ids left out (a transfer limit, or a short reply without one) are asked for again in smaller pieces;
  * any still missing are checked against the layer, and only ids the layer confirms no longer exist are
@@ -321,13 +348,12 @@ export async function readSlice(layer: string, slice: number[], oidField: string
   }
   if (depth < 4) return readSlice(layer, missing, oidField, http, depth + 1).then((r) => ({ features: [...features, ...r.features], vanished: r.vanished }));
   // Still missing after retries: do they exist?
-  const still = await fetchJson<{ objectIds?: number[] | null; error?: { message?: string } }>(`${layer}/query`, {
+  const still = await fetchJson<unknown>(`${layer}/query`, {
     ...http,
     form: { f: 'json', objectIds: missing.join(','), returnIdsOnly: 'true' }
   });
-  if (still.error) throw new Error(`checking missing ids: ${still.error.message ?? 'error'}`);
-  const exist = (still.objectIds ?? []).filter((id) => wanted.has(id));
-  if (exist.length) throw new Error(`${exist.length} requested object ids exist but were not returned`);
+  const existing = confirmedIds(still, oidField, new Set(missing));
+  if (existing.length) throw new Error(`${existing.length} requested object ids exist but were not returned`);
   return { features, vanished: missing };
 }
 

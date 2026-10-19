@@ -325,7 +325,7 @@ describe('withheld records', () => {
 
 describe('collectArcgis proves each reply covers what it asked for', () => {
   const layer = district('bexar').layer!;
-  type Mode = { reply: (asked: number[]) => { features: number[]; flagged?: boolean }; exists?: (id: number) => boolean; ids?: number[]; count?: number; editAfter?: number };
+  type Mode = { reply: (asked: number[]) => { features: number[]; flagged?: boolean }; exists?: (id: number) => boolean; confirm?: (asked: number[]) => unknown; ids?: number[]; count?: number; editAfter?: number };
   function server(m: Mode) {
     const ids = m.ids ?? [1, 2, 3];
     let infoCalls = 0;
@@ -341,7 +341,12 @@ describe('collectArcgis proves each reply covers what it asked for', () => {
       if (u.includes('returnIdsOnly')) return json({ objectIds: ids });
       const form = new URLSearchParams(String(init?.body ?? ''));
       const asked = form.get('objectIds')!.split(',').map(Number);
-      if (form.get('returnIdsOnly')) return json({ objectIds: asked.filter((id) => (m.exists ?? (() => true))(id)) });
+      if (form.get('returnIdsOnly')) {
+        if (m.confirm) return json(m.confirm(asked));
+        const left = asked.filter((id) => (m.exists ?? (() => true))(id));
+        // ArcGIS answers an id query that matches nothing with objectIds: null.
+        return json({ objectIdFieldName: 'OBJECTID', objectIds: left.length ? left : null });
+      }
       const { features, flagged } = m.reply(asked);
       return json({
         features: features.map((id) => ({ attributes: { OBJECTID: id, Prop_id: id, Situs: `${id} MAIN ST`, Market_val: id }, geometry: { rings: [[[-98, 29], [-98.002, 29.002]]] } })),
@@ -389,6 +394,26 @@ describe('collectArcgis proves each reply covers what it asked for', () => {
     const r = await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }), exists: (id) => id !== 3 });
     expect(r.report.status).toBe('complete');
     expect(r.accounts.sort()).toEqual(['1', '2']);
+  });
+  it('confirms a deletion from an explicit empty id list too', async () => {
+    const r = await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }), confirm: () => ({ objectIdFieldName: 'OBJECTID', objectIds: [] }) });
+    expect(r.report.status).toBe('complete');
+    expect(r.accounts.sort()).toEqual(['1', '2']);
+  });
+  it.each([
+    ['an empty object', () => ({})],
+    ['no objectIds', () => ({ objectIdFieldName: 'OBJECTID' })],
+    ['no id field name', () => ({ objectIds: null })],
+    ['another id field', () => ({ objectIdFieldName: 'FID', objectIds: null })],
+    ['objectIds that is not a list', () => ({ objectIdFieldName: 'OBJECTID', objectIds: '3' })],
+    ['a non-integer id', () => ({ objectIdFieldName: 'OBJECTID', objectIds: [3.5] })],
+    ['an id that was not asked about', () => ({ objectIdFieldName: 'OBJECTID', objectIds: [99] })],
+    ['a duplicated id', (a: number[]) => ({ objectIdFieldName: 'OBJECTID', objectIds: [a[0], a[0]] })],
+    ['a truncated id list', () => ({ objectIdFieldName: 'OBJECTID', objectIds: null, exceededTransferLimit: true })],
+    ['an error reply', () => ({ error: { code: 400, message: 'Unable to perform query' } })],
+    ['a reply that is not an object', () => [3]]
+  ] as [string, (asked: number[]) => unknown][])('does not count missing records as deleted on %s', async (_name, confirm) => {
+    notDone(await run({ reply: (asked) => ({ features: asked.filter((id) => id !== 3) }), confirm }));
   });
   it('does not finish a read that spanned a layer edit', async () => {
     notDone(await run({ reply: (asked) => ({ features: asked }), editAfter: 43 }));
