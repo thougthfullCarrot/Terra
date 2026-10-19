@@ -31,3 +31,4 @@ site/events.json
 site/property/
 dev-audit-output/
 /dev-pages.json
+.appraisal-cache/
