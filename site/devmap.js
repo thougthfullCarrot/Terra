@@ -277,7 +277,7 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   // How to read the pins beyond their category: groups and approximate spots.
   const key = el('p', 'devx-key');
   key.innerHTML =
-    '<span class="devx-key-item"><span class="devx-key-cluster" aria-hidden="true">12</span>Group of nearby projects: zoom in or click to see each one</span>' +
+    '<span class="devx-key-item"><span class="devx-key-pill" aria-hidden="true">$12M</span>Biggest projects show their filed cost; small dots are the rest, zoom in or click to see them</span>' +
     '<span class="devx-key-item"><span class="devx-key-approx" aria-hidden="true"></span>Dashed border: approximate location, near the ZIP code center</span>';
   side.append(search, summary, bar, legend, key, listHead, smallerHint, list);
 
@@ -628,12 +628,15 @@ function drawChart(node, months, since, onPick) {
   node.replaceChildren(head, bars, axis);
 }
 
-/** Below this zoom nearby pins group into a counted cluster; from it on, every project has its own icon. */
+/** Below this zoom projects are price pills (biggest first, never overlapping) and small specks; from it on, every project has its own icon. */
 const SPREAD_ZOOM = 16;
 /** Cluster grid cell, in screen pixels. */
 const CELL = 64;
 /** Pin icon size (the hit area; the visible disc is a little smaller, in style.css). */
 const PIN = 40;
+/** A price pill's size for the overlap test: icon disc, cost text, padding. */
+const PILL_H = 30;
+const pillWidth = (text) => 34 + text.length * 7.4 + 12;
 
 /** A keydown handler that runs act on Enter or Space, as a button would. */
 function pressed(act) {
@@ -653,7 +656,7 @@ function pinLabel(project, cat) {
 /**
  * Draws the map once; show() then sets which projects are on it as the
  * filters change, and the pins redraw from that on every pan and zoom:
- * zoomed out, nearby projects share a counted cluster; zoomed in, each has
+ * zoomed out, the biggest projects are price pills and the rest small dots; zoomed in, each has
  * its category icon, and projects at the very same point fan out around it.
  * Only pins near the view are put on the page. Null when the card left the
  * page while Leaflet loaded.
@@ -685,19 +688,27 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     where.set(project, L.latLng(project.lat, project.lng));
     spotOf.set(project, `${project.lat},${project.lng}`);
   }
-  const pinFor = (project) => {
-    let marker = pins.get(project);
+  const pills = new Map();
+  const pillW = new Map();
+  const pinFor = (project, pill = false) => {
+    const cache = pill ? pills : pins;
+    let marker = cache.get(project);
     if (marker) return marker;
     const key = projectCategory(project);
     const cat = catOf.get(key);
-    const icon = L.divIcon({
-      className: 'devx-pin-icon',
-      html: `<span class="devx-pin ${categoryClass(key)}${project.approximate ? ' approx' : ''}" style="--cat:${cat?.color ?? '#9b958d'}">${glyphSvg(key)}</span>`,
-      iconSize: [PIN, PIN]
-    });
+    const disc = `<span class="devx-pin ${categoryClass(key)}${project.approximate ? ' approx' : ''}" style="--cat:${cat?.color ?? '#9b958d'}">${glyphSvg(key)}</span>`;
+    const cost = money(project.cost);
+    const icon = pill
+      ? L.divIcon({
+          className: 'devx-pin-icon devx-pill-icon',
+          html: `<span class="devx-pill${project.approximate ? ' approx' : ''}" style="--cat:${cat?.color ?? '#9b958d'}">${disc}<b>${cost}</b></span>`,
+          iconSize: [pillWidth(cost), PILL_H],
+          iconAnchor: [PILL_H / 2, PILL_H + 5]
+        })
+      : L.divIcon({ className: 'devx-pin-icon', html: disc, iconSize: [PIN, PIN] });
     const label = pinLabel(project, cat);
     marker = L.marker(where.get(project), { icon, keyboard: true, riseOnHover: true });
-    marker.bindTooltip(label, { direction: 'top', offset: [0, -16] });
+    marker.bindTooltip(label, { direction: 'top', offset: pill ? [pillWidth(cost) / 2 - PILL_H / 2, -PILL_H - 4] : [0, -16] });
     marker.on('click', () => onPick(project));
     marker.on('mouseover', () => api.hover(project));
     marker.on('mouseout', () => api.hover(null));
@@ -709,9 +720,75 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       icon.onkeydown = pressed(() => onPick(project));
       decorate(project);
     });
-    pins.set(project, marker);
+    cache.set(project, marker);
     return marker;
   };
+  /**
+   * Small dots for projects with no room for their pill yet, painted in one pass on one
+   * canvas (thousands of map layers would make filtering slow). A click near one zooms in toward it.
+   */
+  const speckCanvas = L.DomUtil.create('canvas', 'devx-specks');
+  map.getPanes().overlayPane.appendChild(speckCanvas);
+  let speckPts = [];
+  let hoverSpeck = null;
+  const paintSpecks = (list) => {
+    if (list) speckPts = list;
+    const size = map.getSize();
+    const ratio = window.devicePixelRatio || 1;
+    const origin = map.containerPointToLayerPoint([0, 0]);
+    L.DomUtil.setPosition(speckCanvas, origin);
+    speckCanvas.width = size.x * ratio;
+    speckCanvas.height = size.y * ratio;
+    speckCanvas.style.width = `${size.x}px`;
+    speckCanvas.style.height = `${size.y}px`;
+    const g = speckCanvas.getContext('2d');
+    g.scale(ratio, ratio);
+    for (const s of speckPts) {
+      const c = map.latLngToContainerPoint(where.get(s.p));
+      s.x = c.x;
+      s.y = c.y;
+      const r = s.p === hoverSpeck ? 6 : 3.5;
+      g.beginPath();
+      g.arc(c.x, c.y, r, 0, Math.PI * 2);
+      if (s.p.approximate) {
+        g.setLineDash([2, 2]);
+        g.strokeStyle = s.color;
+        g.lineWidth = 1.5;
+        g.stroke();
+        g.setLineDash([]);
+      } else {
+        g.globalAlpha = 0.85;
+        g.fillStyle = s.color;
+        g.fill();
+        g.globalAlpha = 0.5;
+        g.strokeStyle = '#000000';
+        g.lineWidth = 1;
+        g.stroke();
+        g.globalAlpha = 1;
+      }
+    }
+  };
+  const speckAt = (point) => {
+    let best = null;
+    let bestD = 64;
+    for (const s of speckPts) {
+      const d = (s.x - point.x) ** 2 + (s.y - point.y) ** 2;
+      if (d < bestD) [best, bestD] = [s.p, d];
+    }
+    return best;
+  };
+  map.on('click', (event) => {
+    if (reports?.picking()) return;
+    const p = speckAt(event.containerPoint);
+    if (p) map.setView(where.get(p), Math.min(map.getZoom() + 2, SPREAD_ZOOM), { animate: !reduceMotion() });
+  });
+  map.on('mousemove', (event) => {
+    const p = speckAt(event.containerPoint);
+    node.style.cursor = p ? 'pointer' : '';
+    if (p !== hoverSpeck) api.hover(p);
+  });
+  map.on('zoomstart', () => (speckCanvas.style.visibility = 'hidden'));
+  map.on('zoomend', () => (speckCanvas.style.visibility = ''));
 
   // Smaller filings (below the cap) with a pin from a spare page read: small,
   // hollow and under the main pins. Shown while no filter but the search is on.
@@ -754,14 +831,17 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   /** The cluster each project sat in at the last draw, for the list's hover. */
   let clusterOf = new Map();
   const decorate = (project) => {
-    const icon = pins.get(project)?.getElement();
-    if (icon) {
+    for (const icon of [pins.get(project)?.getElement(), pills.get(project)?.getElement()]) if (icon) {
       icon.classList.toggle('lit', project === hovered);
       icon.classList.toggle('chosen', project === chosen);
       if (project === chosen) icon.setAttribute('aria-current', 'true');
       else icon.removeAttribute('aria-current');
     }
-    clusterOf.get(project)?.getElement()?.classList.toggle('lit', project === hovered);
+    const speck = speckPts.some((s) => s.p === project) ? project : null;
+    if (speck !== hoverSpeck && (speck || hoverSpeck)) {
+      hoverSpeck = project === hovered ? speck : null;
+      paintSpecks();
+    }
   };
 
   const wide = () => node.clientWidth >= NARROW_MAP;
@@ -783,48 +863,6 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   /** Where each shown pin is drawn at this zoom (fanned out from a shared spot), for the pulse and flyTo. */
   let drawnAt = new Map();
 
-  /** A counted cluster; a click zooms to its projects, or fans out a single shared spot. */
-  const clusterMarker = (members, at) => {
-    const n = members.length;
-    const byCat = new Map();
-    for (const p of members) byCat.set(projectCategory(p), (byCat.get(projectCategory(p)) ?? 0) + 1);
-    // The ring shows the category mix, in legend order.
-    let from = 0;
-    const stops = [];
-    for (const cat of catOf.values()) {
-      const c = byCat.get(cat.key);
-      if (!c) continue;
-      const to = from + (c / n) * 360;
-      stops.push(`${cat.color} ${from}deg ${to}deg`);
-      from = to;
-    }
-    const size = n < 10 ? 36 : n < 100 ? 42 : 48;
-    const label = `${n.toLocaleString('en-US')} projects here: ${[...catOf.values()].filter((c) => byCat.get(c.key)).map((c) => `${byCat.get(c.key)} ${c.label}`).join(', ')}. Zoom in to see each one.`;
-    const marker = L.marker(at, {
-      icon: L.divIcon({
-        className: 'devx-cluster-icon',
-        html: `<span class="devx-cluster" style="--ring:conic-gradient(${stops.join(',')});width:${size}px;height:${size}px" data-count="${n}"><b>${n.toLocaleString('en-US')}</b></span>`,
-        iconSize: [Math.max(size, 44), Math.max(size, 44)]
-      }),
-      keyboard: true,
-      riseOnHover: true
-    });
-    marker.bindTooltip(`${n.toLocaleString('en-US')} projects: click to zoom in`, { direction: 'top', offset: [0, -size / 2] });
-    marker.on('add', () => {
-      const icon = marker.getElement();
-      icon.setAttribute('aria-label', label);
-      icon.onkeydown = pressed(() => marker.fire('click'));
-      if (hovered && members.includes(hovered)) icon.classList.add('lit');
-    });
-    marker.on('click', () => {
-      const spots = new Set(members.map((p) => spotOf.get(p)));
-      const target = Math.max(map.getZoom() + 1, SPREAD_ZOOM);
-      if (spots.size === 1) map.setView(where.get(members[0]), target, { animate: !reduceMotion() });
-      else map.fitBounds(L.latLngBounds(members.map((p) => where.get(p))), { ...padding(), maxZoom: SPREAD_ZOOM, animate: !reduceMotion() });
-    });
-    return marker;
-  };
-
   /** Redraws the pins for this zoom and view. */
   const draw = () => {
     if (map !== liveMap || !node.clientWidth) return;
@@ -832,6 +870,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     const zoom = map.getZoom();
     const view = map.getPixelBounds().pad(0.5);
     const want = new Set();
+    const nextSpecks = [];
     const nextCluster = new Map();
     const nextAt = new Map();
     const lines = [];
@@ -882,47 +921,43 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
         count += members.length;
       }
     } else {
-      // Grid clustering in screen pixels. The selected project always keeps its own icon.
-      const cells = new Map();
-      for (const p of shown) {
-        if (p === chosen) continue;
-        const pt = px(p);
-        const k = `${Math.floor(pt.x / CELL)}:${Math.floor(pt.y / CELL)}`;
-        let cell = cells.get(k);
-        if (!cell) cells.set(k, (cell = { members: [], x: 0, y: 0 }));
-        cell.members.push(p);
-        cell.x += pt.x;
-        cell.y += pt.y;
-      }
-      if (chosen && where.has(chosen) && shown.includes(chosen)) {
-        place(chosen, where.get(chosen));
+      // Price pills, biggest first: a project gets a pill when its pill overlaps none already
+      // placed, otherwise a small speck until zooming in makes room. The selected project always has its pill.
+      const boxes = [];
+      const free = (box) => boxes.every((b) => box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]);
+      const order = [...shown].sort((a, b) => (b === chosen) - (a === chosen) || (b.cost ?? 0) - (a.cost ?? 0));
+      for (const p of order) {
         count++;
-      }
-      for (const cell of cells.values()) {
-        count += cell.members.length;
-        if (cell.members.length === 1) {
-          place(cell.members[0], where.get(cell.members[0]));
-          continue;
+        const at = where.get(p);
+        nextAt.set(p, at);
+        const pt = px(p);
+        if (!view.contains(pt)) continue;
+        let w = pillW.get(p);
+        if (w == null) pillW.set(p, (w = pillWidth(money(p.cost))));
+        const box = [pt.x - PILL_H / 2 - 2, pt.y - PILL_H - 7, pt.x - PILL_H / 2 + w + 2, pt.y + 1];
+        if (p === chosen || free(box)) {
+          boxes.push(box);
+          const marker = pinFor(p, true);
+          if (!marker.getLatLng().equals(at)) marker.setLatLng(at);
+          want.add(marker);
+        } else {
+          nextSpecks.push({ p, color: catOf.get(projectCategory(p))?.color ?? '#9b958d' });
         }
-        const at = map.unproject(L.point(cell.x / cell.members.length, cell.y / cell.members.length), zoom);
-        for (const p of cell.members) nextAt.set(p, at);
-        if (!view.contains(map.project(at, zoom))) continue;
-        const marker = clusterMarker(cell.members, at);
-        for (const p of cell.members) nextCluster.set(p, marker);
-        want.add(marker);
       }
     }
     // Swap in the new set: kept pins stay on the page, so focus and hover survive a pan.
     for (const marker of [...layer.getLayers()]) if (!want.has(marker)) layer.removeLayer(marker);
     for (const marker of want) if (!layer.hasLayer(marker)) layer.addLayer(marker);
+    paintSpecks(nextSpecks);
     leaders.clearLayers();
     for (const line of lines) if (view.contains(map.project(line[1], zoom))) L.polyline(line, { className: 'devx-leader', interactive: false, weight: 1.5 }).addTo(leaders);
     clusterOf = nextCluster;
     drawnAt = nextAt;
-    if (chosen && pins.get(chosen)) pins.get(chosen).setZIndexOffset(1000);
+    for (const m of [pins.get(chosen), pills.get(chosen)]) m?.setZIndexOffset(1000);
     if (chosen && nextAt.has(chosen)) pulse.setLatLng(nextAt.get(chosen));
     node.dataset.drawn = String(count);
-    node.dataset.clusters = String(new Set(nextCluster.values()).size);
+    node.dataset.clusters = '0';
+    node.dataset.specks = String(nextSpecks.length);
     node.dataset.drawMs = String(Math.round(performance.now() - started));
   };
   let drawing = 0;
@@ -997,7 +1032,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       const was = chosen;
       chosen = project;
       if (was) {
-        pins.get(was)?.setZIndexOffset(0);
+        for (const m of [pins.get(was), pills.get(was)]) m?.setZIndexOffset(0);
         decorate(was);
       }
       if (!project || !where.has(project) || !shown.includes(project)) {

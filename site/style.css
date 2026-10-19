@@ -7876,9 +7876,9 @@ nav.market-tools a.chip[aria-current='page'] {
   height: 11px;
 }
 
-/* Map pins: one size for every project, a solid disc with a contrasting border and a soft shadow. */
+/* Map pins (Halo): a dark disc with a ring and glyph in the category color. */
 .devx-pin-icon,
-.devx-cluster-icon {
+.devx-speck-icon {
   display: grid;
   place-items: center;
   background: none;
@@ -7886,8 +7886,12 @@ nav.market-tools a.chip[aria-current='page'] {
   border-radius: 50%;
 }
 
-.devx-pin-icon:focus-visible,
-.devx-cluster-icon:focus-visible {
+.devx-pill-icon {
+  display: block;
+  border-radius: 999px;
+}
+
+.devx-pin-icon:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -2px;
 }
@@ -7897,60 +7901,131 @@ nav.market-tools a.chip[aria-current='page'] {
   place-items: center;
   width: 30px;
   height: 30px;
-  border: 2px solid #ffffff;
+  color: color-mix(in srgb, var(--cat) 82%, #ffffff);
+  background: radial-gradient(circle, color-mix(in srgb, var(--cat) 22%, #16140f) 0%, #16140f 75%);
+  border: 2px solid var(--cat);
   border-radius: 50%;
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.35), 0 0 0 1px oklch(0 0 0 / 0.18);
+  box-shadow: 0 2px 6px oklch(0 0 0 / 0.45);
   transition: transform 0.12s ease;
 }
 
 .devx-pin svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
-/* Approximate: a paler disc and a dashed dark border, so it never reads as an exact site. */
+/* Approximate: a dashed, paler ring, so it never reads as an exact site. */
 .devx-pin.approx {
-  background: color-mix(in srgb, var(--cat) 58%, #ffffff);
-  border: 2px dashed #1b1917;
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
-}
-
-.devx-pin.approx.devx-cat:not(.devx-glyph-dark) {
-  --glyph: #1b1917;
+  color: color-mix(in srgb, var(--cat) 55%, #ffffff);
+  border: 2px dashed color-mix(in srgb, var(--cat) 60%, #ffffff);
 }
 
 .devx-pin-icon.lit .devx-pin {
   transform: scale(1.15);
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #1b1917, 0 2px 6px oklch(0 0 0 / 0.4);
+  box-shadow: 0 0 0 2px #16140f, 0 0 0 4px var(--cat), 0 2px 8px oklch(0 0 0 / 0.5);
 }
 
 .devx-pin-icon.chosen .devx-pin {
   transform: scale(1.25);
-  box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px var(--accent), 0 3px 8px oklch(0 0 0 / 0.45);
+  box-shadow: 0 0 0 3px #16140f, 0 0 0 6px var(--accent), 0 3px 10px oklch(0 0 0 / 0.55);
 }
 
-.devx-cluster {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  background: var(--ring, #9b958d);
+/* Price pills: the Halo disc and the filed cost, with a small tail onto the spot. */
+.devx-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 2px 11px 2px 2px;
+  font: 600 12.5px var(--ui);
+  color: #f3efe8;
+  white-space: nowrap;
+  background: #16140f;
+  border: 1.5px solid var(--cat);
+  border-radius: 999px;
+  box-shadow: 0 2px 7px oklch(0 0 0 / 0.45);
+  transition: transform 0.12s ease;
+  transform-origin: 15px 100%;
+}
+
+.devx-pill::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  bottom: -6px;
+  width: 8px;
+  height: 8px;
+  background: #16140f;
+  border-right: 1.5px solid var(--cat);
+  border-bottom: 1.5px solid var(--cat);
+  transform: rotate(45deg);
+}
+
+.devx-pill .devx-pin {
+  width: 24px;
+  height: 24px;
+  border-width: 1.5px;
+  box-shadow: none;
+}
+
+.devx-pill .devx-pin svg {
+  width: 13px;
+  height: 13px;
+}
+
+.devx-pill.approx {
+  border-style: dashed;
+}
+
+.devx-pill-icon.lit .devx-pill {
+  transform: scale(1.08);
+  background: #2a2620;
+}
+
+.devx-pill-icon.chosen .devx-pill {
+  color: #16140f;
+  background: #f3efe8;
+  box-shadow: 0 0 0 3px var(--accent), 0 3px 10px oklch(0 0 0 / 0.55);
+}
+
+.devx-pill-icon.chosen .devx-pill::after {
+  background: #f3efe8;
+}
+
+.devx-pill-icon.lit .devx-pin,
+.devx-pill-icon.chosen .devx-pin {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Specks: projects waiting for room to show their pill. */
+.devx-speck {
+  width: 7px;
+  height: 7px;
+  background: var(--cat);
   border-radius: 50%;
-  box-shadow: 0 0 0 2px #ffffff, 0 2px 5px oklch(0 0 0 / 0.35);
+  opacity: 0.75;
+  box-shadow: 0 0 0 1px oklch(0 0 0 / 0.5);
 }
 
-.devx-cluster b {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  font: 600 13px var(--ui);
-  color: #1b1917;
-  background: #ffffff;
-  border-radius: 50%;
+.devx-speck.approx {
+  background: none;
+  border: 1.5px dashed var(--cat);
 }
 
-.devx-cluster-icon.lit .devx-cluster {
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #1b1917, 0 2px 6px oklch(0 0 0 / 0.4);
+.devx-speck-icon.lit .devx-speck {
+  opacity: 1;
+  transform: scale(1.8);
+}
+
+/* Night basemap: OpenStreetMap tiles darkened in the browser, no extra tile service. */
+.devx .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.92) saturate(0.6);
+}
+
+.devx .leaflet-container {
+  background: #16140f;
 }
 
 .devx .leaflet-overlay-pane .devx-leader {
@@ -7982,7 +8057,6 @@ nav.market-tools a.chip[aria-current='page'] {
   gap: 8px;
 }
 
-.devx-key-cluster,
 .devx-key-approx {
   flex: none;
   display: grid;
@@ -7992,14 +8066,23 @@ nav.market-tools a.chip[aria-current='page'] {
   border-radius: 50%;
 }
 
-.devx-key-cluster {
-  font: 600 10px var(--ui);
-  color: var(--ink);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 3px var(--muted);
+.devx-key-pill {
+  flex: none;
+  padding: 2px 8px;
+  font: 600 10.5px var(--ui);
+  color: #f3efe8;
+  background: #16140f;
+  border: 1.5px solid var(--muted);
+  border-radius: 999px;
 }
 
 .devx-key-approx {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   background: var(--sunk);
   border: 2px dashed var(--ink);
 }
