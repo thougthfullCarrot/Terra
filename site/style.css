@@ -9855,8 +9855,8 @@ body:has(#gate:not([hidden])) {
   --t-faint: oklch(0.95 0.01 80 / 0.55);
   --t-box: oklch(1 0 0 / 0.045);
   --t-edge: oklch(1 0 0 / 0.09);
-  --t-acc: oklch(0.72 0.15 42);
-  --terrain-major: oklch(0.72 0.15 42 / 0.5);
+  --t-acc: oklch(0.68 0.14 265);
+  --terrain-major: oklch(0.68 0.14 265 / 0.55);
   --terrain-minor: oklch(0.95 0.01 80 / 0.13);
   --mx: 50%;
   --my: 30%;
@@ -9875,7 +9875,7 @@ body:has(#gate:not([hidden])) {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(440px circle at var(--mx) var(--my), oklch(0.72 0.15 42 / 0.22), transparent 70%);
+  background: radial-gradient(440px circle at var(--mx) var(--my), oklch(0.68 0.14 265 / 0.26), transparent 70%);
 }
 
 .terrain-topo {
@@ -9941,16 +9941,43 @@ body:has(#gate:not([hidden])) {
 }
 
 .bento-box {
+  --bx: 50%;
+  --by: 50%;
+  --rx: 0deg;
+  --ry: 0deg;
+  position: relative;
+  overflow: hidden;
   min-width: 0;
   padding: 16px;
   background: var(--t-box);
   border: 1px solid var(--t-edge);
   border-radius: 14px;
-  transition: border-color 0.25s var(--ease);
+  transition: border-color 0.25s var(--ease), transform 0.25s var(--ease);
+}
+
+.bento-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(220px circle at var(--bx) var(--by), oklch(1 0 0 / 0.1), transparent 65%);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
 }
 
 .bento-box:hover {
-  border-color: oklch(0.72 0.15 42 / 0.55);
+  border-color: oklch(0.68 0.14 265 / 0.6);
+  transform: perspective(700px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-2px);
+}
+
+.bento-box:hover::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bento-box:hover {
+    transform: none;
+  }
 }
 
 .bento-box.wide {

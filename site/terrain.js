@@ -3,12 +3,14 @@
 const gate = document.getElementById('gate');
 const canvas = document.getElementById('terrain-topo');
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let t = 0;
+let drifting = false;
 let mx = -1e4;
 let my = -1e4;
 let queued = false;
 
 function height(x, y) {
-  let v = Math.sin(x * 0.006) * 1.2 + Math.cos(y * 0.008 + x * 0.002) * 1.1 + Math.sin((x + y) * 0.004) * 0.9 + Math.cos(x * 0.011 - y * 0.005) * 0.5;
+  let v = Math.sin(x * 0.006 + t * 0.3) * 1.2 + Math.cos(y * 0.008 + x * 0.002 - t * 0.2) * 1.1 + Math.sin((x + y) * 0.004 + t * 0.15) * 0.9 + Math.cos(x * 0.011 - y * 0.005) * 0.5;
   if (!still) {
     const dx = x - mx;
     const dy = y - my;
@@ -70,7 +72,38 @@ function draw() {
   }
 }
 
+// The terrain drifts slowly while the landing is on screen and the tab is visible.
+function drift() {
+  if (!drifting) return;
+  t += 0.012;
+  draw();
+  requestAnimationFrame(drift);
+}
+
+function setDrift(on) {
+  const next = on && !still;
+  if (next === drifting) return;
+  drifting = next;
+  if (drifting) requestAnimationFrame(drift);
+}
+
+// Counts rise from zero the first time they arrive.
+function countTo(el, n) {
+  if (still) {
+    el.textContent = n.toLocaleString('en-US');
+    return;
+  }
+  const start = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / 900);
+    el.textContent = Math.round(n * (1 - (1 - p) ** 3)).toLocaleString('en-US');
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function redraw() {
+  if (drifting) return;
   if (!queued) {
     queued = true;
     requestAnimationFrame(draw);
@@ -82,8 +115,8 @@ async function fillCounts() {
     const response = await fetch('stats.json', { cache: 'no-cache' });
     if (!response.ok) return;
     const stats = await response.json();
-    if (stats?.roles) document.getElementById('bento-roles').textContent = stats.roles.toLocaleString('en-US');
-    if (stats?.firms) document.getElementById('bento-firms').textContent = stats.firms.toLocaleString('en-US');
+    if (stats?.roles) countTo(document.getElementById('bento-roles'), stats.roles);
+    if (stats?.firms) countTo(document.getElementById('bento-firms'), stats.firms);
     const top = stats?.topFirms ?? [];
     if (top.length) {
       const list = document.getElementById('bento-top');
@@ -101,7 +134,25 @@ if (gate && canvas) {
     gate.style.setProperty('--mx', `${mx}px`);
     gate.style.setProperty('--my', `${my}px`);
     if (!still) redraw();
+    const box = event.target.closest?.('.bento-box');
+    if (box) {
+      const q = box.getBoundingClientRect();
+      const px = (event.clientX - q.left) / q.width;
+      const py = (event.clientY - q.top) / q.height;
+      box.style.setProperty('--bx', `${px * 100}%`);
+      box.style.setProperty('--by', `${py * 100}%`);
+      box.style.setProperty('--ry', `${(px - 0.5) * 10}deg`);
+      box.style.setProperty('--rx', `${(0.5 - py) * 10}deg`);
+    }
   });
+  const syncDrift = () => setDrift(!gate.hidden && !document.hidden && onScreen);
+  let onScreen = true;
+  new IntersectionObserver(([entry]) => {
+    onScreen = entry.isIntersecting;
+    syncDrift();
+  }).observe(gate);
+  document.addEventListener('visibilitychange', syncDrift);
+  new MutationObserver(syncDrift).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
   gate.addEventListener('pointerleave', () => {
     mx = my = -1e4;
     redraw();
