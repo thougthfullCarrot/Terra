@@ -76,3 +76,24 @@ describe('time parsing: CREW pages with no confirmed time', () => {
     expect(google.searchParams.get('details')).toContain('Time not confirmed');
   });
 });
+
+describe('rescheduling: a time that turns out to be TBD', () => {
+  it('is not marked "Moved from" when only the unconfirmed clock time goes away', async () => {
+    const { buildEventsFile, EVENT_SOURCES } = await import('../src/events/events.js');
+    const src = EVENT_SOURCES.find((s) => s.key === 'crew-austin')!;
+    const html = readFileSync(new URL('./fixtures/crew-austin-holiday-tbd.html', import.meta.url), 'utf8');
+    const url = 'https://austin.crewnetwork.org/events/2026/holiday-party';
+    const fetcher = (page: string) => ({ json: async () => ({}), text: async (u: string) => (u.endsWith('sitemap.xml') ? `<urlset><url><loc>${url}</loc></url></urlset>` : page) });
+    const at = new Date('2026-10-19T12:00:00Z');
+    const build = (page: string, prev: Awaited<ReturnType<typeof buildEventsFile>> | null) => buildEventsFile(at, prev, { sources: [src], fetcher: fetcher(page), log: () => {} });
+    const party = (f: Awaited<ReturnType<typeof buildEventsFile>>) => f.cities.flatMap((c) => c.events).find((e) => e.title === 'Holiday Party')!;
+    // The old parser kept the 10:50 AM stamp; the same page read now keeps only the date.
+    const old = await build(html.replace('>TBD<', '>10:50 AM<'), null);
+    expect(party(old).start).toBe('2026-12-03T10:50:00-06:00');
+    const now = party(await build(html, old));
+    expect(now.start).toBe('2026-12-03T00:00:00-06:00');
+    expect(now.timeUnconfirmed).toBe(true);
+    expect(now.rescheduledFrom).toBeUndefined();
+    expect(now.status).toBeUndefined();
+  });
+});

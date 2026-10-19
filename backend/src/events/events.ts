@@ -1383,7 +1383,8 @@ function withReschedule(e: TerraEvent, before: TerraEvent | undefined): TerraEve
   // Only a different local day is a move: a listing that gains its clock time (midnight → 8 AM, or a course's
   // first session read from its page) is the same event on the same day.
   const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: e.timezone ?? zoneOf(e.city) }).format(new Date(iso));
-  const moved = (x: string | null | undefined): x is string => Boolean(x) && (day(x!) !== day(e.start) || !isMidnight(x!));
+  // A page that now says its time is TBD has not moved either: the old clock time was never confirmed.
+  const moved = (x: string | null | undefined): x is string => Boolean(x) && (day(x!) !== day(e.start) || (!isMidnight(x!) && !e.timeUnconfirmed));
   const from = [before.start !== e.start ? before.start : null, before.rescheduledFrom].find(moved);
   return from ? { ...e, rescheduledFrom: from, status: e.status ?? 'rescheduled' } : e;
 }
