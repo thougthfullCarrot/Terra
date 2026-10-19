@@ -29,6 +29,27 @@ jobs:
       - name: Database tests
         run: npm run test:db
 
+  # Raw Land prototype screen in real Chromium (synthetic data only, localhost, no network writes).
+  # REQUIRE_BROWSER makes a missing browser fail the job instead of skipping the checks.
+  rawland-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - name: Raw Land UI checks
+        env:
+          REQUIRE_BROWSER: '1'
+        run: npx vitest run test/rawland-ui.test.ts --reporter=verbose
+
   mobile:
     runs-on: ubuntu-latest
     defaults:

@@ -1,0 +1,40 @@
+# Temporary Phase 0 probe for the Raw Land map: read-only GETs against public
+# parcel, appraisal and zoning services, printed to the log. No secrets, no
+# writes. Delete after Phase 0.
+name: Raw Land probe
+on:
+  push:
+    branches: [claude/project-thread-0zw22e]
+    paths: [backend/probe/**, .github/workflows/raw-land-probe.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Regression tests
+        working-directory: backend/probe
+        run: node --test parcel-metrics.test.mjs arcgis-read.test.mjs
+      - name: Live services
+        working-directory: backend/probe
+        run: npm init -y >/dev/null && npm i --no-save @turf/turf@7.1.0 >/dev/null && node raw-land-probe.mjs
+      - name: Official definitions
+        run: |
+          sudo apt-get install -y -qq poppler-utils >/dev/null
+          UA='terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)'
+          for u in https://comptroller.texas.gov/taxinfo/proptax/pdf/96-313.pdf https://comptroller.texas.gov/taxes/property-tax/docs/96-313.pdf; do
+            echo "### def $u"; curl -sSL -A "$UA" -o g.pdf -w '%{http_code} %{size_download}\n' "$u" || true
+            if pdftotext -layout g.pdf g.txt 2>/dev/null; then
+              grep -n -i -E 'Category C|C1 |C2 |C3 |vacant|Category D|D1 |D2 |Category E|E1 |Category F' g.txt | head -60
+              grep -n -A12 -E '^\s*Category C' g.txt | head -60; break
+            fi
+          done
+          echo "### def tax code 1.04 / 23"
+          curl -sSL -A "$UA" https://statutes.capitol.texas.gov/Docs/TX/htm/TX.1.htm -w "\nHTTP %{http_code}\n" | sed 's/<[^>]*>//g' | grep -n -A3 -E 'HTTP|Market value|Appraised value|Assessed value|Taxable value' | head -40
+          curl -sSL -A "$UA" https://statutes.capitol.texas.gov/Docs/TX/htm/TX.23.htm -w "\nHTTP %{http_code}\n" | sed 's/<[^>]*>//g' | grep -n -A3 -E 'Sec. 23.23\.|Sec. 23.231|Sec. 23.41\.|Sec. 23.51' | head -40
+          echo "### def categories D E"
+          grep -n -A14 -E '^\s*Category (D1|E):' g.txt | head -70
