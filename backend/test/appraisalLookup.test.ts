@@ -262,13 +262,16 @@ describe('collapse', () => {
 });
 
 describe('Bexar agricultural land', () => {
-  it('counts ag market value in land, keeps productivity value apart, and reconciles to the market total', () => {
+  it('counts ag market value in land, keeps productivity value apart, and reconciles to the market total (SARA raw 2025, read 2026-10-19)', () => {
     const r = normalizeRow(district('bexar'), {
-      Prop_id: 175721, Situs: '1 TEST RD', Land_hstd_val: 0, Land_non_hstd_val: 18430, AG_Market: 249510, AG_Use_val: 1200,
+      Prop_id: 175721, Situs: '1 TEST RD', Land_hstd_val: 18430, Land_non_hstd_val: 0, AG_Market: 249510, AG_Use_val: 600,
       Imprv_hstd_val: 138060, Imprv_non_hstd_val: 0, Market_val: 406000, Prop_yr: 2025
     }, { retrieved: 'x', dataset: 'x' })!;
-    expect(r).toMatchObject({ landValue: 267940, agMarketValue: 249510, agUseValue: 1200, improvementValue: 138060, totalValue: 406000 });
+    expect(r).toMatchObject({ landValue: 267940, agMarketValue: 249510, agUseValue: 600, improvementValue: 138060, totalValue: 406000 });
     expect(r.landValue! + r.improvementValue!).toBe(r.totalValue);
+    // BCAD's 2025 Appraised (157,090) swaps ag market for ag use value; TERRA's market total must not equal it.
+    expect(r.totalValue! - r.agMarketValue! + r.agUseValue!).toBe(157090);
+    expect(r.totalValue).not.toBe(157090);
   });
 });
 
