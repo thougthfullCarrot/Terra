@@ -18,7 +18,7 @@
   --chip: var(--sunk);
   --chip-hover: oklch(0.95 0.004 80);
   --acc-l: 0.57;
-  --acc-h: 42;
+  --acc-h: 265;
   --tint-a: 0.08;
   --accent: oklch(var(--acc-l) 0.15 var(--acc-h));
   --accent-hover: oklch(calc(var(--acc-l) - 0.06) 0.15 var(--acc-h));
@@ -51,16 +51,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: oklch(0.16 0.004 60);
-    --surface: oklch(0.16 0.004 60);
-    --sunk: oklch(0.2 0.004 60);
+    --bg: oklch(0.15 0.008 50);
+    --surface: oklch(0.175 0.009 50);
+    --sunk: oklch(0.2 0.01 50);
     --ink: oklch(0.95 0.003 80);
     --ink2: oklch(0.8 0.003 80);
     --muted: oklch(0.66 0.003 80);
-    --line: oklch(0.95 0.003 80 / 0.12);
+    --line: oklch(1 0 0 / 0.09);
     --line2: oklch(0.95 0.003 80 / 0.07);
     --chip-hover: oklch(0.24 0.004 60);
-    --acc-l: 0.72;
+    --acc-l: 0.7;
     --tint-a: 0.14;
     --on-tint: oklch(0.8 0.1 var(--acc-h));
     --on-accent: oklch(0.16 0.01 60);
@@ -77,16 +77,16 @@
 }
 
 :root[data-theme='dark'] {
-  --bg: oklch(0.16 0.004 60);
-  --surface: oklch(0.16 0.004 60);
-  --sunk: oklch(0.2 0.004 60);
+  --bg: oklch(0.15 0.008 50);
+  --surface: oklch(0.175 0.009 50);
+  --sunk: oklch(0.2 0.01 50);
   --ink: oklch(0.95 0.003 80);
   --ink2: oklch(0.8 0.003 80);
   --muted: oklch(0.66 0.003 80);
-  --line: oklch(0.95 0.003 80 / 0.12);
+  --line: oklch(1 0 0 / 0.09);
   --line2: oklch(0.95 0.003 80 / 0.07);
   --chip-hover: oklch(0.24 0.004 60);
-  --acc-l: 0.72;
+  --acc-l: 0.7;
   --tint-a: 0.14;
   --on-tint: oklch(0.8 0.1 var(--acc-h));
   --on-accent: oklch(0.16 0.01 60);
@@ -9894,11 +9894,10 @@ body:has(#gate:not([hidden])) {
 }
 
 #gate h1 {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-weight: 400;
-  font-size: clamp(46px, 6.6vw, 88px);
-  line-height: 0.95;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  font-size: clamp(42px, 5.8vw, 78px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
 }
 
 #gate .lede {
@@ -10061,5 +10060,110 @@ body:has(#gate:not([hidden])) {
 
   .bento-v {
     font-size: 24px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Night console (signed in): a Terrain band of contour lines behind the top of
+   each page, a cursor light, cards that glow and lean toward the cursor, and
+   compact rows. Dark is the default theme; light still works from the toggle.
+   --------------------------------------------------------------------------- */
+
+#main {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-topo {
+  position: absolute;
+  top: 0;
+  left: calc(50% - 50vw);
+  z-index: -1;
+  width: 100vw;
+  height: 320px;
+  pointer-events: none;
+  opacity: 0.55;
+  --terrain-major: oklch(var(--acc-l) 0.14 var(--acc-h) / 0.5);
+  --terrain-minor: oklch(0.95 0.01 80 / 0.1);
+  -webkit-mask-image: linear-gradient(#000 40%, transparent);
+  mask-image: linear-gradient(#000 40%, transparent);
+}
+
+:root[data-theme='light'] .app-topo {
+  --terrain-minor: oklch(0.19 0.005 60 / 0.08);
+}
+
+body:has(#gate:not([hidden])) .app-topo {
+  display: none;
+}
+
+#main::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(50% - 50vw);
+  z-index: -1;
+  width: 100vw;
+  height: 320px;
+  pointer-events: none;
+  background: radial-gradient(380px circle at var(--mx, -999px) var(--my, -999px), oklch(var(--acc-l) 0.14 var(--acc-h) / 0.18), transparent 70%);
+}
+
+body:has(#gate:not([hidden])) #main::before {
+  display: none;
+}
+
+.page-title,
+.section-title {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.page-count,
+.tab-count,
+.stat-value {
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  --bx: 50%;
+  --by: 50%;
+  --rx: 0deg;
+  --ry: 0deg;
+  overflow: hidden;
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(220px circle at var(--bx) var(--by), oklch(var(--acc-l) 0.14 var(--acc-h) / 0.13), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+}
+
+.card:hover::after {
+  opacity: 1;
+}
+
+.list > .card:hover {
+  border-color: oklch(var(--acc-l) 0.14 var(--acc-h) / 0.6);
+  transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-1px);
+}
+
+.list {
+  gap: 6px;
+}
+
+.list > .card {
+  padding: 12px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list > .card:hover {
+    transform: none;
   }
 }

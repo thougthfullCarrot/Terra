@@ -30,13 +30,14 @@
       // Before first paint, so a dark-mode visitor never sees a white flash.
       try {
         const theme = localStorage.getItem('terra-theme');
-        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+        // Night console: dark unless the visitor picked light.
+        document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
       } catch {}
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif&family=Geist+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
@@ -85,6 +86,7 @@
     </header>
 
     <main class="page" id="main" tabindex="-1">
+      <canvas class="app-topo" id="app-topo" aria-hidden="true"></canvas>
       <!-- Shown when accounts are configured and nobody is signed in: the landing hero with the sign-in form. -->
       <section id="gate" class="hero" hidden aria-labelledby="gate-title">
         <canvas class="terrain-topo" id="terrain-topo" aria-hidden="true"></canvas>
