@@ -8,6 +8,7 @@ export const LABELS = {
   outline: 'Outline: BCAD 2025 extract (SARA copy)',
   notMatched: 'account not matched in the city parcel layer; current status unknown',
   unincorporated: 'No city zoning: unincorporated',
+  jurisdictionUnknown: 'Jurisdiction unknown: outside every county boundary polygon',
   zoningNotFound: 'Zoning not found for this area',
   coverageUnavailable: 'Zoning coverage unavailable',
   unavailable: 'Unavailable',

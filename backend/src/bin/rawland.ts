@@ -2,7 +2,8 @@
  * Raw Land local prototype (Phase 1). Runs only on a local machine; every output goes to local-data/rawland/
  * (gitignored) and nothing is uploaded, published or deployed.
  *
- *   npm run rawland -- collect --source sara-polygons|zoning|city-parcels|city-limits [--limits-url U --limits-city-field F]
+ *   npm run rawland -- collect --source sara-polygons|zoning|city-parcels|city-limits [--restart] [--limits-verified]
+ *        (city-limits defaults to the county Cities layer; --limits-url U --limits-city-field F --limits-oid-field O override)
  *   npm run rawland -- build --appraisal-cache DIR [--prev-manifest FILE]
  *   npm run rawland -- serve [--synthetic] [--port 4173]
  *
@@ -10,16 +11,17 @@
  * --cache DIR`), checked with completeness(); the build refuses unless that and every geometry read are complete.
  */
 import { execFile } from 'node:child_process';
-import { createWriteStream, createReadStream } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGzip, createGunzip, gzipSync } from 'node:zlib';
+import { createGunzip, gzipSync } from 'node:zlib';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { completeness, cachedRecords } from '../appraisal/collect.js';
 import { PUBLICATION } from '../appraisal/publish.js';
-import { readFiltered, type Feature } from '../rawland/read.js';
+import { readFiltered, checkOidField, type Feature } from '../rawland/read.js';
+import { collectInto, readState, featuresFile, type SourceState } from '../rawland/store.js';
 import { SOURCES } from '../rawland/sources.js';
 import { PolygonIndex, parcelZoning, cityShares, geomKey, type Poly } from '../rawland/spatial.js';
 import { zoningStatus } from '../rawland/jurisdiction.js';
@@ -60,28 +62,31 @@ const q = (layer: string, fmt: string) => (p: Record<string, string>) => `${laye
 async function collect(id: keyof typeof SOURCES): Promise<void> {
   const src = { ...SOURCES[id] };
   if (id === 'city-limits') {
-    src.layer = arg('--limits-url') ?? null;
-    if (!src.layer || !arg('--limits-city-field')) throw new BuildRefused('city limits need --limits-url and --limits-city-field from a verified source (plan D9)');
-    src.fields = `OBJECTID,${arg('--limits-city-field')}`;
+    src.layer = arg('--limits-url') ?? src.layer;
+    src.jurisdictionField = arg('--limits-city-field') ?? src.jurisdictionField;
+    src.oidField = arg('--limits-oid-field') ?? src.oidField;
+    if (!src.layer || !src.jurisdictionField) throw new BuildRefused('city limits need a layer and a jurisdiction field (plan D9)');
+    src.fields = `${src.oidField},${src.jurisdictionField}`;
   }
-  const dir = join(OUT, 'raw', id); await mkdir(dir, { recursive: true });
-  const file = join(dir, 'features.ndjson.gz'); const gz = createGzip(); const sink = gz.pipe(createWriteStream(file));
-  let n = 0; const started = Date.now();
-  const res = await readFiltered(get, q(src.layer!, id === 'city-parcels' ? 'json' : 'geojson'), { where: '1=1' }, {
-    size: src.size, fields: src.fields, extra: id === 'city-parcels' ? { returnGeometry: 'false' } : { returnGeometry: 'true', outSR: '4326', geometryPrecision: '7' },
-    onPage: (f: Feature[]) => { for (const x of f) gz.write(`${JSON.stringify(x)}\n`); n += f.length; if (n % 50000 < f.length) log(`${id}: ${n} rows`); }
-  });
-  gz.end(); await new Promise<void>((r) => sink.on('finish', () => r()));
-  const state = { source: id, layer: src.layer, status: res.status, reason: res.reason, rows: res.rows, pages: res.pages, readAt: new Date().toISOString(), seconds: Math.round((Date.now() - started) / 1000), verified: id === 'city-limits' ? args.includes('--limits-verified') : src.verified };
-  await writeFile(join(dir, 'state.json'), JSON.stringify(state, null, 1));
-  log(`${id}: ${res.status}${res.reason ? ` (${res.reason})` : ''}, ${res.rows} rows in ${state.seconds}s`);
-  if (res.status !== 'complete') process.exitCode = 1;
+  // The layer's own metadata must name the same object id field the paging uses.
+  checkOidField(await get(`${src.layer}?f=json`), src.oidField);
+  const dir = join(OUT, 'raw', id); const started = Date.now(); let logged = 0;
+  const key = { layer: src.layer!, fields: src.fields, oidField: src.oidField };
+  const verified = id === 'city-limits' ? args.includes('--limits-verified') : src.verified;
+  const st = await collectInto(dir, key, (startAfter, priorRows, onPage) => readFiltered(get, q(src.layer!, id === 'city-parcels' ? 'json' : 'geojson'), { where: '1=1' }, {
+    size: src.size, fields: src.fields, oidField: src.oidField, startAfter, priorRows,
+    extra: id === 'city-parcels' ? { returnGeometry: 'false' } : { returnGeometry: 'true', outSR: '4326', geometryPrecision: '7' },
+    onPage: async (f, last) => { await onPage(f, last); logged += f.length; if (logged >= 50000) { logged = 0; log(`${id}: page through ${src.oidField} ${last}`); } }
+  }), { source: id, layer: src.layer!, oidField: src.oidField, ...(src.jurisdictionField ? { jurisdictionField: src.jurisdictionField } : {}), verified, ...(id === 'city-limits' ? { updateDate: 'unknown' } : {}) }, { restart: args.includes('--restart') });
+  log(`${id}: ${st.status}${st.reason ? ` (${st.reason})` : ''}, ${st.rows} rows${st.resumedFrom ? ` (resumed after ${st.resumedFrom})` : ''} in ${Math.round((Date.now() - started) / 1000)}s`);
+  if (st.status !== 'complete') { log(`${id}: the last complete read is unchanged; rerun to resume${/service reported/.test(st.reason ?? '') ? ', or add --restart if the source changed' : ''}`); process.exitCode = 1; }
 }
 
 async function* lines(file: string): AsyncGenerator<Poly> {
   for await (const l of createInterface({ input: createReadStream(file).pipe(createGunzip()), crlfDelay: Infinity })) if (l) yield JSON.parse(l) as Poly;
 }
-async function state(id: string) { return JSON.parse(await readFile(join(OUT, 'raw', id, 'state.json'), 'utf8').catch(() => '{"status":"failed","reason":"never collected"}')); }
+async function state(id: string) { return (await readState(join(OUT, 'raw', id))) ?? { status: 'failed', reason: 'never collected' } as unknown as SourceState; }
+const rawFile = (id: string) => featuresFile(join(OUT, 'raw', id));
 
 async function build(): Promise<void> {
   const cache = arg('--appraisal-cache'); if (!cache) throw new BuildRefused('--appraisal-cache DIR is required');
@@ -96,21 +101,23 @@ async function build(): Promise<void> {
   for await (const r of cachedRecords(resolve(cache), 'bexar')) vals.set(r.account, accountValues(r));
   log('loading outlines (values lead; others are dropped)');
   const outlines = new Map<string, Poly>();
-  for await (const f of lines(join(OUT, 'raw/sara-polygons/features.ndjson.gz'))) {
+  for await (const f of lines(rawFile('sara-polygons'))) {
     const id = String(f.properties.Prop_id ?? ''); if (!f.geometry || !vals.has(id)) continue;
     const prev = outlines.get(id);
     if (!prev) outlines.set(id, f); else if (geomKey(prev) !== geomKey(f)) outlines.set(id, (turf.union(turf.featureCollection([prev, f])) as Poly) ?? prev);
   }
   const { joined, droppedOutlines, noOutline } = joinOutlines(vals, outlines);
   log('indexing zoning and city limits');
-  const zoning: Poly[] = []; for await (const f of lines(join(OUT, 'raw/zoning/features.ndjson.gz'))) if (f.geometry) zoning.push(f);
-  const cityField = arg('--limits-city-field') ?? 'city';
-  const NOT_A_CITY = /^\s*unincorporated\s*$/i;
-  const limits: Poly[] = []; for await (const f of lines(join(OUT, 'raw/city-limits/features.ndjson.gz'))) if (f.geometry && !NOT_A_CITY.test(String(f.properties[cityField] ?? ''))) limits.push({ ...f, properties: { city: f.properties[cityField] } });
+  const zoning: Poly[] = []; for await (const f of lines(rawFile('zoning'))) if (f.geometry) zoning.push(f);
+  // The jurisdiction field comes from the collection's own metadata. Unincorporated and military polygons are kept:
+  // zoningStatus needs them to tell explicit unincorporated land from gaps, which stay unknown.
+  const cityField = reads['city-limits'].jurisdictionField;
+  if (!cityField) throw new BuildRefused('city-limit collection recorded no jurisdiction field; recollect it');
+  const limits: Poly[] = []; for await (const f of lines(rawFile('city-limits'))) if (f.geometry) limits.push({ ...f, properties: { city: String(f.properties[cityField] ?? '').trim() } });
   const zi = new PolygonIndex(zoning), li = new PolygonIndex(limits);
   // Account matching only (by id): never adds or removes an account, never makes a spatial claim.
   const cityAcct = new Map<string, { acres: unknown; polygons: number }>();
-  for await (const f of lines(join(OUT, 'raw/city-parcels/features.ndjson.gz'))) {
+  for await (const f of lines(rawFile('city-parcels'))) {
     const a = (f as unknown as Feature).attributes ?? {}; const id = Number(a.PropID); if (!(id > 0)) continue;
     const k = String(id); const prev = cityAcct.get(k); cityAcct.set(k, { acres: prev ? null : a.legal_acre, polygons: (prev?.polygons ?? 0) + 1 });
   }
@@ -137,7 +144,7 @@ async function build(): Promise<void> {
   await writeFile(join(dir, 'index.json.gz'), gzipSync(JSON.stringify(rows)));
   for (const [k, t] of tiles) await writeFile(join(dir, 'tiles', `${k}.json.gz`), gzipSync(JSON.stringify(t)));
   const manifest: Manifest = {
-    built: new Date().toISOString(), pinnedAppraisalCommit: '7b7fda3', sourceYear: 2025,
+    built: new Date().toISOString(), pinnedAppraisalCommit: 'dd8a267', sourceYear: 2025,
     counts: { accounts: rows.length, noOutline, droppedOutlines, zoningConflicts: conflicts, coverageUnavailable: unavailable, tiles: tiles.size },
     reads: Object.fromEntries(Object.entries(reads).map(([k, v]) => [k, { readAt: v.readAt, rows: v.rows }]))
   };

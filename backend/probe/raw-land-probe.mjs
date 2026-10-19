@@ -1,27 +1,12 @@
-// Raw Land probe, round 9: verify a city-limits source for Bexar County. Boundary layers only:
-// no parcel, value, owner or address data is read. The log prints layer names, fields, counts, city names, dates.
+// Raw Land probe, round 10: the county Cities layer's object id field and GeoJSON output, as the collector reads it.
+// Boundary layer only: no parcel, value, owner or address data. Prints field names, counts and jurisdiction names.
 import { execFileSync } from 'node:child_process';
-import * as turf from '@turf/turf';
 const UA = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
-const out = (k, v) => console.log(`\n### ${k}\n` + String(JSON.stringify(v ?? null)).slice(0, 20000));
-function get(url) { for (let t = 0; t < 3; t++) { try { return JSON.parse(execFileSync('curl', ['-sS', '--fail-with-body', '-L', '-m', '90', '-A', UA, url], { encoding: 'utf8', maxBuffer: 5e8 })); } catch (e) { if (t === 2) return { _err: String(e.message).slice(0, 200) }; } } }
-// round 9: inspect the two layers round 8 found but did not test (all layers of each service, any name)
-const SVCS = ['https://maps.bexar.org/arcgis/rest/services/LocalJurisdictions/MapServer', 'https://maps.bexar.org/arcgis/rest/services/CityCouncilDistricts/MapServer', 'https://services.arcgis.com/g1fRTDLeMgspWrYp/arcgis/rest/services/Texas_Administrative_Boundaries/FeatureServer'];
-const layers = [];
-for (const svc of SVCS) { const s = get(`${svc}?f=json`); out(`service ${svc}`, { err: s._err ?? s.error, layers: (s.layers ?? []).map((l) => [l.id, l.name]) }); for (const l of s.layers ?? []) layers.push({ url: `${svc}/${l.id}`, name: l.name }); }
-const report = [];
-for (const l of layers.slice(0, 40)) {
-  const m = get(`${l.url}?f=json`); if (m._err || m.error || m.geometryType !== 'esriGeometryPolygon') continue;
-  const c = get(`${l.url}/query?f=json&where=1%3D1&returnCountOnly=true`);
-  const strField = (m.fields ?? []).filter((f) => f.type === 'esriFieldTypeString').map((f) => f.name);
-  const nameField = strField.find((f) => /^(name|city|cityname|city_name|municipality|muni|juris|jurisdiction|label|NAME)$/i.test(f)) ?? strField[0];
-  const vals = nameField ? get(`${l.url}/query?f=json&where=1%3D1&outFields=${nameField}&returnDistinctValues=true&returnGeometry=false`) : {};
-  report.push({ ...l, count: c.count ?? c.error, edited: m.editingInfo?.lastEditDate ? new Date(m.editingInfo.lastEditDate).toISOString() : null, copyright: m.copyrightText?.slice(0, 120), description: String(m.description ?? '').replace(/<[^>]+>/g, '').slice(0, 200), fields: (m.fields ?? []).map((f) => f.name).join(','), nameField, names: (vals.features ?? []).map((f) => f.attributes[nameField]).sort().slice(0, 60) });
-}
-out('cityLimitLayers', report);
-// spot-check: known points (city hall-ish coordinates) must fall in the right city
-const POINTS = [['San Antonio', -98.4936, 29.4241], ['Alamo Heights', -98.4655, 29.4844], ['Leon Valley', -98.6160, 29.4952], ['Universal City', -98.2914, 29.5480], ['Converse', -98.3164, 29.5180], ['Schertz', -98.2697, 29.5522], ['Helotes', -98.6897, 29.5780], ['Live Oak', -98.3364, 29.5652], ['unincorporated (Bexar west)', -98.8000, 29.3500]];
-for (const r of report.slice(0, 20)) {
-  r.spot = POINTS.map(([want, x, y]) => { const h = get(`${r.url}/query?f=json&geometry=${x},${y}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${r.nameField}&returnGeometry=false`); return [want, h._err || h.error ? 'ERR' : (h.features ?? []).map((f) => f.attributes[r.nameField])]; });
-}
-out('spotChecks', report.slice(0, 20).map((r) => ({ url: r.url, spot: r.spot })));
+const L = 'https://maps.bexar.org/arcgis/rest/services/LocalJurisdictions/MapServer/0';
+const out = (k, v) => console.log(`\n### ${k}\n` + String(JSON.stringify(v ?? null)).slice(0, 8000));
+const get = (url, body) => { try { return JSON.parse(execFileSync('curl', ['-sS', '--fail-with-body', '-L', '-m', '90', '-A', UA, '-H', 'Content-Type: application/x-www-form-urlencoded', '--data-binary', body, url], { encoding: 'utf8', maxBuffer: 5e8 })); } catch (e) { return { _err: String(e.message).slice(0, 300) }; } };
+const m = get(`${L}`, 'f=json');
+out('meta', { objectIdField: m.objectIdField, oidTyped: (m.fields ?? []).filter((f) => f.type === 'esriFieldTypeOID').map((f) => f.name), maxRecordCount: m.maxRecordCount, currentVersion: m.currentVersion, formats: m.supportedQueryFormats, editingInfo: m.editingInfo ?? null });
+out('count', get(`${L}/query`, 'f=json&where=1%3D1&returnCountOnly=true'));
+const g = get(`${L}/query`, 'f=geojson&where=(1%3D1) AND OBJECTID_1 > -1&outFields=OBJECTID_1,JURIS&orderByFields=OBJECTID_1 ASC&resultRecordCount=2000&returnGeometry=true&outSR=4326&geometryPrecision=7');
+out('geojson', g._err || g.error ? g : { type: g.type, n: g.features?.length, exceeded: g.exceededTransferLimit ?? g.properties?.exceededTransferLimit ?? null, ids: (g.features ?? []).map((f) => f.properties?.OBJECTID_1), juris: (g.features ?? []).map((f) => f.properties?.JURIS).sort(), geomTypes: [...new Set((g.features ?? []).map((f) => f.geometry?.type))] });

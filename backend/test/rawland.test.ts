@@ -105,14 +105,18 @@ describe('spatial index', () => {
 });
 
 describe('jurisdiction', () => {
-  const limits = new PolygonIndex([sq(X, Y, 10 * U, { city: 'San Antonio' }), sq(X + 20 * U, Y, 5 * U, { city: 'Alamo Heights' })]);
+  // County-layer shape: explicit Unincorporated and military polygons; the strip X+30..X+40 and beyond X+50 are gaps.
+  const limits = new PolygonIndex([sq(X, Y, 10 * U, { city: 'San Antonio' }), sq(X + 20 * U, Y, 5 * U, { city: 'Alamo Heights' }), sq(X + 40 * U, Y, 10 * U, { city: 'Unincorporated' }), sq(X + 60 * U, Y + 20 * U, 5 * U, { city: 'Lackland AFB' })]);
   const zoning = new PolygonIndex([sq(X, Y, 10 * U, { Zoning: 'R-6' }), sq(X + 40 * U, Y, 5 * U, { Zoning: 'OCL' })]);
   const st = (p: Poly, z = zoning, limitsRead = 'complete') => zoningStatus(limitsRead, cityShares(p, limits), parcelZoning(p, z, 'complete'));
-  it('outside every city is unincorporated, even where OCL is absent', () => { expect(st(sq(X + 40 * U, Y, U)).status).toBe(LABELS.unincorporated); expect(st(sq(X + 60 * U, Y, U)).status).toBe(LABELS.unincorporated); });
+  it('only the explicit Unincorporated polygon makes land unincorporated, even where OCL is absent', () => { expect(st(sq(X + 41 * U, Y, U)).status).toBe(LABELS.unincorporated); expect(st(sq(X + 45 * U, Y + 5 * U, U)).status).toBe(LABELS.unincorporated); });
+  it('a gap outside every polygon stays unknown, never inferred unincorporated', () => { expect(st(sq(X + 32 * U, Y, U)).status).toBe(LABELS.jurisdictionUnknown); expect(st(sq(X + 80 * U, Y, U)).status).toBe(LABELS.jurisdictionUnknown); });
+  it('a parcel straddling the Unincorporated polygon and a gap is unincorporated with an unknown-part note', () => { const r = st(sq(X + 49.5 * U, Y, U)); expect(r.status).toBe(LABELS.unincorporated); expect(r.note).toMatch(/outside every county boundary polygon/); });
+  it('military polygons keep their own classification', () => expect(st(sq(X + 61 * U, Y + 21 * U, U)).status).toBe('Lackland AFB: military installation, no city zoning'));
   it('inside a non-integrated city shows that city status, not unincorporated', () => expect(st(sq(X + 21 * U, Y, U)).status).toBe('Alamo Heights: published as PDF only'));
   it('inside San Antonio with no zoning is "not found", not unincorporated', () => expect(st(sq(X + 2 * U, Y, U), new PolygonIndex([])).status).toBe(LABELS.zoningNotFound));
   it('inside San Antonio with zoning gives the zoning status', () => expect(st(sq(X + 2 * U, Y, U)).status).toBe('single district'));
-  it('a failed city-limit read never yields unincorporated', () => expect(st(sq(X + 40 * U, Y, U), zoning, 'failed').status).toBe(LABELS.coverageUnavailable));
+  it('a failed city-limit read never yields unincorporated', () => expect(st(sq(X + 41 * U, Y, U), zoning, 'failed').status).toBe(LABELS.coverageUnavailable));
 });
 
 // ---------- county-wide index vs viewport
