@@ -6,7 +6,7 @@
  *   npm run rawland -- build --appraisal-cache DIR [--prev-manifest FILE]
  *   npm run rawland -- serve [--synthetic] [--port 4173]
  *
- * Values come from #84's Bexar read in the local appraisal cache (`npm run appraisal -- collect --district bexar
+ * Values come from #84's Bexar read in the local appraisal cache (`npm run appraisal -- collect --districts bexar
  * --cache DIR`), checked with completeness(); the build refuses unless that and every geometry read are complete.
  */
 import { execFile } from 'node:child_process';
