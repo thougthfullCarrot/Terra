@@ -90,7 +90,22 @@ function toPoly(mp: number[][][][]): Poly | null {
 }
 export const intersectPolys = (a: Poly, b: Poly): Poly | null => toPoly(polygonClipping.intersection(asGeom(a), asGeom(b)));
 export const unionPolys = (ps: Poly[]): Poly | null => (ps.length ? toPoly(polygonClipping.union(asGeom(ps[0]!), ...ps.slice(1).map(asGeom))) : null);
-const clip = (parcel: Poly, cand: Poly): Poly | null => (within(parcel, cand) ? parcel : intersectPolys(parcel, cand));
+/**
+ * Detailed zoning polygons (up to ~17,500 vertices) that cover a small area are not cut by the index, so each nearby
+ * parcel would be clipped against the whole polygon; on real Bexar data that was 25-180 ms per account. Trimming the
+ * candidate to the parcel's box first gives the same intersection, because the parcel lies inside that box.
+ */
+function trimmed(parcel: Poly, cand: Poly): Poly | null {
+  if (vertexCount(cand) <= 200) return cand;
+  const [a, b, c, d] = turf.bbox(parcel), m = 1e-6;
+  const g = turf.bboxClip(cand, [a - m, b - m, c + m, d + m]).geometry;
+  const rings = ((g.type === 'Polygon' ? [g.coordinates] : g.coordinates) as Position[][][]).filter((r) => r.length && r[0]!.length >= 4);
+  return rings.length ? (turf.multiPolygon(rings, cand.properties) as Poly) : null;
+}
+const clip = (parcel: Poly, cand: Poly): Poly | null => {
+  const t = trimmed(parcel, cand); if (!t) return null;
+  return within(parcel, t) ? parcel : intersectPolys(parcel, t);
+};
 
 /** One parcel's zoning coverage. `readStatus` is the status of the one-time zoning read. */
 export function parcelZoning(parcel: Poly, zoning: PolygonIndex, readStatus: string): Coverage {

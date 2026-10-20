@@ -54,3 +54,17 @@ describe('geomKey', () => {
     expect(calls).toBe(0);
   });
 });
+
+describe('trimming detailed candidates to the parcel box', () => {
+  it('gives the same zoning area as clipping against the whole detailed polygon', () => {
+    const z = wobbly(5000, { Zoning: 'R-6' }); // > 200 vertices, small enough not to be cut by the index
+    const ix = new PolygonIndex([z], { maxVerts: Infinity });
+    for (const [x, y] of [[-98.5, 29.4], [-98.41, 29.4], [-98.52, 29.31]] as const) {
+      const p = parcel(x, y), c = parcelZoning(p, ix, 'complete');
+      const exact = turf.intersect(turf.featureCollection([p, z]));
+      const want = exact ? turf.area(exact) * 10.763910417 : 0;
+      const got = 'districts' in c ? c.districts.reduce((s, d) => s + d.sqft, 0) : 0;
+      expect(Math.abs(got - want)).toBeLessThan(Math.max(1e-6 * want, 1e-6));
+    }
+  });
+});
