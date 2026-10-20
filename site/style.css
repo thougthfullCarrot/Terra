@@ -45,6 +45,10 @@
   --mono: var(--ui);
   --radius: 12px;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Strong curves for UI motion: ease-out for enter and respond, ease-in-out for things moving on screen, drawer for sheets. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   color-scheme: light;
 }
@@ -7806,8 +7810,10 @@ nav.market-tools a.chip[aria-current='page'] {
   cursor: pointer;
 }
 
-.devx-legend-item:hover {
-  background: var(--sunk);
+@media (hover: hover) and (pointer: fine) {
+  .devx-legend-item:hover {
+    background: var(--sunk);
+  }
 }
 
 .devx-legend-label {
@@ -7906,7 +7912,7 @@ nav.market-tools a.chip[aria-current='page'] {
   border: 2px solid var(--cat);
   border-radius: 50%;
   box-shadow: 0 2px 6px oklch(0 0 0 / 0.45);
-  transition: transform 0.12s ease;
+  transition: transform 200ms var(--ease-out);
 }
 
 .devx-pin svg {
@@ -7931,7 +7937,7 @@ nav.market-tools a.chip[aria-current='page'] {
 }
 
 /* Price pills: the Halo disc and the filed cost, with a small tail onto the spot. */
-.devx-pill {
+.devx-price {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -7945,11 +7951,11 @@ nav.market-tools a.chip[aria-current='page'] {
   border: 1.5px solid var(--cat);
   border-radius: 999px;
   box-shadow: 0 2px 7px oklch(0 0 0 / 0.45);
-  transition: transform 0.12s ease;
+  transition: transform 200ms var(--ease-out), color 150ms ease, background-color 150ms ease;
   transform-origin: 15px 100%;
 }
 
-.devx-pill::after {
+.devx-price::after {
   content: "";
   position: absolute;
   left: 10px;
@@ -7962,34 +7968,34 @@ nav.market-tools a.chip[aria-current='page'] {
   transform: rotate(45deg);
 }
 
-.devx-pill .devx-pin {
+.devx-price .devx-pin {
   width: 24px;
   height: 24px;
   border-width: 1.5px;
   box-shadow: none;
 }
 
-.devx-pill .devx-pin svg {
+.devx-price .devx-pin svg {
   width: 13px;
   height: 13px;
 }
 
-.devx-pill.approx {
+.devx-price.approx {
   border-style: dashed;
 }
 
-.devx-pill-icon.lit .devx-pill {
+.devx-pill-icon.lit .devx-price {
   transform: scale(1.08);
   background: #2a2620;
 }
 
-.devx-pill-icon.chosen .devx-pill {
+.devx-pill-icon.chosen .devx-price {
   color: #16140f;
   background: #f3efe8;
   box-shadow: 0 0 0 3px var(--accent), 0 3px 10px oklch(0 0 0 / 0.55);
 }
 
-.devx-pill-icon.chosen .devx-pill::after {
+.devx-pill-icon.chosen .devx-price::after {
   background: #f3efe8;
 }
 
@@ -8169,8 +8175,10 @@ nav.market-tools a.chip[aria-current='page'] {
   cursor: pointer;
 }
 
-.devx-list .dev-pick:hover {
-  background: var(--sunk);
+@media (hover: hover) and (pointer: fine) {
+  .devx-list .dev-pick:hover {
+    background: var(--sunk);
+  }
 }
 
 .devx-list .dev-item.active .dev-pick {
@@ -8508,8 +8516,10 @@ nav.market-tools a.chip[aria-current='page'] {
   border-radius: 3px 3px 1px 1px;
 }
 
-.devx-bar-col:hover i {
-  background: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .devx-bar-col:hover i {
+    background: var(--ink);
+  }
 }
 
 .devx-bar-col[aria-pressed='true'] i {
@@ -8899,8 +8909,10 @@ nav.market-tools a.chip[aria-current='page'] {
   border-bottom: 0;
 }
 
-.devx .dev-pick:hover .dev-name {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .devx .dev-pick:hover .dev-name {
+    color: var(--ink);
+  }
 }
 
 .devx .devx-pill select,
@@ -8966,8 +8978,10 @@ body[data-workspace='map'] .devx-body {
   color: var(--muted);
 }
 
-.devx-crumbs a:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .devx-crumbs a:hover {
+    color: var(--ink);
+  }
 }
 
 /* One menu instead of the chip row where the chips would run off the edge. */
@@ -9119,6 +9133,253 @@ body[data-workspace='map'] .devx-body {
 
 .devx-mapwrap {
   scroll-margin-top: 64px;
+}
+
+/* ---------------------------------------------------------------------------
+   Development map motion (devmap.js). UI motion stays under 300 ms, uses the
+   strong curves in :root and moves only transform and opacity (colors fade on
+   their own). Hover is for a mouse or trackpad; reduced motion keeps the fades
+   and drops the movement. Keyboard-only actions (Escape) never animate.
+   --------------------------------------------------------------------------- */
+
+/* Pins arrive: a small rise and fade from their tail, never from nothing. The first
+   draw staggers the price pins biggest first (--in-delay); a fanned-out group starts
+   back at its shared spot (--from) and spreads out. Leaflet rebuilds an icon on
+   every add, so this plays once per appearance and never on a pan. */
+.devx-pin-icon > .devx-pin,
+.devx-pill-icon > .devx-price {
+  animation: devx-pin-in 220ms var(--ease-out) var(--in-delay, 0ms) backwards;
+}
+
+@keyframes devx-pin-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--from, 0px, 0px)) scale(0.9);
+  }
+}
+
+/* Hover lift, chosen grow and press: transform for the state, the separate scale
+   property for the press, so pressing a chosen pin never drops its size. */
+.devx-pin {
+  transition: transform 200ms var(--ease-out), scale 120ms var(--ease-out);
+}
+
+.devx-price {
+  transition: transform 200ms var(--ease-out), scale 120ms var(--ease-out), color 150ms ease, background-color 150ms ease;
+}
+
+.devx-pin-icon:active > .devx-pin,
+.devx-pill-icon:active > .devx-price {
+  scale: 0.94;
+}
+
+/* The chosen pin's ring: two quick pings that say "here", then it rests. */
+.devx-pulse {
+  animation: devx-locate 900ms var(--ease-out) 2 both;
+}
+
+@keyframes devx-locate {
+  from {
+    transform: scale(0.5);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Small dots hide while Leaflet scales the map, then fade back in where they now belong. */
+.devx-specks {
+  transition: opacity 180ms var(--ease-out);
+}
+
+.devx-specks.zooming {
+  opacity: 0;
+  transition: none;
+}
+
+/* Pin tooltips: a quick fade (Leaflet owns their transform, so they don't scale). */
+.devx .leaflet-tooltip {
+  animation: devx-fade-in 120ms var(--ease-out);
+}
+
+/* Popups of smaller filings and reports grow out of the pin they belong to: the
+   card's origin is the tip's point, 20px under it. */
+.devx .leaflet-popup {
+  transition: opacity 150ms var(--ease-out);
+}
+
+.devx .leaflet-popup-content-wrapper,
+.devx .leaflet-popup-tip-container {
+  animation: devx-grow 180ms var(--ease-out);
+}
+
+.devx .leaflet-popup-content-wrapper {
+  transform-origin: 50% calc(100% + 20px);
+}
+
+.devx .leaflet-popup-tip-container {
+  transform-origin: 50% 100%;
+}
+
+@keyframes devx-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes devx-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The project panel: a card that slides in from the map's right edge; on narrow
+   maps a sheet that rises from the bottom on the drawer curve. Closing is instant. */
+.devx-panel {
+  animation: devx-panel-in 220ms var(--ease-out);
+}
+
+.devx-mapwrap.narrow .devx-panel {
+  animation: devx-sheet-in 280ms var(--ease-drawer);
+}
+
+@keyframes devx-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+@keyframes devx-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* Previous / next: the new project slides in from the side it came from. */
+.devx-panel[data-swap='next'] .devx-panel-body {
+  animation: devx-swap-next 200ms var(--ease-out);
+}
+
+.devx-panel[data-swap='prev'] .devx-panel-body {
+  animation: devx-swap-prev 200ms var(--ease-out);
+}
+
+@keyframes devx-swap-next {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes devx-swap-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+/* More: the menu grows from its button, and the caret turns. */
+.devx-more-body {
+  transform-origin: top left;
+}
+
+.devx-more[open] .devx-more-body {
+  animation: devx-menu-in 180ms var(--ease-out);
+}
+
+@keyframes devx-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+
+.devx-more-summary::after {
+  display: inline-block;
+  transition: transform 200ms var(--ease-out);
+}
+
+.devx-more[open] .devx-more-summary::after {
+  transform: rotate(180deg);
+}
+
+/* Press feedback on everything pressable. */
+.devx-filters .devx-pill,
+.devx-seg-item,
+.devx-legend-item,
+.devx-list .dev-pick,
+.devx-bar-col,
+.devx .leaflet-control-zoom a {
+  transition: transform 160ms var(--ease-out), color 150ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.devx-filters .devx-pill:active,
+.devx-seg-item:active,
+.devx-legend-item:active,
+.devx-bar-col:active {
+  transform: scale(0.97);
+}
+
+.devx-list .dev-pick:active {
+  transform: scale(0.98);
+}
+
+.devx .leaflet-control-zoom a:active {
+  transform: scale(0.92);
+}
+
+.devx-bar-col i,
+.devx-toggle-dot,
+.devx-legend-item .devx-badge {
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .devx-filters .devx-pill:not([aria-pressed='true']):hover {
+    border-color: var(--ink2);
+  }
+
+  .devx-seg-item:not([aria-pressed='true']):hover {
+    color: var(--ink2);
+  }
+
+  .devx .leaflet-control-zoom a:hover {
+    background: var(--sunk) !important;
+  }
+}
+
+/* Reduced motion: fades stay (they explain what changed), movement goes. These
+   outrank the site-wide reduced-motion rule, which would cut the fades too. */
+@media (prefers-reduced-motion: reduce) {
+  .devx-pin-icon > .devx-pin,
+  .devx-pill-icon > .devx-price,
+  .devx-panel,
+  .devx-mapwrap.narrow .devx-panel,
+  .devx-panel[data-swap] .devx-panel-body,
+  .devx-more[open] .devx-more-body,
+  .devx .leaflet-popup-content-wrapper,
+  .devx .leaflet-popup-tip-container {
+    animation: devx-fade-in 150ms ease both !important;
+  }
+
+  .devx-pulse {
+    animation: none !important;
+    opacity: 0.8;
+    transform: scale(0.8);
+  }
+
+  .devx-pin-icon:active > .devx-pin,
+  .devx-pill-icon:active > .devx-price {
+    scale: none;
+  }
+
+  .devx-more[open] .devx-more-summary::after {
+    transition: none;
+  }
 }
 
 /* Market data overview, redesign v3: the comparison table beside the picked city's panel. */
@@ -10274,5 +10535,537 @@ body:has(#gate:not([hidden])) #main::before {
 
   #e-list .date-block {
     min-width: 3.75rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Development map, concept B (map-first): the map fills the card; the project
+   rail, the filters and the timeline float over it on glass; a project opens
+   as a popover on its pin. Phones keep the list below the map as a sheet.
+   --------------------------------------------------------------------------- */
+.devx {
+  --glass: color-mix(in srgb, var(--surface) 86%, transparent);
+  --rail: 372px;
+  --num: 'Geist Mono', ui-monospace, monospace;
+}
+
+.devx-glass,
+.devx-side,
+.devx-filters,
+.devx-chart,
+.devx-fold {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+/* The basemap follows the theme: a night map in dark, a quiet paper map in light. */
+:root[data-theme='light'] .devx .leaflet-tile-pane {
+  filter: grayscale(1) sepia(0.12) contrast(0.86) brightness(1.06);
+}
+
+:root[data-theme='light'] .devx .leaflet-container {
+  background: #efece6;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .devx .leaflet-tile-pane {
+    filter: grayscale(1) sepia(0.12) contrast(0.86) brightness(1.06);
+  }
+}
+
+/* ---- Wide screens: one canvas, everything floating. */
+@media (min-width: 901px) {
+  .devx-body {
+    position: relative;
+    display: block;
+  }
+
+  .devx-mapwrap {
+    position: absolute;
+    inset: 0;
+  }
+
+  .devx-side {
+    position: absolute;
+    z-index: 560;
+    top: 16px;
+    left: 16px;
+    bottom: 16px;
+    width: var(--rail);
+    overflow: hidden;
+    border-right: 1px solid var(--line);
+    border-radius: 18px;
+    transition: transform 260ms var(--ease-out), opacity 200ms var(--ease-out);
+  }
+
+  .devx-body.folded .devx-side {
+    transform: translateX(calc(-100% - 24px));
+    opacity: 0;
+  }
+
+  .devx-fold {
+    position: absolute;
+    z-index: 570;
+    top: 50%;
+    left: calc(16px + var(--rail) - 14px);
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 44px;
+    margin-top: -22px;
+    padding: 0;
+    color: var(--ink2);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 260ms var(--ease-out), background-color 150ms ease;
+  }
+
+  .devx-fold svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: transform 260ms var(--ease-in-out);
+  }
+
+  .devx-fold:active {
+    scale: 0.92;
+  }
+
+  .devx-body.folded .devx-fold {
+    transform: translateX(calc(-1 * var(--rail) + 4px));
+  }
+
+  .devx-body.folded .devx-fold svg {
+    transform: rotate(180deg);
+  }
+
+  /* Filters: one glass bar beside the rail. */
+  .devx-filters {
+    top: 16px;
+    left: calc(16px + var(--rail) + 16px);
+    right: auto;
+    max-width: calc(100% - var(--rail) - 64px);
+    gap: 2px;
+    padding: 4px;
+    pointer-events: auto;
+    border-radius: 16px;
+    transition: transform 260ms var(--ease-out);
+    z-index: 620;
+  }
+
+  .devx-body.folded .devx-filters,
+  .devx-body.folded .devx-chart {
+    transform: translateX(calc(-1 * var(--rail) - 16px));
+  }
+
+  .devx-mapwrap.panel-open:not(.narrow) .devx-filters {
+    right: auto;
+  }
+
+  /* The timeline along the bottom, beside the rail. */
+  .devx-chart,
+  .devx-mapwrap.panel-open:not(.narrow) .devx-chart {
+    left: calc(16px + var(--rail) + 16px);
+    right: 68px;
+    bottom: 16px;
+    width: auto;
+    max-width: none;
+    border-radius: 16px;
+    transition: transform 260ms var(--ease-out);
+  }
+
+  .devx-body.folded .devx-chart {
+    width: auto;
+  }
+
+  /* The popover over its pin. JS sets translate; the tail and origin sit on the pin. */
+  .devx-mapwrap:not(.narrow) .devx-panel {
+    top: 0;
+    left: 0;
+    right: auto;
+    bottom: auto;
+    width: 384px;
+    max-height: min(560px, calc(100% - 96px));
+    border-radius: 18px;
+    box-shadow: var(--shadow-lg);
+    transform-origin: var(--ox, 50%) calc(100% + 10px);
+    animation: devx-pop-in 200ms var(--ease-out);
+  }
+
+  /* Each placement grows from the pin: the origin and the tail sit on its side of the card. */
+  .devx-mapwrap:not(.narrow) .devx-panel[data-place='below'] {
+    transform-origin: var(--ox, 50%) -10px;
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel[data-place='right'] {
+    transform-origin: -12px var(--oy, 50%);
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel[data-place='left'] {
+    transform-origin: calc(100% + 12px) var(--oy, 50%);
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    pointer-events: none;
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel[data-place='above']::after {
+    left: calc(var(--ox, 50%) - 7px);
+    bottom: -7px;
+    transform: rotate(45deg);
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel[data-place='below']::after {
+    left: calc(var(--ox, 50%) - 7px);
+    top: -7px;
+    transform: rotate(225deg);
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel[data-place='right']::after {
+    left: -7px;
+    top: calc(var(--oy, 50%) - 7px);
+    transform: rotate(135deg);
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel[data-place='left']::after {
+    right: -7px;
+    top: calc(var(--oy, 50%) - 7px);
+    transform: rotate(-45deg);
+  }
+
+  .devx-mapwrap:not(.narrow) .devx-panel .devx-panel-foot {
+    border-radius: 0 0 18px 18px;
+  }
+}
+
+@keyframes devx-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+/* ---- The rail's content. */
+.devx-dock-head {
+  padding: 16px 18px 0;
+}
+
+.devx-side .devx-summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.devx-side .devx-total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.devx-side .devx-total b {
+  margin: 0;
+  font: 500 38px/1 var(--num);
+  letter-spacing: -0.05em;
+  color: var(--ink);
+}
+
+.devx-side .devx-pinned {
+  font-size: 12.5px;
+}
+
+.devx-side .devx-bar {
+  height: 6px;
+  margin: 12px 0 0;
+}
+
+.devx-side .devx-search {
+  margin: 14px 16px 0;
+}
+
+.devx-side .devx-search input {
+  background: var(--sunk);
+  border-color: transparent;
+  border-radius: 12px;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.devx-side .devx-search input:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+
+/* Categories as chips: tap to hide one, tap again to bring it back. */
+.devx-side .devx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 16px 0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line2);
+}
+
+.devx-side .devx-legend li {
+  display: flex;
+}
+
+.devx-side .devx-legend li[hidden] {
+  display: none;
+}
+
+.devx-side .devx-legend-item {
+  width: auto;
+  height: 30px;
+  gap: 6px;
+  padding: 0 10px 0 5px;
+  font-size: 12.5px;
+  background: var(--sunk);
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.devx-side .devx-legend-item .devx-badge {
+  width: 20px;
+  height: 20px;
+}
+
+.devx-side .devx-legend-item .devx-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.devx-side .devx-legend-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.devx-side .devx-legend-count {
+  font: 11.5px var(--num);
+}
+
+.devx-side .devx-legend-item[aria-pressed='false'] {
+  color: var(--muted);
+  text-decoration: none;
+  background: transparent;
+  border-color: var(--line);
+  border-style: dashed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .devx-side .devx-legend-item:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+}
+
+.devx-side .devx-key {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 18px;
+  padding: 8px 0;
+  font-size: 11.5px;
+  border-bottom: 1px solid var(--line2);
+}
+
+.devx-side .devx-key-pill {
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.devx-side .devx-key-approx {
+  width: 16px;
+  height: 16px;
+  border-width: 1.5px;
+}
+
+.devx-side .devx-list-head {
+  padding: 8px 18px;
+  border-bottom: 0;
+}
+
+.devx-side .devx-seg {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.devx-side .devx-list .dev-pick {
+  padding: 9px 10px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .devx-side .devx-list .dev-pick:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+}
+
+.devx-side .devx-list .dev-item.active .dev-pick {
+  background: var(--tint);
+  box-shadow: none;
+}
+
+.devx-side .devx-cost {
+  font: 500 13px var(--num);
+  letter-spacing: -0.02em;
+}
+
+/* ---- Filters inside their glass bar: flat pills that light up when set. */
+.devx-filters > * {
+  flex: none;
+  white-space: nowrap;
+}
+
+.devx-filters .devx-pill {
+  min-height: 34px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  border-radius: 12px;
+}
+
+.devx-filters .devx-pill.on,
+.devx-filters .devx-more-summary.on {
+  color: var(--on-tint);
+  background: var(--tint);
+  border-color: transparent;
+}
+
+.devx-filters .devx-more-body .devx-pill {
+  border-color: var(--line);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .devx-filters .devx-pill:not([aria-pressed='true']):not(.on):hover {
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    border-color: transparent;
+  }
+}
+
+/* ---- The timeline: stacked by category, a handle-free drag across the bars. */
+.devx-chart .devx-bars {
+  gap: 4px;
+  height: 48px;
+  touch-action: pan-y;
+  cursor: ew-resize;
+}
+
+.devx-chart .devx-bar-col i {
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 3px 3px 1px 1px;
+  transform-origin: bottom;
+  transition: opacity 150ms ease;
+}
+
+.devx-chart .devx-bar-col i b {
+  display: block;
+  min-height: 1px;
+}
+
+.devx-chart .devx-bar-col.before i {
+  opacity: 0.22;
+  background: var(--line);
+}
+
+.devx-chart .devx-bar-col[aria-pressed='true'] i {
+  background: var(--line);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .devx-chart .devx-bar-col:hover i {
+    background: var(--line);
+    opacity: 0.85;
+  }
+}
+
+.devx-chart.dragging,
+.devx-chart.dragging * {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.devx-chart.dragging .devx-bar-col:active {
+  transform: none;
+}
+
+/* ---- Phones and narrow windows: the map fills the screen, the list is a sheet below it. */
+@media (max-width: 900px) {
+  .devx-side {
+    position: relative;
+    z-index: 2;
+    margin-top: -22px;
+    padding-top: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -10px 30px -16px rgb(0 0 0 / 0.35);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .devx-side::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 38px;
+    height: 4px;
+    margin-left: -19px;
+    background: var(--line);
+    border-radius: 999px;
+  }
+
+  .devx-fold {
+    display: none;
+  }
+
+  .devx-filters {
+    padding: 3px;
+    border-radius: 14px;
+    pointer-events: auto;
+  }
+
+  .devx-chart {
+    bottom: 32px;
+    border-radius: 14px;
+  }
+
+  .devx-mapwrap.narrow .devx-panel {
+    bottom: 28px;
+  }
+
+  .devx .leaflet-bottom {
+    margin-bottom: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .devx-mapwrap:not(.narrow) .devx-panel {
+    animation: devx-fade-in 150ms ease both !important;
+  }
+
+  .devx-side,
+  .devx-fold,
+  .devx-filters,
+  .devx-chart {
+    transition: opacity 150ms ease !important;
   }
 }

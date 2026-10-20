@@ -106,6 +106,10 @@ const SORTS = [
 let sort = 'biggest';
 /** "Firms hiring now": only projects with a firm named on the filing that has open roles in the feed. */
 let hiringOnly = false;
+/** The project rail folded away on wide screens, kept while the city changes. */
+let railFolded = false;
+/** Wide screens float the rail over the map; below this the list sits under it (style.css). */
+const FLOATING_RAIL = '(min-width: 901px)';
 
 /**
  * The development map: a project list with a cost summary, category legend
@@ -279,7 +283,9 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   key.innerHTML =
     '<span class="devx-key-item"><span class="devx-key-pill" aria-hidden="true">$12M</span>Biggest projects show their filed cost; small dots are the rest, zoom in or click to see them</span>' +
     '<span class="devx-key-item"><span class="devx-key-approx" aria-hidden="true"></span>Dashed border: approximate location, near the ZIP code center</span>';
-  side.append(search, summary, bar, legend, key, listHead, smallerHint, list);
+  const dockHead = el('div', 'devx-dock-head');
+  dockHead.append(summary, bar);
+  side.append(dockHead, search, legend, key, listHead, smallerHint, list);
 
   // ---- Right: the map with floating filters, the chart and the project panel.
   const mapNode = el('div', 'dev-map');
@@ -294,6 +300,26 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   panel.tabIndex = -1;
   panel.hidden = true;
   mapWrap.append(mapNode, pills.node, chart, panel);
+  const fold = el('button', 'devx-fold');
+  fold.type = 'button';
+  fold.setAttribute('aria-controls', 'devx-side');
+  fold.innerHTML = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M8.5 3 4.5 7l4 4" /></svg>';
+  // Folding only exists where the rail floats: on a phone the list must never be left folded (or inert).
+  const floating = window.matchMedia?.(FLOATING_RAIL);
+  const setFold = (want) => {
+    const folded = want && (floating?.matches ?? true);
+    body.classList.toggle('folded', folded);
+    side.inert = folded;
+    fold.setAttribute('aria-expanded', String(!folded));
+    fold.setAttribute('aria-label', folded ? 'Show the project list' : 'Hide the project list');
+    placePanel();
+  };
+  fold.addEventListener('click', () => {
+    railFolded = !body.classList.contains('folded');
+    setFold(railFolded);
+  });
+  floating?.addEventListener?.('change', () => box.isConnected && setFold(railFolded));
+  body.append(fold);
 
   // ---- Below: coverage, smaller filings and reports, public bids.
   const note = el('p', 'dev-note');
@@ -330,7 +356,7 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     apply();
   }
 
-  function apply() {
+  function apply({ keepView = false } = {}) {
     input.value = filters.query;
     const hiring = (rows) => (hiringOnly ? rows.filter((p) => hiringFor(p).length) : rows);
     const shown = hiring(filterProjects(all, filters, asOf));
@@ -393,10 +419,18 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
       button.title = off.has(key) ? 'Hidden: click to show' : 'Click to hide';
     }
 
+    const stacks = new Map();
+    for (const p of forChart) {
+      const month = String(p.registered ?? '').slice(0, 7);
+      const byCat = stacks.get(month) ?? new Map();
+      byCat.set(projectCategory(p), (byCat.get(projectCategory(p)) ?? 0) + 1);
+      stacks.set(month, byCat);
+    }
     drawChart(chart, filingsByMonth(forChart, asOf), filters.since, (month) => {
+      if (dragged) return;
       filters = { ...filters, since: filters.since === month ? '' : month };
       apply();
-    });
+    }, (month) => cats.map((c) => ({ color: c.color, n: stacks.get(month)?.get(c.key) ?? 0 })).filter((x) => x.n));
 
     // A search also looks through the smaller filings.
     const more = filters.query ? reports.searchSmaller(filters.query) : 0;
@@ -406,9 +440,100 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     smallerHint.textContent = more ? `${more.toLocaleString('en-US')} more in Smaller filings below the map` : '';
     pills.badge(active, hiringOnly);
     mapNode.dataset.matches = String(shown.length);
-    map?.show(ids);
+    map?.show(ids, { fit: !keepView });
     if (selected && !ids.has(selected)) close();
     else if (selected) step(0);
+  }
+
+  // Dragging across the bars sets where the window starts as you go; the map keeps its view meanwhile.
+  let drag = null;
+  let dragged = false;
+  chart.addEventListener('pointerdown', (event) => {
+    const col = event.target.closest('.devx-bar-col');
+    if (col && event.button === 0) drag = { start: col.dataset.month, moved: false, id: event.pointerId };
+  });
+  chart.addEventListener('pointermove', (event) => {
+    if (!drag) return;
+    const cols = [...chart.querySelectorAll('.devx-bar-col')];
+    const r = chart.querySelector('.devx-bars').getBoundingClientRect();
+    const month = cols[Math.max(0, Math.min(cols.length - 1, Math.floor(((event.clientX - r.left) / r.width) * cols.length)))]?.dataset.month;
+    if (!month || (!drag.moved && month === drag.start)) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      chart.setPointerCapture(drag.id);
+      chart.classList.add('dragging');
+    }
+    if (filters.since !== month) {
+      filters = { ...filters, since: month };
+      apply({ keepView: true });
+    }
+  });
+  const endDrag = () => {
+    // The click that ends a drag must not toggle the month it lands on.
+    if (drag?.moved) {
+      dragged = true;
+      setTimeout(() => (dragged = false), 0);
+    }
+    chart.classList.remove('dragging');
+    drag = null;
+  };
+  chart.addEventListener('pointerup', endDrag);
+  chart.addEventListener('pointercancel', endDrag);
+
+  /**
+   * Wide maps: the panel is a popover on its pin. Beside it (right, else left) when the map
+   * has the width, which gives it the map's full height; otherwise above or below, whichever
+   * has more room. It stays inside the map and clear of the rail, its tail and
+   * transform-origin sit on the pin so it grows out of it, and it rides along as the map moves.
+   */
+  function placePanel() {
+    if (!selected || panel.hidden || !map || mapWrap.classList.contains('narrow')) {
+      panel.style.removeProperty('translate');
+      panel.style.removeProperty('max-height');
+      delete panel.dataset.place;
+      return;
+    }
+    const landing = map.landing(selected);
+    const at = landing ?? map.pointOf(selected);
+    if (!at) return;
+    // The pin as drawn; while it flies in (or isn't drawn yet), a price pill's box at its point,
+    // so the card waits where the pin will land instead of chasing it across the map.
+    const icon = landing ? null : mapNode.querySelector('.devx-pin-icon.chosen');
+    const origin = mapWrap.getBoundingClientRect();
+    const r = icon?.getBoundingClientRect();
+    const pin = r && r.width ? { l: r.left - origin.left, r: r.right - origin.left, t: r.top - origin.top, b: r.bottom - origin.top } : { l: at.x - 17, r: at.x + 96, t: at.y - 37, b: at.y };
+    const mid = (pin.t + pin.b) / 2;
+    const W = mapWrap.clientWidth;
+    // Between the filter bar on top and the timeline along the bottom, where they show.
+    const top0 = pills.node.offsetParent ? pills.node.offsetTop + pills.node.offsetHeight + 10 : 12;
+    const H = mapWrap.clientHeight - (chart.offsetParent ? chart.offsetHeight + 16 : 0);
+    const w = panel.offsetWidth;
+    const left0 = body.classList.contains('folded') || getComputedStyle(side).position !== 'absolute' ? 12 : side.offsetWidth + 28;
+    const gap = 14;
+    const onScreen = mid > top0 && mid < H && pin.r > left0 && pin.l < W;
+    let place = !onScreen ? 'dock' : pin.r + gap + w <= W - 12 ? 'right' : pin.l - gap - w >= left0 ? 'left' : '';
+    if (!place) place = pin.t - gap - top0 >= H - pin.b - gap - 12 ? 'above' : 'below';
+    const room = place === 'above' ? pin.t - gap - top0 : place === 'below' ? H - pin.b - gap - 12 : H - top0 - 12;
+    panel.style.maxHeight = `${Math.round(Math.max(200, Math.min(560, room)))}px`;
+    const h = panel.offsetHeight;
+    const clampY = (v) => Math.max(top0, Math.min(H - h - 12, v));
+    let x;
+    let y;
+    if (place === 'dock') {
+      // The pin has been panned out of view: the card waits at the map's right edge, no tail.
+      x = W - w - 12;
+      y = top0;
+    } else if (place === 'right' || place === 'left') {
+      x = place === 'right' ? pin.r + gap : pin.l - gap - w;
+      y = clampY(mid - h / 2);
+      panel.style.setProperty('--oy', `${Math.max(22, Math.min(h - 22, mid - y))}px`);
+    } else {
+      x = Math.max(left0, Math.min(W - w - 12, at.x - w / 2));
+      y = clampY(place === 'above' ? pin.t - gap - h : pin.b + gap);
+      panel.style.setProperty('--ox', `${Math.max(24, Math.min(w - 24, at.x - x))}px`);
+    }
+    panel.dataset.place = place;
+    panel.style.translate = `${Math.round(x)}px ${Math.round(y)}px`;
   }
 
   pills.onHiring = () => {
@@ -417,7 +542,9 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   };
 
   /** Opens a project in the panel: from a row, a pin, or the panel's own previous and next. */
-  function select(project, { fly = false, focus = false, reveal = false } = {}) {
+  function select(project, { fly = false, focus = false, reveal = false, dir = 0 } = {}) {
+    // The panel's content slides the way the user stepped; a redraw of the same project stays still.
+    const swap = !selected || panel.hidden || project === selected ? '' : dir < 0 ? 'prev' : 'next';
     selected = project;
     for (const [p, item] of items) {
       const on = p === project;
@@ -430,10 +557,13 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
       const top = row.offsetTop - list.offsetTop;
       if (top < list.scrollTop || top + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTo({ top: top - 8, behavior: reduceMotion() ? 'auto' : 'smooth' });
     }
+    if (swap) panel.dataset.swap = swap;
+    else delete panel.dataset.swap;
     panel.replaceChildren(...projectPanel(project, { catOf, hiring: hiringFor(project), step, close }));
     panel.hidden = false;
     mapWrap.classList.add('panel-open');
     map?.select(project, fly);
+    placePanel();
     // Stacked layout: the list sits under the map, so a row's pick brings the map and its panel back into view.
     if (reveal && mapWrap.classList.contains('narrow') && mapWrap.getBoundingClientRect().top < 0) mapWrap.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' });
     if (focus) panel.focus({ preventScroll: true });
@@ -444,7 +574,7 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     const i = order.indexOf(selected);
     const next = order[i + by];
     if (i < 0 || !next) return;
-    select(next, { fly: by !== 0 });
+    select(next, { fly: by !== 0, dir: by });
     const nav = panel.querySelector(by < 0 ? '.devx-prev' : '.devx-next');
     if (by && nav && !nav.disabled) nav.focus({ preventScroll: true });
   }
@@ -471,6 +601,7 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   });
   panel.prevStep = () => step(-1);
 
+  setFold(railFolded);
   apply();
   // After the card is on the page: Leaflet measures its container.
   queueMicrotask(() =>
@@ -478,6 +609,7 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
       .then((drawn) => {
         if (!drawn) return;
         map = drawn;
+        drawn.onMove(placePanel);
         reports.setOpenSmall((id) => drawn.openSmall(id));
         apply();
       })
@@ -507,6 +639,11 @@ function fitWorkspace(wrap, narrow) {
 
 function reduceMotion() {
   return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
+
+/** A mouse or trackpad: hover effects are for these only, so a tap never leaves a pin lit. */
+function finePointer() {
+  return window.matchMedia?.('(hover: hover) and (pointer: fine)').matches ?? true;
 }
 
 /**
@@ -603,10 +740,10 @@ const monthLabel = (key, long = false) => {
 };
 
 /** Filings by month: one bar per month; clicking a bar shows filings from that month on, clicking it again clears. */
-function drawChart(node, months, since, onPick) {
+function drawChart(node, months, since, onPick, stackOf = () => []) {
   const max = Math.max(1, ...months.map((m) => m.count));
   const head = el('div', 'devx-chart-head');
-  head.append(el('h3', 'devx-chart-title', 'Filings by month'), el('span', 'devx-chart-note', since ? `From ${monthLabel(since, true)} on · click it again to clear` : `Last ${months.length} months · click a bar to start there`));
+  head.append(el('h3', 'devx-chart-title', 'Filings by month'), el('span', 'devx-chart-note', since ? `From ${monthLabel(since, true)} on · click it again to clear` : `Last ${months.length} months · click or drag across the bars to start later`));
   const bars = el('div', 'devx-bars');
   for (const { month, count } of months) {
     const b = el('button', 'devx-bar-col');
@@ -617,6 +754,12 @@ function drawChart(node, months, since, onPick) {
     b.title = `${monthLabel(month, true)}: ${count.toLocaleString('en-US')}`;
     const fill = el('i');
     fill.style.height = `${Math.max(count ? 6 : 2, Math.round((count / max) * 100))}%`;
+    for (const { color, n } of stackOf(month)) {
+      const seg = el('b');
+      seg.style.background = color;
+      seg.style.flexGrow = String(n);
+      fill.append(seg);
+    }
     if (since && month < since) b.classList.add('before');
     b.append(fill);
     b.addEventListener('click', () => onPick(month));
@@ -690,6 +833,12 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   }
   const pills = new Map();
   const pillW = new Map();
+  const fine = finePointer();
+  /** First draw only: each price pin's entrance delay, biggest first. */
+  let enterDelay = new Map();
+  let entered = false;
+  /** Fanned-out pins: where each starts its entrance, back at the shared spot. */
+  let fanFrom = new Map();
   const pinFor = (project, pill = false) => {
     const cache = pill ? pills : pins;
     let marker = cache.get(project);
@@ -701,7 +850,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     const icon = pill
       ? L.divIcon({
           className: 'devx-pin-icon devx-pill-icon',
-          html: `<span class="devx-pill${project.approximate ? ' approx' : ''}" style="--cat:${cat?.color ?? '#9b958d'}">${disc}<b>${cost}</b></span>`,
+          html: `<span class="devx-price${project.approximate ? ' approx' : ''}" style="--cat:${cat?.color ?? '#9b958d'}">${disc}<b>${cost}</b></span>`,
           iconSize: [pillWidth(cost), PILL_H],
           iconAnchor: [PILL_H / 2, PILL_H + 5]
         })
@@ -710,10 +859,20 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     marker = L.marker(where.get(project), { icon, keyboard: true, riseOnHover: true });
     marker.bindTooltip(label, { direction: 'top', offset: pill ? [pillWidth(cost) / 2 - PILL_H / 2, -PILL_H - 4] : [0, -16] });
     marker.on('click', () => onPick(project));
-    marker.on('mouseover', () => api.hover(project));
-    marker.on('mouseout', () => api.hover(null));
+    if (fine) {
+      marker.on('mouseover', () => api.hover(project));
+      marker.on('mouseout', () => api.hover(null));
+    }
     marker.on('add', () => {
       const icon = marker.getElement();
+      // Leaflet builds the icon anew on each add, so its entrance (style.css) plays once per appearance:
+      // staggered on the first draw, and out from the shared spot for a fanned-out group.
+      const face = icon.firstElementChild;
+      const from = fanFrom.get(project);
+      if (face) {
+        face.style.setProperty('--in-delay', `${enterDelay.get(project) ?? 0}ms`);
+        if (from) face.style.setProperty('--from', `${from.x}px, ${from.y}px`);
+      }
       icon.setAttribute('aria-label', label);
       icon.dataset.category = key;
       icon.dataset.id = project.id;
@@ -783,12 +942,13 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     if (p) map.setView(where.get(p), Math.min(map.getZoom() + 2, SPREAD_ZOOM), { animate: !reduceMotion() });
   });
   map.on('mousemove', (event) => {
+    if (!fine) return;
     const p = speckAt(event.containerPoint);
     node.style.cursor = p ? 'pointer' : '';
     if (p !== hoverSpeck) api.hover(p);
   });
-  map.on('zoomstart', () => (speckCanvas.style.visibility = 'hidden'));
-  map.on('zoomend', () => (speckCanvas.style.visibility = ''));
+  // Hidden while Leaflet scales the panes; draw() fades them back in at their new spots.
+  map.on('zoomstart', () => speckCanvas.classList.add('zooming'));
 
   // Smaller filings (below the cap) with a pin from a spare page read: small,
   // hollow and under the main pins. Shown while no filter but the search is on.
@@ -851,9 +1011,12 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     const h = node.clientHeight;
     const open = wrap.classList.contains('panel-open');
     const narrow = !wide();
+    // The rail floats over the map's left side on wide screens.
+    const side = wrap.parentElement?.querySelector('.devx-side');
+    const rail = !narrow && side && getComputedStyle(side).position === 'absolute' && !wrap.parentElement.classList.contains('folded') ? side.offsetWidth + 16 : 0;
     return {
-      paddingTopLeft: [Math.min(40, w * 0.08), Math.min(narrow ? 56 : 64, h * 0.15)],
-      paddingBottomRight: [open && !narrow ? Math.min(420, w * 0.45) : Math.min(40, w * 0.08), open && narrow ? h * 0.62 : Math.min(narrow ? 40 : 150, h * 0.3)],
+      paddingTopLeft: [rail + Math.min(40, w * 0.08), Math.min(narrow ? 56 : 64, h * 0.15)],
+      paddingBottomRight: [Math.min(40, w * 0.08), open && narrow ? h * 0.62 : Math.min(narrow ? 40 : 150, h * 0.3)],
       maxZoom: 14
     };
   };
@@ -873,6 +1036,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     const nextSpecks = [];
     const nextCluster = new Map();
     const nextAt = new Map();
+    const nextFan = new Map();
     const lines = [];
     const px = (p) => map.project(where.get(p), zoom);
     const place = (project, at) => {
@@ -905,6 +1069,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
           leg += ((PIN - 2) * step) / (2 * Math.PI);
         }
         const at = map.unproject(c.add(offset), zoom);
+        nextFan.set(members[i], L.point(-Math.round(offset.x), -Math.round(offset.y)));
         lines.push([where.get(center), at]);
         place(members[i], at);
       }
@@ -924,6 +1089,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       // Price pills, biggest first: a project gets a pill when its pill overlaps none already
       // placed, otherwise a small speck until zooming in makes room. The selected project always has its pill.
       const boxes = [];
+      if (!entered) enterDelay = new Map();
       const free = (box) => boxes.every((b) => box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]);
       const order = [...shown].sort((a, b) => (b === chosen) - (a === chosen) || (b.cost ?? 0) - (a.cost ?? 0));
       for (const p of order) {
@@ -937,6 +1103,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
         const box = [pt.x - PILL_H / 2 - 2, pt.y - PILL_H - 7, pt.x - PILL_H / 2 + w + 2, pt.y + 1];
         if (p === chosen || free(box)) {
           boxes.push(box);
+          if (!entered) enterDelay.set(p, Math.min(boxes.length - 1, 12) * 24);
           const marker = pinFor(p, true);
           if (!marker.getLatLng().equals(at)) marker.setLatLng(at);
           want.add(marker);
@@ -946,9 +1113,15 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       }
     }
     // Swap in the new set: kept pins stay on the page, so focus and hover survive a pan.
+    fanFrom = nextFan;
     for (const marker of [...layer.getLayers()]) if (!want.has(marker)) layer.removeLayer(marker);
     for (const marker of want) if (!layer.hasLayer(marker)) layer.addLayer(marker);
+    if (want.size && !entered) {
+      entered = true;
+      enterDelay = new Map();
+    }
     paintSpecks(nextSpecks);
+    speckCanvas.classList.remove('zooming');
     leaders.clearLayers();
     for (const line of lines) if (view.contains(map.project(line[1], zoom))) L.polyline(line, { className: 'devx-leader', interactive: false, weight: 1.5 }).addTo(leaders);
     clusterOf = nextCluster;
@@ -959,7 +1132,11 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     node.dataset.clusters = '0';
     node.dataset.specks = String(nextSpecks.length);
     node.dataset.drawMs = String(Math.round(performance.now() - started));
+    afterDraw?.();
   };
+  /** Called after every draw, and while a pick's flight is under way: see api.landing. */
+  let afterDraw = null;
+  let flight = null;
   let drawing = 0;
   const redraw = () => {
     cancelAnimationFrame(drawing);
@@ -1007,7 +1184,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       map.once('moveend', () => marker.openPopup());
       return true;
     },
-    show(ids) {
+    show(ids, { fit: refit = true } = {}) {
       // A debounced search or filter from a card that has since been replaced
       // (the city changed) must not move the removed map.
       if (map !== liveMap) return;
@@ -1017,7 +1194,21 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       lastIds = ids;
       shown = located.filter((p) => ids.has(p));
       node.dataset.pins = String(shown.length);
-      fit();
+      if (refit || !fitted) fit();
+      else draw();
+    },
+    /** Where the pin is drawn now, in the map's own pixels. */
+    pointOf(project) {
+      const at = drawnAt.get(project) ?? where.get(project);
+      return at && map === liveMap ? map.latLngToContainerPoint(at) : null;
+    },
+    onMove(fn) {
+      afterDraw = fn;
+      map.on('move zoom zoomend resize', fn);
+    },
+    /** While the map flies to a pick: where that pin will sit when it lands, in map pixels. */
+    landing(project) {
+      return flight && flight.project === project ? flight.point : null;
     },
     hover(project) {
       if (map !== liveMap) return;
@@ -1042,14 +1233,26 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       }
       draw();
       decorate(project);
+      // Removed and added again so its ring plays for every pick, not only the first.
+      pulse.remove();
       pulse.setLatLng(drawnAt.get(project) ?? where.get(project)).addTo(map);
       if (!fly) return;
       const zoom = Math.max(map.getZoom(), 13);
       const w = node.clientWidth;
       const h = node.clientHeight;
       // Center the map off the pin so the panel doesn't cover it.
-      const shift = wide() ? L.point(Math.min(420, w * 0.45) / 2, 0) : L.point(0, h * 0.28);
+      // Wide: pin and popover (about 410px beside it) sit centered in the map beside the rail;
+      // too narrow for that, the pin lands low with the popover above it.
+      const side = wrap.parentElement?.querySelector('.devx-side');
+      const rail = side && getComputedStyle(side).position === 'absolute' && !wrap.parentElement.classList.contains('folded') ? side.offsetWidth + 16 : 0;
+      const free = w - rail;
+      const pinX = free >= 410 + 140 ? rail + (free - 410) / 2 : rail + free / 2;
+      const shift = !wide() ? L.point(0, h * 0.28) : free >= 410 + 140 ? L.point(w / 2 - pinX, 0) : L.point(w / 2 - pinX, -h * 0.17);
       const target = map.unproject(map.project(where.get(project), zoom).add(shift), zoom);
+      flight = { project, point: L.point(w / 2, h / 2).subtract(shift) };
+      map.once('moveend', () => {
+        flight = null;
+      });
       if (reduceMotion()) map.setView(target, zoom, { animate: false });
       else map.flyTo(target, zoom, { duration: 0.6 });
     }
@@ -1069,6 +1272,7 @@ function locationNote(project) {
 /** The list, every project once, as rows; apply() puts them in order. Returns project → item. */
 function drawList(projects, catOf, hiringFor, onPick, onHover) {
   const items = new Map();
+  const fine = finePointer();
   for (const project of projects) {
     const item = el('li', 'dev-item');
     item.dataset.category = projectCategory(project);
@@ -1096,8 +1300,11 @@ function drawList(projects, catOf, hiringFor, onPick, onHover) {
     text.append(tags);
     button.append(dot, text, el('span', 'devx-cost', money(project.cost)));
     button.addEventListener('click', () => onPick(project));
-    button.addEventListener('mouseenter', () => onHover(project, true));
-    button.addEventListener('mouseleave', () => onHover(project, false));
+    // A tap on a phone sends mouseenter too; only a mouse or trackpad lights the pin.
+    if (fine) {
+      button.addEventListener('mouseenter', () => onHover(project, true));
+      button.addEventListener('mouseleave', () => onHover(project, false));
+    }
     button.addEventListener('focus', () => onHover(project, true));
     button.addEventListener('blur', () => onHover(project, false));
     item.append(button);
