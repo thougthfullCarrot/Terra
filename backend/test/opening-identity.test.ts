@@ -182,3 +182,17 @@ describe('malformed Greenhouse responses', () => {
     expect(later.retained.closed).toBe(1);
   });
 });
+
+describe('a retained-jobs file written before opening ids', () => {
+  it('does not count a job as closed because its id changed scheme', async () => {
+    const { report, postings } = await pass(async () => [opening('R1')], t0);
+    const r1 = postings[0]!;
+    const old: RetainFile = {
+      updatedAt: t0.toISOString(),
+      postings: { [legacy]: { firm: 'JLL', verifiedAt: t0.toISOString(), posting: { ...r1, id: legacy, legacyId: undefined, postedAt: t0.toISOString() } } }
+    };
+    const result = retainUnverified(old, report.boards, postings, hours(2));
+    expect(result.closed).toBe(0);
+    expect(result.postings).toHaveLength(1);
+  });
+});

@@ -90,8 +90,11 @@ export function retainUnverified(
   const retainedByFirm: Record<string, number> = {};
   let closed = 0;
   let expired = 0;
+  // A file written before opening ids keyed board jobs by firm + title + city;
+  // a fresh posting carrying that id as its legacyId is the same job, still up.
+  const legacy = new Set(postings.map((posting) => posting.legacyId).filter(Boolean));
   for (const [id, entry] of Object.entries(previous?.postings ?? {})) {
-    if (byId.has(id)) continue;
+    if (byId.has(id) || legacy.has(id)) continue;
     const board = statusOf.get(entry.firm.toLowerCase());
     // A firm taken off the list takes its jobs with it.
     if (!board) continue;
