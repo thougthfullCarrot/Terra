@@ -245,8 +245,13 @@ async function fetchPage(
     body: { appliedFacets: {}, limit: PAGE_SIZE, offset, searchText: '' }
   });
 
+  // A list page without a jobPostings array is a failed read, not an empty
+  // board (an empty board closes every job it listed).
+  if (!response || typeof response !== 'object' || !Array.isArray(response.jobPostings)) {
+    throw new Error(`Workday ${tenant.tenant}/${tenant.site} sent a malformed list page at offset ${offset}`);
+  }
   return {
-    jobPostings: Array.isArray(response?.jobPostings) ? response.jobPostings : [],
+    jobPostings: response.jobPostings,
     total: typeof response?.total === 'number' ? response.total : undefined
   };
 }

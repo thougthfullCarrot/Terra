@@ -33,6 +33,7 @@ import { usajobsAggregators } from '../collector/sources/usajobs.js';
 import { buildSnapshot } from '../site/snapshot.js';
 import { updateHistory, type JobHistory } from '../site/history.js';
 import { retainUnverified, type RetainFile, type RetainResult } from '../site/retain.js';
+import { publishAs, resolveIdentity } from '../site/identity.js';
 import { sheetsClientFromEnv } from '../sheets/env.js';
 import { firmStatuses, loadFirms } from '../sheets/firms.js';
 
@@ -67,29 +68,40 @@ async function main(): Promise<void> {
   }
   const fresh = [...store.postings.values()];
   const retainPath = flag('--retain');
+  const previousRetain = retainPath ? await readFile(retainPath, 'utf8').then((text) => JSON.parse(text) as RetainFile, () => null) : null;
   let retained: RetainResult | undefined;
   if (retainPath) {
-    const previous = await readFile(retainPath, 'utf8').then((text) => JSON.parse(text) as RetainFile, () => null);
-    retained = retainUnverified(previous, report.boards, fresh, report.ranAt);
-    // A pass where every board failed is not published, so it must not touch the kept jobs either.
-    if (report.firms > 0 && report.firmsFailed < report.firms) await writeFile(retainPath, `${JSON.stringify(retained.next)}\n`);
+    retained = retainUnverified(previousRetain, report.boards, fresh, report.ranAt);
     const kept = Object.entries(retained.retainedByFirm).map(([firm, n]) => `${firm} ${n}`).join(', ');
-    console.log(`Retained: ${retained.postings.length - fresh.length} jobs from boards not read in full${kept ? ` (${kept})` : ''}; ${retained.closed} closed since the last build; ${retained.expired} dropped as unverified for over a week${previous ? '' : ' (new file)'}.`);
+    console.log(`Retained: ${retained.postings.length - fresh.length} jobs from boards not read in full${kept ? ` (${kept})` : ''}; ${retained.closed} closed since the last build; ${retained.expired} dropped as unverified for over a week${previousRetain ? '' : ' (new file)'}.`);
   }
-  const postings = retained?.postings ?? fresh;
+  // Official-board postings are keyed by opening; the site publishes each
+  // under the id saved jobs and the history already know, where that is
+  // unambiguous (site/identity.ts).
+  const identity = resolveIdentity(previousRetain?.identity ?? null, retained?.postings ?? fresh, report.ranAt);
+  console.log(`Identity: ${identity.bound} old ids bound to an opening, ${identity.ambiguous} shared by several openings and retired, ${identity.retiredClosed} retired with a closed opening; ${Object.keys(identity.next.aliases).length} bound in all.`);
+  if (retainPath && retained && report.firms > 0 && report.firmsFailed < report.firms) {
+    // A pass where every board failed is not published, so it must not touch the kept jobs either.
+    await writeFile(retainPath, `${JSON.stringify({ ...retained.next, identity: identity.next })}\n`);
+  }
+  const verification = retained
+    ? new Map([...retained.verification].map(([id, checked]) => [identity.published.get(id) ?? id, checked]))
+    : undefined;
+  const postings = (retained?.postings ?? fresh).map((posting) => publishAs(posting, identity.published));
+  const freshIds = new Set(fresh.map((posting) => identity.published.get(posting.id) ?? posting.id));
   const historyFlag = process.argv.indexOf('--history');
   const historyPath = historyFlag >= 0 ? process.argv[historyFlag + 1] : undefined;
   let seen;
   if (historyPath) {
     const previous = await readFile(historyPath, 'utf8').then((text) => JSON.parse(text) as JobHistory, () => null);
     // Only jobs seen this build count as seen; a retained job was not.
-    const next = updateHistory(previous, fresh);
+    const next = updateHistory(previous, postings.filter((posting) => freshIds.has(posting.id)));
     seen = next.seen;
     // A pass where every board failed is not published, so it must not age the history either.
     if (report.firms > 0 && report.firmsFailed < report.firms) await writeFile(historyPath, `${JSON.stringify(next.history)}\n`);
     console.log(`History: ${Object.keys(next.history.seats).length} seats${previous ? '' : ' (new file)'}.`);
   }
-  const snapshot = buildSnapshot(postings, report, seen, retained?.verification);
+  const snapshot = buildSnapshot(postings, report, seen, verification);
 
   const coveragePath = flag('--coverage');
   if (coveragePath) {
@@ -185,10 +197,10 @@ function metricsTable(report: RunReport, firmsListed: number): string {
   for (const board of report.boards) {
     if (board.status !== 'ok') lines.push(`\nBoard ${board.status === 'failed' ? 'failed' : 'read in part'}: ${board.firm}: ${board.error ?? ''}`);
   }
-  lines.push('', '| Board | ATS | Status | Fetched | Published | Review | Not TX | Not entry | Over exp. | Off-topic |', '|---|---|---|---|---|---|---|---|---|---|');
+  lines.push('', '| Board | ATS | Status | Listed / total | Fetched | Published | Review | Not TX | Not entry | Over exp. | Off-topic |', '|---|---|---|---|---|---|---|---|---|---|---|');
   for (const board of report.boards) {
     const r = board.rejected;
-    lines.push(`| ${board.firm} | ${board.ats} | ${board.status} | ${board.fetched} | ${board.kept} | ${board.review} | ${r['not-texas']} | ${r['not-entry-level']} | ${r['over-experience']} | ${r['off-topic']} |`);
+    lines.push(`| ${board.firm} | ${board.ats} | ${board.status} | ${board.listed ?? '?'} / ${board.total ?? '?'} | ${board.fetched} | ${board.kept} | ${board.review} | ${r['not-texas']} | ${r['not-entry-level']} | ${r['over-experience']} | ${r['off-topic']} |`);
   }
   return lines.join('\n');
 }

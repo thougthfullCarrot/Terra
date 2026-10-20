@@ -21,6 +21,7 @@
  */
 import type { Posting } from '../types.js';
 import type { BoardStatus } from '../collector/run.js';
+import type { IdentityState } from './identity.js';
 
 /** How long a board's jobs outlive the board being unreadable. */
 export const RETAIN_DAYS = 7;
@@ -39,7 +40,10 @@ export interface RetainedEntry {
 
 export interface RetainFile {
   updatedAt: string;
+  /** Keyed by the posting's id: the opening id for official-board postings. */
   postings: Record<string, RetainedEntry>;
+  /** Which old firm + title + city ids each opening publishes under (identity.ts). */
+  identity?: IdentityState;
 }
 
 export interface Verification {

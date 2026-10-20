@@ -31,16 +31,46 @@ export function greenhouseUrl(slug: string): string {
 export async function fetchGreenhouse(
   firm: string,
   slug: string,
-  options: FetchJsonOptions = {}
+  options: FetchJsonOptions & { count?: { listed?: number; total?: number } } = {}
 ): Promise<RawJob[]> {
-  const payload = await fetchJson<GreenhouseResponse>(greenhouseUrl(slug), options);
-  const jobs = parseGreenhouse(firm, payload);
-  const listed = Array.isArray(payload?.jobs) ? payload.jobs.length : 0;
-  const total = payload?.meta?.total;
+  const { count, ...http } = options;
+  const payload = await fetchJson<unknown>(greenhouseUrl(slug), http);
+  const checked = validateGreenhouse(slug, payload);
+  const jobs = parseGreenhouse(firm, checked);
+  const listed = checked.jobs.length;
+  const total = checked.meta?.total;
+  if (count) {
+    count.listed = listed;
+    if (typeof total === 'number') count.total = total;
+  }
   if (typeof total === 'number' && listed < total) {
     throw new IncompleteBoardError(`Greenhouse board ${slug} reports ${total} jobs but listed ${listed}`, jobs);
   }
   return jobs;
+}
+
+/**
+ * A board answer is believed only when it has the shape of one. Anything else
+ * (an HTML error page served as 200, `{}`, `jobs: null`, jobs without ids, a
+ * total that is not a number) is a failed read, not an empty board: an empty
+ * board closes every job it listed, a failed read keeps them as last verified.
+ */
+export function validateGreenhouse(slug: string, payload: unknown): GreenhouseResponse & { jobs: GreenhouseJob[] } {
+  const fail = (why: string): never => {
+    throw new Error(`Greenhouse board ${slug} sent a malformed response: ${why}`);
+  };
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) fail('not a JSON object');
+  const body = payload as { jobs?: unknown; meta?: unknown };
+  if (!Array.isArray(body.jobs)) fail('no jobs array');
+  const jobs = body.jobs as unknown[];
+  const bad = jobs.findIndex((job) => !job || typeof job !== 'object' || typeof (job as GreenhouseJob).id !== 'number');
+  if (bad >= 0) fail(`job ${bad} has no numeric id`);
+  if (body.meta !== undefined) {
+    if (!body.meta || typeof body.meta !== 'object') fail('meta is not an object');
+    const total = (body.meta as { total?: unknown }).total;
+    if (total !== undefined && (typeof total !== 'number' || !Number.isInteger(total) || total < 0)) fail('meta.total is not a count');
+  }
+  return body as GreenhouseResponse & { jobs: GreenhouseJob[] };
 }
 
 export function parseGreenhouse(firm: string, payload: GreenhouseResponse): RawJob[] {

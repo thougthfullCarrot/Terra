@@ -47,6 +47,7 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
     boards: [],
     firmsIncomplete: 0,
     distinctOpenings: 0,
+    crossPostings: 0,
     fetched: 0,
     kept: 0,
     rejected: { 'missing-fields': 0, 'not-texas': 0, 'not-entry-level': 0, 'over-experience': 0, 'off-topic': 0 },

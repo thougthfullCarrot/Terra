@@ -18,6 +18,7 @@
     "probe:slugs": "tsx src/bin/probe-slugs.ts",
     "discover:ats": "tsx src/bin/discover-ats.ts",
     "export:site": "tsx src/bin/export-site.ts",
+    "board:replay": "tsx src/bin/board-replay.ts",
     "export:market": "tsx src/bin/export-market.ts",
     "export:news": "tsx src/bin/export-news.ts",
     "export:events": "tsx src/bin/export-events.ts",

@@ -97,6 +97,13 @@ export interface Posting {
   lastSeen?: Date;
   /** The board's own id for the opening, when it has one (RawJob.sourceId). */
   sourceId?: string;
+  /**
+   * Set when `id` is an opening id (ats + board + sourceId): the id this seat
+   * had under the older firm + title + city scheme. Saved jobs and history
+   * still hold those, so src/site/identity.ts decides, explicitly and once,
+   * which opening (if any) keeps publishing under it.
+   */
+  legacyId?: string;
 }
 
 export interface Profile {

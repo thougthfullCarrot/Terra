@@ -5,11 +5,11 @@ import { fetchAshby } from './sources/ashby.js';
 import { fetchGreenhouse } from './sources/greenhouse.js';
 import { fetchSmartRecruiters } from './sources/smartrecruiters.js';
 import { fetchLever } from './sources/lever.js';
-import { fetchWorkday } from './sources/workday.js';
+import { fetchWorkday, type WorkdayStats } from './sources/workday.js';
 import { fetchIcims } from './sources/icims.js';
 import { fetchWorkable } from './sources/workable.js';
 import { IncompleteBoardError } from './sources/incomplete.js';
-import { postingId } from './id.js';
+import { openingId } from './id.js';
 import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
@@ -20,7 +20,13 @@ const SAMPLES_PER_REASON = 25;
 /** How long a posting can go unseen on its board before it stops being active. */
 export const STALE_DAYS = 14;
 
-export type Fetcher = (firm: FirmRow) => Promise<RawJob[]>;
+/** What a board said about itself: how many jobs it listed, and the total it claims when it gives one. */
+export interface BoardCount {
+  listed?: number;
+  total?: number;
+}
+
+export type Fetcher = (firm: FirmRow, count?: BoardCount) => Promise<RawJob[]>;
 
 /**
  * A source that answers a search rather than one firm's board (Adzuna). Its
@@ -69,6 +75,13 @@ export interface BoardStatus {
   rejected: Record<RejectReason, number>;
   /** Ids of the postings this board published this pass. */
   ids: string[];
+  /**
+   * Jobs the board listed, before any filter, and the total it claims. A board
+   * that answers with listed 0 and total 0 is confirmed empty; one that lists
+   * nothing on a host or site that may be wrong is not the same thing.
+   */
+  listed?: number;
+  total?: number;
   error?: string;
 }
 
@@ -113,8 +126,10 @@ export interface RunReport {
   boards: BoardStatus[];
   /** Boards read only in part this pass (counted in neither firmsFailed nor as clean). */
   firmsIncomplete: number;
-  /** Two openings with the same title and city told apart by the board's own job id. */
+  /** Openings that share a title and city with another on the same board, kept apart by their job ids. */
   distinctOpenings: number;
+  /** The same opening on two firms' boards (same firm, title and city): kept once, from the firm listed first. */
+  crossPostings: number;
   /** Published postings by kind. */
   kinds: { Internship: number; 'Entry-level': number };
   /** Firms whose board answered with at least one published posting. */
@@ -166,6 +181,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     boards: [],
     firmsIncomplete: 0,
     distinctOpenings: 0,
+    crossPostings: 0,
     kinds: { Internship: 0, 'Entry-level': 0 },
     firmsWithOpenings: 0,
     rejectedSamples: {},
@@ -190,34 +206,51 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
   const held = new Map<string, ReviewItem>();
   const firmsWithOpenings = new Set<FirmRow['id']>();
 
-  // Which board and opening each kept id came from, so a second opening with
-  // the same title and city on the same board is kept as its own posting.
-  const owners = new Map<string, { firm: FirmRow['id']; sourceId?: string }>();
+  // Boards are read concurrently but folded in firm-list order, so which
+  // copy of a cross-posted seat wins never depends on which board answered first.
   const statuses = new Map<FirmRow['id'], BoardStatus>();
+  const reads = new Map<FirmRow['id'], RawJob[]>();
 
   await inBatches(firms, concurrency, async (firm) => {
     const status: BoardStatus = { firm: firm.name, ats: firm.ats, status: 'ok', fetched: 0, kept: 0, review: 0, rejected: emptyRejected(), ids: [] };
     statuses.set(firm.id, status);
-    let raw: RawJob[];
     try {
-      raw = await fetcher(firm);
-      raw = forFirm(firm, raw);
+      const count: BoardCount = {};
+      try {
+        reads.set(firm.id, forFirm(firm, await fetcher(firm, count)));
+      } finally {
+        if (count.listed !== undefined) status.listed = count.listed;
+        if (count.total !== undefined) status.total = count.total;
+      }
       await store.markFirmPolled(firm.id, { ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      report.errors.push({ firm: firm.name, message });
       status.error = message;
       if (!(error instanceof IncompleteBoardError)) {
-        report.firmsFailed++;
         status.status = 'failed';
         await store.markFirmPolled(firm.id, { ok: false, error: message });
         return;
       }
-      report.firmsIncomplete++;
       status.status = 'incomplete';
-      raw = forFirm(firm, error.jobs);
+      reads.set(firm.id, forFirm(firm, error.jobs));
       await store.markFirmPolled(firm.id, { ok: true, error: message });
     }
+  });
+
+  /** legacy id -> the board that first kept a seat under it. */
+  const legacyOwner = new Map<string, FirmRow['id']>();
+  /** board + legacy id -> openings kept under it, to count distinct openings. */
+  const sameSeat = new Map<string, number>();
+
+  for (const firm of firms) {
+    const status = statuses.get(firm.id)!;
+    if (status.error) report.errors.push({ firm: firm.name, message: status.error });
+    if (status.status === 'failed') {
+      report.firmsFailed++;
+      continue;
+    }
+    if (status.status === 'incomplete') report.firmsIncomplete++;
+    const raw = reads.get(firm.id) ?? [];
 
     report.fetched += raw.length;
     status.fetched = raw.length;
@@ -230,7 +263,8 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
         if (result.reason === 'needs-review') {
           counts.review++;
           status.review++;
-          if (!held.has(result.posting.id)) held.set(result.posting.id, { posting: result.posting, reason: result.review, source: firm.ats });
+          const posting = withOpeningId(firm, result.posting);
+          if (!held.has(posting.id)) held.set(posting.id, { posting, reason: result.review, source: firm.ats });
           continue;
         }
         report.rejected[result.reason]++;
@@ -244,22 +278,25 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
       counts.kept++;
       status.kept++;
       firmsWithOpenings.add(firm.id);
-      let posting = result.posting;
-      const owner = owners.get(posting.id);
-      // Same board, same title and city, different job ids: two openings
-      // (two Leasing Analyst seats in Dallas), not one listed twice. The first
-      // keeps the plain id, so existing ids do not change.
-      if (owner && owner.firm === firm.id && posting.sourceId && owner.sourceId && owner.sourceId !== posting.sourceId) {
-        posting = { ...posting, id: postingId(posting.firm, `${posting.role} #${posting.sourceId}`, posting.city) };
-        report.distinctOpenings++;
+      const posting = withOpeningId(firm, result.posting);
+      // The same job id listed twice on one board (two location pages) is one opening.
+      if (status.ids.includes(posting.id)) continue;
+      const legacy = posting.legacyId ?? posting.id;
+      const owner = legacyOwner.get(legacy);
+      if (owner !== undefined && owner !== firm.id) {
+        // Another firm's board already has this firm, title and city.
+        report.crossPostings++;
+        continue;
       }
-      if (!keep.has(posting.id)) {
-        keep.set(posting.id, posting);
-        owners.set(posting.id, { firm: firm.id, sourceId: posting.sourceId });
-      }
-      if (!status.ids.includes(posting.id)) status.ids.push(posting.id);
+      legacyOwner.set(legacy, firm.id);
+      const seat = `${firm.id}|${legacy}`;
+      const n = (sameSeat.get(seat) ?? 0) + 1;
+      sameSeat.set(seat, n);
+      if (n > 1) report.distinctOpenings++;
+      keep.set(posting.id, posting);
+      status.ids.push(posting.id);
     }
-  });
+  }
   report.boards = firms.map((firm) => statuses.get(firm.id)!).filter(Boolean);
   report.firmsWithOpenings = firmsWithOpenings.size;
 
@@ -432,15 +469,38 @@ function sourceCounts(report: RunReport, source: string): SourceCounts {
   return (report.bySource[source] ??= { fetched: 0, kept: 0, review: 0, rejected: emptyRejected() });
 }
 
+async function fetchWorkdayCounted(firm: FirmRow, count?: BoardCount): Promise<RawJob[]> {
+  const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
+  try {
+    return await fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, { stats });
+  } finally {
+    if (count) {
+      count.listed = stats.listed;
+      if (stats.total !== undefined) count.total = stats.total;
+    }
+  }
+}
+
+/** The board an opening id is scoped to: Greenhouse slug, or Workday/iCIMS host plus slug. */
+export function boardKey(firm: Pick<FirmRow, 'atsHost' | 'atsSlug'>): string {
+  return [firm.atsHost ?? '', firm.atsSlug].filter(Boolean).join('/');
+}
+
+/** Re-key a board posting by its opening (ats + board + job id), keeping the older id as legacyId. */
+function withOpeningId(firm: FirmRow, posting: Posting): Posting {
+  if (!posting.sourceId) return posting;
+  return { ...posting, id: openingId(firm.ats, boardKey(firm), posting.sourceId), legacyId: posting.id };
+}
+
 /** Read one firm's board with the reader for its ATS. */
-export async function fetchBoard(firm: FirmRow): Promise<RawJob[]> {
+export async function fetchBoard(firm: FirmRow, count?: BoardCount): Promise<RawJob[]> {
   switch (firm.ats) {
     case 'greenhouse':
-      return fetchGreenhouse(firm.name, firm.atsSlug);
+      return fetchGreenhouse(firm.name, firm.atsSlug, { count });
     case 'lever':
       return fetchLever(firm.name, firm.atsSlug);
     case 'workday':
-      return fetchWorkday(firm.name, firm.atsHost, firm.atsSlug);
+      return fetchWorkdayCounted(firm, count);
     case 'icims':
       return fetchIcims(firm.name, firm.atsHost, firm.atsSlug);
     case 'workable':
