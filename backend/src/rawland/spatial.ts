@@ -19,14 +19,24 @@ export const geomKey = (g: Poly) => createHash('sha1').update(JSON.stringify(g.g
  * with a 5,000-vertex polygon costs ~150 ms, which made a 705k-parcel build take days. The pieces partition the
  * polygon, so areas are unchanged. `source(piece)` returns the original polygon (for geometry keys).
  */
+function vertexCount(p: Poly): number {
+  const g = p.geometry; let n = 0;
+  for (const poly of g.type === 'Polygon' ? [g.coordinates] : g.coordinates) for (const r of poly) n += r.length;
+  return n;
+}
+
 export class PolygonIndex {
   private readonly index: Flatbush;
   private readonly pieces: Poly[] = [];
   private readonly src = new Map<Poly, Poly>();
-  constructor(readonly polys: Poly[], { cell = 0.01, maxVerts = 200 } = {}) {
+  /** Number of pieces made by cutting large polygons. */
+  cut = 0;
+  constructor(readonly polys: Poly[], { cell = 0.01, maxVerts = 1000 } = {}) {
     for (const p of polys) {
-      if (turf.coordAll(p).length <= maxVerts) { this.pieces.push(p); this.src.set(p, p); continue; }
+      // Only polygons that are both detailed and span several cells are cut; ordinary zoning polygons stay whole,
+      // so memory stays close to the input size (cutting every detailed polygon ran a 768k-polygon build out of memory).
       const [a, b, c, d] = turf.bbox(p);
+      if ((c - a <= 2 * cell && d - b <= 2 * cell) || vertexCount(p) <= maxVerts) { this.pieces.push(p); continue; }
       for (let x = Math.floor(a / cell) * cell; x < c; x += cell) for (let y = Math.floor(b / cell) * cell; y < d; y += cell) {
         const g = turf.bboxClip(p, [x, y, x + cell, y + cell]).geometry;
         const polys2 = (g.type === 'Polygon' ? [g.coordinates] : g.coordinates) as Position[][][];
@@ -34,7 +44,7 @@ export class PolygonIndex {
         if (!rings.length) continue;
         const piece = turf.multiPolygon(rings, p.properties) as Poly;
         if (!(turf.area(piece) > 0)) continue;
-        this.pieces.push(piece); this.src.set(piece, p);
+        this.pieces.push(piece); this.src.set(piece, p); this.cut++;
       }
     }
     this.index = new Flatbush(Math.max(1, this.pieces.length));

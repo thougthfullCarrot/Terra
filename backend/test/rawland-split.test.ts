@@ -15,6 +15,11 @@ describe('PolygonIndex grid split', () => {
   const big = wobbly(5000, { city: 'Unincorporated', Zoning: 'OCL' });
   const cut = new PolygonIndex([big]), whole = new PolygonIndex([big], { maxVerts: Infinity });
 
+  it('leaves detailed but small polygons whole, so memory stays near the input size', () => {
+    const small = Array.from({ length: 200 }, (_, i) => { const p = wobbly(2000, { Zoning: 'R-6' }); p.geometry.coordinates = (p.geometry.coordinates as number[][][]).map((r) => r.map(([x, y]) => [-98.5 + (x! + 98.5) / 20 + i * 0.01, 29.4 + (y! - 29.4) / 20])); return p; });
+    expect(new PolygonIndex(small).cut).toBe(0);
+  });
+
   it('cuts a large polygon into many pieces', () => { expect(cut.size).toBeGreaterThan(100); expect(whole.size).toBe(1); });
 
   it('city shares match the uncut polygon, including parcels across cell lines and the edge', () => {

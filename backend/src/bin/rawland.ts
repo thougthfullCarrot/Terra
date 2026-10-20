@@ -115,6 +115,7 @@ async function build(): Promise<void> {
   if (!cityField) throw new BuildRefused('city-limit collection recorded no jurisdiction field; recollect it');
   const limits: Poly[] = []; for await (const f of lines(rawFile('city-limits'))) if (f.geometry) limits.push({ ...f, properties: { city: String(f.properties[cityField] ?? '').trim() } });
   const zi = new PolygonIndex(zoning), li = new PolygonIndex(limits);
+  log(`indexed ${zoning.length} zoning polygons (${zi.cut} cut pieces) and ${limits.length} city-limit polygons (${li.cut} cut pieces); heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
   // Account matching only (by id): never adds or removes an account, never makes a spatial claim.
   const cityAcct = new Map<string, { acres: unknown; polygons: number }>();
   for await (const f of lines(rawFile('city-parcels'))) {
@@ -124,7 +125,7 @@ async function build(): Promise<void> {
 
   const rows: AccountRow[] = []; const tiles = new Map<string, unknown[]>(); let conflicts = 0, unavailable = 0, i = 0;
   for (const { account, value, outline } of joined) {
-    if (++i % 50000 === 0) log(`${i} accounts`);
+    if (++i % 50000 === 0) log(`${i} accounts; heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
     let zs = { status: 'Outline unavailable', cities: [] as string[] }, bases: string[] = [], c = null as ReturnType<typeof parcelZoning> | null;
     let cx = NaN, cy = NaN;
     if (outline) {
