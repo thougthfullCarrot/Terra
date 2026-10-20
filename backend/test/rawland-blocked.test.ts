@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { buildBlocked } from '../src/rawland/blocked.js';
-import { PolygonIndex, parcelZoning, cityShares, geomKey, type Poly } from '../src/rawland/spatial.js';
+import { PolygonIndex, parcelZoning, cityShares, geomKey, unionPolys, type Poly } from '../src/rawland/spatial.js';
 import { zoningStatus } from '../src/rawland/jurisdiction.js';
 import { cityMatch } from '../src/rawland/metrics.js';
 import { tileKey } from '../src/rawland/tiles.js';
@@ -35,7 +35,7 @@ function fixture() {
 /** The previous all-in-memory algorithm. */
 function reference(fx: ReturnType<typeof fixture>, li: PolygonIndex) {
   const outlines = new Map<string, Poly>();
-  for (const f of fx.outlines) { const id = String(f.properties.Prop_id); if (!fx.values.has(id)) continue; const p = outlines.get(id); if (!p) outlines.set(id, f); else if (geomKey(p) !== geomKey(f)) outlines.set(id, (turf.union(turf.featureCollection([p, f])) as Poly) ?? p); }
+  for (const f of fx.outlines) { const id = String(f.properties.Prop_id); if (!fx.values.has(id)) continue; const p = outlines.get(id); if (!p) outlines.set(id, f); else if (geomKey(p) !== geomKey(f)) outlines.set(id, unionPolys([p, f]) ?? p); }
   const zi = new PolygonIndex(fx.zoning); const rows: any[] = []; const tiles = new Map<string, any[]>();
   for (const [account, value] of fx.values) {
     const outline = outlines.get(account);
@@ -67,5 +67,14 @@ describe('block-by-block build', () => {
       expect(got.sort(byAccount)).toEqual(ref.tiles.get(f.replace('.json.gz', ''))!.sort(byAccount));
     }
     await expect(readdir(join(dir, 'tmp'))).rejects.toThrow(); // temp files removed
+  }, 60000);
+});
+
+describe('timing trial', () => {
+  it('processes only the first N blocks and keeps nothing', async () => {
+    const fx = fixture(); const dir = await mkdtemp(join(tmpdir(), 'rl-trial-'));
+    const res = await buildBlocked({ values: fx.values, outlines: () => iter(fx.outlines), zoning: () => iter(fx.zoning), limits: new PolygonIndex(fx.limits), cityAcct: fx.cityAcct, status: { zoning: 'complete', cityLimits: 'complete' }, tmp: join(dir, 'tmp'), tilesDir: join(dir, 'tiles'), block: 0.02, maxBlocks: 3 });
+    expect(res.blocks).toBe(3); expect(res.rows).toEqual([]);
+    await expect(readdir(join(dir, 'tmp'))).rejects.toThrow();
   }, 60000);
 });

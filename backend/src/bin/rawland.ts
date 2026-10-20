@@ -4,7 +4,7 @@
  *
  *   npm run rawland -- collect --source sara-polygons|zoning|city-parcels|city-limits [--restart] [--limits-verified]
  *        (city-limits defaults to the county Cities layer; --limits-url U --limits-city-field F --limits-oid-field O override)
- *   npm run rawland -- build --appraisal-cache DIR [--prev-manifest FILE]
+ *   npm run rawland -- build --appraisal-cache DIR [--prev-manifest FILE] [--trial-blocks N]  (N: time the first N blocks only, keep nothing)
  *   npm run rawland -- serve [--synthetic] [--port 4173]
  *
  * Values come from #84's Bexar read in the local appraisal cache (`npm run appraisal -- collect --districts bexar
@@ -115,8 +115,10 @@ async function build(): Promise<void> {
   log('processing outlines and zoning in blocks');
   const res = await buildBlocked({
     values: vals, outlines: () => lines(rawFile('sara-polygons')), zoning: () => lines(rawFile('zoning')), limits: li, cityAcct,
-    status: { zoning: reads.zoning.status, cityLimits: reads['city-limits'].status }, tmp: join(OUT, 'build-tmp'), tilesDir: join(dir, 'tiles'), log
+    status: { zoning: reads.zoning.status, cityLimits: reads['city-limits'].status }, tmp: join(OUT, 'build-tmp'), tilesDir: join(dir, 'tiles'), log,
+    ...(arg('--trial-blocks') ? { maxBlocks: Number(arg('--trial-blocks')) } : {})
   });
+  if (arg('--trial-blocks')) { await rm(dir, { recursive: true, force: true }); log('timing trial only: nothing kept'); return; }
   const rows = res.rows, { noOutline, droppedOutlines, conflicts, unavailable } = res;
   const tileSample = await Promise.all((await readdir(join(dir, 'tiles'))).slice(0, 50).map(async (f) => JSON.parse(gunzipSync(await readFile(join(dir, 'tiles', f))).toString()) as unknown[]));
   const hits = privacyScan(rows.slice(0, 1000)).concat(...tileSample.map((t) => privacyScan(t)));

@@ -40,7 +40,8 @@
     "@turf/turf": "^7.1.0",
     "flatbush": "^4.4.0",
     "leaflet": "1.9.4",
-    "nodemailer": "^10.0.14"
+    "nodemailer": "^10.0.14",
+    "polygon-clipping": "^0.15.7"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",

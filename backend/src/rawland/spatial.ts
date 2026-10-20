@@ -3,6 +3,7 @@
  * zoning polygons whose boxes overlap it; there are no per-parcel server queries.
  */
 import Flatbush from 'flatbush';
+import polygonClipping, { type Geom } from 'polygon-clipping';
 import * as turf from '@turf/turf';
 import type { Feature as GFeature, MultiPolygon, Polygon, Position } from 'geojson';
 import { createHash } from 'node:crypto';
@@ -80,7 +81,16 @@ function within(parcel: Poly, cand: Poly): boolean {
   for (const pt of turf.coordAll(parcel)) if (!turf.booleanPointInPolygon(pt, cand, { ignoreBoundary: true })) return false;
   return turf.lineIntersect(parcel, cand).features.length === 0;
 }
-const clip = (parcel: Poly, cand: Poly): Poly | null => (within(parcel, cand) ? parcel : (turf.intersect(turf.featureCollection([parcel, cand])) as Poly | null));
+// polygon-clipping (plain floating point) is ~10x faster than turf's intersect/union (arbitrary-precision numbers),
+// which was most of the build's time; areas agree to the square foot.
+const asGeom = (p: Poly) => p.geometry.coordinates as Geom;
+function toPoly(mp: number[][][][]): Poly | null {
+  if (!mp.length) return null;
+  return (mp.length === 1 ? turf.polygon(mp[0]!) : turf.multiPolygon(mp)) as Poly;
+}
+export const intersectPolys = (a: Poly, b: Poly): Poly | null => toPoly(polygonClipping.intersection(asGeom(a), asGeom(b)));
+export const unionPolys = (ps: Poly[]): Poly | null => (ps.length ? toPoly(polygonClipping.union(asGeom(ps[0]!), ...ps.slice(1).map(asGeom))) : null);
+const clip = (parcel: Poly, cand: Poly): Poly | null => (within(parcel, cand) ? parcel : intersectPolys(parcel, cand));
 
 /** One parcel's zoning coverage. `readStatus` is the status of the one-time zoning read. */
 export function parcelZoning(parcel: Poly, zoning: PolygonIndex, readStatus: string): Coverage {
@@ -97,7 +107,7 @@ export function parcelZoning(parcel: Poly, zoning: PolygonIndex, readStatus: str
   const ordered = [...bySource].sort((a, b) => b[1] - a[1] || String(a[0].properties.Zoning ?? '').localeCompare(String(b[0].properties.Zoning ?? '')) || geomKey(a[0]).localeCompare(geomKey(b[0])));
   for (const [z, sqft] of ordered) pieces.push({ code: String(z.properties.Zoning ?? '').trim(), sqft, geomKey: geomKey(z), attrKey: zoningAttrKey(z.properties) });
   let union = 0;
-  try { union = !parts.length ? 0 : areaSqft(parts.length === 1 ? parts[0]! : (turf.union(turf.featureCollection(parts)) as Poly)); } catch { pieces.push({ error: 'union failed' }); }
+  try { union = !parts.length ? 0 : areaSqft(parts.length === 1 ? parts[0]! : unionPolys(parts)!); } catch { pieces.push({ error: 'union failed' }); }
   return zoningCoverage(areaSqft(parcel), readStatus, pieces, union);
 }
 

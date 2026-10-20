@@ -14,7 +14,7 @@ import { createInterface } from 'node:readline';
 import { gzipSync } from 'node:zlib';
 import Flatbush from 'flatbush';
 import * as turf from '@turf/turf';
-import { PolygonIndex, parcelZoning, cityShares, geomKey, type Poly } from './spatial.js';
+import { PolygonIndex, parcelZoning, cityShares, geomKey, unionPolys, type Poly } from './spatial.js';
 import { zoningStatus } from './jurisdiction.js';
 import { cityMatch } from './metrics.js';
 import { tileKey } from './tiles.js';
@@ -32,6 +32,8 @@ export interface BlockedInput {
   tmp: string; tilesDir: string;
   block?: number; // degrees per block side
   log?: (m: string) => void;
+  /** Timing trial: process only this many blocks, then stop (nothing is meant to be kept). */
+  maxBlocks?: number;
 }
 export interface BlockedResult { rows: AccountRow[]; tiles: number; noOutline: number; droppedOutlines: number; conflicts: number; unavailable: number; blocks: number }
 
@@ -98,11 +100,13 @@ export async function buildBlocked(inp: BlockedInput): Promise<BlockedResult> {
   const rows = new Map<string, AccountRow>(); let conflicts = 0, unavailable = 0, done = 0, nb = 0;
   const tiles = new Spill(tDir, 5000); const tileNames = new Set<string>();
   const zFiles = new Set(await readdir(zDir));
+  const t0 = Date.now();
   for (const name of (await readdir(oDir)).sort()) {
+    if (inp.maxBlocks != null && nb >= inp.maxBlocks) break;
     const outlines = new Map<string, Poly>();
     for await (const l of readLines(join(oDir, name))) {
       const f = JSON.parse(l) as Poly; const id = idOf(f); const prev = outlines.get(id);
-      if (!prev) outlines.set(id, f); else if (geomKey(prev) !== geomKey(f)) outlines.set(id, (turf.union(turf.featureCollection([prev, f])) as Poly) ?? prev);
+      if (!prev) outlines.set(id, f); else if (geomKey(prev) !== geomKey(f)) outlines.set(id, unionPolys([prev, f]) ?? prev);
     }
     const zoning: Poly[] = [];
     if (zFiles.has(name)) for await (const l of readLines(join(zDir, name))) zoning.push(JSON.parse(l) as Poly);
@@ -118,10 +122,12 @@ export async function buildBlocked(inp: BlockedInput): Promise<BlockedResult> {
       rows.set(account, row);
       const k = tileKey(cx, cy); tileNames.add(k);
       await tiles.add(k, JSON.stringify({ ...row, cityMatch: cityMatch(value.acres, inp.cityAcct.get(account)), zoning: c, outline: outline.geometry }));
-      if (++done % 10000 === 0) log(`${done} accounts; heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
+      if (++done % 10000 === 0) log(`${done} accounts (${Math.round(done / ((Date.now() - t0) / 60000))}/min); heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
     }
     nb++;
   }
+  log(`${done} accounts in ${nb} blocks, ${((Date.now() - t0) / 1000).toFixed(0)}s (${(((Date.now() - t0) / Math.max(1, done))).toFixed(1)} ms per account)`);
+  if (inp.maxBlocks != null) { await rm(inp.tmp, { recursive: true, force: true }); return { rows: [], tiles: 0, noOutline: 0, droppedOutlines: dropped.size, conflicts, unavailable, blocks: nb }; }
   await tiles.flush();
 
   // Accounts without an outline stay listed, in the values order like before.
