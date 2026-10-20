@@ -196,3 +196,56 @@ describe('a retained-jobs file written before opening ids', () => {
     expect(result.postings).toHaveLength(1);
   });
 });
+
+describe('a published id stays put across builds', () => {
+  const title = (sourceId: string, overrides: Partial<RawJob>) => ({ ...opening(sourceId), ...overrides });
+
+  it('reproduces the reported case: a reworded title does not replace the published id', () => {
+    const first = resolveIdentity(null, [{ id: 'opening-123', legacyId: 'legacy-original-title' } as Posting], t0);
+    expect(first.published.get('opening-123')).toBe('legacy-original-title');
+    const next = resolveIdentity(first.next, [{ id: 'opening-123', legacyId: 'legacy-new-title' } as Posting], hours(2));
+    expect(next.published.get('opening-123')).toBe('legacy-original-title');
+    expect(next.next.aliases['legacy-new-title']).toBeUndefined();
+  });
+
+  it('keeps the published id and the saved job through title, location and retention changes', async () => {
+    const saved = new Set<string>();
+    const b1 = await build(null, async () => [opening('R1')], t0);
+    const id = b1.published.get('R1')!;
+    expect(id).toBe(legacy);
+    saved.add(id);
+
+    // Title reworded.
+    const b2 = await build(b1.next, async () => [title('R1', { title: 'Leasing Analyst, Office Portfolio' })], hours(2));
+    // Location wording changed (and resolves to another city string).
+    const b3 = await build(b2.next, async () => [title('R1', { title: 'Leasing Analyst, Office Portfolio', location: 'Plano, Texas' })], hours(4));
+    // Board fails: the job is retained.
+    const b4 = await build(b3.next, async () => {
+      throw new Error('POST https://jll.wd1.myworkdayjobs.com/... returned 502');
+    }, hours(6));
+    // Board back, with yet another wording, and a new sibling under the original title.
+    const b5 = await build(b4.next, async () => [title('R1', { title: 'Leasing Analyst - Dallas' }), opening('R2')], hours(8));
+
+    for (const b of [b2, b3, b4, b5]) {
+      expect(b.published.get('R1')).toBe(id);
+      expect(saved.has(b.published.get('R1')!)).toBe(true);
+    }
+    expect(b4.retained.verification.get(b4.retained.postings[0]!.id)?.retained).toBe(true);
+    // The sibling never takes the saved id.
+    expect(b5.published.get('R2')).toBe(idR2);
+    expect(saved.has(b5.published.get('R2')!)).toBe(false);
+  });
+
+  it('keeps an opening first published under its opening id on that id when its title later becomes unique', async () => {
+    const b1 = await build(null, async () => [opening('R1'), opening('R2')], t0);
+    expect(b1.published.get('R2')).toBe(idR2);
+    const b2 = await build(b1.next, async () => [title('R2', { title: 'Leasing Analyst, Industrial' })], hours(2));
+    expect(b2.published.get('R2')).toBe(idR2);
+  });
+
+  it('reads a file from before published ids existed without moving a binding', () => {
+    const old: IdentityState = { aliases: { [legacy]: idR1 }, retired: {} };
+    const result = resolveIdentity(old, [{ id: idR1, legacyId: 'something-new' } as Posting], t0);
+    expect(result.published.get(idR1)).toBe(legacy);
+  });
+});

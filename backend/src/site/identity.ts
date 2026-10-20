@@ -28,6 +28,13 @@ export interface IdentityState {
   aliases: Record<string, string>;
   /** Old ids that will never be bound again: YYYY-MM-DD retired. */
   retired: Record<string, string>;
+  /**
+   * opening id -> the id it has been published under. Set the first time an
+   * opening is published and never changed after: a later title or location
+   * rewording gives the opening a new old-style id, and that must not replace
+   * the id saved jobs already hold. Dropped when the opening closes.
+   */
+  published?: Record<string, string>;
 }
 
 export interface IdentityResult {
@@ -45,23 +52,29 @@ export interface IdentityResult {
 /** Retired ids are remembered this long, past the job history's own 120 days. */
 const RETIRED_DAYS = 180;
 
-/**
- * @param postings every posting this build publishes, fresh and retained
- * @param live opening ids still listed or retained this build (the rest have closed)
- */
+/** @param postings every posting this build publishes, fresh and retained */
 export function resolveIdentity(previous: IdentityState | null, postings: Posting[], now = new Date()): IdentityResult {
   const today = now.toISOString().slice(0, 10);
-  const aliases: Record<string, string> = {};
   const retired: Record<string, string> = {};
   for (const [legacy, day] of Object.entries(previous?.retired ?? {})) {
     if ((Date.parse(today) - Date.parse(day)) / 86_400_000 <= RETIRED_DAYS) retired[legacy] = day;
   }
 
   const live = new Set(postings.map((posting) => posting.id));
+  // Openings already published keep their id; a closed one releases nothing:
+  // its old id is retired so no sibling ever inherits it.
+  const fixed: Record<string, string> = {};
+  for (const [opening, id] of Object.entries(previous?.published ?? {})) {
+    if (live.has(opening)) fixed[opening] = id;
+  }
+  const aliases: Record<string, string> = {};
   let retiredClosed = 0;
   for (const [legacy, opening] of Object.entries(previous?.aliases ?? {})) {
-    if (live.has(opening)) aliases[legacy] = opening;
-    else if (!retired[legacy]) {
+    if (live.has(opening)) {
+      aliases[legacy] = opening;
+      // A file from before `published` existed: the binding is the published id.
+      fixed[opening] ??= legacy;
+    } else if (!retired[legacy]) {
       retired[legacy] = today;
       retiredClosed++;
     }
@@ -69,18 +82,22 @@ export function resolveIdentity(previous: IdentityState | null, postings: Postin
 
   const groups = new Map<string, string[]>();
   for (const posting of postings) {
-    if (!posting.legacyId) continue;
+    if (!posting.legacyId || fixed[posting.id]) continue;
     const group = groups.get(posting.legacyId) ?? [];
     if (!group.includes(posting.id)) group.push(posting.id);
     groups.set(posting.legacyId, group);
   }
 
+  const taken = new Set(Object.values(fixed));
   let bound = 0;
   let ambiguous = 0;
   for (const [legacy, openings] of groups) {
-    if (aliases[legacy] || retired[legacy]) continue;
+    // Already bound, retired, or published by another opening: never reused.
+    if (aliases[legacy] || retired[legacy] || taken.has(legacy)) continue;
     if (openings.length === 1) {
       aliases[legacy] = openings[0]!;
+      fixed[openings[0]!] = legacy;
+      taken.add(legacy);
       bound++;
     } else {
       retired[legacy] = today;
@@ -88,11 +105,14 @@ export function resolveIdentity(previous: IdentityState | null, postings: Postin
     }
   }
 
-  const byOpening = new Map(Object.entries(aliases).map(([legacy, opening]) => [opening, legacy]));
   const published = new Map<string, string>();
-  for (const posting of postings) published.set(posting.id, byOpening.get(posting.id) ?? posting.id);
+  for (const posting of postings) {
+    // Only openings get a fixed id; aggregator postings publish as they are.
+    if (posting.legacyId) fixed[posting.id] ??= posting.id;
+    published.set(posting.id, fixed[posting.id] ?? posting.id);
+  }
 
-  return { published, next: { aliases, retired }, bound, ambiguous, retiredClosed };
+  return { published, next: { aliases, retired, published: fixed }, bound, ambiguous, retiredClosed };
 }
 
 /** The posting under the id the site publishes. */
