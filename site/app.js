@@ -468,7 +468,13 @@ function card(job, now, index) {
   fillChips(node.querySelector('.chips'), job);
 
   node.querySelector('.new-tag').hidden = !isNew(job.postedAt, now);
-  node.querySelector('.posted').textContent = postedLabel(job.postedAt, now);
+  const posted = node.querySelector('.posted');
+  posted.textContent = postedLabel(job.postedAt, now);
+  // Its board could not be read this build: say when it was last confirmed open.
+  if (job.retained && job.verifiedAt) {
+    posted.textContent += ` · last verified ${SHORT_DATE.format(new Date(job.verifiedAt))}`;
+    posted.title = 'The firm\'s job board did not answer in full on the latest check, so this listing is shown as of its last confirmed check.';
+  }
   if (job.via !== 'Adzuna') node.querySelector('.via').remove();
   const deadline = deadlineLabel(job.deadline, now);
   const deadlineNode = node.querySelector('.deadline');

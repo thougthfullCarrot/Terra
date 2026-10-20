@@ -20,3 +20,14 @@ function canonical(value: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/**
+ * Identity of one opening on an official board: the ATS, the board (Greenhouse
+ * slug; Workday host + tenant/site) and the board's own job id. Unlike
+ * postingId() it does not depend on the title or city, nor on which of two
+ * same-titled openings a board happens to list first.
+ */
+export function openingId(ats: string, board: string, sourceId: string): string {
+  const key = ['opening', ats.toLowerCase(), board.toLowerCase().trim(), sourceId.trim()].join('|');
+  return createHash('sha1').update(key).digest('hex');
+}

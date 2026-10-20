@@ -9,6 +9,7 @@ import {
   worthFetching,
   type WorkdayStats
 } from '../src/collector/sources/workday.js';
+import { IncompleteBoardError } from '../src/collector/sources/incomplete.js';
 
 const tenant = parseTenant('cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers');
 
@@ -145,7 +146,10 @@ describe('fetchWorkday', () => {
       return new Response('not found', { status: 404 });
     }) as typeof fetch;
     const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
-    await fetchWorkday('Bank', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', { fetchImpl, retries: 0, baseDelayMs: 1, maxPages: 5, stats });
+    // Read in part: the error says so and carries what was read.
+    const partial = await fetchWorkday('Bank', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', { fetchImpl, retries: 0, baseDelayMs: 1, maxPages: 5, stats }).catch((error: unknown) => error);
+    expect(partial).toBeInstanceOf(IncompleteBoardError);
+    expect((partial as IncompleteBoardError).message).toMatch(/page 2 failed/);
     expect(stats.listed).toBe(20);
 
     const down = (async () => new Response('boom', { status: 500 })) as typeof fetch;
@@ -226,7 +230,7 @@ describe('fetchWorkday', () => {
     expect(jobs[0]?.location).toBe('New York, NY; Austin, TX; Chicago, IL');
   });
 
-  it('drops a posting whose detail fails without failing the firm', async () => {
+  it('treats a 404 detail as a posting that came down, not a failed read', async () => {
     const { fetchImpl } = fakeWorkday([
       { title: 'Investment Analyst', externalPath: '/job/gone', locationsText: 'Dallas, TX' },
       { title: 'Development Analyst', externalPath: '/job/ok', locationsText: 'Austin, TX' }
@@ -295,7 +299,7 @@ describe('fetchWorkday', () => {
     expect(empty.sample).toEqual([]);
   });
 
-  it('respects the page cap', async () => {
+  it('respects the page cap, and says the board was not read in full', async () => {
     const listings = Array.from({ length: 200 }, (_, i) => ({
       title: 'Director',
       externalPath: `/job/${i}`,
@@ -303,10 +307,10 @@ describe('fetchWorkday', () => {
     }));
     const { fetchImpl, calls } = fakeWorkday(listings);
 
-    await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
+    await expect(fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', {
       fetchImpl,
       maxPages: 2
-    });
+    })).rejects.toThrow(/2-page cap/);
 
     expect(calls).toHaveLength(2);
   });
@@ -325,8 +329,36 @@ describe('fetchWorkday', () => {
       fetchImpl,
       maxPages: 2,
       stats
-    });
+    }).catch(() => undefined);
 
     expect(stats).toMatchObject({ total: 200, listed: 40 });
+  });
+
+  it('flags a board whose detail reads fail, keeping the jobs it did read', async () => {
+    const listings = [
+      { title: 'Investment Analyst', externalPath: '/job/Dallas/Investment-Analyst_R100', locationsText: 'Dallas, TX' },
+      { title: 'Development Analyst', externalPath: '/job/Austin/Development-Analyst_R200', locationsText: 'Austin, TX' }
+    ];
+    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+      const href = String(url);
+      if (href.endsWith('/jobs')) return new Response(JSON.stringify({ total: 2, jobPostings: listings }), { status: 200 });
+      if (href.includes('R100')) return new Response('boom', { status: 500 });
+      void init;
+      return new Response(JSON.stringify({ jobPostingInfo: { title: 'Development Analyst', jobDescription: 'x', location: 'Austin, TX' } }), { status: 200 });
+    }) as typeof fetch;
+
+    const error = await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', { fetchImpl, retries: 0, baseDelayMs: 1 }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(IncompleteBoardError);
+    expect((error as IncompleteBoardError).message).toMatch(/1 of 2 posting details failed/);
+    expect((error as IncompleteBoardError).jobs.map((job) => [job.title, job.sourceId])).toEqual([['Development Analyst', 'R200']]);
+  });
+
+  it('keeps the requisition id as the source job id', async () => {
+    const { fetchImpl } = fakeWorkday(
+      [{ title: 'Development Analyst', externalPath: '/job/Austin/Development-Analyst_R555-1', locationsText: 'Austin, TX' }],
+      { '/job/Austin/Development-Analyst_R555-1': { jobPostingInfo: { title: 'Development Analyst', jobDescription: 'x', location: 'Austin, TX', jobRequisitionId: 'R555' } } }
+    );
+    const jobs = await fetchWorkday('CBRE', 'cbre.wd1.myworkdayjobs.com', 'cbre/CBRE_Careers', { fetchImpl, retries: 0 });
+    expect(jobs[0]?.sourceId).toBe('R555');
   });
 });

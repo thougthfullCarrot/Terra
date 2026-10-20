@@ -1,8 +1,9 @@
 import type { RawJob } from '../../types.js';
-import { fetchJson, type FetchJsonOptions } from '../../lib/http.js';
+import { HttpError, fetchJson, type FetchJsonOptions } from '../../lib/http.js';
 import { stripHtml } from '../../lib/html.js';
 import { classifyKind } from '../seniority.js';
 import { resolveCity } from '../texas.js';
+import { IncompleteBoardError } from './incomplete.js';
 
 /**
  * Workday (CXS) fetcher.
@@ -147,14 +148,18 @@ export async function fetchWorkday(
 
   const listings: WorkdayListing[] = [];
   let total: number | undefined;
+  /** Why the list was not read to its end, if it was not. */
+  let gap: string | undefined;
   for (let page = 0; page < maxPages; page++) {
     let batch;
     try {
       batch = await fetchPage(tenant, page * PAGE_SIZE, options);
     } catch (error) {
       // Some tenants answer the first pages and then fail deep in the list
-      // (Huntington's 500s past a few hundred postings); keep what was read.
+      // (Huntington's 500s past a few hundred postings); keep what was read,
+      // and say the board was not read in full.
       if (page === 0) throw error;
+      gap = `page ${page + 1} failed (${error instanceof Error ? error.message : String(error)})`;
       break;
     }
     // Workday reports the total on the first page only; later pages carry 0.
@@ -162,7 +167,10 @@ export async function fetchWorkday(
     listings.push(...batch.jobPostings);
     if (batch.jobPostings.length < PAGE_SIZE) break;
     if (total && listings.length >= total) break;
+    if (page === maxPages - 1) gap = `stopped at the ${maxPages}-page cap`;
   }
+  // Workday's own ceiling: a board reporting more than it pages through.
+  if (!gap && total && listings.length < total && listings.length >= maxPages * PAGE_SIZE) gap = `board reports ${total}, listed ${listings.length}`;
 
   const candidates = listings.filter(worthFetching);
 
@@ -176,16 +184,22 @@ export async function fetchWorkday(
   }
 
   const jobs: RawJob[] = [];
+  let detailFailures = 0;
   // Three at a time: this is one tenant's server and we are a guest on it.
   for (let i = 0; i < candidates.length; i += 3) {
     const details = await Promise.all(
       candidates.slice(i, i + 3).map((listing) => fetchDetail(firm, tenant, listing, options))
     );
-    jobs.push(...details.filter((job): job is RawJob => job !== null));
+    for (const detail of details) {
+      if (detail === 'failed') detailFailures++;
+      else if (detail) jobs.push(detail);
+    }
   }
 
   if (options.stats) options.stats.fetched = jobs.length;
 
+  if (detailFailures) gap = [gap, `${detailFailures} of ${candidates.length} posting details failed`].filter(Boolean).join('; ');
+  if (gap) throw new IncompleteBoardError(`Workday ${tenant.tenant}/${tenant.site}: ${gap}`, jobs);
   return jobs;
 }
 
@@ -231,8 +245,13 @@ async function fetchPage(
     body: { appliedFacets: {}, limit: PAGE_SIZE, offset, searchText: '' }
   });
 
+  // A list page without a jobPostings array is a failed read, not an empty
+  // board (an empty board closes every job it listed).
+  if (!response || typeof response !== 'object' || !Array.isArray(response.jobPostings)) {
+    throw new Error(`Workday ${tenant.tenant}/${tenant.site} sent a malformed list page at offset ${offset}`);
+  }
   return {
-    jobPostings: Array.isArray(response?.jobPostings) ? response.jobPostings : [],
+    jobPostings: response.jobPostings,
     total: typeof response?.total === 'number' ? response.total : undefined
   };
 }
@@ -242,16 +261,19 @@ async function fetchDetail(
   tenant: WorkdayTenant,
   listing: WorkdayListing,
   options: FetchJsonOptions
-): Promise<RawJob | null> {
+): Promise<RawJob | null | 'failed'> {
   const path = listing.externalPath as string;
 
   let detail: WorkdayDetailResponse;
   try {
     detail = await fetchJson<WorkdayDetailResponse>(detailUrl(tenant, path), options);
-  } catch {
-    // One posting failing is not the firm failing. Drop it and keep going —
-    // the run report still counts what the board returned.
-    return null;
+  } catch (error) {
+    // 404/410: the posting came down between the list and the detail read,
+    // which is a closed job. Anything else is a failed read: one posting
+    // failing is not the firm failing, but the board was then not read in
+    // full, and the caller says so rather than calling the job closed.
+    if (error instanceof HttpError && (error.status === 404 || error.status === 410)) return null;
+    return 'failed';
   }
 
   const info = detail?.jobPostingInfo;
@@ -270,8 +292,14 @@ async function fetchDetail(
     // Workday has no seniority field on the public API; `timeType` at least
     // separates an intern-shaped posting from a career hire on some tenants.
     level: info.timeType?.trim(),
-    ats: 'workday'
+    ats: 'workday',
+    sourceId: info.jobRequisitionId?.trim() || requisitionFromPath(path)
   };
+}
+
+/** '/job/Dallas-TX/Analyst_R12345' and '/job/Dallas/Analyst_R12345-1' end in the requisition id. */
+export function requisitionFromPath(path: string): string | undefined {
+  return /_([A-Za-z0-9-]+)$/.exec(path)?.[1] ?? undefined;
 }
 
 function locations(

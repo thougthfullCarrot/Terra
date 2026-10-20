@@ -17,12 +17,14 @@
  *   EMPTY the board answered with 0 Texas entry-level roles -> slug is fine,
  *         the firm just is not hiring into this funnel right now
  */
+import type { RawJob } from '../types.js';
 import type { FirmRow } from '../db/store.js';
 import { loadFirmSeed, SEED_PATHS } from '../collector/firmSeed.js';
 import { SupabaseStore } from '../db/supabase.js';
 import { fetchGreenhouse } from '../collector/sources/greenhouse.js';
 import { fetchLever } from '../collector/sources/lever.js';
 import { fetchWorkday, type WorkdayStats } from '../collector/sources/workday.js';
+import { evenIfIncomplete } from '../collector/sources/incomplete.js';
 import { fetchIcims } from '../collector/sources/icims.js';
 import { fetchWorkable } from '../collector/sources/workable.js';
 import { fetchAshby } from '../collector/sources/ashby.js';
@@ -137,6 +139,10 @@ async function check(firm: FirmRow): Promise<Result> {
 }
 
 async function fetchFor(firm: FirmRow, stats: WorkdayStats) {
+  return evenIfIncomplete(readBoard(firm, stats));
+}
+
+async function readBoard(firm: FirmRow, stats: WorkdayStats): Promise<RawJob[]> {
   switch (firm.ats) {
     case 'greenhouse':
       return fetchGreenhouse(firm.name, firm.atsSlug, { retries: 1 });

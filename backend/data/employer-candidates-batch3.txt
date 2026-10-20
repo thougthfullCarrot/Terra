@@ -1,0 +1,49 @@
+# Employer discovery, batch 3 (2026-10-20): official career sites.
+#
+# Texas-active real estate employers that post on their own Greenhouse or
+# Workday boards and are not on the firm list, batch 1 or batch 2. Seeded by
+# the RCLCO trace (job-boards.greenhouse.io/rclco), LinkedIn postings used only
+# as leads to the employer's own careers page, and national CRE advisory,
+# capital markets, lending, REIT and proptech firms with Texas offices. Each
+# line is a candidate, not a fact; `discover:ats --check` decides.
+#
+# Name | website hint | sector | markets
+
+# --- Advisory, research and valuation ---
+RCLCO | rclco.com | Investment | Austin
+Altus Group | altusgroup.com | Appraisal | Dallas; Houston
+CoStar Group | costargroup.com | Investment | Dallas; Austin; Houston
+Savills | savills.us | Brokerage | Dallas; Houston; Austin
+Kidder Mathews | kiddermathews.com | Brokerage | Dallas
+Dwight Capital | dwightcapital.com | Lending | Dallas
+Eastdil Secured | eastdilsecured.com | Lending | Dallas; Houston
+Greysteel | greysteel.com | Brokerage | Dallas; Austin
+Berkadia | berkadia.com | Lending | Dallas; Houston; Austin
+Mesa West Capital | mesawestcapital.com | Lending | Dallas
+
+# --- Investment managers and REITs ---
+Nuveen Real Estate | nuveen.com | Investment | Dallas
+PGIM Real Estate | pgim.com | Investment | Dallas
+Blackstone | blackstone.com | Investment | Dallas
+Kennedy Wilson | kennedywilson.com | Investment | Dallas
+Link Logistics | linklogistics.com | Investment | Dallas; Houston
+Stonemont Financial Group | stonemontfinancial.com | Development | Dallas
+Hillwood | hillwood.com | Development | Fort Worth; Dallas
+Howard Hughes Holdings | howardhughes.com | Development | Houston
+Mid-America Apartment Communities | maac.com | Investment | Dallas; Austin; Houston
+Hilltop Holdings | hilltop-holdings.com | Lending | Dallas
+Granite Properties | graniteprop.com | Investment | Dallas; Houston
+Weitzman | weitzmangroup.com | Brokerage | Dallas; Houston; Austin
+Tishman Speyer | tishmanspeyer.com | Development | Dallas; Austin
+Hanover Company | hanoverco.com | Development | Houston; Austin; Dallas
+Skanska USA | usa.skanska.com | Development | Houston; Dallas; Austin
+Waypoint Residential | waypointresidential.com | Investment | Dallas; Austin
+
+# --- Proptech and real estate platforms (CRE seats only publish) ---
+Cadre | cadre.com | Investment | Dallas
+Fundrise | fundrise.com | Investment | Dallas
+Opendoor | opendoor.com | Investment | Dallas; Houston; Austin
+VTS | vts.com | Investment | Dallas
+Juniper Square | junipersquare.com | Investment | Dallas
+Crexi | crexi.com | Brokerage | Dallas; Austin; Houston
+Roofstock | roofstock.com | Investment | Dallas

@@ -27,6 +27,7 @@ import { writeFile } from 'node:fs/promises';
 import { loadFirmSeed } from '../collector/firmSeed.js';
 import { loadCandidates, type Candidate } from '../collector/firmCandidates.js';
 import { fetchBoard } from '../collector/run.js';
+import { evenIfIncomplete } from '../collector/sources/incomplete.js';
 import { emptyRejected, forFirm, normalize, type RejectReason } from '../collector/normalize.js';
 import type { FirmRow } from '../db/store.js';
 import { domainCandidates } from '../collector/domainCandidates.js';
@@ -213,7 +214,7 @@ async function checkBoard(finding: Finding): Promise<BoardCheck> {
   };
   const check: BoardCheck = { ok: false, fetched: 0, published: 0, review: 0, rejected: emptyRejected(), postings: [] };
   try {
-    const jobs = forFirm(firm, await fetchBoard(firm));
+    const jobs = forFirm(firm, await evenIfIncomplete(fetchBoard(firm)));
     check.ok = true;
     check.fetched = jobs.length;
     for (const job of jobs) {

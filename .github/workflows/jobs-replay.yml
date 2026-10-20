@@ -1,0 +1,68 @@
+# Controlled before/after for changes to the jobs collector.
+#
+# Reads every official board once (no aggregators), saves the responses, then
+# runs the base branch's collector and this branch's collector over exactly
+# those responses (backend/src/bin/board-replay.ts). The difference is the
+# change, not the hours between two live builds. Read only: no Sheet writes,
+# no Supabase, no deploy.
+name: Jobs replay
+
+on:
+  pull_request:
+    paths: ['backend/src/collector/**', 'backend/src/bin/board-replay.ts', '.github/workflows/jobs-replay.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+        working-directory: backend
+
+      - name: Check out the base branch's collector beside this one
+        env:
+          BASE: ${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          git worktree add ../base "origin/$BASE"
+          ln -s "$PWD/backend/node_modules" ../base/backend/node_modules
+
+      - name: Record the live boards once
+        working-directory: backend
+        env:
+          # Read only: the firm list. board-replay never writes to the Sheet.
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          TERRA_SHEET_ID: ${{ vars.TERRA_SHEET_ID }}
+        run: npm run --silent board:replay -- --record ../capture.json
+
+      - name: Replay both collectors over the same responses
+        working-directory: backend
+        run: |
+          npm run --silent board:replay -- --replay ../capture.json --code ../../base/backend --out ../before.json
+          npm run --silent board:replay -- --replay ../capture.json --out ../after.json
+          npm run --silent board:replay -- --compare ../before.json ../after.json | tee ../replay.md
+          { echo '## Jobs replay (same captured responses)'; echo; cat ../replay.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jobs-replay
+          path: |
+            capture.json
+            before.json
+            after.json
+            replay.md
+          retention-days: 14
