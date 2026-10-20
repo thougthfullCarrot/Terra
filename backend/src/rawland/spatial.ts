@@ -11,7 +11,14 @@ import { zoningAttrKey, zoningCoverage, type Coverage, type ZoningFailure, type 
 export type Poly = GFeature<Polygon | MultiPolygon, Record<string, unknown>>;
 const SQM_TO_SQFT = 10.763910417;
 export const areaSqft = (g: Poly) => turf.area(g) * SQM_TO_SQFT;
-export const geomKey = (g: Poly) => createHash('sha1').update(JSON.stringify(g.geometry.coordinates)).digest('hex').slice(0, 16);
+// Memoized per polygon: a large zoning polygon touches thousands of parcels, and re-serializing its coordinates for
+// each one made gigabytes of short-lived strings during the per-account build step.
+const geomKeys = new WeakMap<object, string>();
+export const geomKey = (g: Poly) => {
+  let k = geomKeys.get(g);
+  if (k == null) { k = createHash('sha1').update(JSON.stringify(g.geometry.coordinates)).digest('hex').slice(0, 16); geomKeys.set(g, k); }
+  return k;
+};
 
 /**
  * Large polygons (the county's Unincorporated area has tens of thousands of vertices) are cut once into grid-cell

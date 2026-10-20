@@ -125,7 +125,7 @@ async function build(): Promise<void> {
 
   const rows: AccountRow[] = []; const tiles = new Map<string, unknown[]>(); let conflicts = 0, unavailable = 0, i = 0;
   for (const { account, value, outline } of joined) {
-    if (++i % 50000 === 0) log(`${i} accounts; heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
+    if (++i % 10000 === 0) log(`${i} accounts; heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
     let zs = { status: 'Outline unavailable', cities: [] as string[] }, bases: string[] = [], c = null as ReturnType<typeof parcelZoning> | null;
     let cx = NaN, cy = NaN;
     if (outline) {

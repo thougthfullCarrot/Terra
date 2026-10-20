@@ -42,3 +42,15 @@ describe('PolygonIndex grid split', () => {
     expect((Date.now() - t) / 1000).toBeLessThan(5); // the uncut polygon took ~150 ms per parcel
   });
 });
+
+describe('geomKey', () => {
+  it('is computed once per polygon object and still distinguishes geometries', async () => {
+    const { geomKey } = await import('../src/rawland/spatial.js');
+    const a = wobbly(500, {}), b = wobbly(500, {}), c = turf.bboxPolygon([0, 0, 1, 1]) as Poly;
+    expect(geomKey(a)).toBe(geomKey(b));
+    expect(geomKey(a)).not.toBe(geomKey(c));
+    const spy = JSON.stringify; let calls = 0; JSON.stringify = ((...x: Parameters<typeof spy>) => { calls++; return spy(...x); }) as typeof spy;
+    try { for (let i = 0; i < 100; i++) geomKey(a); } finally { JSON.stringify = spy; }
+    expect(calls).toBe(0);
+  });
+});
