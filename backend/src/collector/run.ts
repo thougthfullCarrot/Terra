@@ -8,6 +8,8 @@ import { fetchLever } from './sources/lever.js';
 import { fetchWorkday } from './sources/workday.js';
 import { fetchIcims } from './sources/icims.js';
 import { fetchWorkable } from './sources/workable.js';
+import { IncompleteBoardError } from './sources/incomplete.js';
+import { postingId } from './id.js';
 import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
@@ -52,6 +54,24 @@ export interface SourceCounts {
   rejected: Record<RejectReason, number>;
 }
 
+/**
+ * How one firm's board answered this pass. 'incomplete' means the board was
+ * read only in part (a later page or some details failed): its jobs that were
+ * read publish, and the ones not read are unknown rather than closed.
+ */
+export interface BoardStatus {
+  firm: string;
+  ats: string;
+  status: 'ok' | 'incomplete' | 'failed';
+  fetched: number;
+  kept: number;
+  review: number;
+  rejected: Record<RejectReason, number>;
+  /** Ids of the postings this board published this pass. */
+  ids: string[];
+  error?: string;
+}
+
 /** A posting held back for a person to check, with the reason it was held. */
 export interface ReviewItem {
   posting: Posting;
@@ -89,6 +109,12 @@ export interface RunReport {
   review: ReviewItem[];
   /** Per ATS or aggregator. */
   bySource: Record<string, SourceCounts>;
+  /** Per firm board, in firm-list order. */
+  boards: BoardStatus[];
+  /** Boards read only in part this pass (counted in neither firmsFailed nor as clean). */
+  firmsIncomplete: number;
+  /** Two openings with the same title and city told apart by the board's own job id. */
+  distinctOpenings: number;
   /** Published postings by kind. */
   kinds: { Internship: number; 'Entry-level': number };
   /** Firms whose board answered with at least one published posting. */
@@ -137,6 +163,9 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     reviewed: 0,
     review: [],
     bySource: {},
+    boards: [],
+    firmsIncomplete: 0,
+    distinctOpenings: 0,
     kinds: { Internship: 0, 'Entry-level': 0 },
     firmsWithOpenings: 0,
     rejectedSamples: {},
@@ -161,21 +190,37 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
   const held = new Map<string, ReviewItem>();
   const firmsWithOpenings = new Set<FirmRow['id']>();
 
+  // Which board and opening each kept id came from, so a second opening with
+  // the same title and city on the same board is kept as its own posting.
+  const owners = new Map<string, { firm: FirmRow['id']; sourceId?: string }>();
+  const statuses = new Map<FirmRow['id'], BoardStatus>();
+
   await inBatches(firms, concurrency, async (firm) => {
+    const status: BoardStatus = { firm: firm.name, ats: firm.ats, status: 'ok', fetched: 0, kept: 0, review: 0, rejected: emptyRejected(), ids: [] };
+    statuses.set(firm.id, status);
     let raw: RawJob[];
     try {
       raw = await fetcher(firm);
       raw = forFirm(firm, raw);
       await store.markFirmPolled(firm.id, { ok: true });
     } catch (error) {
-      report.firmsFailed++;
       const message = error instanceof Error ? error.message : String(error);
       report.errors.push({ firm: firm.name, message });
-      await store.markFirmPolled(firm.id, { ok: false, error: message });
-      return;
+      status.error = message;
+      if (!(error instanceof IncompleteBoardError)) {
+        report.firmsFailed++;
+        status.status = 'failed';
+        await store.markFirmPolled(firm.id, { ok: false, error: message });
+        return;
+      }
+      report.firmsIncomplete++;
+      status.status = 'incomplete';
+      raw = forFirm(firm, error.jobs);
+      await store.markFirmPolled(firm.id, { ok: true, error: message });
     }
 
     report.fetched += raw.length;
+    status.fetched = raw.length;
     const counts = sourceCounts(report, firm.ats);
     counts.fetched += raw.length;
 
@@ -184,21 +229,38 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
       if (!result.ok) {
         if (result.reason === 'needs-review') {
           counts.review++;
+          status.review++;
           if (!held.has(result.posting.id)) held.set(result.posting.id, { posting: result.posting, reason: result.review, source: firm.ats });
           continue;
         }
         report.rejected[result.reason]++;
         counts.rejected[result.reason]++;
+        status.rejected[result.reason]++;
         const samples = (report.rejectedSamples[result.reason] ??= []);
         if (samples.length < SAMPLES_PER_REASON) samples.push({ role: job.title, firm: job.firm, location: job.location });
         continue;
       }
       if (result.sectorGuessed) report.sectorGuessed++;
       counts.kept++;
+      status.kept++;
       firmsWithOpenings.add(firm.id);
-      if (!keep.has(result.posting.id)) keep.set(result.posting.id, result.posting);
+      let posting = result.posting;
+      const owner = owners.get(posting.id);
+      // Same board, same title and city, different job ids: two openings
+      // (two Leasing Analyst seats in Dallas), not one listed twice. The first
+      // keeps the plain id, so existing ids do not change.
+      if (owner && owner.firm === firm.id && posting.sourceId && owner.sourceId && owner.sourceId !== posting.sourceId) {
+        posting = { ...posting, id: postingId(posting.firm, `${posting.role} #${posting.sourceId}`, posting.city) };
+        report.distinctOpenings++;
+      }
+      if (!keep.has(posting.id)) {
+        keep.set(posting.id, posting);
+        owners.set(posting.id, { firm: firm.id, sourceId: posting.sourceId });
+      }
+      if (!status.ids.includes(posting.id)) status.ids.push(posting.id);
     }
   });
+  report.boards = firms.map((firm) => statuses.get(firm.id)!).filter(Boolean);
   report.firmsWithOpenings = firmsWithOpenings.size;
 
   for (const aggregator of aggregators) {

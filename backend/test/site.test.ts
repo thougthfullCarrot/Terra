@@ -44,6 +44,9 @@ function report(overrides: Partial<RunReport> = {}): RunReport {
   return {
     firms: 2,
     firmsFailed: 0,
+    boards: [],
+    firmsIncomplete: 0,
+    distinctOpenings: 0,
     fetched: 0,
     kept: 0,
     rejected: { 'missing-fields': 0, 'not-texas': 0, 'not-entry-level': 0, 'over-experience': 0, 'off-topic': 0 },
@@ -82,7 +85,7 @@ describe('buildSnapshot', () => {
     );
 
     expect(snapshot.generatedAt).toBe('2026-10-04T15:00:00.000Z');
-    expect(snapshot.boards).toEqual({ polled: 2, failed: 1 });
+    expect(snapshot.boards).toEqual({ polled: 2, failed: 1, incomplete: 0 });
     expect(snapshot.cities).toContain('San Antonio');
     expect(snapshot.jobs.map((j) => j.id)).toEqual(['new', 'old']);
     expect(snapshot.jobs[0]).toMatchObject({

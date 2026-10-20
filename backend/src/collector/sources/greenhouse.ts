@@ -1,6 +1,7 @@
 import type { RawJob } from '../../types.js';
 import { fetchJson, type FetchJsonOptions } from '../../lib/http.js';
 import { stripHtml } from '../../lib/html.js';
+import { IncompleteBoardError } from './incomplete.js';
 
 const BASE = 'https://boards-api.greenhouse.io/v1/boards';
 
@@ -18,6 +19,8 @@ interface GreenhouseJob {
 
 interface GreenhouseResponse {
   jobs?: GreenhouseJob[];
+  /** How many jobs the board holds. The list endpoint is not paged, so `jobs` should hold all of them. */
+  meta?: { total?: number };
 }
 
 export function greenhouseUrl(slug: string): string {
@@ -31,7 +34,13 @@ export async function fetchGreenhouse(
   options: FetchJsonOptions = {}
 ): Promise<RawJob[]> {
   const payload = await fetchJson<GreenhouseResponse>(greenhouseUrl(slug), options);
-  return parseGreenhouse(firm, payload);
+  const jobs = parseGreenhouse(firm, payload);
+  const listed = Array.isArray(payload?.jobs) ? payload.jobs.length : 0;
+  const total = payload?.meta?.total;
+  if (typeof total === 'number' && listed < total) {
+    throw new IncompleteBoardError(`Greenhouse board ${slug} reports ${total} jobs but listed ${listed}`, jobs);
+  }
+  return jobs;
 }
 
 export function parseGreenhouse(firm: string, payload: GreenhouseResponse): RawJob[] {
@@ -52,19 +61,28 @@ export function parseGreenhouse(firm: string, payload: GreenhouseResponse): RawJ
         applyUrl,
         postedAt: date(job.first_published ?? job.updated_at),
         level: metadata(job, /level|seniority|experience/i),
-        ats: 'greenhouse'
+        ats: 'greenhouse',
+        sourceId: String(job.id)
       } satisfies RawJob
     ];
   });
 }
 
-function location(job: GreenhouseJob): string {
-  const primary = job.location?.name?.trim();
-  if (primary) return primary;
-  const offices = (job.offices ?? [])
-    .map((office) => office.location?.trim() || office.name?.trim())
+/**
+ * The posting's location line, then each office it is tied to. A board's
+ * location line can be 'Multiple Locations', 'Remote' or another state's city
+ * while one of its offices is in Texas, so the offices are always read too;
+ * the Texas resolver takes the first Texas place in the list.
+ */
+export function location(job: Pick<GreenhouseJob, 'location' | 'offices'>): string {
+  const places = [
+    job.location?.name,
+    ...(job.offices ?? []).map((office) => office.location?.trim() || office.name)
+  ]
+    .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value) && value !== 'No offices');
-  return offices.join('; ');
+  const seen = new Set<string>();
+  return places.filter((place) => !seen.has(place.toLowerCase()) && seen.add(place.toLowerCase())).join('; ');
 }
 
 /** Boards expose an optional custom field list; pull the seniority one if present. */

@@ -104,6 +104,16 @@ jobs:
           key: job-history-none
           restore-keys: job-history-
 
+      # Each board job with when it was last verified, so a board that fails
+      # for one build keeps its jobs (marked as not freshly verified) instead of
+      # dropping them (backend/src/site/retain.ts).
+      - name: Restore the retained jobs
+        uses: actions/cache/restore@v4
+        with:
+          path: job-retain.json
+          key: job-retain-none
+          restore-keys: job-retain-
+
       - name: Export postings from the live boards
         # Optional. With these set, Adzuna search results join the board
         # postings; without them the site is built from the boards alone.
@@ -119,7 +129,7 @@ jobs:
           SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
-          npm run --silent export:site -- --history ../job-history.json --review ../job-review.json --samples 2>&1 | tee /tmp/export.log
+          npm run --silent export:site -- --history ../job-history.json --retain ../job-retain.json --coverage ../job-coverage.json --review ../job-review.json --samples 2>&1 | tee /tmp/export.log
 
       # Postings held back because they state no experience and nothing says
       # entry level. Kept as a run artifact for a person to look through;
@@ -131,6 +141,23 @@ jobs:
           name: job-review
           path: job-review.json
           retention-days: 14
+
+      # Per-board status (read in full, in part, failed) and why each job was
+      # left out, for coverage checks.
+      - name: Keep the board coverage
+        if: always() && hashFiles('job-coverage.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-coverage
+          path: job-coverage.json
+          retention-days: 14
+
+      - name: Cache the retained jobs
+        if: hashFiles('job-retain.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: job-retain.json
+          key: job-retain-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Cache the job history
         if: hashFiles('job-history.json') != ''

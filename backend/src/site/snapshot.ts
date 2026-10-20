@@ -2,6 +2,7 @@ import { CITIES, type City, type Kind, type Posting, type Sector } from '../type
 import type { RunReport } from '../collector/run.js';
 import { matchInputs, type MatchInputs } from '../matching/score.js';
 import type { Seen } from './history.js';
+import type { Verification } from './retain.js';
 
 /**
  * One posting as the public website renders it.
@@ -40,13 +41,22 @@ export interface SitePosting {
   openSince?: string;
   /** Times the seat was reposted or came back after coming down. */
   reposts?: number;
+  /** The board's own id for the opening (Greenhouse job id, Workday requisition). */
+  sourceId?: string;
+  /** ISO time the posting was last seen on its source. */
+  verifiedAt?: string;
+  /**
+   * Its board could not be read in full this build, so the posting is shown
+   * as last verified at `verifiedAt` rather than as checked just now.
+   */
+  retained?: true;
 }
 
 export interface SiteSnapshot {
   /** ISO timestamp of the collector pass this was built from. */
   generatedAt: string;
   /** Boards polled, and how many of them failed, so a thin feed can be told apart from a broken one. */
-  boards: { polled: number; failed: number };
+  boards: { polled: number; failed: number; incomplete?: number };
   /**
    * The tracked cities, so the filter offers one even on a day it has no
    * postings, then any other Texas town a job is in today, A to Z.
@@ -58,15 +68,29 @@ export interface SiteSnapshot {
 /** Long enough to read as a summary on a card; the full text is one click away on the firm's board. */
 export const DESC_LIMIT = 600;
 
-export function buildSnapshot(postings: Posting[], report: RunReport, seen?: Map<string, Seen>): SiteSnapshot {
+export function buildSnapshot(
+  postings: Posting[],
+  report: RunReport,
+  seen?: Map<string, Seen>,
+  verification?: Map<string, Verification>
+): SiteSnapshot {
+  const ranAt = report.ranAt.toISOString();
   const jobs = postings
-    .map((posting) => ({ ...toSitePosting(posting), ...seen?.get(posting.id) }))
+    .map((posting) => {
+      const checked = verification?.get(posting.id);
+      return {
+        ...toSitePosting(posting),
+        ...seen?.get(posting.id),
+        verifiedAt: checked?.verifiedAt ?? ranAt,
+        ...(checked?.retained ? { retained: true as const } : {})
+      };
+    })
     // Newest first; id breaks ties so the file is stable between identical runs.
     .sort((a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id));
 
   return {
-    generatedAt: report.ranAt.toISOString(),
-    boards: { polled: report.firms, failed: report.firmsFailed },
+    generatedAt: ranAt,
+    boards: { polled: report.firms, failed: report.firmsFailed, incomplete: report.firmsIncomplete ?? 0 },
     cities: [
       ...CITIES,
       ...[...new Set(jobs.map((job) => job.city))]
@@ -92,7 +116,8 @@ export function toSitePosting(posting: Posting): SitePosting {
     reqs: posting.reqs,
     applyUrl: posting.applyUrl,
     match: matchInputs(posting),
-    via: viaAggregator(posting.applyUrl)
+    via: viaAggregator(posting.applyUrl),
+    ...(posting.sourceId ? { sourceId: posting.sourceId } : {})
   };
 }
 

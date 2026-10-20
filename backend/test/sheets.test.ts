@@ -356,6 +356,17 @@ describe('the approved discovery batch in the Firms tab', () => {
     expect(google.tabs.get(FIRMS_TAB)).toHaveLength(4);
   });
 
+  it('adds the career-site batch (RCLCO) after the first batch was recorded, once, with its own record', async () => {
+    const rclco: FirmRow = { id: 5, name: 'RCLCO', ats: 'greenhouse', atsSlug: 'rclco', active: true, slugVerified: true, seeded: '0020_career_site_firms.sql' };
+    const google = fakeGoogle({ [FIRMS_TAB]: tab(), [BATCHES_TAB]: [['Batch', 'Added', 'Firms'], [DISCOVERED_BATCH, '2026-10-11T21:50:00Z', 'Fairfield Residential']] });
+    const result = await loadFirms(google.client, [...seed, ...batch, rclco], { write: true });
+    expect(result.firms.map((firm) => firm.name)).toContain('RCLCO');
+    expect(google.tabs.get(FIRMS_TAB)!.slice(2).map((row) => row.slice(0, 3))).toEqual([['RCLCO', 'greenhouse', 'rclco']]);
+    expect(google.tabs.get(BATCHES_TAB)!.map((row) => row[0])).toEqual(['Batch', DISCOVERED_BATCH, '0020_career_site_firms.sql']);
+    await loadFirms(google.client, [...seed, ...batch, rclco], { write: true });
+    expect(google.tabs.get(FIRMS_TAB)).toHaveLength(3);
+  });
+
   it('does not add back a firm the owner deleted after the batch was recorded', async () => {
     const google = fakeGoogle({ [FIRMS_TAB]: tab() });
     await loadFirms(google.client, [...seed, ...batch], { write: true });

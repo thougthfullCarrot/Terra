@@ -397,6 +397,16 @@ export const DISCOVERED_FIRMS = '0018_discovered_firms.sql';
  */
 export const DISCOVERED_BATCH = '0017_discovered_firms.sql';
 
+/**
+ * Every approved batch, in order: the migration holding its firms and the id
+ * the "Firm batches" tab records it under.
+ */
+export const FIRM_BATCHES: { file: string; id: string }[] = [
+  { file: DISCOVERED_FIRMS, id: DISCOVERED_BATCH },
+  // Official career sites, batch 3 (2026-10-20): RCLCO.
+  { file: '0020_career_site_firms.sql', id: '0020_career_site_firms.sql' }
+];
+
 /** A small tab recording which firm batches were added, so a firm the owner deletes is never added back. */
 export const BATCHES_TAB = 'Firm batches';
 
@@ -419,11 +429,32 @@ async function addDiscoveredFirms(
   seed: FirmRow[],
   write: boolean
 ): Promise<{ firms: FirmRow[]; note: string }> {
-  const batch = seed.filter((firm) => firm.seeded === DISCOVERED_FIRMS);
+  const firms: FirmRow[] = [];
+  const notes: string[] = [];
+  let current = sheet;
+  for (const { file, id } of FIRM_BATCHES) {
+    const added = await addBatch(client, current, seed, write, file, id);
+    firms.push(...added.firms);
+    if (added.note) notes.push(added.note);
+    // A later batch appends below the rows an earlier one just wrote.
+    if (added.firms.length) current = { ...current, lastRow: current.lastRow + added.firms.length, firms: [...current.firms, ...added.firms.map((firm) => ({ firm }))] as SheetFirmList['firms'] };
+  }
+  return { firms, note: notes.join('; ') };
+}
+
+async function addBatch(
+  client: SheetsClient,
+  sheet: SheetFirmList,
+  seed: FirmRow[],
+  write: boolean,
+  file: string,
+  batchId: string
+): Promise<{ firms: FirmRow[]; note: string }> {
+  const batch = seed.filter((firm) => firm.seeded === file);
   if (!batch.length) return { firms: [], note: '' };
 
   const recorded = await client.read(tabRange(BATCHES_TAB)).catch(() => [] as string[][]);
-  if (recorded.some((row) => (row[0] ?? '').trim() === DISCOVERED_BATCH)) return { firms: [], note: '' };
+  if (recorded.some((row) => (row[0] ?? '').trim() === batchId)) return { firms: [], note: '' };
 
   const present = new Set(sheet.firms.map((entry) => (entry.firm?.name ?? '').trim().toLowerCase()));
   const missing = batch.filter((firm) => !present.has(firm.name.trim().toLowerCase()));
@@ -458,7 +489,7 @@ async function addDiscoveredFirms(
   const header = recorded.length ? [] : [['Batch', 'Added', 'Firms']];
   await client.write(tabRange(BATCHES_TAB, `A${Math.max(recorded.length, 0) + 1}`), [
     ...header,
-    [DISCOVERED_BATCH, new Date().toISOString(), missing.map((firm) => firm.name).join(', ') || '(all already listed)']
+    [batchId, new Date().toISOString(), missing.map((firm) => firm.name).join(', ') || '(all already listed)']
   ]);
   return { firms: polled, note: missing.length ? `added ${missing.length} discovered firms (${listed})` : '' };
 }

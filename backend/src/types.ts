@@ -62,6 +62,12 @@ export interface RawJob {
    * keep the job only when its title names real estate work.
    */
   creOnly?: boolean;
+  /**
+   * The board's own id for the opening (Greenhouse job id, Workday requisition
+   * id). Two openings with the same title in the same city are told apart by
+   * it; the same id listed twice is one opening.
+   */
+  sourceId?: string;
 }
 
 /** A row of `postings`. */
@@ -89,6 +95,8 @@ export interface Posting {
   active?: boolean;
   firstSeen?: Date;
   lastSeen?: Date;
+  /** The board's own id for the opening, when it has one (RawJob.sourceId). */
+  sourceId?: string;
 }
 
 export interface Profile {
