@@ -12,10 +12,10 @@
  */
 import { execFile } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGunzip, gzipSync } from 'node:zlib';
+import { createGunzip, gunzipSync, gzipSync } from 'node:zlib';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { completeness, cachedRecords } from '../appraisal/collect.js';
@@ -28,7 +28,7 @@ import { zoningStatus } from '../rawland/jurisdiction.js';
 import { accountValues } from '../rawland/values.js';
 import { cityMatch } from '../rawland/metrics.js';
 import { assertBuildable, assertNotPublishable, joinOutlines, privacyScan, compareBaseline, BuildRefused, type Manifest } from '../rawland/guards.js';
-import { tileKey } from '../rawland/tiles.js';
+import { buildBlocked } from '../rawland/blocked.js';
 import type { AccountRow } from '../rawland/accountIndex.js';
 import * as turf from '@turf/turf';
 import { synthBuild } from '../rawland/synth.js';
@@ -99,59 +99,38 @@ async function build(): Promise<void> {
   log('loading values');
   const vals = new Map<string, ReturnType<typeof accountValues>>();
   for await (const r of cachedRecords(resolve(cache), 'bexar')) vals.set(r.account, accountValues(r));
-  log('loading outlines (values lead; others are dropped)');
-  const outlines = new Map<string, Poly>();
-  for await (const f of lines(rawFile('sara-polygons'))) {
-    const id = String(f.properties.Prop_id ?? ''); if (!f.geometry || !vals.has(id)) continue;
-    const prev = outlines.get(id);
-    if (!prev) outlines.set(id, f); else if (geomKey(prev) !== geomKey(f)) outlines.set(id, (turf.union(turf.featureCollection([prev, f])) as Poly) ?? prev);
-  }
-  const { joined, droppedOutlines, noOutline } = joinOutlines(vals, outlines);
-  log('indexing zoning and city limits');
-  const zoning: Poly[] = []; for await (const f of lines(rawFile('zoning'))) if (f.geometry) zoning.push(f);
-  // The jurisdiction field comes from the collection's own metadata. Unincorporated and military polygons are kept:
-  // zoningStatus needs them to tell explicit unincorporated land from gaps, which stay unknown.
+  // Outlines and zoning are processed in spatial blocks (rawland/blocked.ts) so memory stays bounded.
+  log('indexing city limits');
   const cityField = reads['city-limits'].jurisdictionField;
   if (!cityField) throw new BuildRefused('city-limit collection recorded no jurisdiction field; recollect it');
   const limits: Poly[] = []; for await (const f of lines(rawFile('city-limits'))) if (f.geometry) limits.push({ ...f, properties: { city: String(f.properties[cityField] ?? '').trim() } });
-  const zi = new PolygonIndex(zoning), li = new PolygonIndex(limits);
-  log(`indexed ${zoning.length} zoning polygons (${zi.cut} cut pieces) and ${limits.length} city-limit polygons (${li.cut} cut pieces); heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
+  const li = new PolygonIndex(limits);
   // Account matching only (by id): never adds or removes an account, never makes a spatial claim.
   const cityAcct = new Map<string, { acres: unknown; polygons: number }>();
   for await (const f of lines(rawFile('city-parcels'))) {
     const a = (f as unknown as Feature).attributes ?? {}; const id = Number(a.PropID); if (!(id > 0)) continue;
     const k = String(id); const prev = cityAcct.get(k); cityAcct.set(k, { acres: prev ? null : a.legal_acre, polygons: (prev?.polygons ?? 0) + 1 });
   }
-
-  const rows: AccountRow[] = []; const tiles = new Map<string, unknown[]>(); let conflicts = 0, unavailable = 0, i = 0;
-  for (const { account, value, outline } of joined) {
-    if (++i % 10000 === 0) log(`${i} accounts; heap ${Math.round(process.memoryUsage().heapUsed / 2 ** 20)} MB`);
-    let zs = { status: 'Outline unavailable', cities: [] as string[] }, bases: string[] = [], c = null as ReturnType<typeof parcelZoning> | null;
-    let cx = NaN, cy = NaN;
-    if (outline) {
-      c = parcelZoning(outline, zi, reads.zoning.status);
-      zs = zoningStatus(reads['city-limits'].status, cityShares(outline, li), c);
-      if ('districts' in c) { bases = [...new Set(c.districts.map((d) => d.code.split(/\s+/)[0]!))]; if (c.conflict) conflicts++; } else unavailable++;
-      [cx, cy] = turf.centroid(outline).geometry.coordinates as [number, number];
-    }
-    const row: AccountRow = { account, acres: value.acres, stateCode: value.stateCode, zoningBases: bases, zoningStatus: zs.status, market: value.market, land: value.land, landPsf: value.landPsf, valueStatus: value.status, cx, cy };
-    rows.push(row);
-    if (outline) { const k = tileKey(cx, cy); const t = tiles.get(k) ?? []; t.push({ ...row, cityMatch: cityMatch(value.acres, cityAcct.get(account)), zoning: c, outline: outline.geometry }); tiles.set(k, t); }
-  }
-  const hits = privacyScan(rows.slice(0, 1000)).concat(...[...tiles.values()].slice(0, 50).map((t) => privacyScan(t)));
+  const dir = join(OUT, 'build'); await rm(dir, { recursive: true, force: true }); await mkdir(join(dir, 'tiles'), { recursive: true });
+  log('processing outlines and zoning in blocks');
+  const res = await buildBlocked({
+    values: vals, outlines: () => lines(rawFile('sara-polygons')), zoning: () => lines(rawFile('zoning')), limits: li, cityAcct,
+    status: { zoning: reads.zoning.status, cityLimits: reads['city-limits'].status }, tmp: join(OUT, 'build-tmp'), tilesDir: join(dir, 'tiles'), log
+  });
+  const rows = res.rows, { noOutline, droppedOutlines, conflicts, unavailable } = res;
+  const tileSample = await Promise.all((await readdir(join(dir, 'tiles'))).slice(0, 50).map(async (f) => JSON.parse(gunzipSync(await readFile(join(dir, 'tiles', f))).toString()) as unknown[]));
+  const hits = privacyScan(rows.slice(0, 1000)).concat(...tileSample.map((t) => privacyScan(t)));
   if (hits.length) throw new BuildRefused(`owner/address fields in output: ${hits.slice(0, 5).join(', ')}`);
 
-  const dir = join(OUT, 'build'); await mkdir(join(dir, 'tiles'), { recursive: true });
   await writeFile(join(dir, 'index.json.gz'), gzipSync(JSON.stringify(rows)));
-  for (const [k, t] of tiles) await writeFile(join(dir, 'tiles', `${k}.json.gz`), gzipSync(JSON.stringify(t)));
   const manifest: Manifest = {
     built: new Date().toISOString(), pinnedAppraisalCommit: 'dd8a267', sourceYear: 2025,
-    counts: { accounts: rows.length, noOutline, droppedOutlines, zoningConflicts: conflicts, coverageUnavailable: unavailable, tiles: tiles.size },
+    counts: { accounts: rows.length, noOutline, droppedOutlines, zoningConflicts: conflicts, coverageUnavailable: unavailable, tiles: res.tiles },
     reads: Object.fromEntries(Object.entries(reads).map(([k, v]) => [k, { readAt: v.readAt, rows: v.rows }]))
   };
   const prev = arg('--prev-manifest') ? JSON.parse(await readFile(arg('--prev-manifest')!, 'utf8')) as Manifest : null;
   await writeFile(join(dir, 'manifest.json'), JSON.stringify({ ...manifest, changesFromPrevious: compareBaseline(prev, manifest), values: values.note }, null, 1));
-  log(`built ${rows.length} accounts, ${tiles.size} tiles; dropped ${droppedOutlines} outlines without values; ${noOutline} accounts without outline`);
+  log(`built ${rows.length} accounts, ${res.tiles} tiles; dropped ${droppedOutlines} outlines without values; ${noOutline} accounts without outline`);
 }
 
 /** localhost only. --synthetic serves invented data; otherwise the local build (which exists only after build passed its gates). */
