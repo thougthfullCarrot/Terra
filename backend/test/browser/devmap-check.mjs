@@ -271,7 +271,14 @@ for (const vp of [
     log(`${v}: ${label}: showing it again restores the list`, (await state()).count === exp.length);
   }
   // Filings chart: a bar's click keeps filings from that month on; a second click clears it.
+  // On a phone the chart sits in the project sheet, so the sheet is raised first with its own button.
+  const sheet = async (up) => {
+    if (!vp.mobile || (await page.locator('.devx-side').evaluate((n) => n.classList.contains('up'))) === up) return;
+    await page.locator('.devx-fold').click();
+    await page.waitForTimeout(400);
+  };
   await setF({});
+  await sheet(true);
   const bars = await page.$$eval('.devx-bar-col', (bs) => bs.map((b) => b.dataset.month));
   const regsBy = (rows) => rows.reduce((m, p) => (p.registered ? m.set(p.registered.slice(0, 7), (m.get(p.registered.slice(0, 7)) ?? 0) + 1) : m), new Map());
   const barCounts = await page.$$eval('.devx-bar-col', (bs) => bs.map((b) => Number(/: ([\d,]+)/.exec(b.title)?.[1].replace(/,/g, ''))));
@@ -289,6 +296,7 @@ for (const vp of [
     await page.waitForTimeout(200);
     log(`${v}: ${label}: clicking the bar again clears it`, (await state()).count === expected(city, f).length);
   }
+  await sheet(false);
   // Sorting: the list order follows the chosen sort, filters included.
   await setF({ work: 'New construction' });
   const exp = expected(city, { work: 'New construction' });
@@ -431,7 +439,11 @@ for (const vp of [
   // Clear filters.
   await setF({ query: 'a', publicInvolvement: 'private', cost: 'over100', filed: '365' });
   await page.locator('.devx-legend-item:not([aria-pressed="false"])').first().click();
-  if (mid) await page.locator(`.devx-bar-col[data-month="${mid}"]`).click();
+  if (mid) {
+    await sheet(true);
+    await page.locator(`.devx-bar-col[data-month="${mid}"]`).click();
+    await sheet(false);
+  }
   await page.locator('.devx-toggle').click();
   await page.waitForTimeout(150);
   await page.locator('.dev-clear').click();
@@ -526,18 +538,19 @@ for (const vp of [
     await page.waitForFunction(() => document.querySelector('.dev-map')?.dataset.pins != null);
     await waitFull(page, 'San Antonio');
     if (vp.mobile) {
-      // Phones: the list sits under the full-height map, so reach it through the visible control, not fill() on a hidden field.
-      const open = page.locator('.devx-to-list');
-      log(`${v}: a visible "Search & project list" control is on the map`, await open.isVisible());
+      // Phones: the list is a bottom sheet over the map; its visible button raises it, then a tap on search focuses it.
+      const open = page.locator('.devx-fold');
+      log(`${v}: a visible control raises the project sheet`, await open.isVisible());
       await open.click();
       await page.waitForTimeout(700);
+      await page.locator('.devx-search input').click();
       const side = await page.evaluate(() => {
         const r = document.querySelector('.devx-side').getBoundingClientRect();
         const tabs = document.querySelector('nav.tabs')?.getBoundingClientRect();
         const legend = document.querySelector('.devx-legend')?.getBoundingClientRect();
         return { top: r.top, focused: document.activeElement?.closest('.devx-search') != null, legendShown: legend ? legend.height > 0 : false, tabsTop: tabs?.top ?? innerHeight, vh: innerHeight };
       });
-      log(`${v}: it scrolls the search and list into view and focuses search`, side.top >= 0 && side.top < side.vh / 2 && side.focused, JSON.stringify(side));
+      log(`${v}: the raised sheet shows the search and list, and search takes focus`, side.top >= 0 && side.top < side.vh / 2 && side.focused, JSON.stringify(side));
       log(`${v}: the category legend is shown with the list`, side.legendShown);
       const firstName = await page.locator('.dev-list .dev-item .dev-name').first().textContent();
       const before = await page.$$eval('.dev-list .dev-item:not([hidden])', (r) => r.length);

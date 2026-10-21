@@ -115,7 +115,7 @@ let hiringOnly = false;
  * is just that one.
  */
 export function developmentMap({ data, cities, city, bids, onCity, back = null }) {
-  const box = el('section', 'card dev-card devx');
+  const box = el('section', 'card dev-card devx mapfirst');
   box.setAttribute('aria-labelledby', 'dev-title');
 
   // ---- Title row: where we are, the city chips, Follow new filings.
@@ -177,14 +177,51 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     return firms;
   };
 
+  // Map-first: the map is the whole body; the project dock, filters, chart and panel float over it.
   const body = el('div', 'devx-body');
-  const side = el('div', 'devx-side');
+  const side = el('div', 'devx-side devx-glass');
   side.id = 'devx-side';
   side.setAttribute('aria-label', 'Projects');
   side.setAttribute('role', 'region');
   const mapWrap = el('div', 'devx-mapwrap');
-  body.append(side, mapWrap);
+  mapWrap.append(side);
+  body.append(mapWrap);
   box.append(body);
+
+  // ---- The dock's head: the place, the total and how many firms on it are hiring.
+  const dockHead = el('div', 'devx-dock-head');
+  const dockTitles = el('div', 'devx-dock-titles');
+  const place = el('p', 'devx-place');
+  const placeCity = actions.querySelector('.devx-city-menu select');
+  if (placeCity) {
+    actions.querySelector('.devx-city-menu').remove();
+    const wrapSel = el('span', 'devx-place-pick devx-city-menu');
+    wrapSel.append(placeCity);
+    place.append('Being built in ', wrapSel);
+  } else place.append('Being built in ', el('b', '', city));
+  const placeWindow = el('span', 'devx-place-window');
+  place.append(placeWindow);
+  const big = el('p', 'devx-big');
+  const bigSub = el('p', 'devx-big-sub');
+  dockTitles.append(place, big, bigSub);
+  const fold = el('button', 'devx-fold');
+  fold.type = 'button';
+  fold.setAttribute('aria-controls', 'devx-side');
+  fold.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>';
+  const sheetUp = () => side.classList.contains('up');
+  const syncFold = () => {
+    const phone = mapWrap.classList.contains('narrow');
+    const open = phone ? sheetUp() : !side.classList.contains('folded');
+    fold.setAttribute('aria-expanded', String(open));
+    fold.setAttribute('aria-label', phone ? (open ? 'Lower the project list' : 'Raise the project list') : open ? 'Fold the project list' : 'Unfold the project list');
+  };
+  fold.addEventListener('click', () => {
+    if (mapWrap.classList.contains('narrow')) side.classList.toggle('up');
+    else side.classList.toggle('folded');
+    syncFold();
+    setTimeout(() => map?.refit?.(), 280);
+  });
+  dockHead.append(dockTitles, fold);
 
   // ---- Left: search, summary, legend, sort, list.
   const search = el('label', 'search dev-search devx-search');
@@ -197,7 +234,9 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   search.insertAdjacentHTML('beforeend', '<svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>');
   search.append(input);
   toList.addEventListener('click', () => {
-    side.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' });
+    side.classList.add('up');
+    side.classList.remove('folded');
+    syncFold();
     input.focus({ preventScroll: true });
   });
   let typing = 0;
@@ -279,7 +318,9 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   key.innerHTML =
     '<span class="devx-key-item"><span class="devx-key-pill" aria-hidden="true">$12M</span>Biggest projects show their filed cost; small dots are the rest, zoom in or click to see them</span>' +
     '<span class="devx-key-item"><span class="devx-key-approx" aria-hidden="true"></span>Dashed border: approximate location, near the ZIP code center</span>';
-  side.append(search, summary, bar, legend, key, listHead, smallerHint, list);
+  side.append(dockHead, search, legend, listHead, smallerHint, list);
+  summary.hidden = true;
+  bar.hidden = true;
 
   // ---- Right: the map with floating filters, the chart and the project panel.
   const mapNode = el('div', 'dev-map');
@@ -293,12 +334,16 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   panel.setAttribute('aria-label', 'Project details');
   panel.tabIndex = -1;
   panel.hidden = true;
-  mapWrap.append(mapNode, pills.node, chart, panel);
+  pills.node.classList.add('devx-glass');
+  chart.classList.add('devx-glass');
+  panel.classList.add('devx-glass');
+  mapWrap.prepend(mapNode);
+  mapWrap.append(pills.node, chart, panel);
 
   // ---- Below: coverage, smaller filings and reports, public bids.
   const note = el('p', 'dev-note');
   const reports = reportsSection({ city, data, permits: PERMIT_CITIES[city] ?? null });
-  box.append(note, reports.node);
+  box.append(note, summary, bar, key, reports.node);
   const bidList = bidsSection(bids, city);
   if (bidList) box.append(bidList);
 
@@ -361,6 +406,9 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     const cost = shown.reduce((sum, p) => sum + (p.cost > 0 ? p.cost : 0), 0);
     total.replaceChildren(el('b', '', money(cost) || '$0'), ` across ${shown.length.toLocaleString('en-US')} ${shown.length === 1 ? 'project' : 'projects'}`);
     pinned.textContent = `${pins.toLocaleString('en-US')} on the map`;
+    big.textContent = money(cost) || '$0';
+    placeWindow.textContent = filters.since ? ` · since ${monthLabel(filters.since)}` : '';
+    countHiring(shown);
     const active = activeFilterCount(filters) + (hiringOnly ? 1 : 0);
     count.replaceChildren(
       el('strong', '', shown.length.toLocaleString('en-US')),
@@ -393,10 +441,27 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
       button.title = off.has(key) ? 'Hidden: click to show' : 'Click to hide';
     }
 
-    drawChart(chart, filingsByMonth(forChart, asOf), filters.since, (month) => {
-      filters = { ...filters, since: filters.since === month ? '' : month };
-      apply();
-    });
+    const stack = new Map();
+    const rank = new Map(cats.map((c, i) => [c.key, i]));
+    for (const p of forChart) {
+      const month = String(p.registered ?? '').slice(0, 7);
+      if (!month) continue;
+      const row = stack.get(month) ?? new Map();
+      const key = projectCategory(p);
+      row.set(key, (row.get(key) ?? 0) + 1);
+      stack.set(month, row);
+    }
+    for (const [month, row] of stack) stack.set(month, [...row].sort((a, b) => rank.get(a[0]) - rank.get(b[0])).map(([key, n]) => [catOf.get(key)?.color ?? 'var(--muted)', n]));
+    drawChart(
+      chart,
+      filingsByMonth(forChart, asOf),
+      filters.since,
+      (month) => {
+        filters = { ...filters, since: filters.since === month ? '' : month };
+        apply();
+      },
+      stack
+    );
 
     // A search also looks through the smaller filings.
     const more = filters.query ? reports.searchSmaller(filters.query) : 0;
@@ -409,6 +474,21 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     map?.show(ids);
     if (selected && !ids.has(selected)) close();
     else if (selected) step(0);
+  }
+
+  /** "N projects filed · K with firms hiring", the hiring count after the paint (each project's check is cached). */
+  let hiringTurn = 0;
+  function countHiring(shown) {
+    const n = `${shown.length.toLocaleString('en-US')}`;
+    const label = shown.length === 1 ? ' project filed' : ' projects filed';
+    bigSub.replaceChildren(el('b', '', n), label);
+    if (!growthJobs().length) return;
+    const turn = ++hiringTurn;
+    setTimeout(() => {
+      if (turn !== hiringTurn) return;
+      const k = hiringOnly ? shown.length : shown.filter((p) => hiringFor(p).length).length;
+      bigSub.replaceChildren(el('b', '', n), label, ' · ', el('b', '', k.toLocaleString('en-US')), ' with firms hiring');
+    }, 60);
   }
 
   pills.onHiring = () => {
@@ -471,7 +551,16 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   });
   panel.prevStep = () => step(-1);
 
+  // Phones: the timeline moves into the bottom sheet, above the list, instead of covering the map.
+  const placeChart = () => {
+    const narrow = mapWrap.classList.contains('narrow');
+    if (narrow && chart.parentNode !== side) side.insertBefore(chart, listHead);
+    else if (!narrow && chart.parentNode !== mapWrap) mapWrap.insertBefore(chart, panel);
+    syncFold();
+  };
+  new MutationObserver(placeChart).observe(mapWrap, { attributes: true, attributeFilter: ['class'] });
   apply();
+  syncFold();
   // After the card is on the page: Leaflet measures its container.
   queueMicrotask(() =>
     drawMap(mapNode, mapWrap, all, city, catOf, reports, smallerOf(data, city), (project) => select(project, { fly: true, focus: false }))
@@ -603,7 +692,7 @@ const monthLabel = (key, long = false) => {
 };
 
 /** Filings by month: one bar per month; clicking a bar shows filings from that month on, clicking it again clears. */
-function drawChart(node, months, since, onPick) {
+function drawChart(node, months, since, onPick, stack = null) {
   const max = Math.max(1, ...months.map((m) => m.count));
   const head = el('div', 'devx-chart-head');
   head.append(el('h3', 'devx-chart-title', 'Filings by month'), el('span', 'devx-chart-note', since ? `From ${monthLabel(since, true)} on · click it again to clear` : `Last ${months.length} months · click a bar to start there`));
@@ -618,6 +707,17 @@ function drawChart(node, months, since, onPick) {
     const fill = el('i');
     fill.style.height = `${Math.max(count ? 6 : 2, Math.round((count / max) * 100))}%`;
     if (since && month < since) b.classList.add('before');
+    // Stacked by category, in the legend's order, when the caller gives the split.
+    const split = stack?.get(month);
+    if (split && count) {
+      fill.classList.add('stacked');
+      for (const [color, n] of split) {
+        const seg = el('span');
+        seg.style.background = color;
+        seg.style.flexGrow = String(n);
+        fill.append(seg);
+      }
+    }
     b.append(fill);
     b.addEventListener('click', () => onPick(month));
     bars.append(b);
@@ -851,9 +951,13 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     const h = node.clientHeight;
     const open = wrap.classList.contains('panel-open');
     const narrow = !wide();
+    // The floating dock covers the left side (or the bottom of a phone), the timeline the bottom.
+    const dock = wrap.querySelector('.devx-side');
+    const dockW = !narrow && dock && !dock.classList.contains('folded') ? dock.offsetWidth + 16 : 0;
+    const peek = narrow ? Math.min(h * 0.4, 220) : 0;
     return {
-      paddingTopLeft: [Math.min(40, w * 0.08), Math.min(narrow ? 56 : 64, h * 0.15)],
-      paddingBottomRight: [open && !narrow ? Math.min(420, w * 0.45) : Math.min(40, w * 0.08), open && narrow ? h * 0.62 : Math.min(narrow ? 40 : 150, h * 0.3)],
+      paddingTopLeft: [Math.min(dockW + 40, w * 0.5), Math.min(narrow ? 64 : 72, h * 0.15)],
+      paddingBottomRight: [open && !narrow ? Math.min(420, w * 0.35) : Math.min(40, w * 0.08), open && narrow ? h * 0.62 : narrow ? peek : Math.min(150, h * 0.3)],
       maxZoom: 14
     };
   };
