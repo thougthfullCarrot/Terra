@@ -10276,3 +10276,398 @@ body:has(#gate:not([hidden])) #main::before {
     min-width: 3.75rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Development map, map-first (concept B): the map is the page, and the project
+   dock, filters, filings timeline and project card float over it on glass.
+   --------------------------------------------------------------------------- */
+body[data-workspace='map'] .page:has(.devx.mapfirst) {
+  padding: 0;
+}
+
+.devx.mapfirst {
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* The title row stays for screen readers and links; the dock says where you are. */
+.devx.mapfirst .devx-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.devx.mapfirst .devx-body,
+body[data-workspace='map'] .devx.mapfirst .devx-body {
+  display: block;
+  height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
+  min-height: 560px;
+}
+
+.devx.mapfirst .devx-mapwrap {
+  height: 100%;
+  overflow: hidden;
+}
+
+.devx-glass {
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+/* Left dock: place, total, search, categories, results. */
+.devx.mapfirst .devx-side {
+  position: absolute;
+  z-index: 600;
+  top: 16px;
+  left: 16px;
+  bottom: 136px;
+  width: 360px;
+  border-right: 1px solid var(--line);
+  transition: transform 260ms var(--ease-out);
+}
+
+.devx.mapfirst .devx-side.folded {
+  transform: translateX(calc(-100% + 56px));
+}
+
+.devx-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 16px 0 18px;
+}
+
+.devx-dock-titles {
+  min-width: 0;
+}
+
+.devx-place {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.devx-place b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.devx-place-pick.devx-city-menu {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.devx-place-pick select {
+  min-height: 0;
+  padding: 0 18px 0 2px;
+  font-weight: 500;
+  color: var(--ink);
+  background-position: right 2px center;
+}
+
+.devx-big {
+  margin: 2px 0 0;
+  font: 500 40px/1 'Geist Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+}
+
+.devx-big-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.devx-big-sub b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.devx-fold {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--ink);
+  background: var(--sunk);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out);
+}
+
+.devx-fold:active {
+  transform: scale(0.92);
+}
+
+.devx-fold svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  transition: transform 260ms var(--ease-in-out);
+}
+
+.devx-side.folded .devx-fold svg {
+  transform: rotate(180deg);
+}
+
+.devx.mapfirst .devx-search {
+  margin: 14px 16px 0;
+}
+
+.devx.mapfirst .devx-search input {
+  background: var(--sunk);
+  border-color: transparent;
+  border-radius: 12px;
+}
+
+.devx.mapfirst .devx-search input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* Categories as chips: click one to hide or show it. */
+.devx.mapfirst .devx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 16px 0;
+  padding: 0;
+  border: 0;
+}
+
+.devx.mapfirst .devx-legend-item {
+  width: auto;
+  height: 30px;
+  padding: 0 10px 0 4px;
+  gap: 6px;
+  font-size: 12.5px;
+  background: var(--sunk);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition: transform 160ms var(--ease-out), background-color 150ms ease, color 150ms ease;
+}
+
+.devx.mapfirst .devx-legend-item:active {
+  transform: scale(0.96);
+}
+
+.devx.mapfirst .devx-legend-item .dev-cat-badge,
+.devx.mapfirst .devx-legend-item > :first-child {
+  transform: scale(0.82);
+}
+
+.devx.mapfirst .devx-legend-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.devx.mapfirst .devx-legend-count {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+}
+
+.devx.mapfirst .devx-legend-item[aria-pressed='false'] {
+  text-decoration: none;
+  background: transparent;
+  border-color: var(--line);
+}
+
+.devx.mapfirst .devx-legend-item[aria-pressed='false'] > :first-child {
+  opacity: 0.3;
+}
+
+.devx.mapfirst .devx-list-head {
+  margin: 14px 18px 4px;
+  padding: 0;
+  border: 0;
+}
+
+.devx.mapfirst .devx-list {
+  padding: 0 8px 10px;
+}
+
+.devx.mapfirst .dev-item {
+  border-radius: 12px;
+}
+
+/* Top right: the filters as one glass bar. */
+.devx.mapfirst .devx-filters.devx-glass {
+  left: auto;
+  right: 16px;
+  max-width: calc(100% - 410px);
+  padding: 4px;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+.devx.mapfirst .devx-mapwrap.panel-open:not(.narrow) .devx-filters {
+  right: 16px;
+}
+
+.devx.mapfirst .devx-filters .devx-pill {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Bottom: the filings timeline across the map. */
+.devx.mapfirst .devx-chart.devx-glass,
+.devx.mapfirst .devx-mapwrap.panel-open:not(.narrow) .devx-chart {
+  left: 16px;
+  right: 72px;
+  bottom: 16px;
+  width: auto;
+  max-width: none;
+  padding: 12px 16px 10px;
+}
+
+/* The project card: glass, under the filters on the right. */
+.devx.mapfirst .devx-panel {
+  top: 72px;
+  bottom: 136px;
+  width: 360px;
+}
+
+.devx.mapfirst .devx-mapwrap .leaflet-bottom.leaflet-right {
+  bottom: 0;
+}
+
+/* Phones and narrow windows: the dock becomes a bottom sheet that peeks. */
+.devx.mapfirst .devx-mapwrap.narrow .devx-side {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: 86%;
+  border-bottom: 0;
+  border-radius: 22px 22px 0 0;
+  transform: translateY(calc(100% - var(--peek, 196px)));
+  transition: transform 320ms var(--ease-drawer, ease);
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-side.up {
+  transform: translateY(0);
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-side::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 38px;
+  height: 4px;
+  margin-left: -19px;
+  background: var(--line);
+  border-radius: 999px;
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-dock-head {
+  padding-top: 20px;
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-big {
+  font-size: 32px;
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-fold svg {
+  transform: rotate(90deg);
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-side.up .devx-fold svg {
+  transform: rotate(-90deg);
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-filters.devx-glass {
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  max-width: none;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .leaflet-control-zoom {
+  display: none;
+}
+
+/* In the sheet the timeline is a plain block above the list. */
+.devx.mapfirst .devx-side > .devx-chart {
+  position: static;
+  width: auto;
+  max-width: none;
+  margin: 14px 16px 0;
+  padding: 10px 12px 8px;
+  background: var(--sunk);
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.devx.mapfirst .devx-mapwrap.narrow .devx-panel {
+  top: auto;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--peek, 196px) + 10px);
+  width: auto;
+  max-height: calc(100% - var(--peek, 196px) - 72px);
+}
+
+@media (max-width: 900px) {
+  .devx.mapfirst .devx-body,
+  body[data-workspace='map'] .devx.mapfirst .devx-body {
+    height: auto;
+    min-height: 0;
+  }
+
+  body[data-workspace='map'] .devx.mapfirst .devx-mapwrap {
+    min-height: 420px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .devx.mapfirst .devx-side {
+    transition: none;
+  }
+}
+
+.devx-filters .devx-pill::after {
+  display: none;
+}
+
+.devx-bar-col i.stacked {
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: hidden;
+  background: none;
+  border-radius: 3px 3px 0 0;
+}
+
+.devx-bar-col i.stacked span {
+  display: block;
+  flex: 1 1 0;
+  min-height: 1px;
+}
