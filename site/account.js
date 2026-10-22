@@ -157,6 +157,15 @@ async function accessLevel() {
   return data ?? 'none';
 }
 
+/** The same feed read again in the background, for the "new roles" check: nothing on the page is cleared. */
+async function refreshFeed() {
+  if (!user) return;
+  const { data, error } = await supabase.from('site_snapshots').select('data').eq('id', 'current').maybeSingle();
+  if (error || !data?.data || !user) return;
+  feedJobs = data.data.jobs ?? [];
+  app.showFeed(data.data, { background: true });
+}
+
 async function loadFeed() {
   app.hideFeed('Loading postings…');
   const { data, error } = await supabase.from('site_snapshots').select('data').eq('id', 'current').maybeSingle();
@@ -166,6 +175,7 @@ async function loadFeed() {
   }
   feedJobs = data.data?.jobs ?? [];
   app.showFeed(data.data);
+  app.setRefetch(refreshFeed);
   app.setTracker(trackerStore());
   // Watchlists (migration 0017) stay hidden until site.yml switches them on,
   // and during the private beta the database says whether this member is a

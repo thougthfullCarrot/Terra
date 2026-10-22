@@ -37,6 +37,7 @@ import { readEventsHash } from './events.js';
 import { readPropertyHash } from './property.js';
 import { readCareerHash } from './career.js';
 import { stateBox } from './labels.js';
+import { countText, placeOf, texasMap } from './live.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -300,7 +301,10 @@ function overview(group) {
     head.append(el('h2', 'market-side-city', market.city), el('p', 'market-side-metro', market.metro ?? ''));
     const follow = watchControls(market.city);
     if (follow) head.append(follow);
-    side.append(head, kpis(market, group));
+    side.append(head);
+    const picker = marketMap(market.city);
+    if (picker) side.append(picker);
+    side.append(countKpis(kpis(market, group), market.city));
     const missing = group.metrics.slice(0, 4).filter((key) => market.values[key] == null).length;
     if (missing) side.append(el('p', 'market-side-note', `${missing === 1 ? 'One figure has' : `${missing} figures have`} no published value for ${market.city} yet.`));
     const links = el('div', 'market-side-links');
@@ -317,6 +321,48 @@ function overview(group) {
   const main = el('div', 'market-overview-main');
   main.append(tableBox);
   box.append(main, side);
+  return box;
+}
+
+/** The side panel's map: every market as a dot, the shown one ringed; a dot picks it like a table row does. */
+let mapFrom = null;
+let mapDrawn = false;
+function marketMap(city) {
+  const places = snapshot.markets.map((m) => ({ market: m, place: placeOf(m.city) })).filter((x) => x.place);
+  if (places.length < 2) return null;
+  const box = el('div', 'market-map');
+  box.append(
+    texasMap(
+      places.map(({ market, place }) => ({
+        name: market.city,
+        at: place.at,
+        r: 4.5,
+        label: market.city === city ? market.city : '',
+        side: place.at[0] < -97.5 ? -1 : 1,
+        onPick: (name) => {
+          sideCity = name;
+          render();
+        }
+      })),
+      { label: 'Texas markets: pick one to show it here', picked: city, from: mapFrom, animate: !mapDrawn }
+    )
+  );
+  // The outline draws itself once; after that a pick only moves the ring.
+  mapDrawn = true;
+  mapFrom = city;
+  return box;
+}
+
+/** Headline figures count from the last city's values to this one's. */
+let lastKpis = null;
+function countKpis(box, city) {
+  const now = new Map([...box.querySelectorAll('.kpi')].map((tile) => [tile.querySelector('small')?.textContent, tile.querySelector('.value')]));
+  if (lastKpis && lastKpis.city !== city)
+    for (const [key, node] of now) {
+      const was = lastKpis.values.get(key);
+      if (node && was) countText(node, was, node.textContent);
+    }
+  lastKpis = { city, values: new Map([...now].map(([key, node]) => [key, node?.textContent])) };
   return box;
 }
 

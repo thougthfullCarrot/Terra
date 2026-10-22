@@ -367,6 +367,14 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   let order = [];
   let selected = null;
   let listTurn = 0;
+  /** Time-lapse: while set, only filings up to this month (YYYY-MM) show, and the chart plays forward. */
+  let until = '';
+  let lapseTimer = 0;
+  let lapseMonths = [];
+  const lapseChip = el('p', 'devx-lapse-chip devx-glass');
+  lapseChip.setAttribute('aria-live', 'polite');
+  const filedMonth = (p) => String(p.registered ?? '').slice(0, 7);
+  const lapse = (rows) => (until ? rows.filter((p) => filedMonth(p) && filedMonth(p) <= until) : rows);
 
   function clearAll() {
     filters = { ...EMPTY_DEV_FILTERS };
@@ -378,9 +386,9 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   function apply() {
     input.value = filters.query;
     const hiring = (rows) => (hiringOnly ? rows.filter((p) => hiringFor(p).length) : rows);
-    const shown = hiring(filterProjects(all, filters, asOf));
+    const shown = lapse(hiring(filterProjects(all, filters, asOf)));
     // Legend counts ignore the legend itself, so a hidden category still says how many it holds.
-    const forLegend = hiring(filterProjects(all, { ...filters, off: [] }, asOf));
+    const forLegend = lapse(hiring(filterProjects(all, { ...filters, off: [] }, asOf)));
     // The chart ignores its own month, so every bar stays clickable.
     const forChart = hiring(filterProjects(all, { ...filters, since: '' }, asOf));
     order = sortProjects(shown, sort);
@@ -452,15 +460,20 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
       stack.set(month, row);
     }
     for (const [month, row] of stack) stack.set(month, [...row].sort((a, b) => rank.get(a[0]) - rank.get(b[0])).map(([key, n]) => [catOf.get(key)?.color ?? 'var(--muted)', n]));
+    const months = filingsByMonth(forChart, asOf);
+    lapseMonths = months.map((m) => m.month);
     drawChart(
       chart,
-      filingsByMonth(forChart, asOf),
+      months,
       filters.since,
       (month) => {
+        // A bar picked during the time-lapse takes over from it.
+        if (until) stopLapse({ clear: true, redraw: false });
         filters = { ...filters, since: filters.since === month ? '' : month };
         apply();
       },
-      stack
+      stack,
+      { until, playing: Boolean(lapseTimer), onPlay: playLapse }
     );
 
     // A search also looks through the smaller filings.
@@ -471,9 +484,46 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     smallerHint.textContent = more ? `${more.toLocaleString('en-US')} more in Smaller filings below the map` : '';
     pills.badge(active, hiringOnly);
     mapNode.dataset.matches = String(shown.length);
-    map?.show(ids);
+    // During the time-lapse the view holds still while filings fill it in.
+    map?.show(ids, { keepView: Boolean(until) });
     if (selected && !ids.has(selected)) close();
     else if (selected) step(0);
+  }
+
+  /**
+   * Play: the map starts empty and fills month by month, the biggest new
+   * filings ringing where they land. Pause holds the month; Play again
+   * resumes; the end shows everything again.
+   */
+  function playLapse() {
+    if (lapseTimer) return stopLapse();
+    if (!lapseMonths.length) return;
+    if (selected) close();
+    filters = { ...filters, since: '' };
+    let i = until && until !== lapseMonths.at(-1) ? lapseMonths.indexOf(until) + 1 : 0;
+    if (!lapseChip.isConnected) mapWrap.append(lapseChip);
+    lapseChip.classList.add('on');
+    const tick = () => {
+      // Another city's map replaced this one.
+      if (!box.isConnected) return clearInterval(lapseTimer);
+      if (i >= lapseMonths.length) return stopLapse({ clear: true, done: true });
+      until = lapseMonths[i++];
+      apply();
+      const landed = order.filter((p) => filedMonth(p) === until);
+      lapseChip.replaceChildren(el('b', '', monthLabel(until, true)), ` · ${order.length.toLocaleString('en-US')} filed so far`);
+      map?.blip([...landed].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0)).slice(0, 6));
+    };
+    lapseTimer = setInterval(tick, 280);
+    tick();
+  }
+
+  function stopLapse({ clear = false, done = false, redraw = true } = {}) {
+    clearInterval(lapseTimer);
+    lapseTimer = 0;
+    if (clear) until = '';
+    if (redraw) apply();
+    if (done) lapseChip.replaceChildren(el('b', '', 'All months'), ` · ${order.length.toLocaleString('en-US')} filed`);
+    if (clear) setTimeout(() => !lapseTimer && lapseChip.classList.remove('on'), done ? 1400 : 0);
   }
 
   /** "N projects filed · K with firms hiring", the hiring count after the paint (each project's check is cached). */
@@ -691,11 +741,30 @@ const monthLabel = (key, long = false) => {
   return long ? `${MONTHS[+m - 1]} ${y}` : `${MONTHS[+m - 1]} '${y.slice(2)}`;
 };
 
-/** Filings by month: one bar per month; clicking a bar shows filings from that month on, clicking it again clears. */
-function drawChart(node, months, since, onPick, stack = null) {
+/**
+ * Filings by month: one bar per month; clicking a bar shows filings from that month on, clicking it again clears.
+ * With lapse, a Play button runs the months forward; bars past the playing month dim.
+ */
+function drawChart(node, months, since, onPick, stack = null, lapse = null) {
   const max = Math.max(1, ...months.map((m) => m.count));
   const head = el('div', 'devx-chart-head');
-  head.append(el('h3', 'devx-chart-title', 'Filings by month'), el('span', 'devx-chart-note', since ? `From ${monthLabel(since, true)} on · click it again to clear` : `Last ${months.length} months · click a bar to start there`));
+  const titleRow = el('div', 'devx-chart-titles');
+  titleRow.append(el('h3', 'devx-chart-title', 'Filings by month'));
+  // The chart is redrawn every month of the playback; a keyboard user keeps their place on the button.
+  const hadFocus = document.activeElement?.classList?.contains('devx-play') && node.contains(document.activeElement);
+  let play = null;
+  if (lapse && months.length > 1) {
+    play = el('button', `devx-play${lapse.playing ? ' on' : ''}`);
+    play.type = 'button';
+    play.setAttribute('aria-pressed', String(lapse.playing));
+    play.setAttribute('aria-label', lapse.playing ? 'Pause the time-lapse' : 'Play the filings month by month on the map');
+    play.innerHTML = lapse.playing ? '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1h2v8H2zM6 1h2v8H6z" /></svg>' : '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1v8l7-4z" /></svg>';
+    play.append(lapse.playing ? 'Pause' : lapse.until ? 'Resume' : 'Play');
+    play.addEventListener('click', lapse.onPlay);
+    titleRow.append(play);
+  }
+  const playing = lapse?.until ? `Showing filings up to ${monthLabel(lapse.until, true)}` : '';
+  head.append(titleRow, el('span', 'devx-chart-note', playing || (since ? `From ${monthLabel(since, true)} on · click it again to clear` : `Last ${months.length} months · click a bar to start there`)));
   const bars = el('div', 'devx-bars');
   for (const { month, count } of months) {
     const b = el('button', 'devx-bar-col');
@@ -707,6 +776,8 @@ function drawChart(node, months, since, onPick, stack = null) {
     const fill = el('i');
     fill.style.height = `${Math.max(count ? 6 : 2, Math.round((count / max) * 100))}%`;
     if (since && month < since) b.classList.add('before');
+    if (lapse?.until && month > lapse.until) b.classList.add('after');
+    if (lapse?.until === month) b.classList.add('now');
     // Stacked by category, in the legend's order, when the caller gives the split.
     const split = stack?.get(month);
     if (split && count) {
@@ -726,6 +797,7 @@ function drawChart(node, months, since, onPick, stack = null) {
   const ticks = [0, Math.round(months.length / 3), Math.round((2 * months.length) / 3), months.length - 1];
   for (const i of ticks) axis.append(el('span', '', months[i] ? monthLabel(months[i].month) : ''));
   node.replaceChildren(head, bars, axis);
+  if (hadFocus) play?.focus({ preventScroll: true });
 }
 
 /** Below this zoom projects are price pills (biggest first, never overlapping) and small specks; from it on, every project has its own icon. */
@@ -1111,7 +1183,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       map.once('moveend', () => marker.openPopup());
       return true;
     },
-    show(ids) {
+    show(ids, { keepView = false } = {}) {
       // A debounced search or filter from a card that has since been replaced
       // (the city changed) must not move the removed map.
       if (map !== liveMap) return;
@@ -1121,7 +1193,21 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       lastIds = ids;
       shown = located.filter((p) => ids.has(p));
       node.dataset.pins = String(shown.length);
-      fit();
+      if (keepView && fitted) draw();
+      else fit();
+    },
+    /** A ring that spreads once where each project sits, in its category color (the time-lapse's new filings). */
+    blip(list) {
+      if (map !== liveMap || reduceMotion()) return;
+      list.forEach((project, k) => {
+        const at = where.get(project);
+        if (!at || project.approximate) return;
+        const color = catOf.get(projectCategory(project))?.color ?? 'var(--accent)';
+        setTimeout(() => {
+          const ring = L.marker(at, { icon: L.divIcon({ className: 'devx-blip-icon', html: `<span class="devx-blip" style="--c:${color}"></span>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(map);
+          setTimeout(() => ring.remove(), 950);
+        }, k * 60);
+      });
     },
     hover(project) {
       if (map !== liveMap) return;

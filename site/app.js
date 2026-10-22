@@ -36,6 +36,7 @@ import { startCareer } from './career-view.js';
 import { jobFlags, TITLE_GUIDE, writeCareerHash } from './career.js';
 import { startPitch } from './pitch.js';
 import { stateBox } from './labels.js';
+import { startGateMap, startTabSlider } from './live.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { firm: 'All firms', sector: 'All sectors' };
@@ -77,7 +78,35 @@ async function load() {
   }
 }
 
-function showFeed(next) {
+/**
+ * A newer feed found while the page is open waits behind the "N new roles"
+ * button, so the list never moves under someone reading it. Without new
+ * roles (only edits or removals) it's swapped in quietly.
+ */
+let waiting = null;
+/** Fetches the feed again without clearing the page: set per mode (open site or accounts). */
+let refetch = null;
+const RECHECK_MS = 10 * 60 * 1000;
+
+function setRefetch(fn) {
+  refetch = fn;
+}
+
+function showFeed(next, { background = false } = {}) {
+  if (background && snapshot) {
+    if (next?.generatedAt === snapshot.generatedAt) return;
+    const known = new Set(snapshot.jobs.map((job) => job.id));
+    const added = (next?.jobs ?? []).filter((job) => !known.has(job.id));
+    if (added.length) {
+      waiting = { next, added: new Set(added.map((job) => job.id)) };
+      const button = $('new-roles');
+      button.querySelector('span').textContent = `${added.length} new ${added.length === 1 ? 'role' : 'roles'}`;
+      button.hidden = false;
+      return;
+    }
+  }
+  waiting = null;
+  $('new-roles').hidden = true;
   snapshot = next;
   setGrowthJobs(snapshot.jobs);
   applyScores();
@@ -88,7 +117,18 @@ function showFeed(next) {
   render();
 }
 
+/** The "N new roles" button: the waiting feed goes in, and its new cards arrive at the top. */
+function takeWaiting() {
+  if (!waiting) return;
+  const { next, added } = waiting;
+  showFeed(next);
+  for (const node of $('list').querySelectorAll('.card')) if (added.has(node.dataset.id)) node.classList.add('arrived');
+  $('jobs-view').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+
 function hideFeed(message) {
+  waiting = null;
+  $('new-roles').hidden = true;
   snapshot = null;
   setGrowthJobs([]);
   setTracker(null);
@@ -529,14 +569,19 @@ function paintSave(button, job) {
   button.title = on ? 'Saved' : 'Save for later';
 }
 
-function flipSaved(job) {
+function flipSaved(job, { quiet = false } = {}) {
+  // Undo flips it straight back, without a second toast.
+  const undo = () => {
+    flipSaved(job, { quiet: true });
+    trackerChanged();
+  };
   if (trackerOn()) {
     const stage = stageOf(job.id);
     if (!stage) {
-      track(job, { stage: 'Saved' }).then((ok) => ok && toast('Saved. Find it under Tracker.'));
+      track(job, { stage: 'Saved' }).then((ok) => ok && !quiet && toast('Saved. Find it under Tracker.', undo));
     } else if (stage === 'Saved') {
-      untrack(job.id).then((ok) => ok && toast('Removed from your tracker.'));
-    } else {
+      untrack(job.id).then((ok) => ok && !quiet && toast('Removed from your tracker.', undo));
+    } else if (!quiet) {
       toast(`It's in your tracker as ${stage}. Change or remove it there.`);
     }
     return;
@@ -547,7 +592,7 @@ function flipSaved(job) {
   } catch {
     // Private windows can refuse storage; the star still works for this visit.
   }
-  toast(saved.has(job.id) ? 'Saved. Find it under Saved.' : 'Removed from saved.');
+  if (!quiet) toast(saved.has(job.id) ? 'Saved. Find it under Saved.' : 'Removed from saved.', undo);
   drawSavedToggle();
   // In the Saved view an unstarred job leaves the list.
   if (state.saved) render();
@@ -821,20 +866,44 @@ function paintPanelSave() {
 }
 
 let toastTimer;
-function toast(text) {
+let toastLeft = 0;
+/** A short note at the bottom of the screen; with undo, it carries an Undo button and stays a little longer. */
+function toast(text, undo = null) {
   const node = $('toast');
   // An open modal sits in the top layer, above anything outside it.
   const host = isModal() ? $('job-panel') : document.body;
   if (node.parentElement !== host) host.append(node);
-  node.textContent = text;
+  node.replaceChildren(el('span', 'toast-text', text));
+  if (undo) {
+    const button = el('button', 'toast-undo', 'Undo');
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      dropToast();
+      undo();
+    });
+    node.append(button);
+  }
   node.hidden = false;
   node.classList.remove('leaving');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    node.classList.add('leaving');
-    toastTimer = setTimeout(() => (node.hidden = true), 200);
-  }, 2200);
+  toastLeft = undo ? 4000 : 2200;
+  holdToast();
 }
+function holdToast() {
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(dropToast, toastLeft);
+}
+function dropToast() {
+  clearTimeout(toastTimer);
+  const node = $('toast');
+  node.classList.add('leaving');
+  toastTimer = setTimeout(() => (node.hidden = true), 200);
+}
+// The clock stops while the tab is in the background, so a toast is never missed.
+document.addEventListener('visibilitychange', () => {
+  if ($('toast').hidden || $('toast').classList.contains('leaving')) return;
+  if (document.hidden) clearTimeout(toastTimer);
+  else holdToast();
+});
 
 /* ---------------------------------------------------------------------------
    Light and dark. The page follows the device until the visitor picks one.
@@ -912,9 +981,21 @@ if (isConfigured(CONFIG)) {
   $('meta').textContent = '';
   $('feed').hidden = true;
   import('./account.js')
-    .then(({ startAccounts }) => startAccounts({ showFeed, hideFeed, setProfile, setMarketLoader, setTracker }))
+    .then(({ startAccounts }) => startAccounts({ showFeed, hideFeed, setProfile, setMarketLoader, setTracker, setRefetch }))
     .catch((error) => showState(`Couldn't start sign-in. ${error instanceof Error ? error.message : ''}`.trim(), true));
 } else {
   setMarketLoader(loadMarketFile);
   load();
+  setRefetch(async () => {
+    const response = await fetch('postings.json', { cache: 'no-cache' });
+    if (response.ok) showFeed(await response.json(), { background: true });
+  });
 }
+
+$('new-roles').addEventListener('click', takeWaiting);
+// The feed is rebuilt every two hours; an open tab looks again now and then, never while it's in the background.
+setInterval(() => {
+  if (!document.hidden && snapshot && refetch) refetch().catch(() => {});
+}, RECHECK_MS);
+startTabSlider();
+startGateMap();
