@@ -36,7 +36,7 @@ import { startCareer } from './career-view.js';
 import { jobFlags, TITLE_GUIDE, writeCareerHash } from './career.js';
 import { startPitch } from './pitch.js';
 import { stateBox } from './labels.js';
-import { startGateMap, startTabSlider } from './live.js';
+import { startGateMap, startLanding, startTabSlider } from './live.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { firm: 'All firms', sector: 'All sectors' };
@@ -999,3 +999,4 @@ setInterval(() => {
 }, RECHECK_MS);
 startTabSlider();
 startGateMap();
+startLanding();
