@@ -1,110 +1,8 @@
-// Signed-out landing (Terrain): contour lines that rise toward the cursor, a
-// soft accent light that follows it, and the live counts from stats.json.
+// Signed-out landing: the live counts from stats.json in the "Right now" panel.
+// (This file used to draw the Terrain contour lines and the cursor light; the
+// A3 redesign retired both, and live.js runs the landing's motion.)
 const gate = document.getElementById('gate');
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let t = 0;
-
-// One contour layer per canvas: the landing band, and the band behind the top
-// of each signed-in page. Each rises toward the cursor and drifts slowly.
-function terrain(canvas, host) {
-  const layer = { canvas, host, mx: -1e4, my: -1e4, onScreen: true };
-  layer.height = (x, y) => {
-    let v = Math.sin(x * 0.006 + t * 0.3) * 1.2 + Math.cos(y * 0.008 + x * 0.002 - t * 0.2) * 1.1 + Math.sin((x + y) * 0.004 + t * 0.15) * 0.9 + Math.cos(x * 0.011 - y * 0.005) * 0.5;
-    if (!still) {
-      const dx = x - layer.mx;
-      const dy = y - layer.my;
-      v += 1.6 * Math.exp(-(dx * dx + dy * dy) / 18000);
-    }
-    return v;
-  };
-  new IntersectionObserver(([entry]) => {
-    layer.onScreen = entry.isIntersecting;
-    syncDrift();
-  }).observe(canvas);
-  return layer;
-}
-
-const layers = [];
-const visible = (layer) => layer.canvas.offsetParent !== null && layer.onScreen;
-
-function paint(layer) {
-  const { canvas } = layer;
-  const r = canvas.getBoundingClientRect();
-  if (!r.width || !visible(layer)) return;
-  const d = devicePixelRatio || 1;
-  if (canvas.width !== Math.round(r.width * d) || canvas.height !== Math.round(r.height * d)) {
-    canvas.width = Math.round(r.width * d);
-    canvas.height = Math.round(r.height * d);
-  }
-  const g = canvas.getContext('2d');
-  g.setTransform(d, 0, 0, d, 0, 0);
-  g.clearRect(0, 0, r.width, r.height);
-  const css = getComputedStyle(canvas);
-  const major = css.getPropertyValue('--terrain-major').trim();
-  const minor = css.getPropertyValue('--terrain-minor').trim();
-  const s = 8;
-  const cols = Math.ceil(r.width / s) + 1;
-  const rows = Math.ceil(r.height / s) + 1;
-  const v = new Float32Array(cols * rows);
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) v[j * cols + i] = layer.height(i * s, j * s);
-  let k = 0;
-  for (let L = -3; L <= 4.6; L += 0.35, k++) {
-    g.strokeStyle = k % 4 === 0 ? major : minor;
-    g.lineWidth = k % 4 === 0 ? 1.2 : 1;
-    g.beginPath();
-    for (let j = 0; j < rows - 1; j++) {
-      for (let i = 0; i < cols - 1; i++) {
-        const a = v[j * cols + i];
-        const b = v[j * cols + i + 1];
-        const c = v[(j + 1) * cols + i];
-        const e = v[(j + 1) * cols + i + 1];
-        const x = i * s;
-        const y = j * s;
-        const p = [];
-        if ((a - L) * (b - L) < 0) p.push(x + ((L - a) / (b - a)) * s, y);
-        if ((b - L) * (e - L) < 0) p.push(x + s, y + ((L - b) / (e - b)) * s);
-        if ((c - L) * (e - L) < 0) p.push(x + ((L - c) / (e - c)) * s, y + s);
-        if ((a - L) * (c - L) < 0) p.push(x, y + ((L - a) / (c - a)) * s);
-        if (p.length >= 4) {
-          g.moveTo(p[0], p[1]);
-          g.lineTo(p[2], p[3]);
-        }
-        if (p.length === 8) {
-          g.moveTo(p[4], p[5]);
-          g.lineTo(p[6], p[7]);
-        }
-      }
-    }
-    g.stroke();
-  }
-}
-
-let queued = false;
-function draw() {
-  queued = false;
-  layers.forEach(paint);
-}
-
-let drifting = false;
-function drift() {
-  if (!drifting) return;
-  t += 0.012;
-  draw();
-  requestAnimationFrame(drift);
-}
-
-function syncDrift() {
-  const next = !still && !document.hidden && layers.some(visible);
-  if (next === drifting) return;
-  drifting = next;
-  if (drifting) requestAnimationFrame(drift);
-}
-
-function redraw() {
-  if (drifting || queued) return;
-  queued = true;
-  requestAnimationFrame(draw);
-}
 
 // Counts rise from zero the first time they arrive.
 function countTo(el, n) {
@@ -119,19 +17,6 @@ function countTo(el, n) {
     if (p < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
-}
-
-// Cards and count boxes light up where the cursor is and lean toward it.
-function lean(event) {
-  const box = event.target.closest?.('.bento-box, .list > .card');
-  if (!box) return;
-  const q = box.getBoundingClientRect();
-  const px = (event.clientX - q.left) / q.width;
-  const py = (event.clientY - q.top) / q.height;
-  box.style.setProperty('--bx', `${px * 100}%`);
-  box.style.setProperty('--by', `${py * 100}%`);
-  box.style.setProperty('--ry', `${(px - 0.5) * 6}deg`);
-  box.style.setProperty('--rx', `${(0.5 - py) * 6}deg`);
 }
 
 async function fillCounts() {
@@ -150,57 +35,4 @@ async function fillCounts() {
   } catch {}
 }
 
-for (const [canvasId, hostId] of [['terrain-topo', 'gate'], ['app-topo', 'main']]) {
-  const c = document.getElementById(canvasId);
-  const host = document.getElementById(hostId);
-  if (!c || !host) continue;
-  const layer = terrain(c, host);
-  layers.push(layer);
-  // The cursor light is drawn by host::before, a full-viewport-wide band that starts left of the host when the
-  // page is narrower than the window, so --mx/--my are measured from that band's own corner (read back from its
-  // computed left/top), not the host's. Re-placed on scroll and resize too, so it stays under a still pointer.
-  let last = null;
-  const place = () => {
-    if (!last) return;
-    const r = c.getBoundingClientRect();
-    const h = host.getBoundingClientRect();
-    const band = getComputedStyle(host, '::before');
-    const left = h.left + (parseFloat(band.left) || 0);
-    const top = h.top + (parseFloat(band.top) || 0);
-    layer.mx = last.x - r.left;
-    layer.my = last.y - r.top;
-    host.style.setProperty('--mx', `${last.x - left}px`);
-    host.style.setProperty('--my', `${last.y - top}px`);
-    if (!still) redraw();
-  };
-  host.addEventListener('pointermove', (event) => {
-    // Touch and pen have no hover: no light left stranded where a finger lifted, and no lean.
-    // Reduced motion: no light chasing the pointer either (the bands and cards stay still too).
-    if (event.pointerType !== 'mouse' || still) return;
-    last = { x: event.clientX, y: event.clientY };
-    place();
-    lean(event);
-  });
-  addEventListener('scroll', place, { passive: true });
-  addEventListener('resize', place);
-  host.addEventListener('pointerleave', () => {
-    last = null;
-    layer.mx = layer.my = -1e4;
-    host.style.removeProperty('--mx');
-    host.style.removeProperty('--my');
-    redraw();
-  });
-}
-
-const refresh = () => {
-  redraw();
-  syncDrift();
-};
-addEventListener('resize', refresh);
-addEventListener('themechange', refresh);
-document.addEventListener('visibilitychange', syncDrift);
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refresh);
-if (gate) new MutationObserver(refresh).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
-new MutationObserver(refresh).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-refresh();
 if (gate) fillCounts();
