@@ -116,7 +116,7 @@ export interface EventSource {
 
 /** Business networking and real estate words; used for sources with relevantOnly. */
 export const RELEVANT =
-  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure|business connections/i;
+  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure|business connections|realtors?|apartments?|multifamily|property management|home ?builders?/i;
 
 /**
  * RELEVANT against the title, then against the words of the event page's own address ("/events/economic-outlook-2026"):

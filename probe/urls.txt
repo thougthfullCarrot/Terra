@@ -1,3 +1,1 @@
-https://www.taa.org/wp-json/tribe/events/v1/events?per_page=5&categories=local-association-events
-https://galvestonchamber.com/wp-json/tribe/events/v1/events?per_page=5
-https://galvestonchamber.com/events/
+https://galvestonchamber.chambermaster.com/events/calendar/
