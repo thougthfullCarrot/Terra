@@ -10473,6 +10473,13 @@ body:has(#gate:not([hidden])) {
     -webkit-backdrop-filter: saturate(1.4) blur(14px);
     backdrop-filter: saturate(1.4) blur(14px);
   }
+
+  /* Not over the full-screen dev map: blurring a map that repaints on every filter change costs frames there. */
+  body[data-workspace='map'] .appbar {
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .page-title,
