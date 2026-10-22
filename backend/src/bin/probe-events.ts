@@ -1,5 +1,6 @@
 /** Temporary: probe candidate event calendars from a GitHub runner. */
-import { fetchSource, type EventSource } from '../events/events.js';
+import { detailLinks, fetchSource, parseJsonLdEvents, type EventSource } from '../events/events.js';
+import { fetchText } from '../lib/http.js';
 
 const URLS: string[] = (process.env.PROBE_URLS ?? '').split(/\s+/).filter(Boolean);
 const SOURCES: EventSource[] = JSON.parse(process.env.PROBE_SOURCES ?? '[]');
@@ -31,6 +32,16 @@ async function main(): Promise<void> {
       if (process.env.PROBE_SNIPPET && r.ok) console.log(`  SNIP ${body.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 600)}`);
     } catch (e) {
       console.log(`URL ERR ${url} ${(e as Error).message}`);
+    }
+  }
+  for (const s of SOURCES.filter((x) => x.kind === 'pages')) {
+    const page = s.page ?? `${s.base}/events`;
+    const links = detailLinks(await fetchText(page, { accept: 'text/html,text/calendar,*/*' }), page, s.detailPath ?? '/events/');
+    for (const l of links) {
+      try {
+        const html = await fetchText(l, { accept: 'text/html,text/calendar,*/*', retries: 0 });
+        console.log(`  LINK ${l} ${html.length}b ld=${parseJsonLdEvents(html, s, l).length} blocks=${(html.match(/ld\+json/g) ?? []).length}`);
+      } catch (e) { console.log(`  LINK ${l} ERR ${(e as Error).message}`); }
     }
   }
   const now = new Date();

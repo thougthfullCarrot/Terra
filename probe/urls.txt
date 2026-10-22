@@ -1,1 +1,3 @@
-https://www.austinchamber.com/events/area-business-connections-oct-2026
+https://www.taa.org/wp-json/tribe/events/v1/events?per_page=5&categories=local-association-events
+https://galvestonchamber.com/wp-json/tribe/events/v1/events?per_page=5
+https://galvestonchamber.com/events/
