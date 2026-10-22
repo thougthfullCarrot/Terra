@@ -4,6 +4,7 @@ import {
   EVENT_SOURCES,
   fetchSource,
   INTERNAL,
+  internalMeeting,
   parseGrowthZoneDetail,
   parseJsonLdEvents,
   parseLd,
@@ -84,6 +85,15 @@ describe('new sources (2026-10-22 expansion)', () => {
     expect(INTERNAL.test('Urban Design Committee Meeting')).toBe(true);
     expect(INTERNAL.test('TAA’s 2027 Winter Board of Directors Meeting')).toBe(true);
     expect(INTERNAL.test('Committee on the Environment (COTE) Happy Hour')).toBe(false);
+    // Public government meetings about development stay: only an association's own governance is dropped.
+    expect(internalMeeting('Urban Design Committee Meeting')).toBe(true);
+    expect(internalMeeting('Chapter Council Meeting')).toBe(true);
+    expect(internalMeeting('City Council Meeting')).toBe(false);
+    expect(internalMeeting('Georgetown City Council Meeting: Zoning Cases')).toBe(false);
+    expect(internalMeeting('Planning and Zoning Committee Meeting')).toBe(false);
+    expect(internalMeeting('Land Use Committee Meeting')).toBe(false);
+    expect(internalMeeting('Zoning Board of Adjustment Board Meeting')).toBe(false);
+    expect(t('Planning & Zoning Commission Meeting')).toBe(true);
     expect(t('Celebrating Excellence', 'https://x.org/events/business-after-hours-oct')).toBe(true);
   });
 
@@ -186,6 +196,20 @@ describe('new sources (2026-10-22 expansion)', () => {
     // A real overnight end (a gala to 1 AM) is kept.
     const late = parseGrowthZoneDetail(ld.replace('2026-10-29T00:00:00-05:00', '2026-10-29T01:00:00-05:00'));
     expect(late.end).not.toBeNull();
+  });
+
+  it('GrowthZone: legitimate multi-day events and stated midnight endings keep their end', () => {
+    const page = (start: string, end: string, text = '') =>
+      parseGrowthZoneDetail(`<script type="application/ld+json">${JSON.stringify({ '@type': 'Event', name: 'X', startDate: start, endDate: end })}</script>${text}`);
+    // A two-day conference ending at midnight two days on is a real multi-day event.
+    expect(page('2026-11-05T08:00:00-06:00', '2026-11-07T00:00:00-06:00').end).toBe('2026-11-07T00:00:00-06:00');
+    // A three-day summit ending at a clock time is untouched.
+    expect(page('2026-11-05T08:00:00-06:00', '2026-11-07T15:00:00-06:00').end).toBe('2026-11-07T15:00:00-06:00');
+    // The page prints the midnight end itself: kept.
+    expect(page('2026-10-31T20:00:00-05:00', '2026-11-01T00:00:00-05:00', '<p>October 31, 2026 8:00 PM - 12:00 AM</p>').end).toBe('2026-11-01T00:00:00-05:00');
+    expect(page('2026-10-31T20:00:00-05:00', '2026-11-01T00:00:00-05:00', '<p>Gala runs until midnight.</p>').end).toBe('2026-11-01T00:00:00-05:00');
+    // The mixer placeholder with a printed range still takes the printed end.
+    expect(page('2026-10-28T17:00:00-05:00', '2026-10-29T00:00:00-05:00', '<p>October 28, 2026 5:00 PM - 7:00 PM</p>').end).toBe('2026-10-28T19:00:00-05:00');
   });
 
   it('every new source is configured with a real organizer page', () => {

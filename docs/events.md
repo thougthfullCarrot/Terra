@@ -105,7 +105,8 @@ hybrid), Cost, Registration link, Status (cancelled, postponed, sold out), Notes
   mixers, happy hours, young professionals, luncheons and breakfasts, groundbreakings, hard-hat and
   property tours, urban design/planning, zoning, Realtors, apartments and property management.
   Personal "planning" seminars and general socials do not match.
-- Governance meetings ("... Committee Meeting", "Board of Directors Meeting") are never listed.
+- An association's own governance meetings ("... Committee Meeting", "Board of Directors Meeting", "Chapter Council Meeting") are never listed. Public development meetings (city council, planning and zoning, land use, board of adjustment) are not treated as internal.
+- GrowthZone's placeholder end (a timed start "ending" at 12:00 AM the next day) is replaced by the printed time range or left blank. Ends two or more days later, and midnight ends the page itself prints, are kept.
 - `placedOnly` is for statewide calendars (Texas Apartment Association): an event is kept only when
   its venue or address names a market, including suburbs and satellite cities (`SUBURBS`: Humble is
   Houston, Odessa is Midland, Bryan is College Station, League City is Galveston...). Virtual events

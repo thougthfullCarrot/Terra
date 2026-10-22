@@ -119,7 +119,19 @@ export const RELEVANT =
   /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban (?:design|development|planning|land)|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure|business connections|realtors?|apartments?|multifamily|property management|home ?builders?/i;
 
 /** Governance meetings on public calendars (a committee's or board's own meeting), never listed. */
-export const INTERNAL = /\b(?:committee|board(?: of directors)?|council) meeting\b/i;
+/**
+ * An association's own governance meeting (committee, board, chapter council). Public government meetings
+ * (city council, planning and zoning, land use, development review) are relevant and never matched here.
+ */
+export const INTERNAL = /\b(?:committee|board(?: of directors)?|(?:chapter|advisory|leadership|executive|member(?:ship)?|young professionals?|yp|student) council) meeting\b/i;
+
+/** Public development meetings: a city or county body, planning, zoning, land use or development review. */
+export const PUBLIC_MEETING = /\b(?:city|county|town|municipal|commissioners?)\b|planning|zoning|land use|development review|board of adjustment|historic (?:landmark|preservation|design)|capital improvements?|bond/i;
+
+/** An association's internal meeting, unless it is a public development meeting. */
+export function internalMeeting(title: string): boolean {
+  return INTERNAL.test(title) && !PUBLIC_MEETING.test(title);
+}
 
 /**
  * RELEVANT against the title, then against the words of the event page's own address ("/events/economic-outlook-2026"):
@@ -571,17 +583,37 @@ export function visibleTimes(html: string, day: string): { start: string; end: s
  */
 export function parseGrowthZoneDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null; dateOnly: boolean } {
   const found = structuredDetail(html);
-  // A timed start with an end at the next midnight is GrowthZone's placeholder end ("5:30 PM" mixers printed as
-  // ending at 12:00 AM the next day), not a multi-day event: the visible time range, or no end.
-  const startDay = found.start ? new Intl.DateTimeFormat('en-CA', { timeZone: parseZone }).format(new Date(found.start)) : '';
-  if (found.start && !isMidnight(found.start) && found.end && isMidnight(found.end) && found.end.slice(0, 10) > startDay) {
+  // A timed start with an end at exactly the next midnight is GrowthZone's placeholder end ("5:30 PM" mixers
+  // printed as ending at 12:00 AM the next day). Only that one-day case is touched: an end two or more days
+  // later is a real multi-day event, and a page that itself prints "12:00 AM"/"midnight" as the end keeps it.
+  // Otherwise the visible time range gives the end, or there is no end.
+  const startDay = found.start ? localDay(found.start) : '';
+  if (found.start && !isMidnight(found.start) && found.end && isMidnight(found.end) && found.end.slice(0, 10) === nextDay(startDay)) {
     const times = visibleTimes(html, startDay);
+    if (times?.end && /T00:00/.test(times.end)) return { ...found, dateOnly: false };
+    if (!times && statedMidnightEnd(html)) return { ...found, dateOnly: false };
     return { ...found, end: times?.end ?? null, dateOnly: false };
   }
   if (!found.start || !isMidnight(found.start)) return { ...found, dateOnly: false };
   const times = visibleTimes(html, found.start.slice(0, 10));
   if (times) return { ...found, start: times.start, end: times.end, dateOnly: false };
   return { ...found, dateOnly: true };
+}
+
+function localDay(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: parseZone }).format(new Date(iso));
+}
+
+function nextDay(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** True when the visible page text says the event ends at midnight ("until midnight", "- 12:00 AM"). */
+function statedMidnightEnd(html: string): boolean {
+  const text = decodeText(html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')).replace(/\s+/g, ' ');
+  return /(?:until|till|to|-|–|—)\s*(?:midnight|12(?::00)?\s*a\.?m\b)/i.test(text);
 }
 
 function structuredDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null } {
@@ -992,7 +1024,7 @@ export async function fetchSource(
     const raw = await fetchRaw(source, now, fetcher, log);
     if (counts) counts.raw = raw.length;
     const events = await withSessions(tidy(raw), fetcher, log);
-    const kept = events.filter((e) => (!source.relevantOnly || relevantEvent(e)) && !source.exclude?.test(e.title) && !INTERNAL.test(e.title));
+    const kept = events.filter((e) => (!source.relevantOnly || relevantEvent(e)) && !source.exclude?.test(e.title) && !internalMeeting(e.title));
     const places = source.placedOnly ? [...(source.places ?? []), ...SUBURBS] : source.places;
     const done = kept.map((e) => finalize(e, { ...source, places }, now));
     return joinDays(source.placedOnly ? done.filter((e) => e.format === 'virtual' || placedInMarket(e, places)) : done);
