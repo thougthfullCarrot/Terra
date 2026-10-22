@@ -50,6 +50,7 @@ jobs:
             for (const c of B.cities) for (const e of c.events) if(!aid.has(e.id)) console.log(`GONE | ${c.city} | ${e.start} | ${e.title} | ${e.organizer}`);
           '
           grep -h "PLACE\|failed\|keeping" /tmp/after.log | head -40 || true
+          for f in before after; do echo "B64 $f $(gzip -9c /tmp/$f.json | base64 -w0)"; done
       - uses: actions/upload-artifact@v4
         with:
           name: pilot

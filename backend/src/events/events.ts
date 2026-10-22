@@ -116,7 +116,10 @@ export interface EventSource {
 
 /** Business networking and real estate words; used for sources with relevantOnly. */
 export const RELEVANT =
-  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure|business connections|realtors?|apartments?|multifamily|property management|home ?builders?/i;
+  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban (?:design|development|planning|land)|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure|business connections|realtors?|apartments?|multifamily|property management|home ?builders?/i;
+
+/** Governance meetings on public calendars (a committee's or board's own meeting), never listed. */
+export const INTERNAL = /\b(?:committee|board(?: of directors)?|council) meeting\b/i;
 
 /**
  * RELEVANT against the title, then against the words of the event page's own address ("/events/economic-outlook-2026"):
@@ -671,7 +674,10 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
       const details = ldDetails(n as Record<string, unknown>, normalizeDate);
       const { locations, ...extra } = details;
       const place = locations[0] ?? (typeof loc === 'object' && !/Virtual/i.test(String((loc as { '@type'?: string })['@type'])) ? loc : undefined);
-      const venue = typeof loc === 'string' ? loc : place?.name;
+      // Some CMSs (the Austin Chamber's) fill the place with the event's own name: that is no venue.
+      const named = typeof loc === 'string' ? loc : place?.name;
+      const venue = named && decodeText(named).trim().toLowerCase() === title.trim().toLowerCase() ? undefined : named;
+      if (!venue && extra.address && decodeText(String(extra.address)).trim().toLowerCase() === title.trim().toLowerCase()) delete extra.address;
       out.push({
         ...clean(extra),
         id: `${source.key}-${url}`,
@@ -979,7 +985,7 @@ export async function fetchSource(
     const raw = await fetchRaw(source, now, fetcher, log);
     if (counts) counts.raw = raw.length;
     const events = await withSessions(tidy(raw), fetcher, log);
-    const kept = events.filter((e) => (!source.relevantOnly || relevantEvent(e)) && !source.exclude?.test(e.title));
+    const kept = events.filter((e) => (!source.relevantOnly || relevantEvent(e)) && !source.exclude?.test(e.title) && !INTERNAL.test(e.title));
     const places = source.placedOnly ? [...(source.places ?? []), ...SUBURBS] : source.places;
     const done = kept.map((e) => finalize(e, { ...source, places }, now));
     return joinDays(source.placedOnly ? done.filter((e) => e.format === 'virtual' || placedInMarket(e, places)) : done);
