@@ -26,7 +26,7 @@ async function main(): Promise<void> {
       const r = await fetch(url, { headers: { 'user-agent': 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)', accept: 'text/html,application/json,text/calendar,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(15000) });
       const body = await r.text();
       console.log(`URL ${r.status} ${body.length}b ${url} -> ${r.url} | ${markers(body)}`);
-      for (const ld of (body.match(/<script[^>]*ld\+json[^>]*>[\s\S]*?<\/script>/g) ?? []).slice(0, 2)) console.log(`  LD ${ld.replace(/\s+/g, ' ').slice(0, 900)}`);
+      for (const ld of (body.match(/<script[^>]*ld\+json[^>]*>[\s\S]*?<\/script>/g) ?? []).slice(0, 2)) console.log(`  LD ${JSON.stringify(ld.slice(0, 2500))}`);
       console.log(`  FEEDS ${[...new Set(body.match(/(?:href|src)="[^"]*(?:ical|\.ics|rss|subscribe|export|webcal)[^"]*"/gi) ?? [])].slice(0, 8).join(' ')}`);
       if (process.env.PROBE_SNIPPET && r.ok) console.log(`  SNIP ${body.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 600)}`);
     } catch (e) {

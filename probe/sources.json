@@ -1,1 +1,8 @@
-[]
+[
+ {"key":"austin-chamber","organizer":"Austin Chamber","city":"Austin","kind":"pages","base":"https://www.austinchamber.com","page":"https://www.austinchamber.com/events","detailPath":"/events/","relevantOnly":true},
+ {"key":"georgetown-chamber","organizer":"Georgetown Chamber","city":"Austin","kind":"growthzone","base":"https://business.georgetownchamber.org","page":"https://business.georgetownchamber.org/events/calendar","relevantOnly":true},
+ {"key":"cedar-park-chamber","organizer":"Cedar Park Chamber","city":"Austin","kind":"growthzone","base":"https://business.cedarparkchamber.org","page":"https://business.cedarparkchamber.org/events/calendar","relevantOnly":true},
+ {"key":"san-marcos-chamber","organizer":"Greater San Marcos Partnership","city":"Austin","kind":"growthzone","base":"https://business.sanmarcostexas.com","page":"https://business.sanmarcostexas.com/events/calendar","relevantOnly":true},
+ {"key":"tamu-reda","organizer":"Texas A&M Real Estate Development Association","city":"College Station","kind":"ics","base":"https://getinvolved.tamu.edu/org/reda/events","page":"https://getinvolved.tamu.edu/ics/event/upcoming/1133"},
+ {"key":"tamu-real","organizer":"Aggie Real Estate Club","city":"College Station","kind":"ics","base":"https://getinvolved.tamu.edu/org/real/events","page":"https://getinvolved.tamu.edu/ics/event/upcoming/767"}
+]

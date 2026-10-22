@@ -85,7 +85,7 @@ export interface EventSource {
   key: string;
   organizer: string;
   city: City;
-  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist' | 'livewhale' | 'sitemap';
+  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist' | 'livewhale' | 'sitemap' | 'ics';
   /** Site root, no trailing slash. */
   base: string;
   /** The listing page (default base + /events). */
@@ -111,7 +111,7 @@ export interface EventSource {
 
 /** Business networking and real estate words; used for sources with relevantOnly. */
 export const RELEVANT =
-  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership/i;
+  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure/i;
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
@@ -578,6 +578,22 @@ interface LdEvent {
   offers?: { price?: string | number } | Array<{ price?: string | number }>;
 }
 
+/**
+ * One JSON-LD block. Some CMSs (Craft on the Austin Chamber, AIA San Antonio) print raw line breaks inside strings,
+ * which JSON forbids; those are read as spaces. undefined when the block still isn't JSON.
+ */
+export function parseLd(json: string): unknown {
+  try {
+    return JSON.parse(json.trim());
+  } catch {
+    try {
+      return JSON.parse(json.trim().replace(/[\u0000-\u001f]+/g, ' '));
+    } catch {
+      return undefined;
+    }
+  }
+}
+
 function ldNodes(data: unknown): LdEvent[] {
   if (Array.isArray(data)) return data.flatMap(ldNodes);
   if (!data || typeof data !== 'object') return [];
@@ -590,12 +606,8 @@ function ldNodes(data: unknown): LdEvent[] {
 export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: string): TerraEvent[] {
   const out: TerraEvent[] = [];
   for (const [, json = ''] of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    let data: unknown;
-    try {
-      data = JSON.parse(json.trim());
-    } catch {
-      continue;
-    }
+    const data = parseLd(json);
+    if (data === undefined) continue;
     for (const n of ldNodes(data)) {
       const types = Array.isArray(n['@type']) ? n['@type'] : [n['@type']];
       if (!types.some((t) => typeof t === 'string' && /Event$/.test(t))) continue;
@@ -639,12 +651,8 @@ function clean(details: Details): Details {
 /** The schema.org details of the first Event on a detail page (registration, price, format, status...). */
 export function pageDetails(html: string): Details {
   for (const [, json = ''] of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    let data: unknown;
-    try {
-      data = JSON.parse(json.trim());
-    } catch {
-      continue;
-    }
+    const data = parseLd(json);
+    if (data === undefined) continue;
     for (const n of ldNodes(data)) {
       const types = Array.isArray(n['@type']) ? n['@type'] : [n['@type']];
       if (!types.some((t) => typeof t === 'string' && /Event$/.test(t))) continue;
@@ -912,10 +920,19 @@ const defaultFetcher: Fetcher = {
   text: (url) => fetchText(url, { retries: 1, accept: 'text/html,text/calendar,*/*' })
 };
 
-export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
+export async function fetchSource(
+  source: EventSource,
+  now: Date,
+  fetcher: Fetcher = defaultFetcher,
+  log: (m: string) => void = console.log,
+  /** Filled with the number of listings the source returned before the relevance, closure and date filters. */
+  counts?: { raw: number }
+): Promise<TerraEvent[]> {
   parseZone = zoneOf(source.city);
   try {
-    const events = await withSessions(tidy(await fetchRaw(source, now, fetcher, log)), fetcher, log);
+    const raw = await fetchRaw(source, now, fetcher, log);
+    if (counts) counts.raw = raw.length;
+    const events = await withSessions(tidy(raw), fetcher, log);
     const kept = events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
     return joinDays(kept.map((e) => finalize(e, source, now)));
   } finally {
@@ -999,6 +1016,16 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       }
     }
     throw restError instanceof Error ? restError : new Error('no event feed reachable');
+  }
+
+  // A public iCal feed published by the organizer (a student organization's "Add to iCal" export): page is the feed.
+  if (source.kind === 'ics') {
+    const feed = source.page ?? `${source.base}/events.ics`;
+    const text = await fetcher.text(feed);
+    if (!/BEGIN:VCALENDAR/.test(text)) throw new Error(`${feed} is not an iCal feed`);
+    const events = parseIcs(text, source, source.base, now);
+    log(`${source.organizer}: ${events.length} events from ${feed}`);
+    return events;
   }
 
   if (source.kind === 'jsonld') {
@@ -1283,6 +1310,8 @@ export interface SourceStatus {
   fetchedAt: string;
   /** Upcoming events this source contributes (from the earlier build when it failed). */
   count: number;
+  /** Listings the source returned this run, before the relevance, date-window and duplicate filters (0 when it failed). */
+  raw?: number;
   ok?: boolean;
   /** Why it could not be read this run (HTTP status, timeout...). */
   error?: string;
@@ -1301,6 +1330,10 @@ export interface MarketReport {
   sourcesOk: number;
   sourcesFailed: number;
   upcoming: number;
+  /** Listings the market's sources returned this run, before relevance, date-window and duplicate filters. */
+  raw?: number;
+  /** Events displayed after filtering and deduplication, cancelled ones included (upcoming leaves those out). */
+  displayed?: number;
   virtual: number;
   duplicatesRemoved: number;
   /** Events kept from an earlier build because their source failed. */
@@ -1341,17 +1374,18 @@ export async function buildEventsFile(
     );
     const url = source.page ?? `${source.base}/events`;
     try {
-      const events = upcoming(await fetchSource(source, now, fetcher, log), now).map((e) => withReschedule(e, previousById.get(e.id)));
+      const counts = { raw: 0 };
+      const events = upcoming(await fetchSource(source, now, fetcher, log, counts), now).map((e) => withReschedule(e, previousById.get(e.id)));
       log(`${source.organizer}: ${events.length} upcoming events.`);
       all.push(...events);
-      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: now.toISOString(), count: events.length, ok: true, lastSuccessAt: now.toISOString() });
+      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: now.toISOString(), count: events.length, raw: counts.raw, ok: true, lastSuccessAt: now.toISOString() });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(`${source.organizer}: ${message}; keeping ${kept.length} earlier events.`);
       const still = upcoming(kept, now).map((e) => ({ ...e, stale: true, verifiedAt: e.verifiedAt ?? before?.fetchedAt ?? previous?.generatedAt }) as TerraEvent);
       all.push(...still);
       const last = before ? (before.lastSuccessAt !== undefined ? before.lastSuccessAt : before.fetchedAt) : null;
-      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: before?.fetchedAt ?? now.toISOString(), count: still.length, ok: false, error: message.slice(0, 120), lastSuccessAt: last ?? null });
+      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: before?.fetchedAt ?? now.toISOString(), count: still.length, raw: 0, ok: false, error: message.slice(0, 120), lastSuccessAt: last ?? null });
     }
   }
   const previousManual = previousEvents.filter((e) => e.source === MANUAL_SOURCE);
@@ -1403,6 +1437,8 @@ export function marketReport(cities: EventsFile['cities'], meta: SourceStatus[],
       sourcesOk: ok.length,
       sourcesFailed: mine.length - ok.length,
       upcoming: upcomingCount,
+      raw: mine.reduce((sum, m) => sum + (m.key === 'manual' ? 0 : (m.raw ?? 0)), 0),
+      displayed: events.length,
       virtual: events.filter((e) => e.format === 'virtual').length,
       duplicatesRemoved: removed.get(city) ?? 0,
       stale: events.filter((e) => e.stale).length,
@@ -1413,12 +1449,12 @@ export function marketReport(cities: EventsFile['cities'], meta: SourceStatus[],
 
 /** The collection report as Markdown (written next to events.json and to the workflow summary). */
 export function reportMarkdown(file: EventsFile): string {
-  const lines = [`# Events collection report`, '', `Built ${file.generatedAt}.`, '', '| Market | Result | Sources read | Failed | Upcoming | Virtual | Duplicates removed | Kept from earlier build | Last verified |', '|---|---|---|---|---|---|---|---|---|'];
+  const lines = [`# Events collection report`, '', `Built ${file.generatedAt}.`, '', '| Market | Result | Sources read | Failed | Raw listings | Displayed | Upcoming | Virtual | Duplicates removed | Kept from earlier build | Last verified |', '|---|---|---|---|---|---|---|---|---|---|---|'];
   const label = { events: 'Events listed', 'none-found': 'No upcoming events found', unreadable: 'Sources could not be read', 'no-sources': 'No calendar configured' };
   for (const r of file.report ?? []) {
-    lines.push(`| ${r.city} | ${label[r.state]} | ${r.sourcesOk}/${r.sourcesChecked} | ${r.sourcesFailed} | ${r.upcoming} | ${r.virtual} | ${r.duplicatesRemoved} | ${r.stale} | ${r.lastVerifiedAt ?? 'never'} |`);
+    lines.push(`| ${r.city} | ${label[r.state]} | ${r.sourcesOk}/${r.sourcesChecked} | ${r.sourcesFailed} | ${r.raw ?? '?'} | ${r.displayed ?? '?'} | ${r.upcoming} | ${r.virtual} | ${r.duplicatesRemoved} | ${r.stale} | ${r.lastVerifiedAt ?? 'never'} |`);
   }
-  lines.push('', '## Sources', '', '| Market | Source | Read this run | Upcoming | Last success | Error |', '|---|---|---|---|---|---|');
-  for (const s of file.sources) lines.push(`| ${s.city ?? 'All'} | [${s.organizer}](${s.url || '#'}) | ${s.ok ? 'yes' : 'no'} | ${s.count} | ${s.lastSuccessAt ?? 'never'} | ${(s.error ?? '').replace(/\|/g, '/')} |`);
+  lines.push('', '## Sources', '', '| Market | Source | Read this run | Raw listings | Upcoming | Last success | Error |', '|---|---|---|---|---|---|---|');
+  for (const s of file.sources) lines.push(`| ${s.city ?? 'All'} | [${s.organizer}](${s.url || '#'}) | ${s.ok ? 'yes' : 'no'} | ${s.raw ?? '?'} | ${s.count} | ${s.lastSuccessAt ?? 'never'} | ${(s.error ?? '').replace(/\|/g, '/')} |`);
   return `${lines.join('\n')}\n`;
 }
