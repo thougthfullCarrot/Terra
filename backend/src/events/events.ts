@@ -164,6 +164,17 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'league-city-chamber', organizer: 'League City Chamber', city: 'Galveston', kind: 'growthzone', base: 'https://business.leaguecitychamber.com', relevantOnly: true },
   { key: 'lubbock-chamber', organizer: 'Lubbock Chamber', city: 'Lubbock', kind: 'growthzone', base: 'https://business.lubbockchamber.com', relevantOnly: true },
   { key: 'midland-chamber', organizer: 'Midland Chamber', city: 'Midland', kind: 'growthzone', base: 'https://business.midlandtxchamber.com', relevantOnly: true },
+  // Austin-area chambers (no iCal feed; their GrowthZone calendar pages are read) and the Galveston chamber's ChamberMaster.
+  { key: 'georgetown-chamber', organizer: 'Georgetown Chamber', city: 'Austin', kind: 'growthzone', base: 'https://business.georgetownchamber.org', page: 'https://business.georgetownchamber.org/events/calendar', relevantOnly: true },
+  // Member businesses' bar promotions ("All Day Happy Hour - <bar>") are not networking events.
+  { key: 'cedar-park-chamber', organizer: 'Cedar Park Chamber', city: 'Austin', kind: 'growthzone', base: 'https://business.cedarparkchamber.org', page: 'https://business.cedarparkchamber.org/events/calendar', relevantOnly: true, exclude: /all[- ]day happy hour/i },
+  { key: 'san-marcos-partnership', organizer: 'Greater San Marcos Partnership', city: 'Austin', kind: 'growthzone', base: 'https://business.sanmarcostexas.com', page: 'https://business.sanmarcostexas.com/events/calendar', relevantOnly: true },
+  { key: 'galveston-chamber', organizer: 'Galveston Regional Chamber', city: 'Galveston', kind: 'growthzone', base: 'https://galvestonchamber.chambermaster.com', page: 'https://galvestonchamber.chambermaster.com/events/calendar/', relevantOnly: true },
+  // The Austin Chamber's own site (Craft CMS): schema.org Event on each /events/<slug> page.
+  { key: 'austin-chamber', organizer: 'Austin Chamber', city: 'Austin', kind: 'pages', base: 'https://www.austinchamber.com', page: 'https://www.austinchamber.com/events', detailPath: '/events/', relevantOnly: true },
+  // Texas Apartment Association (The Events Calendar): its own and every local apartment association's events, statewide;
+  // only those whose venue is in a market are kept (property management education, association socials and expos).
+  { key: 'taa', organizer: 'Texas Apartment Association', city: 'Austin', kind: 'tribe', base: 'https://www.taa.org', placedOnly: true },
   // Young professionals and women in CRE: YCRAN (San Antonio and Austin, Wix) and CREW chapters (Next.js pages with
   // startDate microdata); event pages come from each site's sitemap.
   { key: 'ycran', organizer: 'YCRAN', city: 'San Antonio', kind: 'sitemap', base: 'https://www.ycran.org', page: 'https://www.ycran.org/event-pages-sitemap.xml', sitemapPath: '/event-details/', cityFromVenue: true },
@@ -193,6 +204,10 @@ export const EVENT_SOURCES: EventSource[] = [
     ]
   },
   { key: 'rice', organizer: 'Rice University', city: 'Houston', kind: 'livewhale', base: 'https://events.rice.edu', keyword: 'real estate' },
+  // Texas A&M student real estate organizations: their public "Add to iCal" feeds on Get Involved (members-only events
+  // need a sign-in there and are not read).
+  { key: 'tamu-reda', organizer: 'Real Estate Development Association (Texas A&M)', city: 'College Station', kind: 'ics', base: 'https://getinvolved.tamu.edu/org/reda/events', page: 'https://getinvolved.tamu.edu/ics/event/upcoming/1133' },
+  { key: 'tamu-real', organizer: 'Aggie Real Estate Club (Texas A&M)', city: 'College Station', kind: 'ics', base: 'https://getinvolved.tamu.edu/org/real/events', page: 'https://getinvolved.tamu.edu/ics/event/upcoming/767' },
   // Architecture chapters on The Events Calendar: only their networking, development and industry events.
   { key: 'aia-dallas', organizer: 'AIA Dallas', city: 'Dallas', kind: 'tribe', base: 'https://www.aiadallas.org', relevantOnly: true },
   { key: 'aia-houston', organizer: 'AIA Houston', city: 'Houston', kind: 'tribe', base: 'https://aiahouston.org', relevantOnly: true }

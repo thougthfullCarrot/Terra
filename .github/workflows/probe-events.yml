@@ -24,3 +24,33 @@ jobs:
           export PROBE_SOURCES="$(cat ../probe/sources.json 2>/dev/null || echo '[]')"
           export PROBE_SNIPPET="$(cat ../probe/snippet 2>/dev/null || true)"
           npx tsx src/bin/probe-events.ts
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Before (default branch) and after (this branch), same minute
+        run: |
+          git worktree add ../base origin/claude/new-session-6xvm0u
+          (cd ../base/backend && npm ci --silent) && (cd backend && npm ci --silent)
+          s=$(date +%s); (cd ../base/backend && npx tsx src/bin/export-events.ts --out /tmp/before.json --previous /nonexistent --report /tmp/before.md > /tmp/before.log 2>&1); b=$(( $(date +%s)-s ))
+          s=$(date +%s); (cd backend && npx tsx src/bin/export-events.ts --out /tmp/after.json --previous /nonexistent --report /tmp/after.md > /tmp/after.log 2>&1); a=$(( $(date +%s)-s ))
+          echo "RUNTIME before ${b}s after ${a}s"
+          echo "=== BEFORE"; cat /tmp/before.md; echo "=== AFTER"; cat /tmp/after.md
+          node -e '
+            const f=(p)=>require(p); const B=f("/tmp/before.json"), A=f("/tmp/after.json");
+            const ids=new Set(B.cities.flatMap(c=>c.events.map(e=>e.id)));
+            for (const c of A.cities) for (const e of c.events) if(!ids.has(e.id)) console.log(`NEW | ${c.city} | ${e.start} | ${e.title} | ${e.organizer} | ${e.venue??"-"} | ${e.url} | free=${e.free??"?"} cost=${e.cost??"?"} elig=${e.eligibility??"?"} status=${e.status??"scheduled"} fmt=${e.format??"?"} tz=${e.timezone} dateOnly=${!!e.dateOnly} tbd=${!!e.timeUnconfirmed}`);
+            const aid=new Set(A.cities.flatMap(c=>c.events.map(e=>e.id)));
+            for (const c of B.cities) for (const e of c.events) if(!aid.has(e.id)) console.log(`GONE | ${c.city} | ${e.start} | ${e.title} | ${e.organizer}`);
+          '
+          grep -h "PLACE\|failed\|keeping" /tmp/after.log | head -40 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pilot
+          path: /tmp/*.json

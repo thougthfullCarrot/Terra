@@ -135,7 +135,7 @@ const TBD_PLACE = /^(tbd|tba|to be (?:determined|announced))$/i;
 export function guessFormat(e: Pick<TerraEvent, 'venue' | 'title' | 'address'>): EventFormat | undefined {
   const where = `${e.venue ?? ''} ${e.address ?? ''}`;
   if (/\bhybrid\b/i.test(`${where} ${e.title}`)) return 'hybrid';
-  if (VIRTUAL.test(where) || /^\s*(virtual|webinar|online)\b/i.test(e.title) || /\b(webinar|virtual)\s*$/i.test(e.title)) return 'virtual';
+  if (VIRTUAL.test(where) || /^\s*(virtual|webinar|online)\b/i.test(e.title) || /\b(webinar|virtual)\s*$/i.test(e.title) || /\(\s*(?:virtual|zoom|online|webinar)\s*\)/i.test(e.title)) return 'virtual';
   return undefined;
 }
 
