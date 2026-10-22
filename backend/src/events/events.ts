@@ -571,6 +571,13 @@ export function visibleTimes(html: string, day: string): { start: string; end: s
  */
 export function parseGrowthZoneDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null; dateOnly: boolean } {
   const found = structuredDetail(html);
+  // A timed start with an end at the next midnight is GrowthZone's placeholder end ("5:30 PM" mixers printed as
+  // ending at 12:00 AM the next day), not a multi-day event: the visible time range, or no end.
+  const startDay = found.start ? new Intl.DateTimeFormat('en-CA', { timeZone: parseZone }).format(new Date(found.start)) : '';
+  if (found.start && !isMidnight(found.start) && found.end && isMidnight(found.end) && found.end.slice(0, 10) > startDay) {
+    const times = visibleTimes(html, startDay);
+    return { ...found, end: times?.end ?? null, dateOnly: false };
+  }
   if (!found.start || !isMidnight(found.start)) return { ...found, dateOnly: false };
   const times = visibleTimes(html, found.start.slice(0, 10));
   if (times) return { ...found, start: times.start, end: times.end, dateOnly: false };

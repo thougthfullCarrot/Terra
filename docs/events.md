@@ -8,7 +8,8 @@ calendar feeds and pages only, no paid APIs, no logins.
 
 1. Each source in `EVENT_SOURCES` is read by its kind: The Events Calendar REST/iCal
    (`tribe`), GrowthZone iCal and detail pages (`growthzone`), schema.org JSON-LD
-   (`jsonld`, `pages`, `sitemap`), Localist and LiveWhale university APIs. One request at a
+   (`jsonld`, `pages`, `sitemap`), Localist and LiveWhale university APIs, and a plain public
+   iCal feed (`ics`, e.g. a student organization's "Add to iCal" export). One request at a
    time, a 15 s timeout and one retry (`lib/http.ts`); a site that refuses (403/405) is
    reported, never worked around.
 2. Detail pages are read where the listing lacks times or details, and their schema.org
@@ -96,6 +97,34 @@ Required columns: Date, Title, City (Time, Organizer, Venue, Link optional). Opt
 columns, read when present in the Sheet tab or as JSON keys (lowercase names, or
 camelCase/snake_case): End date, End time, Address, Format (in-person, virtual,
 hybrid), Cost, Registration link, Status (cancelled, postponed, sold out), Notes.
+
+## Relevance and coverage rules (2026-10-22)
+
+- `relevantOnly` sources keep an event when its title, or the words of its own page address
+  (`/events/economic-outlook-2026`), name networking, real estate, development or economic topics:
+  mixers, happy hours, young professionals, luncheons and breakfasts, groundbreakings, hard-hat and
+  property tours, urban design/planning, zoning, Realtors, apartments and property management.
+  Personal "planning" seminars and general socials do not match.
+- Governance meetings ("... Committee Meeting", "Board of Directors Meeting") are never listed.
+- `placedOnly` is for statewide calendars (Texas Apartment Association): an event is kept only when
+  its venue or address names a market, including suburbs and satellite cities (`SUBURBS`: Humble is
+  Houston, Odessa is Midland, Bryan is College Station, League City is Galveston...). Virtual events
+  are kept under the organizer's market and shown as Online.
+- A schema.org location that only repeats the event's title is not a venue ("Venue not listed").
+- A title marked "(Virtual)" or "(Zoom)" is a virtual event even when a venue is printed.
+- The collection report counts **raw listings** (what each source returned this run, before the
+  relevance, date-window and duplicate filters; 0 for a source that failed) separately from
+  **displayed** events (after filtering and deduplication).
+
+## Sources checked and not added (2026-10-22)
+
+From a GitHub runner, without logins: ULI (all chapters), CCIM Texas/El Paso, IREM Houston/Dallas/San
+Antonio (StarChapter), Odessa Chamber, Texas Tech events, UTEP, BOMA Austin and SMU's calendar answer a
+bot challenge or 403; they are not worked around. NAIOP North Texas/Houston return 404 on their event
+paths and the other NAIOP, BOMA San Antonio/Fort Worth, RECA and RECSA hosts did not resolve under the
+names tried. Lubbock EDA, UH, UTSA and SABOR list no machine-readable events; Midland Development
+Corporation's and AIA Lubbock's event feeds return 404. Bisnow's event pages are a commercial
+ticketing business and were not added without permission.
 
 ## Adding a source
 

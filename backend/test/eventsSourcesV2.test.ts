@@ -4,6 +4,7 @@ import {
   EVENT_SOURCES,
   fetchSource,
   INTERNAL,
+  parseGrowthZoneDetail,
   parseJsonLdEvents,
   parseLd,
   relevantEvent,
@@ -174,6 +175,17 @@ describe('new sources (2026-10-22 expansion)', () => {
       { ...base, id: 'c', url: 'https://a.org/e/1#nov', title: 'Business After Hours: Ally Medical ER', organizer: 'Cedar Park Chamber', start: '2026-11-25T17:00:00-06:00' }
     ]);
     expect(merged.map((e) => e.id)).toEqual(['a', 'c']);
+  });
+
+  it('GrowthZone: an end at the next midnight after a timed start is a placeholder, not a two-day mixer', () => {
+    // Seen on four chamber pages in the 2026-10-22 pilot (Cedar Park, Metro SA, B-CS, Lubbock): 5 PM start, "ends" 12 AM.
+    const ld = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'Event', name: 'Business After Hours - Ally Medical ER', startDate: '2026-10-28T17:00:00-05:00', endDate: '2026-10-29T00:00:00-05:00', location: { '@type': 'Place', name: '14016 North Highway 183' } })}</script>`;
+    const withText = parseGrowthZoneDetail(`${ld}<p>October 28, 2026 (5:00 PM - 7:00 PM)</p>`);
+    expect([withText.start, withText.end]).toEqual(['2026-10-28T17:00:00-05:00', '2026-10-28T19:00:00-05:00']);
+    expect(parseGrowthZoneDetail(ld).end).toBeNull();
+    // A real overnight end (a gala to 1 AM) is kept.
+    const late = parseGrowthZoneDetail(ld.replace('2026-10-29T00:00:00-05:00', '2026-10-29T01:00:00-05:00'));
+    expect(late.end).not.toBeNull();
   });
 
   it('every new source is configured with a real organizer page', () => {
