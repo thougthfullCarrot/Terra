@@ -190,9 +190,11 @@ export function startGateMap() {
   const host = document.getElementById('bento-map-box');
   if (!host) return;
   let shown = null;
+  let busy = false;
   const check = async () => {
-    if (document.hidden || document.getElementById('gate')?.hidden) return;
-    const totals = await cityTotals();
+    if (busy || document.hidden || document.getElementById('gate')?.hidden) return;
+    busy = true;
+    const totals = await cityTotals().finally(() => (busy = false));
     if (!totals) return;
     // Only redraw when something changed; a city whose count went up ripples.
     const key = JSON.stringify([...totals]);
@@ -203,6 +205,9 @@ export function startGateMap() {
   };
   check();
   setInterval(check, RECHECK_MS);
+  // With accounts on, the sign-in page is shown only after account.js hears from Supabase, after this first check.
+  const gate = document.getElementById('gate');
+  if (gate) new MutationObserver(() => !gate.hidden && check()).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
 }
 
 async function cityTotals() {
