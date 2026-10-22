@@ -105,13 +105,44 @@ export interface EventSource {
    * Fort Worth, not College Station). Checked after the street address and before the source's own city.
    */
   places?: Array<[RegExp, City]>;
+  /**
+   * A statewide calendar (the Texas Apartment Association lists every local association's events): keep only events
+   * whose venue or address places them in a market (or virtual ones); the rest are outside Terra's coverage.
+   */
+  placedOnly?: boolean;
   /** localist, livewhale: the search words (a university calendar lists every event on campus). */
   keyword?: string;
 }
 
 /** Business networking and real estate words; used for sources with relevantOnly. */
 export const RELEVANT =
-  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure/i;
+  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure|business connections/i;
+
+/**
+ * RELEVANT against the title, then against the words of the event page's own address ("/events/economic-outlook-2026"):
+ * the organizer's slug often names the kind of event when the title is a slogan.
+ */
+export function relevantEvent(e: Pick<TerraEvent, 'title' | 'url'>): boolean {
+  if (RELEVANT.test(e.title)) return true;
+  try {
+    return RELEVANT.test(decodeURIComponent(new URL(e.url).pathname).replace(/[-_/]+/g, ' '));
+  } catch {
+    return false;
+  }
+}
+
+/** Suburbs and satellite cities, for statewide calendars whose venues name them without a market city. */
+export const SUBURBS: Array<[RegExp, City]> = [
+  [/\b(?:Humble|Katy|Sugar Land|The Woodlands|Pearland|Pasadena|Baytown|Conroe|Cypress|Tomball|Kingwood|Stafford|Missouri City)\b/i, 'Houston'],
+  [/\b(?:Plano|Frisco|McKinney|Irving|Richardson|Garland|Mesquite|Allen|Carrollton|Lewisville|Denton|Addison|Las Colinas|Grand Prairie|Grapevine)\b/i, 'Dallas'],
+  [/\b(?:Arlington|Southlake|Keller|Hurst|Weatherford)\b/i, 'Fort Worth'],
+  [/\b(?:Round Rock|Georgetown|Cedar Park|Pflugerville|San Marcos|Kyle|Buda|Leander|Lakeway|Bee Cave)\b/i, 'Austin'],
+  [/\b(?:Boerne|Schertz|Converse|Live Oak|Helotes)\b/i, 'San Antonio'],
+  [/\b(?:Seguin|Canyon Lake)\b/i, 'New Braunfels'],
+  [/\bOdessa\b/i, 'Midland'],
+  [/\bBryan\b/i, 'College Station'],
+  [/\b(?:League City|Texas City|La Marque|Kemah|Friendswood)\b/i, 'Galveston']
+];
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
@@ -933,8 +964,10 @@ export async function fetchSource(
     const raw = await fetchRaw(source, now, fetcher, log);
     if (counts) counts.raw = raw.length;
     const events = await withSessions(tidy(raw), fetcher, log);
-    const kept = events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
-    return joinDays(kept.map((e) => finalize(e, source, now)));
+    const kept = events.filter((e) => (!source.relevantOnly || relevantEvent(e)) && !source.exclude?.test(e.title));
+    const places = source.placedOnly ? [...(source.places ?? []), ...SUBURBS] : source.places;
+    const done = kept.map((e) => finalize(e, { ...source, places }, now));
+    return joinDays(source.placedOnly ? done.filter((e) => e.format === 'virtual' || placedInMarket(e, places)) : done);
   } finally {
     parseZone = 'America/Chicago';
   }
@@ -983,6 +1016,11 @@ export function finalize(e: TerraEvent, source: Pick<EventSource, 'key' | 'city'
 }
 
 /** The market a source's campus wording names for this venue or organizer group, if any. */
+/** True when the venue or address itself names a market (not just the organizer's office). */
+export function placedInMarket(e: Pick<TerraEvent, 'venue' | 'organizer' | 'address'>, places: EventSource['places']): boolean {
+  return Boolean(addressCity(e.address) ?? addressCity(e.venue) ?? placeCity({ ...e, organizer: '' }, places));
+}
+
 export function placeCity(e: Pick<TerraEvent, 'venue' | 'organizer' | 'address'>, places: EventSource['places']): City | null {
   // A venue written "Hotel Ella, Austin" names its city even without ", TX".
   const tail = e.venue ? [...CITIES].find((c) => new RegExp(`,\\s*${c}\\s*$`, 'i').test(e.venue!)) : undefined;

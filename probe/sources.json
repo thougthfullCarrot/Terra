@@ -1,4 +1,4 @@
 [
- {"key":"austin-chamber","organizer":"Austin Chamber","city":"Austin","kind":"pages","base":"https://www.austinchamber.com","page":"https://www.austinchamber.com/events","detailPath":"/events/"},
- {"key":"taa","organizer":"Texas Apartment Association","city":"Austin","kind":"tribe","base":"https://www.taa.org"}
+ {"key":"galveston-chamber","organizer":"Galveston Regional Chamber","city":"Galveston","kind":"growthzone","base":"https://galvestonchamber.chambermaster.com","page":"https://galvestonchamber.chambermaster.com/events/calendar/","relevantOnly":true},
+ {"key":"taa","organizer":"Texas Apartment Association","city":"Austin","kind":"tribe","base":"https://www.taa.org","placedOnly":true}
 ]
