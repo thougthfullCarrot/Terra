@@ -1,0 +1,26 @@
+# Temporary: probe candidate event calendars from a runner (removed before review).
+name: Probe event sources
+on:
+  push:
+    branches: [claude/project-thread-6dru2f]
+    paths: [probe/**, .github/workflows/probe-events.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: |
+          export PROBE_URLS="$(cat ../probe/urls.txt)"
+          export PROBE_SOURCES="$(cat ../probe/sources.json 2>/dev/null || echo '[]')"
+          export PROBE_SNIPPET="$(cat ../probe/snippet 2>/dev/null || true)"
+          npx tsx src/bin/probe-events.ts
