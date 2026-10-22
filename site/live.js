@@ -2,6 +2,8 @@
 // slides to the open section, numbers that count to a new value, and the small
 // Texas map used on the sign-in page and the Markets overview.
 
+import { updatedLabel } from './feed.js';
+
 const still = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 /* ---------------------------------------------------------------------------
@@ -182,6 +184,147 @@ export function ripple(svg, name) {
    --------------------------------------------------------------------------- */
 
 const LABELED = 4;
+
+/* ---------------------------------------------------------------------------
+   The landing's first-visit motion: the headline word by word, the copy and
+   the panel after it, the bands below as they scroll in, and the panel leaning
+   toward the cursor. It runs once, the first time the sign-in page shows.
+   --------------------------------------------------------------------------- */
+
+export function startLanding() {
+  const gate = document.getElementById('gate');
+  if (!gate) return;
+  let started = false;
+  const start = () => {
+    if (started || gate.hidden) return;
+    started = true;
+    arrive(gate);
+    fillPill();
+    reveal();
+    lean(gate.querySelector('.hero-panel'));
+  };
+  start();
+  new MutationObserver(start).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
+}
+
+/** Adds an entrance class with a delay, and takes it off once played so later transforms (the lean) aren't held by it. */
+function enter(node, cls, delay) {
+  node.style.setProperty('--d', `${Math.round(delay)}ms`);
+  node.classList.add(cls);
+  node.addEventListener('animationend', (event) => event.target === node && node.classList.remove(cls), { once: true });
+}
+
+function arrive(gate) {
+  const h1 = gate.querySelector('h1');
+  let n = 0;
+  // Only text nodes are split, so any markup inside the headline survives.
+  const split = (node) =>
+    [...node.childNodes].forEach((child) => {
+      if (child.nodeType === 1) return split(child);
+      if (child.nodeType !== 3) return;
+      const frag = document.createDocumentFragment();
+      for (const part of child.textContent.split(/(\s+)/)) {
+        if (!part) continue;
+        if (/^\s+$/.test(part)) {
+          frag.append(part);
+          continue;
+        }
+        const w = document.createElement('span');
+        w.className = 'land-w';
+        w.style.setProperty('--d', `${120 + n++ * 55}ms`);
+        w.textContent = part;
+        frag.append(w);
+      }
+      child.replaceWith(frag);
+    });
+  if (h1) split(h1);
+  let delay = 120 + n * 55;
+  for (const node of gate.querySelector('.hero-copy')?.children ?? []) {
+    if (node === h1 || node.hidden || node.classList.contains('visually-hidden')) continue;
+    enter(node, 'land-in', node.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_PRECEDING ? (delay += 90) : 0);
+  }
+  const panel = gate.querySelector('.hero-panel');
+  if (panel) enter(panel, 'land-panel', Math.min(delay, 520) + 120);
+}
+
+/** "79 open roles at 26 firms · updated 2 hours ago", counting up once. */
+async function fillPill() {
+  const pill = document.getElementById('live-pill');
+  if (!pill) return;
+  let stats;
+  try {
+    const response = await fetch('stats.json', { cache: 'no-cache' });
+    if (!response.ok) return;
+    stats = await response.json();
+  } catch {
+    return;
+  }
+  if (!stats?.roles) return;
+  pill.hidden = false;
+  countText(document.getElementById('live-roles'), '0', String(stats.roles), 800);
+  countText(document.getElementById('live-firms'), '0', String(stats.firms ?? 0), 800);
+  if (stats.generatedAt) document.getElementById('live-updated').textContent = ` · ${updatedLabel(stats.generatedAt).toLowerCase()}`;
+}
+
+function reveal() {
+  const nodes = document.querySelectorAll('#welcome .welcome-block > h2, #welcome .steps > li, #welcome .features > *, #welcome .plans > *, #welcome .faq details, #welcome .welcome-cta');
+  if (!nodes.length || !('IntersectionObserver' in window)) return;
+  const seen = new IntersectionObserver(
+    (entries) =>
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('in');
+        seen.unobserve(entry.target);
+      }),
+    { rootMargin: '0px 0px -80px 0px' }
+  );
+  for (const node of nodes) {
+    node.style.setProperty('--i', String([...node.parentElement.children].indexOf(node) % 8));
+    node.classList.add('land-rv');
+    seen.observe(node);
+  }
+}
+
+/** The panel leans a few degrees toward the cursor on a spring: decorative, so fine pointers only. */
+function lean(panel) {
+  const fine = window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+  if (!panel || !fine || still()) return;
+  const host = panel.parentElement;
+  host.style.perspective = '1400px';
+  let x = 0;
+  let y = 0;
+  let vx = 0;
+  let vy = 0;
+  let tx = 0;
+  let ty = 0;
+  let frame = 0;
+  let last = 0;
+  const loop = (now) => {
+    const dt = Math.min(0.032, (now - (last || now)) / 1000) || 0.016;
+    last = now;
+    vx += (90 * (tx - x) - 13 * vx) * dt;
+    vy += (90 * (ty - y) - 13 * vy) * dt;
+    x += vx * dt;
+    y += vy * dt;
+    panel.style.transform = `rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 6).toFixed(2)}deg)`;
+    if (Math.abs(tx - x) + Math.abs(ty - y) + Math.abs(vx) + Math.abs(vy) > 0.001) frame = requestAnimationFrame(loop);
+    else {
+      frame = 0;
+      last = 0;
+    }
+  };
+  const aim = (nx, ny) => {
+    tx = nx;
+    ty = ny;
+    if (!frame) frame = requestAnimationFrame(loop);
+  };
+  host.addEventListener('pointermove', (event) => {
+    if (event.pointerType !== 'mouse' || panel.classList.contains('land-panel')) return;
+    const r = panel.getBoundingClientRect();
+    aim((event.clientX - r.left) / r.width - 0.5, (event.clientY - r.top) / r.height - 0.5);
+  });
+  host.addEventListener('pointerleave', () => aim(0, 0));
+}
 
 /** stats.json is rebuilt every two hours; an open sign-in page checks again this often. */
 const RECHECK_MS = 10 * 60 * 1000;

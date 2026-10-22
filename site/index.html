@@ -86,14 +86,13 @@
     </header>
 
     <main class="page" id="main" tabindex="-1">
-      <canvas class="app-topo" id="app-topo" aria-hidden="true"></canvas>
       <!-- Shown when accounts are configured and nobody is signed in: the landing hero with the sign-in form. -->
       <section id="gate" class="hero" hidden aria-labelledby="gate-title">
-        <canvas class="terrain-topo" id="terrain-topo" aria-hidden="true"></canvas>
         <div class="hero-copy">
-          <p class="eyebrow accent">Texas · commercial real estate · entry level</p>
-          <h1 id="gate-title">Learn the ground before you work it.</h1>
-          <p class="lede">Your first job in Texas commercial real estate: internships and roles asking for 0-2 years, read straight from firm career boards every two hours, with the markets and projects behind them.</p>
+          <!-- Live counts from stats.json (live.js startLanding); stays hidden until they arrive. -->
+          <p class="live-pill" id="live-pill" hidden><span class="pulse" aria-hidden="true"></span><span><b id="live-roles">0</b> open roles at <b id="live-firms">0</b> firms<span id="live-updated"></span></span></p>
+          <h1 id="gate-title">Your first job in Texas commercial real estate.</h1>
+          <p class="lede">Internships and roles asking for 0-2 years, read straight from firm career boards every two hours, with the markets and projects you need to sound sharp in the interview.</p>
           <form id="signin" class="signin pill-form" novalidate>
             <label>
               <span class="visually-hidden">Email</span>
@@ -110,23 +109,28 @@
           </form>
           <p class="notice" id="signin-status" aria-live="polite" hidden></p>
           <p class="hero-note"><span id="gate-lede">Terra is free for students. Sign in with your college (.edu) email.</span> <button type="button" class="link tour-link" id="pitch-open">New here? Take the 1-minute tour</button></p>
-          <p class="meta" id="teaser" aria-live="polite"></p>
+          <!-- account.js writes the same counts here as a sentence; the live pill shows them, so this is for screen readers. -->
+          <p class="visually-hidden" id="teaser" aria-live="polite"></p>
         </div>
-        <div class="terrain-bento" aria-label="Terra right now">
-          <div class="bento-box"><p class="bento-k">Open roles</p><p class="bento-v" id="bento-roles">—</p><p class="bento-s" id="bento-updated">Entry level, 0-2 years</p></div>
-          <div class="bento-box"><p class="bento-k">Firms hiring</p><p class="bento-v" id="bento-firms">—</p><p class="bento-s">Read from their own career boards</p></div>
-          <div class="bento-box"><p class="bento-k">Texas markets</p><p class="bento-v">11</p><p class="bento-s">Rents, vacancy, permits and projects</p></div>
-          <div class="bento-box"><p class="bento-k">For students</p><p class="bento-v">$0</p><p class="bento-s">With a college (.edu) email</p></div>
-          <div class="bento-box wide" id="bento-top-box" hidden><p class="bento-k">Hiring most right now</p><ol class="bento-list" id="bento-top"></ol></div>
-          <div class="bento-box wide bento-map-box" id="bento-map-box" hidden><p class="bento-k">Where the roles are</p><div class="bento-map"></div><p class="bento-s"></p></div>
-        </div>
+        <!-- Counts only: signed-out visitors never see postings. -->
+        <aside class="hero-panel" aria-label="Terra right now">
+          <div class="hero-panel-head"><b>Right now</b><span>Updated every two hours</span></div>
+          <div class="bento-box bento-map-box" id="bento-map-box" hidden><p class="bento-k">Where the roles are</p><div class="bento-map"></div><p class="bento-s"></p></div>
+          <div class="hero-stats">
+            <div class="bento-box"><p class="bento-k">Open roles</p><p class="bento-v" id="bento-roles">—</p><p class="bento-s">0-2 years</p></div>
+            <div class="bento-box"><p class="bento-k">Firms hiring</p><p class="bento-v" id="bento-firms">—</p><p class="bento-s">Their own boards</p></div>
+            <div class="bento-box"><p class="bento-k">Markets</p><p class="bento-v">11</p><p class="bento-s">Texas metros</p></div>
+          </div>
+          <div class="bento-box" id="bento-top-box" hidden><p class="bento-k">Hiring most right now</p><ol class="bento-list" id="bento-top"></ol></div>
+          <p class="hero-panel-foot">Every apply button goes to the firm's own career page. Terra never stands in between.</p>
+        </aside>
       </section>
 
       <!-- Signed out: what Terra is, shown under the sign-in form. -->
       <div id="welcome" class="welcome" hidden>
         <section class="welcome-block" aria-labelledby="how-title">
           <p class="eyebrow">How it works</p>
-          <h2 id="how-title">Three steps to your first CRE job</h2>
+          <h2 id="how-title">Three steps, done properly.</h2>
           <ol class="steps">
             <li>
               <span class="step-num" aria-hidden="true">1</span>

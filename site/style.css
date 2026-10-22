@@ -9927,8 +9927,11 @@ select option:disabled {
 }
 
 /* ---------------------------------------------------------------------------
-   Terrain landing (concept D): a dark band with contour lines (terrain.js),
-   a cursor light, a serif headline and a grid of live counts. Signed out only.
+   Landing, A3 · Live: the headline and sign-in on the left, a live panel of
+   counts and the Texas map on the right (never postings: signed-out visitors
+   get counts only), then how it works, why, pricing and questions as calm
+   bands. Motion is live.js startLanding: the headline arrives word by word,
+   the panel rises and leans toward the cursor, the bands reveal on scroll.
    --------------------------------------------------------------------------- */
 
 body:has(#gate:not([hidden])) {
@@ -9936,138 +9939,197 @@ body:has(#gate:not([hidden])) {
 }
 
 #gate.hero {
-  --t-bg: oklch(0.17 0.01 50);
-  --t-ink: oklch(0.95 0.01 80);
-  --t-soft: oklch(0.95 0.01 80 / 0.7);
-  --t-faint: oklch(0.95 0.01 80 / 0.55);
-  --t-box: oklch(1 0 0 / 0.045);
-  --t-edge: oklch(1 0 0 / 0.09);
-  --t-acc: oklch(0.68 0.14 265);
-  --terrain-major: oklch(0.68 0.14 265 / 0.55);
-  --terrain-minor: oklch(0.95 0.01 80 / 0.13);
-  --mx: 50%;
-  --my: 30%;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  margin: -40px calc(50% - 50vw) 0;
-  padding: 88px max(16px, calc(50vw - 620px)) 72px;
-  color: var(--t-ink);
-  background: var(--t-bg);
-}
-
-#gate.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(440px circle at var(--mx) var(--my), oklch(0.68 0.14 265 / 0.26), transparent 70%);
-}
-
-.terrain-topo {
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  width: 100%;
-  height: 100%;
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-#gate .eyebrow {
-  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
-  color: var(--t-acc);
-}
-
-#gate h1 {
-  font-weight: 600;
-  font-size: clamp(42px, 5.8vw, 78px);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
-}
-
-#gate .lede {
-  color: var(--t-soft);
-}
-
-#gate .pill-form {
-  background: oklch(1 0 0 / 0.06);
-  border-color: oklch(1 0 0 / 0.16);
-}
-
-#gate .pill-form input {
-  color: var(--t-ink);
-}
-
-#gate .pill-form input::placeholder {
-  color: var(--t-faint);
-}
-
-#gate .primary {
-  color: oklch(0.16 0.01 60);
-  background: var(--t-acc);
-}
-
-#gate .hero-note,
-#gate .meta {
-  color: var(--t-faint);
-}
-
-#gate .hero-note .tour-link {
-  color: var(--t-acc);
-}
-
-.terrain-bento {
-  flex: 1 1 380px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  max-width: 500px;
+  gap: 48px;
+  align-items: center;
+  margin: 0;
+  padding: 56px 0 64px;
+  color: var(--ink);
+  background: none;
 }
 
-.bento-box {
-  --bx: 50%;
-  --by: 50%;
-  --rx: 0deg;
-  --ry: 0deg;
-  position: relative;
-  overflow: hidden;
-  min-width: 0;
-  padding: 16px;
-  background: var(--t-box);
-  border: 1px solid var(--t-edge);
-  border-radius: 14px;
-  transition: border-color 0.25s var(--ease), transform 0.25s var(--ease);
-}
-
-.bento-box::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(220px circle at var(--bx) var(--by), oklch(1 0 0 / 0.1), transparent 65%);
-  opacity: 0;
-  transition: opacity 0.25s var(--ease);
-}
-
-.bento-box:hover {
-  border-color: oklch(0.68 0.14 265 / 0.6);
-  transform: perspective(700px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-2px);
-}
-
-.bento-box:hover::after {
-  opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bento-box:hover {
-    transform: none;
+@media (min-width: 1000px) {
+  #gate.hero {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 64px;
+    padding: 32px 0 72px;
   }
 }
 
-.bento-box.wide {
-  grid-column: 1 / -1;
+/* The contour band belonged to the old landing. */
+#gate .terrain-topo {
+  display: none;
+}
+
+#gate .hero-copy {
+  min-width: 0;
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 22px;
+  padding: 5px 12px 5px 10px;
+  font-size: 13px;
+  color: var(--ink2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.live-pill[hidden] {
+  display: none;
+}
+
+.live-pill b {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.live-pill .pulse {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pos);
+}
+
+/* Constant, slow and small: the one thing on the page that says "live". */
+.live-pill .pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--pos);
+  animation: live-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes live-ping {
+  75%,
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+#gate h1 {
+  margin: 0 0 18px;
+  font-size: clamp(38px, 5.2vw, 62px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+#gate .lede {
+  max-width: 540px;
+  margin: 0 0 28px;
+  font-size: 17.5px;
+  line-height: 1.55;
+  color: var(--ink2);
+  text-wrap: pretty;
+}
+
+#gate .pill-form {
+  max-width: 500px;
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+#gate .pill-form:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--tint);
+}
+
+#gate .pill-form input {
+  color: var(--ink);
+}
+
+#gate .pill-form input::placeholder {
+  color: var(--muted);
+}
+
+#gate .primary {
+  color: var(--on-accent);
+  background: var(--accent);
+  transition: transform 160ms var(--ease-out), background-color 150ms ease;
+}
+
+#gate .primary:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #gate .primary:hover {
+    background: var(--accent-hover);
+  }
+}
+
+#gate .hero-note {
+  margin-top: 14px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+#gate .hero-note .tour-link {
+  color: var(--accent);
+}
+
+/* The live panel. */
+.hero-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.35);
+}
+
+.hero-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 2px;
+}
+
+.hero-panel-head b {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.hero-panel-head span,
+.hero-panel-foot {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.hero-panel-foot {
+  margin: 2px 0 0;
+  padding: 4px 12px 8px;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hero-panel .bento-box {
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--sunk);
+  border: 0;
+  border-radius: 12px;
+}
+
+.hero-panel .bento-box[hidden] {
+  display: none;
 }
 
 .bento-box p {
@@ -10076,23 +10138,21 @@ body:has(#gate:not([hidden])) {
 
 .bento-k {
   font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--t-faint);
+  color: var(--muted);
 }
 
 .bento-v {
-  margin-top: 6px !important;
-  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
-  font-size: 30px;
+  margin-top: 4px !important;
+  font-size: 26px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .bento-s {
   margin-top: 2px !important;
-  font-size: 13px;
-  color: var(--t-soft);
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
 .bento-list {
@@ -10107,8 +10167,262 @@ body:has(#gate:not([hidden])) {
 .bento-list li {
   padding: 4px 10px;
   font-size: 13px;
-  border: 1px solid var(--t-edge);
+  color: var(--ink2);
+  background: var(--surface);
   border-radius: 999px;
+}
+
+.hero-panel .bento-map-box .bento-map .tx-map {
+  max-height: 230px;
+}
+
+/* Bands under the hero: one quiet style for every section. */
+#welcome .welcome-block,
+#welcome .welcome-pair,
+#welcome .welcome-cta {
+  padding: 56px 0;
+  border-top: 1px solid var(--line);
+}
+
+#welcome .welcome-pair .welcome-block {
+  padding: 0;
+  border: 0;
+}
+
+#welcome .welcome-block h2,
+#welcome .welcome-cta h2 {
+  max-width: 620px;
+  margin: 0 0 28px;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+#welcome .eyebrow {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--accent);
+}
+
+#welcome > .welcome-block:first-child {
+  display: block;
+}
+
+#welcome .steps,
+#welcome .features,
+#welcome .plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#welcome .steps li,
+#welcome .feature,
+#welcome .plan {
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+#welcome .step-num {
+  display: block;
+  width: auto;
+  height: auto;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  background: none;
+  border: 0;
+}
+
+#welcome .step-num::before {
+  content: '0';
+}
+
+#welcome h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#welcome p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink2);
+}
+
+#welcome .feature svg {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 12px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#welcome .plan.featured {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+#welcome .plan-price {
+  margin: 6px 0;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+#welcome .faq details {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+#welcome .faq details:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+#welcome .faq summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+#welcome .faq summary::after {
+  content: '+';
+  font-weight: 400;
+  color: var(--muted);
+  transition: transform 200ms var(--ease-out);
+}
+
+#welcome .faq details[open] summary::after {
+  transform: rotate(45deg);
+}
+
+#welcome .faq details p {
+  margin-top: 10px;
+  max-width: 680px;
+}
+
+#welcome .welcome-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+  background: none;
+}
+
+#welcome .welcome-cta h2 {
+  margin: 0;
+}
+
+/* Landing motion (live.js): first-visit choreography, so delight is allowed here and nowhere else. */
+.land-w {
+  display: inline-block;
+  animation: land-word 800ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes land-word {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(0.35em);
+  }
+}
+
+.land-in {
+  animation: land-in 700ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes land-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(14px);
+  }
+}
+
+.land-panel {
+  transform-origin: 50% 100%;
+  animation: land-panel 900ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes land-panel {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(24px) scale(0.96);
+  }
+}
+
+/* Scroll reveals are transitions, so scrolling quickly past retargets instead of restarting. */
+.land-rv {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 700ms ease-out, transform 800ms var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 70ms);
+}
+
+.land-rv.in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  #gate.hero {
+    padding: 32px 0 40px;
+  }
+
+  .hero-stats .bento-v {
+    font-size: 22px;
+  }
+
+  #welcome .welcome-block,
+  #welcome .welcome-pair,
+  #welcome .welcome-cta {
+    padding: 40px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .land-w,
+  .land-in,
+  .land-panel {
+    animation: land-fade 300ms ease both;
+    filter: none;
+  }
+
+  @keyframes land-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .land-rv {
+    transform: none;
+    transition: opacity 300ms ease;
+  }
+
+  .live-pill .pulse::after {
+    animation: none;
+  }
 }
 
 .brand-mark {
@@ -10134,26 +10448,11 @@ body:has(#gate:not([hidden])) {
   align-items: center;
 }
 
-@media (max-width: 640px) {
-  #gate.hero {
-    margin-top: -24px;
-    padding-top: 48px;
-    padding-bottom: 48px;
-  }
-
-  .terrain-bento {
-    flex-basis: 100%;
-  }
-
-  .bento-v {
-    font-size: 24px;
-  }
-}
-
 /* ---------------------------------------------------------------------------
-   Night console (signed in): a Terrain band of contour lines behind the top of
-   each page, a cursor light, cards that glow and lean toward the cursor, and
-   compact rows. Dark is the default theme; light still works from the toggle.
+   Signed in, A3 · Live: calm surfaces instead of the contour band and cursor
+   light. A frosted app bar, bordered cards that only change their border on
+   hover, and a quick press on everything you can click. Motion lives in what
+   changes (the tab underline, toasts, counts, the maps), not in decoration.
    --------------------------------------------------------------------------- */
 
 #main {
@@ -10161,43 +10460,26 @@ body:has(#gate:not([hidden])) {
   isolation: isolate;
 }
 
-.app-topo {
-  position: absolute;
-  top: 0;
-  left: calc(50% - 50vw);
-  z-index: -1;
-  width: 100vw;
-  height: 320px;
-  pointer-events: none;
-  opacity: 0.55;
-  --terrain-major: oklch(var(--acc-l) 0.14 var(--acc-h) / 0.5);
-  --terrain-minor: oklch(0.95 0.01 80 / 0.1);
-  -webkit-mask-image: linear-gradient(#000 40%, transparent);
-  mask-image: linear-gradient(#000 40%, transparent);
-}
-
-:root[data-theme='light'] .app-topo {
-  --terrain-minor: oklch(0.19 0.005 60 / 0.08);
-}
-
-body:has(#gate:not([hidden])) .app-topo {
-  display: none;
-}
-
+/* The contour band and the cursor light belonged to the night console. */
+.app-topo,
 #main::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: calc(50% - 50vw);
-  z-index: -1;
-  width: 100vw;
-  height: 320px;
-  pointer-events: none;
-  background: radial-gradient(380px circle at var(--mx, -999px) var(--my, -999px), oklch(var(--acc-l) 0.14 var(--acc-h) / 0.18), transparent 70%);
+  display: none;
 }
 
-body:has(#gate:not([hidden])) #main::before {
-  display: none;
+/* Frosted bar on wide screens. Phones keep a solid bar: a backdrop filter would trap the fixed bottom tabs inside it. */
+@media (min-width: 641px) {
+  .appbar {
+    background: color-mix(in oklch, var(--bg) 82%, transparent);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    backdrop-filter: saturate(1.4) blur(14px);
+  }
+
+  /* Not over the full-screen dev map: blurring a map that repaints on every filter change costs frames there. */
+  body[data-workspace='map'] .appbar {
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .page-title,
@@ -10209,48 +10491,70 @@ body:has(#gate:not([hidden])) #main::before {
 .page-count,
 .tab-count,
 .stat-value {
-  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }
 
-.card {
-  --bx: 50%;
-  --by: 50%;
-  --rx: 0deg;
-  --ry: 0deg;
-  overflow: hidden;
+/* Postings as bordered cards (they were divided rows): the open one gets an accent ring, best matches keep their badge. */
+#list.list {
+  gap: 8px;
 }
 
-.card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background: radial-gradient(220px circle at var(--bx) var(--by), oklch(var(--acc-l) 0.14 var(--acc-h) / 0.13), transparent 70%);
-  opacity: 0;
-  transition: opacity 0.25s var(--ease);
+#list > .card {
+  padding: 14px 16px 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
-.card:hover::after {
-  opacity: 1;
+#list > .card.selected,
+#list > .card.best.selected {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
-.list > .card:hover {
-  border-color: oklch(var(--acc-l) 0.14 var(--acc-h) / 0.6);
-  transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-1px);
+#list > .card.best {
+  box-shadow: none;
 }
 
-.list {
-  gap: 6px;
+@media (hover: hover) and (pointer: fine) {
+  #list > .card:hover:not(.selected) {
+    background: var(--surface);
+    border-color: color-mix(in oklch, var(--ink) 24%, transparent);
+  }
 }
 
-.list > .card {
-  padding: 12px 14px;
+/* A quick press on anything clickable: the page heard you. */
+.primary,
+.secondary,
+.chip,
+.tab,
+.card .save,
+.more,
+.devx-seg-item,
+.icon-button {
+  transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.primary:active,
+.secondary:active,
+.chip:active,
+.card .save:active,
+.more:active,
+.devx-seg-item:active,
+.icon-button:active {
+  transform: scale(0.97);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .list > .card:hover {
+  .primary:active,
+  .secondary:active,
+  .chip:active,
+  .card .save:active,
+  .more:active,
+  .devx-seg-item:active,
+  .icon-button:active {
     transform: none;
   }
 }

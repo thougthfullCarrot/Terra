@@ -1,11 +1,12 @@
-// Cursor light check: the glow behind the top of each signed-in page must stay centred on the pointer.
+// Calm-pages check (A3 redesign): nothing on a signed-in page follows or tilts with the cursor any more.
 //
-//   CHROMIUM_PATH=/opt/pw-browsers/chromium node test/browser/glow-check.mjs [site dir]
+//   CHROMIUM_PATH=/opt/pw-browsers/chromium node test/browser/calm-check.mjs [site dir]
 //
-// Serves the site folder and, on a wide window, a narrow one and at 200% zoom, moves the mouse, then scrolls,
-// resizes and switches tabs, and after each step compares the glow's centre (the --mx/--my of #main, measured
-// from the #main::before band it paints) with the pointer. Also checks that touch input leaves no glow behind.
-// Read-only; no network besides the local server.
+// The night console painted a light under the pointer (#main::before, placed by --mx/--my) and leaned job
+// cards toward it. The redesign retired both. This serves the site folder and, on a wide window, a narrow one
+// and at 200% zoom, in dark and light, moves the mouse over the Events page and the job list, scrolls and
+// switches tabs, then checks that no light is painted, #main carries no pointer position, and no job card is
+// transformed. Also covers touch and reduced motion. Read-only; no network besides the local server.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
@@ -33,16 +34,23 @@ const check = (ok, m) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${m}`);
 };
 
-/** Where the glow is centred, in viewport px, or null when it is off. */
-const glowAt = (page) =>
+/** Anything left over from the cursor effects: a painted light, a pointer position on #main, a tilted card. */
+const leftovers = (page) =>
   page.evaluate(() => {
     const host = document.getElementById('main');
-    const mx = host.style.getPropertyValue('--mx');
-    const my = host.style.getPropertyValue('--my');
-    if (!mx || !my) return null;
-    const h = host.getBoundingClientRect();
     const band = getComputedStyle(host, '::before');
-    return { x: h.left + parseFloat(band.left) + parseFloat(mx), y: h.top + parseFloat(band.top) + parseFloat(my) };
+    const out = [];
+    if (band.display !== 'none' && band.content !== 'none' && band.backgroundImage !== 'none') out.push('a light is painted behind the page');
+    if (host.style.getPropertyValue('--mx') || host.style.getPropertyValue('--my')) out.push('#main tracks the pointer');
+    for (const card of document.querySelectorAll('#list > .card')) {
+      const t = getComputedStyle(card).transform;
+      if (t && t !== 'none') {
+        out.push(`a job card is transformed (${t})`);
+        break;
+      }
+    }
+    if (document.querySelector('.app-topo, .terrain-topo')) out.push('a contour canvas is on the page');
+    return out;
   });
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
@@ -58,46 +66,49 @@ for (const vp of [
     await page.goto(`${base}#events`);
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
     await page.waitForSelector('#main', { timeout: 20000 });
-    const near = async (step, x, y) => {
-      const g = await glowAt(page);
-      check(g && Math.abs(g.x - x) <= 1 && Math.abs(g.y - y) <= 1, `${vp.name} ${theme} ${step}: glow at ${g ? `${g.x.toFixed(1)},${g.y.toFixed(1)}` : 'none'}, pointer at ${x},${y}`);
+    const calm = async (step) => {
+      const found = await leftovers(page);
+      check(!found.length, `${vp.name} ${theme} ${step}: ${found.length ? found.join('; ') : 'nothing follows the cursor'}`);
     };
     const x = Math.round(vp.width * 0.3);
     await page.mouse.move(x, 120);
-    await near('after a move', x, 120);
+    await calm('after a move');
     await page.mouse.wheel(0, 60);
     await page.waitForTimeout(200);
-    await near('after scrolling', x, 120);
-    await page.setViewportSize({ width: vp.width - 200, height: vp.height });
-    await page.waitForTimeout(200);
-    await page.mouse.move(x - 10, 140);
-    await near('after a resize', x - 10, 140);
-    await page.evaluate(() => (location.hash = '#news'));
-    await page.waitForTimeout(300);
-    await page.mouse.move(x, 150);
-    await near('after switching to News', x, 150);
+    await calm('after scrolling');
+    await page.evaluate(() => (location.hash = ''));
+    await page.waitForTimeout(400);
+    const card = await page.$('#list > .card');
+    if (card) {
+      const box = await card.boundingBox();
+      if (box) await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.3);
+      await page.waitForTimeout(300);
+    }
+    await calm('hovering a job card');
     await ctx.close();
   }
 }
 
-// Touch: a tap fires pointer events but must not leave a glow (or a tilted card) behind.
+// Touch: a tap leaves nothing behind.
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
 const page = await ctx.newPage();
 await page.goto(`${base}#events`);
 await page.waitForSelector('#main', { timeout: 20000 });
 await page.touchscreen.tap(120, 200);
-check(!(await glowAt(page)), 'phone: a tap leaves no cursor glow');
+const touched = await leftovers(page);
+check(!touched.length, `phone: a tap leaves ${touched.length ? touched.join('; ') : 'nothing behind'}`);
 await ctx.close();
 
-// Reduced motion: the light does not follow the pointer.
+// Reduced motion: still nothing follows the pointer.
 const still = await browser.newContext({ viewport: { width: 1366, height: 900 }, reducedMotion: 'reduce' });
 await still.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
 const quiet = await still.newPage();
 await quiet.goto(`${base}#events`);
 await quiet.waitForSelector('#main', { timeout: 20000 });
 await quiet.mouse.move(400, 120);
-check(!(await glowAt(quiet)), 'reduced motion: no glow follows the pointer');
+const moved = await leftovers(quiet);
+check(!moved.length, `reduced motion: ${moved.length ? moved.join('; ') : 'nothing follows the pointer'}`);
 await still.close();
 
 await browser.close();
