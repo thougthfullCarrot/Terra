@@ -1,6 +1,6 @@
 [
- {"key":"georgetown-chamber","organizer":"Georgetown Chamber","city":"Austin","kind":"growthzone","base":"https://business.georgetownchamber.org","relevantOnly":true},
- {"key":"cedar-park-chamber","organizer":"Cedar Park Chamber","city":"Austin","kind":"growthzone","base":"https://business.cedarparkchamber.org","relevantOnly":true},
- {"key":"midland-dc","organizer":"Midland Development Corporation","city":"Midland","kind":"tribe","base":"https://www.midlandtexas.com"},
- {"key":"aia-lubbock","organizer":"AIA Lubbock","city":"Lubbock","kind":"tribe","base":"https://aialubbock.org","relevantOnly":true}
+ {"key":"austin-chamber","organizer":"Austin Chamber","city":"Austin","kind":"pages","base":"https://www.austinchamber.com","page":"https://www.austinchamber.com/events","detailPath":"/events/","relevantOnly":true},
+ {"key":"san-marcos-chamber","organizer":"Greater San Marcos Partnership","city":"Austin","kind":"growthzone","base":"https://business.sanmarcostexas.com","relevantOnly":true},
+ {"key":"lubbock-eda","organizer":"Lubbock EDA","city":"Lubbock","kind":"pages","base":"https://lubbockeda.org","page":"https://lubbockeda.org/events/","detailPath":"/events/"},
+ {"key":"utsa","organizer":"UTSA","city":"San Antonio","kind":"pages","base":"https://www.utsa.edu","page":"https://www.utsa.edu/events/","detailPath":"/events/"}
 ]
