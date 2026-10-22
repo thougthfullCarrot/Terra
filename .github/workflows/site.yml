@@ -614,7 +614,7 @@ jobs:
           SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run --silent sync:sheets
 
-      # Counts only (how many roles and firms, the three firms hiring most),
+      # Counts only (how many roles and firms, the three firms hiring most, roles per city for the map),
       # so the sign-in page can show there are real jobs behind it. No
       # posting leaves the members-only feed.
       - name: Publish job counts for the sign-in page
@@ -625,7 +625,8 @@ jobs:
               generatedAt,
               roles: (.jobs | length),
               firms: ([.jobs[].firm] | unique | length),
-              topFirms: ([.jobs[].firm] | group_by(.) | map({firm: .[0], n: length}) | sort_by(-.n) | .[:3] | map(.firm))
+              topFirms: ([.jobs[].firm] | group_by(.) | map({firm: .[0], n: length}) | sort_by(-.n) | .[:3] | map(.firm)),
+              byCity: ([.jobs[].city | select(. != null and . != "")] | group_by(.) | map({city: .[0], n: length}) | sort_by(-.n))
             }' ../site/postings.json > ../site/stats.json
             cat ../site/stats.json
           fi

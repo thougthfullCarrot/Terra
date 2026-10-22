@@ -45,6 +45,10 @@
   --mono: var(--ui);
   --radius: 12px;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Motion curves: strong ease-out for things arriving, ease-in-out for things moving on screen, the iOS sheet curve for drawers. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   color-scheme: light;
 }
@@ -10670,4 +10674,430 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
   display: block;
   flex: 1 1 0;
   min-height: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+   Live (live.js and friends): the tab underline that slides, toasts with
+   Undo, the Texas map, the "new roles" button and the dev map time-lapse.
+   --------------------------------------------------------------------------- */
+
+/* One underline slides between tabs; the open tab's own underline steps aside. */
+@media (min-width: 641px) {
+  .appbar .tabs.sliding {
+    position: relative;
+  }
+}
+
+.appbar .tabs.sliding .tab[aria-current='page'] {
+  border-bottom-color: transparent;
+}
+
+.tab-slider {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: transform 260ms var(--ease-in-out), width 260ms var(--ease-in-out), opacity 150ms ease;
+}
+
+@media (max-width: 640px) {
+  .appbar .tabs.sliding .tab[aria-current='page'] {
+    border-top-color: transparent;
+  }
+
+  .tab-slider {
+    top: 0;
+    bottom: auto;
+  }
+}
+
+/* Toasts rise from the bottom edge and leave the same way, faster than they came. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: toast-in 0.4s var(--ease-out);
+}
+
+.toast.leaving {
+  opacity: 0;
+  transform: translate(-50%, 100%);
+  transition: transform 0.2s var(--ease-out), opacity 0.2s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 100%);
+  }
+}
+
+.toast-undo {
+  margin: -4px -8px -4px 0;
+  padding: 4px 10px;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out), background-color 150ms ease;
+}
+
+.toast-undo:active {
+  transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .toast-undo:hover {
+    background: color-mix(in srgb, var(--bg) 18%, transparent);
+  }
+}
+
+/* The Texas map: the outline draws itself, then the dots arrive one after another. */
+.tx-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.tx-land {
+  fill: var(--tint);
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tx-draw 1400ms var(--ease-in-out) 200ms forwards, tx-fill 700ms ease 1100ms backwards;
+}
+
+@keyframes tx-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes tx-fill {
+  from {
+    fill-opacity: 0;
+  }
+}
+
+.tx-dot,
+.tx-halo,
+.tx-ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.tx-dot {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  animation: tx-pin-in 500ms var(--ease-out) backwards;
+  animation-delay: calc(1000ms + var(--i, 0) * 70ms);
+  transition: transform 200ms var(--ease-out);
+}
+
+.tx-halo {
+  fill: var(--accent);
+  opacity: 0.14;
+  animation: tx-pin-in 600ms var(--ease-out) backwards;
+  animation-delay: calc(1050ms + var(--i, 0) * 70ms);
+}
+
+@keyframes tx-pin-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+.tx-label {
+  font: 600 18px var(--ui);
+  fill: var(--ink2);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  animation: tx-label-in 400ms ease backwards;
+  animation-delay: calc(1200ms + var(--i, 0) * 70ms);
+}
+
+.tx-n {
+  font-weight: 500;
+  fill: var(--muted);
+}
+
+@keyframes tx-label-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.tx-map.settled .tx-land {
+  stroke-dashoffset: 0;
+  animation: none;
+}
+
+.tx-map.settled .tx-dot,
+.tx-map.settled .tx-halo,
+.tx-map.settled .tx-label {
+  animation: none;
+}
+
+.tx-pin[role='button'] {
+  cursor: pointer;
+  outline: none;
+}
+
+.tx-pin[role='button']:focus-visible .tx-dot {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tx-pin[role='button']:hover .tx-dot {
+    transform: scale(1.25);
+  }
+}
+
+.tx-ring {
+  pointer-events: none;
+  transition: transform 450ms var(--ease-in-out);
+}
+
+.tx-ring circle {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.tx-ripple {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.bento-map {
+  margin: 8px 0 4px;
+}
+
+.bento-map .tx-map,
+.market-map .tx-map {
+  max-height: 210px;
+}
+
+.market-map {
+  margin: 4px 0 14px;
+}
+
+/* New roles wait under the header instead of pushing the list down. */
+/* At rest it sits in the row above the list (the negative margin); scrolled, it rides under the header. */
+.new-roles-wrap {
+  position: sticky;
+  top: 118px;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  height: 0;
+}
+
+.new-roles {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  margin-top: -46px;
+  padding: 0 14px;
+  font: 600 13.5px var(--ui);
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+  transition: transform 300ms var(--ease-out), opacity 300ms ease;
+}
+
+@starting-style {
+  .new-roles {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+.new-roles[hidden] {
+  display: none;
+}
+
+/* Wide screens: centered over the list column, not the list and the posting beside it (the split is 1 : 1.25 with a 32px gap). */
+@media (min-width: 1024px) {
+  body:has(.panel-sheet[open]:not(:modal)) .new-roles-wrap {
+    padding-right: calc((100% - 32px) * 1.25 / 2.25 + 32px);
+  }
+}
+
+.new-roles:active {
+  transform: scale(0.97);
+  transition-duration: 160ms;
+}
+
+.new-roles svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card.arrived {
+  animation: card-arrived 1600ms ease-out;
+}
+
+@keyframes card-arrived {
+  from {
+    background-color: var(--tint);
+  }
+}
+
+/* Dev map time-lapse: Play beside the chart title, a month label over the map, rings where filings land. */
+.devx-chart-titles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.devx-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  font: 500 12px var(--ui);
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out), background-color 150ms ease;
+}
+
+.devx-play:active {
+  transform: scale(0.95);
+}
+
+.devx-play svg {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+}
+
+.devx-bar-col.after i {
+  opacity: 0.2;
+}
+
+.devx-lapse-chip {
+  position: absolute;
+  z-index: 610;
+  top: 16px;
+  left: 50%;
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  pointer-events: none;
+  transition: transform 240ms var(--ease-out), opacity 200ms ease;
+}
+
+.devx-lapse-chip.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.devx-lapse-chip b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.devx-blip-icon {
+  pointer-events: none;
+}
+
+.devx-blip {
+  position: absolute;
+  left: -18px;
+  top: -18px;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--c);
+  border-radius: 50%;
+  animation: devx-blip 900ms var(--ease-out) forwards;
+}
+
+@keyframes devx-blip {
+  from {
+    opacity: 0.9;
+    transform: scale(0.35);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@media (max-width: 640px) {
+  .new-roles-wrap {
+    top: 110px;
+  }
+
+  .devx-lapse-chip {
+    top: 60px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-slider,
+  .tx-ring {
+    transition: opacity 150ms ease;
+  }
+
+  .toast,
+  .toast.leaving {
+    animation: none;
+    transform: translateX(-50%);
+  }
+
+  .tx-land {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+
+  .tx-dot,
+  .tx-halo,
+  .tx-label,
+  .card.arrived {
+    animation: none;
+  }
+
+  .devx-lapse-chip {
+    transform: translate(-50%, 0);
+  }
+
+  .devx-blip {
+    display: none;
+  }
 }
