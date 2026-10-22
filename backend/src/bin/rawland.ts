@@ -4,7 +4,9 @@
  *
  *   npm run rawland -- collect --source sara-polygons|zoning|city-parcels|city-limits [--restart] [--limits-verified]
  *        (city-limits defaults to the county Cities layer; --limits-url U --limits-city-field F --limits-oid-field O override)
- *   npm run rawland -- build --appraisal-cache DIR [--prev-manifest FILE] [--trial-blocks N]  (N: time the first N blocks only, keep nothing)
+ *   npm run rawland -- build --appraisal-cache DIR [--prev-manifest FILE] [--trial-blocks N] [--area downtown|loop410|W,S,E,N] [--restart]
+ *        (--trial-blocks: time the first N blocks only, keep nothing; --area: pilot build of one box; progress is saved
+ *         per block and an interrupted build resumes unless --restart)
  *   npm run rawland -- serve [--synthetic] [--port 4173]
  *
  * Values come from #84's Bexar read in the local appraisal cache (`npm run appraisal -- collect --districts bexar
@@ -88,6 +90,19 @@ async function* lines(file: string): AsyncGenerator<Poly> {
 async function state(id: string) { return (await readState(join(OUT, 'raw', id))) ?? { status: 'failed', reason: 'never collected' } as unknown as SourceState; }
 const rawFile = (id: string) => featuresFile(join(OUT, 'raw', id));
 
+/** Pilot areas are plain boxes ([west, south, east, north], WGS84), approximate by design; --area also takes four numbers. */
+export const PILOT_AREAS: Record<string, [number, number, number, number]> = {
+  downtown: [-98.503, 29.414, -98.479, 29.437], // central business district, roughly ZIP 78205
+  loop410: [-98.585, 29.355, -98.405, 29.555] // roughly inside Loop 410
+};
+function pilotArea(v: string | undefined): { name: string; box: [number, number, number, number] } | null {
+  if (!v) return null;
+  if (PILOT_AREAS[v]) return { name: v, box: PILOT_AREAS[v]! };
+  const n = v.split(',').map(Number);
+  if (n.length !== 4 || n.some((x) => !Number.isFinite(x)) || n[0]! >= n[2]! || n[1]! >= n[3]!) throw new BuildRefused(`--area must be ${Object.keys(PILOT_AREAS).join(' | ')} or west,south,east,north`);
+  return { name: 'custom', box: n as [number, number, number, number] };
+}
+
 async function build(): Promise<void> {
   const cache = arg('--appraisal-cache'); if (!cache) throw new BuildRefused('--appraisal-cache DIR is required');
   const values = await completeness(resolve(cache), 'bexar');
@@ -111,12 +126,17 @@ async function build(): Promise<void> {
     const a = (f as unknown as Feature).attributes ?? {}; const id = Number(a.PropID); if (!(id > 0)) continue;
     const k = String(id); const prev = cityAcct.get(k); cityAcct.set(k, { acres: prev ? null : a.legal_acre, polygons: (prev?.polygons ?? 0) + 1 });
   }
+  const area = pilotArea(arg('--area'));
+  if (area) log(`pilot area: ${area.name} [${area.box.join(', ')}]`);
   const dir = join(OUT, 'build'); await rm(dir, { recursive: true, force: true }); await mkdir(join(dir, 'tiles'), { recursive: true });
   log('processing outlines and zoning in blocks');
   const res = await buildBlocked({
     values: vals, outlines: () => lines(rawFile('sara-polygons')), zoning: () => lines(rawFile('zoning')), limits: li, cityAcct,
     status: { zoning: reads.zoning.status, cityLimits: reads['city-limits'].status }, tmp: join(OUT, 'build-tmp'), tilesDir: join(dir, 'tiles'), log,
-    ...(arg('--trial-blocks') ? { maxBlocks: Number(arg('--trial-blocks')) } : {})
+    ...(arg('--trial-blocks') ? { maxBlocks: Number(arg('--trial-blocks')) } : {}),
+    ...(area ? { area: area.box } : {}),
+    key: JSON.stringify({ reads: Object.fromEntries(Object.entries(reads).map(([k, v]) => [k, [v.readAt, v.rows]])), values: values.note }),
+    restart: args.includes('--restart')
   });
   if (arg('--trial-blocks')) { await rm(dir, { recursive: true, force: true }); log('timing trial only: nothing kept'); return; }
   const rows = res.rows, { noOutline, droppedOutlines, conflicts, unavailable } = res;
@@ -127,11 +147,11 @@ async function build(): Promise<void> {
   await writeFile(join(dir, 'index.json.gz'), gzipSync(JSON.stringify(rows)));
   const manifest: Manifest = {
     built: new Date().toISOString(), pinnedAppraisalCommit: 'dd8a267', sourceYear: 2025,
-    counts: { accounts: rows.length, noOutline, droppedOutlines, zoningConflicts: conflicts, coverageUnavailable: unavailable, tiles: res.tiles },
+    counts: { accounts: rows.length, noOutline, droppedOutlines, zoningConflicts: conflicts, coverageUnavailable: unavailable, tiles: res.tiles, ...(area ? { outsidePilotArea: res.outsideArea } : {}) },
     reads: Object.fromEntries(Object.entries(reads).map(([k, v]) => [k, { readAt: v.readAt, rows: v.rows }]))
   };
   const prev = arg('--prev-manifest') ? JSON.parse(await readFile(arg('--prev-manifest')!, 'utf8')) as Manifest : null;
-  await writeFile(join(dir, 'manifest.json'), JSON.stringify({ ...manifest, changesFromPrevious: compareBaseline(prev, manifest), values: values.note }, null, 1));
+  await writeFile(join(dir, 'manifest.json'), JSON.stringify({ ...manifest, ...(area ? { pilot: { area: area.name, box: area.box, note: 'Pilot build: only accounts whose outline centre is inside this box. Counts are not county totals.' } } : {}), changesFromPrevious: compareBaseline(prev, manifest), values: values.note }, null, 1));
   log(`built ${rows.length} accounts, ${res.tiles} tiles; dropped ${droppedOutlines} outlines without values; ${noOutline} accounts without outline`);
 }
 

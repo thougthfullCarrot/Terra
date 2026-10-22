@@ -78,3 +78,48 @@ describe('timing trial', () => {
     await expect(readdir(join(dir, 'tmp'))).rejects.toThrow();
   }, 60000);
 });
+
+describe('pilot area and resume', () => {
+  const run = (fx: ReturnType<typeof fixture>, li: PolygonIndex, dir: string, extra: Partial<Parameters<typeof buildBlocked>[0]> = {}) =>
+    buildBlocked({ values: fx.values, outlines: () => iter(fx.outlines), zoning: () => iter(fx.zoning), limits: li, cityAcct: fx.cityAcct, status: { zoning: 'complete', cityLimits: 'complete' }, tmp: join(dir, 'tmp'), tilesDir: join(dir, 'tiles'), block: 0.02, key: 'k1', ...extra });
+  const tilesOf = async (dir: string) => { const m = new Map<string, any[]>(); for (const f of await readdir(join(dir, 'tiles'))) m.set(f.replace('.json.gz', ''), JSON.parse(gunzipSync(await readFile(join(dir, 'tiles', f))).toString()).sort(byAccount)); return m; };
+
+  it('a pilot area gives exactly the full build\'s rows and tile entries for the accounts inside it', async () => {
+    const fx = fixture(); const li = new PolygonIndex(fx.limits); const ref = reference(fx, li);
+    const area: [number, number, number, number] = [X0 + 0.05, Y0 + 0.05, X0 + 0.15, Y0 + 0.15];
+    // An account is inside when the centre of its outline records' combined box is inside the area.
+    const box = new Map<string, number[]>();
+    for (const o of fx.outlines) { const id = String(o.properties.Prop_id); if (!fx.values.has(id)) continue; const [a, b, c, d] = turf.bbox(o); const x = box.get(id); box.set(id, x ? [Math.min(x[0]!, a), Math.min(x[1]!, b), Math.max(x[2]!, c), Math.max(x[3]!, d)] : [a, b, c, d]); }
+    const inside = new Set([...box].filter(([, x]) => { const cx = (x[0]! + x[2]!) / 2, cy = (x[1]! + x[3]!) / 2; return cx >= area[0] && cx <= area[2] && cy >= area[1] && cy <= area[3]; }).map(([id]) => id));
+    expect(inside.size).toBeGreaterThan(50); expect(inside.size).toBeLessThan(box.size);
+    const dir = await mkdtemp(join(tmpdir(), 'rl-area-'));
+    const res = await run(fx, li, dir, { area });
+    expect(JSON.parse(JSON.stringify(res.rows))).toEqual(JSON.parse(JSON.stringify(ref.rows.filter((r) => inside.has(r.account)))));
+    expect(res.outsideArea).toBe(box.size - inside.size); expect(res.noOutline).toBe(0);
+    const got = await tilesOf(dir);
+    const want = new Map<string, any[]>(); for (const [k, t] of ref.tiles) { const e = t.filter((x) => inside.has(x.account)); if (e.length) want.set(k, e.sort(byAccount)); }
+    expect(got).toEqual(want);
+  }, 60000);
+
+  it('an interrupted build resumes from the finished blocks and gives the same result', async () => {
+    const fx = fixture(); const li = new PolygonIndex(fx.limits); const ref = reference(fx, li);
+    const dir = await mkdtemp(join(tmpdir(), 'rl-resume-'));
+    await expect(run(fx, li, dir, { afterBlock: (n) => { if (n === 5) throw new Error('interrupted'); } })).rejects.toThrow('interrupted');
+    expect((await readdir(join(dir, 'tmp', 'done'))).length).toBe(5);
+    const res = await run(fx, li, dir);
+    expect(res.resumedBlocks).toBe(5);
+    expect(JSON.parse(JSON.stringify(res.rows))).toEqual(JSON.parse(JSON.stringify(ref.rows)));
+    const got = await tilesOf(dir); expect(got.size).toBe(ref.tiles.size);
+    for (const [k, t] of ref.tiles) expect(got.get(k)).toEqual(t.sort(byAccount));
+  }, 60000);
+
+  it('changed inputs or --restart discard saved progress', async () => {
+    const fx = fixture(); const li = new PolygonIndex(fx.limits);
+    const dir = await mkdtemp(join(tmpdir(), 'rl-key-'));
+    const stop = (n: number) => { if (n === 3) throw new Error('stop'); };
+    await expect(run(fx, li, dir, { afterBlock: stop })).rejects.toThrow();
+    expect((await run(fx, li, dir, { key: 'k2' })).resumedBlocks).toBe(0);
+    await expect(run(fx, li, dir, { afterBlock: stop })).rejects.toThrow();
+    expect((await run(fx, li, dir, { restart: true })).resumedBlocks).toBe(0);
+  }, 60000);
+});
