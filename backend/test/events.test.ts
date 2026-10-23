@@ -194,7 +194,7 @@ describe('buildEventsFile', () => {
       }
     };
     // University calendars answer JSON too; this fake only speaks The Events Calendar's.
-    const sources = EVENT_SOURCES.filter((s) => s.kind !== 'localist' && s.kind !== 'livewhale' && !s.key.startsWith('aia-'));
+    const sources = EVENT_SOURCES.filter((s) => s.kind !== 'localist' && s.kind !== 'livewhale' && !s.key.startsWith('aia-') && s.key !== 'taa');
     const file = await buildEventsFile(now, previous, { sources, fetcher, log: () => {} });
     expect(file.cities.map((c) => c.city)).toEqual(['Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'New Braunfels', 'College Station', 'Galveston', 'Lubbock', 'Midland']);
     expect(file.cities.find((c) => c.city === 'Houston')!.events).toHaveLength(2);

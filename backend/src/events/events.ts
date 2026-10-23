@@ -85,7 +85,7 @@ export interface EventSource {
   key: string;
   organizer: string;
   city: City;
-  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist' | 'livewhale' | 'sitemap';
+  kind: 'tribe' | 'growthzone' | 'jsonld' | 'pages' | 'localist' | 'livewhale' | 'sitemap' | 'ics';
   /** Site root, no trailing slash. */
   base: string;
   /** The listing page (default base + /events). */
@@ -105,13 +105,59 @@ export interface EventSource {
    * Fort Worth, not College Station). Checked after the street address and before the source's own city.
    */
   places?: Array<[RegExp, City]>;
+  /**
+   * A statewide calendar (the Texas Apartment Association lists every local association's events): keep only events
+   * whose venue or address places them in a market (or virtual ones); the rest are outside Terra's coverage.
+   */
+  placedOnly?: boolean;
   /** localist, livewhale: the search words (a university calendar lists every event on campus). */
   keyword?: string;
 }
 
 /** Business networking and real estate words; used for sources with relevantOnly. */
 export const RELEVANT =
-  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership/i;
+  /real estate|\bcre\b|commercial|develop|networking|network\b|luncheon|lunch\b|mixer|breakfast|after[- ]hours|economic|state of the (?:city|county|region)|builder|broker|investor|business alliance|forum|leadership|happy hour|young professionals?|\byps?\b|emerging leaders|groundbreaking|hard ?hat|(?:property|site|building|project) tours?|urban (?:design|development|planning|land)|zoning|land use|(?:urban|city|regional) planning|planning (?:commission|&|and) zoning|infrastructure|business connections|realtors?|apartments?|multifamily|property management|home ?builders?/i;
+
+/** Governance meetings on public calendars (a committee's or board's own meeting), never listed. */
+/**
+ * An association's own governance meeting (committee, board, chapter council). Public government meetings
+ * (city council, planning and zoning, land use, development review) are relevant and never matched here.
+ */
+export const INTERNAL = /\b(?:committee|board(?: of directors)?|(?:chapter|advisory|leadership|executive|member(?:ship)?|young professionals?|yp|student) council) meeting\b/i;
+
+/** Public development meetings: a city or county body, planning, zoning, land use or development review. */
+export const PUBLIC_MEETING = /\b(?:city|county|town|municipal|commissioners?)\b|planning|zoning|land use|development review|board of adjustment|historic (?:landmark|preservation|design)|capital improvements?|bond/i;
+
+/** An association's internal meeting, unless it is a public development meeting. */
+export function internalMeeting(title: string): boolean {
+  return INTERNAL.test(title) && !PUBLIC_MEETING.test(title);
+}
+
+/**
+ * RELEVANT against the title, then against the words of the event page's own address ("/events/economic-outlook-2026"):
+ * the organizer's slug often names the kind of event when the title is a slogan.
+ */
+export function relevantEvent(e: Pick<TerraEvent, 'title' | 'url'>): boolean {
+  if (RELEVANT.test(e.title)) return true;
+  try {
+    return RELEVANT.test(decodeURIComponent(new URL(e.url).pathname).replace(/[-_/]+/g, ' '));
+  } catch {
+    return false;
+  }
+}
+
+/** Suburbs and satellite cities, for statewide calendars whose venues name them without a market city. */
+export const SUBURBS: Array<[RegExp, City]> = [
+  [/\b(?:Humble|Katy|Sugar Land|The Woodlands|Pearland|Pasadena|Baytown|Conroe|Cypress|Tomball|Kingwood|Stafford|Missouri City)\b/i, 'Houston'],
+  [/\b(?:Plano|Frisco|McKinney|Irving|Richardson|Garland|Mesquite|Allen|Carrollton|Lewisville|Denton|Addison|Las Colinas|Grand Prairie|Grapevine)\b/i, 'Dallas'],
+  [/\b(?:Arlington|Southlake|Keller|Hurst|Weatherford)\b/i, 'Fort Worth'],
+  [/\b(?:Round Rock|Georgetown|Cedar Park|Pflugerville|San Marcos|Kyle|Buda|Leander|Lakeway|Bee Cave)\b/i, 'Austin'],
+  [/\b(?:Boerne|Schertz|Converse|Live Oak|Helotes)\b/i, 'San Antonio'],
+  [/\b(?:Seguin|Canyon Lake)\b/i, 'New Braunfels'],
+  [/\bOdessa\b/i, 'Midland'],
+  [/\bBryan\b/i, 'College Station'],
+  [/\b(?:League City|Texas City|La Marque|Kemah|Friendswood)\b/i, 'Galveston']
+];
 
 /** Add a chapter here; the kind picks the parser. */
 export const EVENT_SOURCES: EventSource[] = [
@@ -133,6 +179,17 @@ export const EVENT_SOURCES: EventSource[] = [
   { key: 'league-city-chamber', organizer: 'League City Chamber', city: 'Galveston', kind: 'growthzone', base: 'https://business.leaguecitychamber.com', relevantOnly: true },
   { key: 'lubbock-chamber', organizer: 'Lubbock Chamber', city: 'Lubbock', kind: 'growthzone', base: 'https://business.lubbockchamber.com', relevantOnly: true },
   { key: 'midland-chamber', organizer: 'Midland Chamber', city: 'Midland', kind: 'growthzone', base: 'https://business.midlandtxchamber.com', relevantOnly: true },
+  // Austin-area chambers (no iCal feed; their GrowthZone calendar pages are read) and the Galveston chamber's ChamberMaster.
+  { key: 'georgetown-chamber', organizer: 'Georgetown Chamber', city: 'Austin', kind: 'growthzone', base: 'https://business.georgetownchamber.org', page: 'https://business.georgetownchamber.org/events/calendar', relevantOnly: true },
+  // Member businesses' bar promotions ("All Day Happy Hour - <bar>") are not networking events.
+  { key: 'cedar-park-chamber', organizer: 'Cedar Park Chamber', city: 'Austin', kind: 'growthzone', base: 'https://business.cedarparkchamber.org', page: 'https://business.cedarparkchamber.org/events/calendar', relevantOnly: true, exclude: /all[- ]day happy hour/i },
+  { key: 'san-marcos-partnership', organizer: 'Greater San Marcos Partnership', city: 'Austin', kind: 'growthzone', base: 'https://business.sanmarcostexas.com', page: 'https://business.sanmarcostexas.com/events/calendar', relevantOnly: true },
+  { key: 'galveston-chamber', organizer: 'Galveston Regional Chamber', city: 'Galveston', kind: 'growthzone', base: 'https://galvestonchamber.chambermaster.com', page: 'https://galvestonchamber.chambermaster.com/events/calendar/', relevantOnly: true },
+  // The Austin Chamber's own site (Craft CMS): schema.org Event on each /events/<slug> page.
+  { key: 'austin-chamber', organizer: 'Austin Chamber', city: 'Austin', kind: 'pages', base: 'https://www.austinchamber.com', page: 'https://www.austinchamber.com/events', detailPath: '/events/', relevantOnly: true },
+  // Texas Apartment Association (The Events Calendar): its own and every local apartment association's events, statewide;
+  // only those whose venue is in a market are kept (property management education, association socials and expos).
+  { key: 'taa', organizer: 'Texas Apartment Association', city: 'Austin', kind: 'tribe', base: 'https://www.taa.org', placedOnly: true },
   // Young professionals and women in CRE: YCRAN (San Antonio and Austin, Wix) and CREW chapters (Next.js pages with
   // startDate microdata); event pages come from each site's sitemap.
   { key: 'ycran', organizer: 'YCRAN', city: 'San Antonio', kind: 'sitemap', base: 'https://www.ycran.org', page: 'https://www.ycran.org/event-pages-sitemap.xml', sitemapPath: '/event-details/', cityFromVenue: true },
@@ -162,6 +219,10 @@ export const EVENT_SOURCES: EventSource[] = [
     ]
   },
   { key: 'rice', organizer: 'Rice University', city: 'Houston', kind: 'livewhale', base: 'https://events.rice.edu', keyword: 'real estate' },
+  // Texas A&M student real estate organizations: their public "Add to iCal" feeds on Get Involved (members-only events
+  // need a sign-in there and are not read).
+  { key: 'tamu-reda', organizer: 'Real Estate Development Association (Texas A&M)', city: 'College Station', kind: 'ics', base: 'https://getinvolved.tamu.edu/org/reda/events', page: 'https://getinvolved.tamu.edu/ics/event/upcoming/1133' },
+  { key: 'tamu-real', organizer: 'Aggie Real Estate Club (Texas A&M)', city: 'College Station', kind: 'ics', base: 'https://getinvolved.tamu.edu/org/real/events', page: 'https://getinvolved.tamu.edu/ics/event/upcoming/767' },
   // Architecture chapters on The Events Calendar: only their networking, development and industry events.
   { key: 'aia-dallas', organizer: 'AIA Dallas', city: 'Dallas', kind: 'tribe', base: 'https://www.aiadallas.org', relevantOnly: true },
   { key: 'aia-houston', organizer: 'AIA Houston', city: 'Houston', kind: 'tribe', base: 'https://aiahouston.org', relevantOnly: true }
@@ -522,10 +583,37 @@ export function visibleTimes(html: string, day: string): { start: string; end: s
  */
 export function parseGrowthZoneDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null; dateOnly: boolean } {
   const found = structuredDetail(html);
+  // A timed start with an end at exactly the next midnight is GrowthZone's placeholder end ("5:30 PM" mixers
+  // printed as ending at 12:00 AM the next day). Only that one-day case is touched: an end two or more days
+  // later is a real multi-day event, and a page that itself prints "12:00 AM"/"midnight" as the end keeps it.
+  // Otherwise the visible time range gives the end, or there is no end.
+  const startDay = found.start ? localDay(found.start) : '';
+  if (found.start && !isMidnight(found.start) && found.end && isMidnight(found.end) && found.end.slice(0, 10) === nextDay(startDay)) {
+    const times = visibleTimes(html, startDay);
+    if (times?.end && /T00:00/.test(times.end)) return { ...found, dateOnly: false };
+    if (!times && statedMidnightEnd(html)) return { ...found, dateOnly: false };
+    return { ...found, end: times?.end ?? null, dateOnly: false };
+  }
   if (!found.start || !isMidnight(found.start)) return { ...found, dateOnly: false };
   const times = visibleTimes(html, found.start.slice(0, 10));
   if (times) return { ...found, start: times.start, end: times.end, dateOnly: false };
   return { ...found, dateOnly: true };
+}
+
+function localDay(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: parseZone }).format(new Date(iso));
+}
+
+function nextDay(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** True when the visible page text says the event ends at midnight ("until midnight", "- 12:00 AM"). */
+function statedMidnightEnd(html: string): boolean {
+  const text = decodeText(html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')).replace(/\s+/g, ' ');
+  return /(?:until|till|to|-|–|—)\s*(?:midnight|12(?::00)?\s*a\.?m\b)/i.test(text);
 }
 
 function structuredDetail(html: string): { title?: string; start: string | null; end: string | null; venue: string | null } {
@@ -578,6 +666,22 @@ interface LdEvent {
   offers?: { price?: string | number } | Array<{ price?: string | number }>;
 }
 
+/**
+ * One JSON-LD block. Some CMSs (Craft on the Austin Chamber, AIA San Antonio) print raw line breaks inside strings,
+ * which JSON forbids; those are read as spaces. undefined when the block still isn't JSON.
+ */
+export function parseLd(json: string): unknown {
+  try {
+    return JSON.parse(json.trim());
+  } catch {
+    try {
+      return JSON.parse(json.trim().replace(/[\u0000-\u001f]+/g, ' '));
+    } catch {
+      return undefined;
+    }
+  }
+}
+
 function ldNodes(data: unknown): LdEvent[] {
   if (Array.isArray(data)) return data.flatMap(ldNodes);
   if (!data || typeof data !== 'object') return [];
@@ -590,12 +694,8 @@ function ldNodes(data: unknown): LdEvent[] {
 export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: string): TerraEvent[] {
   const out: TerraEvent[] = [];
   for (const [, json = ''] of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    let data: unknown;
-    try {
-      data = JSON.parse(json.trim());
-    } catch {
-      continue;
-    }
+    const data = parseLd(json);
+    if (data === undefined) continue;
     for (const n of ldNodes(data)) {
       const types = Array.isArray(n['@type']) ? n['@type'] : [n['@type']];
       if (!types.some((t) => typeof t === 'string' && /Event$/.test(t))) continue;
@@ -613,7 +713,10 @@ export function parseJsonLdEvents(html: string, source: EventSource, pageUrl: st
       const details = ldDetails(n as Record<string, unknown>, normalizeDate);
       const { locations, ...extra } = details;
       const place = locations[0] ?? (typeof loc === 'object' && !/Virtual/i.test(String((loc as { '@type'?: string })['@type'])) ? loc : undefined);
-      const venue = typeof loc === 'string' ? loc : place?.name;
+      // Some CMSs (the Austin Chamber's) fill the place with the event's own name: that is no venue.
+      const named = typeof loc === 'string' ? loc : place?.name;
+      const venue = named && decodeText(named).trim().toLowerCase() === title.trim().toLowerCase() ? undefined : named;
+      if (!venue && extra.address && decodeText(String(extra.address)).trim().toLowerCase() === title.trim().toLowerCase()) delete extra.address;
       out.push({
         ...clean(extra),
         id: `${source.key}-${url}`,
@@ -639,12 +742,8 @@ function clean(details: Details): Details {
 /** The schema.org details of the first Event on a detail page (registration, price, format, status...). */
 export function pageDetails(html: string): Details {
   for (const [, json = ''] of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    let data: unknown;
-    try {
-      data = JSON.parse(json.trim());
-    } catch {
-      continue;
-    }
+    const data = parseLd(json);
+    if (data === undefined) continue;
     for (const n of ldNodes(data)) {
       const types = Array.isArray(n['@type']) ? n['@type'] : [n['@type']];
       if (!types.some((t) => typeof t === 'string' && /Event$/.test(t))) continue;
@@ -912,12 +1011,23 @@ const defaultFetcher: Fetcher = {
   text: (url) => fetchText(url, { retries: 1, accept: 'text/html,text/calendar,*/*' })
 };
 
-export async function fetchSource(source: EventSource, now: Date, fetcher: Fetcher = defaultFetcher, log: (m: string) => void = console.log): Promise<TerraEvent[]> {
+export async function fetchSource(
+  source: EventSource,
+  now: Date,
+  fetcher: Fetcher = defaultFetcher,
+  log: (m: string) => void = console.log,
+  /** Filled with the number of listings the source returned before the relevance, closure and date filters. */
+  counts?: { raw: number }
+): Promise<TerraEvent[]> {
   parseZone = zoneOf(source.city);
   try {
-    const events = await withSessions(tidy(await fetchRaw(source, now, fetcher, log)), fetcher, log);
-    const kept = events.filter((e) => (!source.relevantOnly || RELEVANT.test(e.title)) && !source.exclude?.test(e.title));
-    return joinDays(kept.map((e) => finalize(e, source, now)));
+    const raw = await fetchRaw(source, now, fetcher, log);
+    if (counts) counts.raw = raw.length;
+    const events = await withSessions(tidy(raw), fetcher, log);
+    const kept = events.filter((e) => (!source.relevantOnly || relevantEvent(e)) && !source.exclude?.test(e.title) && !internalMeeting(e.title));
+    const places = source.placedOnly ? [...(source.places ?? []), ...SUBURBS] : source.places;
+    const done = kept.map((e) => finalize(e, { ...source, places }, now));
+    return joinDays(source.placedOnly ? done.filter((e) => e.format === 'virtual' || placedInMarket(e, places)) : done);
   } finally {
     parseZone = 'America/Chicago';
   }
@@ -966,6 +1076,11 @@ export function finalize(e: TerraEvent, source: Pick<EventSource, 'key' | 'city'
 }
 
 /** The market a source's campus wording names for this venue or organizer group, if any. */
+/** True when the venue or address itself names a market (not just the organizer's office). */
+export function placedInMarket(e: Pick<TerraEvent, 'venue' | 'organizer' | 'address'>, places: EventSource['places']): boolean {
+  return Boolean(addressCity(e.address) ?? addressCity(e.venue) ?? placeCity({ ...e, organizer: '' }, places));
+}
+
 export function placeCity(e: Pick<TerraEvent, 'venue' | 'organizer' | 'address'>, places: EventSource['places']): City | null {
   // A venue written "Hotel Ella, Austin" names its city even without ", TX".
   const tail = e.venue ? [...CITIES].find((c) => new RegExp(`,\\s*${c}\\s*$`, 'i').test(e.venue!)) : undefined;
@@ -999,6 +1114,16 @@ async function fetchRaw(source: EventSource, now: Date, fetcher: Fetcher, log: (
       }
     }
     throw restError instanceof Error ? restError : new Error('no event feed reachable');
+  }
+
+  // A public iCal feed published by the organizer (a student organization's "Add to iCal" export): page is the feed.
+  if (source.kind === 'ics') {
+    const feed = source.page ?? `${source.base}/events.ics`;
+    const text = await fetcher.text(feed);
+    if (!/BEGIN:VCALENDAR/.test(text)) throw new Error(`${feed} is not an iCal feed`);
+    const events = parseIcs(text, source, source.base, now);
+    log(`${source.organizer}: ${events.length} events from ${feed}`);
+    return events;
   }
 
   if (source.kind === 'jsonld') {
@@ -1283,6 +1408,8 @@ export interface SourceStatus {
   fetchedAt: string;
   /** Upcoming events this source contributes (from the earlier build when it failed). */
   count: number;
+  /** Listings the source returned this run, before the relevance, date-window and duplicate filters (0 when it failed). */
+  raw?: number;
   ok?: boolean;
   /** Why it could not be read this run (HTTP status, timeout...). */
   error?: string;
@@ -1301,6 +1428,10 @@ export interface MarketReport {
   sourcesOk: number;
   sourcesFailed: number;
   upcoming: number;
+  /** Listings the market's sources returned this run, before relevance, date-window and duplicate filters. */
+  raw?: number;
+  /** Events displayed after filtering and deduplication, cancelled ones included (upcoming leaves those out). */
+  displayed?: number;
   virtual: number;
   duplicatesRemoved: number;
   /** Events kept from an earlier build because their source failed. */
@@ -1341,17 +1472,18 @@ export async function buildEventsFile(
     );
     const url = source.page ?? `${source.base}/events`;
     try {
-      const events = upcoming(await fetchSource(source, now, fetcher, log), now).map((e) => withReschedule(e, previousById.get(e.id)));
+      const counts = { raw: 0 };
+      const events = upcoming(await fetchSource(source, now, fetcher, log, counts), now).map((e) => withReschedule(e, previousById.get(e.id)));
       log(`${source.organizer}: ${events.length} upcoming events.`);
       all.push(...events);
-      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: now.toISOString(), count: events.length, ok: true, lastSuccessAt: now.toISOString() });
+      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: now.toISOString(), count: events.length, raw: counts.raw, ok: true, lastSuccessAt: now.toISOString() });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(`${source.organizer}: ${message}; keeping ${kept.length} earlier events.`);
       const still = upcoming(kept, now).map((e) => ({ ...e, stale: true, verifiedAt: e.verifiedAt ?? before?.fetchedAt ?? previous?.generatedAt }) as TerraEvent);
       all.push(...still);
       const last = before ? (before.lastSuccessAt !== undefined ? before.lastSuccessAt : before.fetchedAt) : null;
-      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: before?.fetchedAt ?? now.toISOString(), count: still.length, ok: false, error: message.slice(0, 120), lastSuccessAt: last ?? null });
+      meta.push({ key: source.key, organizer: source.organizer, city: source.city, url, fetchedAt: before?.fetchedAt ?? now.toISOString(), count: still.length, raw: 0, ok: false, error: message.slice(0, 120), lastSuccessAt: last ?? null });
     }
   }
   const previousManual = previousEvents.filter((e) => e.source === MANUAL_SOURCE);
@@ -1403,6 +1535,8 @@ export function marketReport(cities: EventsFile['cities'], meta: SourceStatus[],
       sourcesOk: ok.length,
       sourcesFailed: mine.length - ok.length,
       upcoming: upcomingCount,
+      raw: mine.reduce((sum, m) => sum + (m.key === 'manual' ? 0 : (m.raw ?? 0)), 0),
+      displayed: events.length,
       virtual: events.filter((e) => e.format === 'virtual').length,
       duplicatesRemoved: removed.get(city) ?? 0,
       stale: events.filter((e) => e.stale).length,
@@ -1413,12 +1547,12 @@ export function marketReport(cities: EventsFile['cities'], meta: SourceStatus[],
 
 /** The collection report as Markdown (written next to events.json and to the workflow summary). */
 export function reportMarkdown(file: EventsFile): string {
-  const lines = [`# Events collection report`, '', `Built ${file.generatedAt}.`, '', '| Market | Result | Sources read | Failed | Upcoming | Virtual | Duplicates removed | Kept from earlier build | Last verified |', '|---|---|---|---|---|---|---|---|---|'];
+  const lines = [`# Events collection report`, '', `Built ${file.generatedAt}.`, '', '| Market | Result | Sources read | Failed | Raw listings | Displayed | Upcoming | Virtual | Duplicates removed | Kept from earlier build | Last verified |', '|---|---|---|---|---|---|---|---|---|---|---|'];
   const label = { events: 'Events listed', 'none-found': 'No upcoming events found', unreadable: 'Sources could not be read', 'no-sources': 'No calendar configured' };
   for (const r of file.report ?? []) {
-    lines.push(`| ${r.city} | ${label[r.state]} | ${r.sourcesOk}/${r.sourcesChecked} | ${r.sourcesFailed} | ${r.upcoming} | ${r.virtual} | ${r.duplicatesRemoved} | ${r.stale} | ${r.lastVerifiedAt ?? 'never'} |`);
+    lines.push(`| ${r.city} | ${label[r.state]} | ${r.sourcesOk}/${r.sourcesChecked} | ${r.sourcesFailed} | ${r.raw ?? '?'} | ${r.displayed ?? '?'} | ${r.upcoming} | ${r.virtual} | ${r.duplicatesRemoved} | ${r.stale} | ${r.lastVerifiedAt ?? 'never'} |`);
   }
-  lines.push('', '## Sources', '', '| Market | Source | Read this run | Upcoming | Last success | Error |', '|---|---|---|---|---|---|');
-  for (const s of file.sources) lines.push(`| ${s.city ?? 'All'} | [${s.organizer}](${s.url || '#'}) | ${s.ok ? 'yes' : 'no'} | ${s.count} | ${s.lastSuccessAt ?? 'never'} | ${(s.error ?? '').replace(/\|/g, '/')} |`);
+  lines.push('', '## Sources', '', '| Market | Source | Read this run | Raw listings | Upcoming | Last success | Error |', '|---|---|---|---|---|---|---|');
+  for (const s of file.sources) lines.push(`| ${s.city ?? 'All'} | [${s.organizer}](${s.url || '#'}) | ${s.ok ? 'yes' : 'no'} | ${s.raw ?? '?'} | ${s.count} | ${s.lastSuccessAt ?? 'never'} | ${(s.error ?? '').replace(/\|/g, '/')} |`);
   return `${lines.join('\n')}\n`;
 }

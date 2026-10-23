@@ -131,7 +131,7 @@ function reportDetails() {
   for (const r of rows) {
     const verdict = r.state === 'no-sources' ? 'no readable calendar yet' : r.state === 'unreadable' ? 'calendars could not be read' : r.state === 'none-found' ? 'no upcoming events found' : `${r.upcoming} upcoming`;
     const li = el('li', `report-${r.state}`);
-    li.append(el('b', '', r.city), el('span', '', ` · ${verdict} · ${r.sourcesOk}/${r.sourcesChecked} calendars read${r.duplicatesRemoved ? ` · ${r.duplicatesRemoved} duplicates merged` : ''} · last verified ${fmt(r.lastVerifiedAt)}`));
+    li.append(el('b', '', r.city), el('span', '', ` · ${verdict} · ${r.sourcesOk}/${r.sourcesChecked} calendars read${r.raw != null ? ` · ${r.raw} listings collected, ${r.displayed ?? r.upcoming} shown` : ''}${r.duplicatesRemoved ? ` · ${r.duplicatesRemoved} duplicates merged` : ''} · last verified ${fmt(r.lastVerifiedAt)}`));
     list.append(li);
   }
   box.append(list);
