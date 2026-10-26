@@ -302,7 +302,9 @@
 
 
         <form id="profile-form" class="profile-form" novalidate>
-          <h2 class="section-title">About you</h2>
+          <section class="about" aria-labelledby="about-title">
+          <h2 class="section-title" id="about-title">About you</h2>
+          <div class="fields">
           <label>
             <span class="eyebrow">Name</span>
             <input name="name" autocomplete="name" maxlength="120" />
@@ -323,6 +325,7 @@
             <span class="eyebrow">Home city</span>
             <select name="homeCity"><option value="">Select</option></select>
           </label>
+          </div>
           <label class="check">
             <input type="checkbox" name="relocationOpen" />
             <span>Open to relocating within Texas</span>
@@ -331,6 +334,7 @@
             <legend class="eyebrow">Sectors you're interested in</legend>
             <div id="sector-options"></div>
           </fieldset>
+          </section>
           <fieldset class="sectors alerts" id="alert-settings">
             <legend class="eyebrow">Daily job alerts</legend>
             <label class="check">
