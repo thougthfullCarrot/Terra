@@ -147,6 +147,7 @@ export function formatValue(value, unit) {
       const abs = Math.abs(value);
       if (abs >= 1e9) return `$${trim(value / 1e9, 1)}B`;
       if (abs >= 1e7) return `$${trim(value / 1e6, 1)}M`;
+      if (value === 0) return '$0';
       if (abs < 10) return `$${value.toFixed(2)}`;
       return `$${Math.round(value).toLocaleString('en-US')}`;
     }
@@ -559,4 +560,65 @@ export function compareWarnings(markets, metrics, cities) {
     if (stale.length) out.push({ key: metric.key, label: metric.label, kind: 'stale', text: `Not refreshed on the latest update for ${stale.join(', ')}; an earlier figure is shown.` });
   }
   return out;
+}
+
+/** The four headline figures on a city's page, in order. */
+export const HEADLINE_METRICS = ['jobsGrowth', 'unemployment', 'pepGrowth', 'netMigration'];
+
+/** Words in a source list entry's name that identify each metric source. */
+const SOURCE_NAMES = {
+  BLS: /Bureau of Labor Statistics/,
+  'Census ACS': /American Community Survey/,
+  'Census estimates': /Population Estimates/,
+  Zillow: /^Zillow/,
+  'Apartment List': /^Apartment List/,
+  'Census BPS': /Building Permits/,
+  'Appraisal districts': /appraisal districts/i,
+  'Texas Comptroller': /Comptroller/,
+  HUD: /HUD/,
+  TxDOT: /TxDOT/,
+  Redfin: /Redfin/,
+  'Realtor.com': /Realtor\.com/,
+  FHFA: /FHFA/
+};
+
+/**
+ * The source list entry ({ name, url, detail }) behind a metric, or null.
+ * HUD publishes two lists: Fair Market Rents for fmr* figures, Opportunity Zones otherwise.
+ */
+export function metricSource(snapshot, metric) {
+  const pattern = SOURCE_NAMES[metric?.source];
+  if (!pattern) return null;
+  const found = (snapshot?.sources ?? []).filter((s) => pattern.test(s.name));
+  if (metric.source === 'HUD') return found.find((s) => /Fair Market/.test(s.name) === metric.key.startsWith('fmr')) ?? found[0] ?? null;
+  return found[0] ?? null;
+}
+
+/**
+ * One topic's figures for one city, as the detail table lists them: each
+ * metric once, the headline figures left out (they sit above the tabs), and
+ * the ones with no figure set apart so they can be summed up in one note.
+ * A zero is a figure, not a gap.
+ */
+export function cityRows(snapshot, market, group, skip = HEADLINE_METRICS) {
+  const rows = [];
+  const missing = [];
+  const seen = new Set(skip);
+  for (const key of group?.metrics ?? []) {
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const metric = snapshot.metrics.find((m) => m.key === key);
+    if (!metric) continue;
+    const value = market?.values?.[key];
+    if (value == null || !Number.isFinite(value)) missing.push({ metric, status: valueStatus(market, key) });
+    else rows.push({ metric, value, period: market.periods?.[key] ?? null, status: valueStatus(market, key), shared: sharedWith(market, key) });
+  }
+  return { rows, missing };
+}
+
+/** How many of the snapshot's metrics a city has a figure for. */
+export function coverage(snapshot, market) {
+  const total = snapshot.metrics.length;
+  const have = snapshot.metrics.filter((m) => market?.values?.[m.key] != null && Number.isFinite(market.values[m.key])).length;
+  return { have, total };
 }
