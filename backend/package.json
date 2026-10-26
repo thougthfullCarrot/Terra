@@ -33,6 +33,7 @@
     "send:alerts": "tsx src/bin/send-alerts.ts",
     "store:history": "tsx src/bin/store-history.ts",
     "audit:developments": "tsx src/bin/audit-developments.ts",
+    "audit:locations": "tsx src/bin/audit-locations.ts",
     "appraisal": "tsx src/bin/appraisal-lookup.ts"
   },
   "dependencies": {

@@ -3,6 +3,7 @@ import { unzip, xmlText } from '../lib/xlsx.js';
 import type { City } from '../types.js';
 import { fetchCityPermitProjects } from './cityPermits.js';
 import { developerLink } from './developers.js';
+import { checkPoint, inferMethod, locationInfo, pickGeocode, type CensusMatch, type LocationInfo, type ZipArea } from './devLocation.js';
 
 /**
  * Current development projects from TDLR's Texas Architectural Barriers
@@ -178,8 +179,10 @@ export interface Development {
   isPublic: boolean;
   lat: number | null;
   lng: number | null;
-  /** True when the point is the ZIP code's center, not the street address. */
+  /** True when the point is the ZIP code's center, not the street address: "Location not verified", drawn as an area, never as a site pin. */
   approximate: boolean;
+  /** Where the point came from, how far to trust it, and when it was checked (devLocation.ts). */
+  location?: LocationInfo;
   /** The developer's website, or a search for it when not listed (see developerLink). */
   developerUrl: string;
   developerDirect: boolean;
@@ -470,12 +473,12 @@ export function zipOf(address: string | null): string | null {
 export const zctaUrl = (year: number) =>
   `https://www2.census.gov/geo/docs/maps-data/data/gazetteer/${year}_Gazetteer/${year}_Gaz_zcta_national.zip`;
 
-/** Texas ZIP code centers from the Census gazetteer (tab separated: GEOID … INTPTLAT, INTPTLONG). */
-export function parseZcta(text: string): Map<string, [number, number]> {
+/** Texas ZIP code areas from the Census gazetteer (tab separated: GEOID, ALAND … INTPTLAT, INTPTLONG). */
+export function parseZctaAreas(text: string): Map<string, ZipArea> {
   const lines = text.split(/\r?\n/);
   const header = (lines[0] ?? '').split('\t').map((h) => h.trim().toUpperCase());
-  const [id, lat, lng] = ['GEOID', 'INTPTLAT', 'INTPTLONG'].map((name) => header.indexOf(name)) as [number, number, number];
-  const out = new Map<string, [number, number]>();
+  const [id, lat, lng, land] = ['GEOID', 'INTPTLAT', 'INTPTLONG', 'ALAND'].map((name) => header.indexOf(name)) as [number, number, number, number];
+  const out = new Map<string, ZipArea>();
   if (id < 0 || lat < 0 || lng < 0) return out;
   for (const line of lines.slice(1)) {
     const cells = line.split('\t');
@@ -484,24 +487,36 @@ export function parseZcta(text: string): Map<string, [number, number]> {
     if (!/^(7[5-9]|885)/.test(zip)) continue;
     const y = Number(cells[lat]);
     const x = Number(cells[lng]);
-    if (Number.isFinite(y) && Number.isFinite(x)) out.set(zip, [y, x]);
+    const m2 = land >= 0 ? Number(cells[land]) : NaN;
+    // The radius of a circle with the ZIP's land area: a rough size, for drawing the area and flagging far points.
+    const radiusKm = Number.isFinite(m2) && m2 > 0 ? Math.sqrt(m2 / Math.PI) / 1000 : 2;
+    if (Number.isFinite(y) && Number.isFinite(x)) out.set(zip, { at: [y, x], radiusKm });
   }
   return out;
 }
 
+/** Texas ZIP code centers from the Census gazetteer. */
+export function parseZcta(text: string): Map<string, [number, number]> {
+  return new Map([...parseZctaAreas(text)].map(([zip, a]) => [zip, a.at]));
+}
+
 /** The newest gazetteer published: each year's comes out that summer. */
-export async function fetchZipCenters(now: Date, options: FetchJsonOptions = {}): Promise<Map<string, [number, number]>> {
+export async function fetchZipAreas(now: Date, options: FetchJsonOptions = {}): Promise<Map<string, ZipArea>> {
   for (let year = now.getUTCFullYear(); year >= now.getUTCFullYear() - 3; year--) {
     try {
       const files = unzip(await fetchBuffer(zctaUrl(year), { timeoutMs: 120_000, ...options }));
       const text = [...files.values()][0]?.toString('utf8') ?? '';
-      const centers = parseZcta(text);
-      if (centers.size) return centers;
+      const areas = parseZctaAreas(text);
+      if (areas.size) return areas;
     } catch {
       // Not published yet, or a bad download: try the year before.
     }
   }
   return new Map();
+}
+
+export async function fetchZipCenters(now: Date, options: FetchJsonOptions = {}): Promise<Map<string, [number, number]>> {
+  return new Map([...(await fetchZipAreas(now, options))].map(([zip, a]) => [zip, a.at]));
 }
 
 /**
@@ -519,7 +534,7 @@ export const geocodeUrl = (address: string) =>
   `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(address)}&benchmark=Public_AR_Current&format=json`;
 
 interface GeocodeResponse {
-  result?: { addressMatches?: { coordinates?: { x: number; y: number } }[] };
+  result?: { addressMatches?: CensusMatch[] };
 }
 
 /** Kilometres between two points, near enough for a sanity check. */
@@ -530,14 +545,30 @@ export function distanceKm([lat1, lng1]: [number, number], [lat2, lng2]: [number
   return Math.sqrt(x * x + y * y) * 6371;
 }
 
+/**
+ * The filed address's point from the Census geocoder, or null. A match must be
+ * the filed address (same number, direction and ZIP or town: pickGeocode) and
+ * inside the market; anything else is a wrong match, and no point beats a wrong one.
+ */
 export async function geocode(address: string, city: City, options: FetchJsonOptions = {}): Promise<[number, number] | null> {
-  const data = await fetchJson<GeocodeResponse>(geocodeUrl(address), { timeoutMs: 30_000, ...options });
-  const point = data.result?.addressMatches?.[0]?.coordinates;
-  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
-  const at: [number, number] = [point.y, point.x];
-  // A match across the state is a wrong match; a metro spans about 80 km from its center.
-  return distanceKm(at, CITY_CENTERS[city]) <= METRO_RADIUS_KM[city] ? at : null;
+  return (await geocodeChecked(address, city, options)).at;
 }
+
+/** geocode, with the matched address or the reason a match was refused (for the audit). */
+export async function geocodeChecked(address: string, city: City, options: FetchJsonOptions = {}): Promise<{ at: [number, number] | null; matched?: string; rejected?: string }> {
+  const data = await fetchJson<GeocodeResponse>(geocodeUrl(address), { timeoutMs: 30_000, ...options });
+  const pick = pickGeocode(address, data.result?.addressMatches);
+  if (!pick.at) return pick;
+  // A match across the state is a wrong match; a metro spans about 80 km from its center.
+  if (distanceKm(pick.at, CITY_CENTERS[city]) > METRO_RADIUS_KM[city]) return { at: null, matched: pick.matched, rejected: 'match outside the market' };
+  return pick;
+}
+
+/** Today's date for a location's verified stamp. */
+export const dayOf = (d: Date) => d.toISOString().slice(0, 10);
+
+/** The Census geocoder as a location source. */
+export const CENSUS_SOURCE = 'Census Geocoder (Public_AR_Current) match of the filed address';
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -564,7 +595,7 @@ export interface FetchDevelopmentsOptions extends FetchJsonOptions {
 }
 
 /** One project's page details and point, as a checkpoint keeps them. */
-export type PageDetails = ProjectDetails & { lat: number | null; lng: number | null; approximate: boolean };
+export type PageDetails = ProjectDetails & { lat: number | null; lng: number | null; approximate: boolean; location?: LocationInfo };
 
 export interface PageCheckpoint {
   load(): Promise<Map<string, PageDetails>>;
@@ -863,18 +894,14 @@ export async function pinSmaller(
     const at = address ? await geocode(address, s.city, http).catch(() => null) : null;
     Object.assign(s, { address: details.address, owner: details.owner, isPublic: details.isPublic, lat: at?.[0] ?? null, lng: at?.[1] ?? null, approximate: false, paged: true });
   }
-  // ZIP centers for the ones the geocoder missed, like the main map's.
+  // The ones the geocoder could not place show their ZIP's area, marked not verified, like the main map's.
   const missing = smaller.filter((s) => s.paged && s.lat == null && zipOf(s.address ?? null));
   if (missing.length) {
-    const centers = await fetchZipCenters(new Date(), http).catch(() => new Map<string, [number, number]>());
-    const perZip = new Map<string, number>();
+    const areas = await fetchZipAreas(new Date(), http).catch(() => new Map<string, ZipArea>());
     for (const s of missing) {
-      const zip = zipOf(s.address ?? null)!;
-      const center = centers.get(zip);
-      if (!center) continue;
-      const index = perZip.get(zip) ?? 0;
-      perZip.set(zip, index + 1);
-      [s.lat, s.lng] = spread(center, index + 40);
+      const area = areas.get(zipOf(s.address ?? null)!);
+      if (!area || distanceKm(area.at, CITY_CENTERS[s.city]) > METRO_RADIUS_KM[s.city]) continue;
+      [s.lat, s.lng] = area.at;
       s.approximate = true;
     }
   }
@@ -962,7 +989,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       const details = projectDetails(parseProjectPage(await fetchText(tabsProjectUrl(row.ProjectNumber), { timeoutMs: 60_000, ...http })));
       const address = geocodable(details.address);
       const at = address ? await geocode(address, city, http).catch(() => null) : null;
-      const got: PageDetails = { ...details, lat: at?.[0] ?? null, lng: at?.[1] ?? null, approximate: false };
+      const got: PageDetails = { ...details, lat: at?.[0] ?? null, lng: at?.[1] ?? null, approximate: false, ...(at ? { location: locationInfo('geocoded-address', CENSUS_SOURCE, dayOf(now)) } : {}) };
       known.set(row.ProjectNumber, got);
       fresh.set(row.ProjectNumber, got);
       if (checkpoint && fresh.size % CHECKPOINT_EVERY === 0) await checkpoint.save(fresh).catch(() => {});
@@ -1016,21 +1043,31 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       let lat = d?.lat ?? null;
       let lng = d?.lng ?? null;
       let approximate = d?.approximate ?? false;
-      const locatedFrom = old?.locatedFrom;
-      // A pin that missed or sits at the ZIP center gets another try: the
-      // geocoder learns new streets, and a ZIP center should not stick forever.
-      if (d && !fresh.has(row.ProjectNumber) && (lat == null || approximate) && !locatedFrom && retries > 0) {
+      let location: LocationInfo | undefined = d?.location;
+      // A borrowed point is never carried over: the city permits are matched
+      // again below under the same-site rules, so a point lent by an earlier,
+      // looser match (street number and name only) does not stick.
+      if (old?.locatedFrom || location?.method === 'same-site-permit') {
+        lat = lng = null;
+        location = undefined;
+      }
+      // A ZIP area is drawn from this build's ZIP data, never carried over.
+      if (approximate) {
+        lat = lng = null;
+        approximate = false;
+        location = undefined;
+      }
+      // A point saved before provenance was kept is the filed address's geocode.
+      if (lat != null && lng != null && !location) location = locationInfo(inferMethod({ lat, lng }), CENSUS_SOURCE, 'not recorded');
+      // A project with no point gets another try: the geocoder learns new streets.
+      if (d && !fresh.has(row.ProjectNumber) && lat == null && retries > 0) {
         const address = geocodable(d.address);
         if (address) {
           retries--;
           const at = await geocode(address, city, http).catch(() => null);
           if (at) {
             [lat, lng] = at;
-            approximate = false;
-          } else if (approximate) {
-            // Placed again at its ZIP center below, with this build's spread.
-            lat = lng = null;
-            approximate = false;
+            location = locationInfo('geocoded-address', CENSUS_SOURCE, dayOf(now));
           }
         }
       }
@@ -1058,7 +1095,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
         lat,
         lng,
         approximate,
-        ...(locatedFrom ? { locatedFrom } : {}),
+        ...(location ? { location } : {}),
         ...(old?.aliases?.length ? { aliases: [...old.aliases] } : {}),
         developerUrl: link.url,
         developerDirect: link.direct,
@@ -1091,24 +1128,29 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
     }))
   );
 
-  // Whatever the geocoder could not place goes at its ZIP code's center.
-  const missing = projects.filter((p) => p.lat == null && zipOf(p.address));
-  if (missing.length) {
-    const centers = await fetchZipCenters(now, http);
-    const perZip = new Map<string, number>();
-    for (const p of projects) {
-      const zip = zipOf(p.address);
-      if (zip && p.approximate) perZip.set(zip, (perZip.get(zip) ?? 0) + 1);
+  // Whatever has no trustworthy point is "Location not verified": with a ZIP,
+  // its ZIP's area is drawn (at the area's center, never spread out to look
+  // like separate sites); without one it stays off the map. Every point is
+  // then checked against its market and ZIP, and anything odd is flagged for
+  // the audit (flags never move a point).
+  const areas = await fetchZipAreas(now, http).catch(() => new Map<string, ZipArea>());
+  for (const p of projects) {
+    if (p.lat != null && p.lng != null) {
+      const check = checkPoint([p.lat, p.lng], { center: CITY_CENTERS[p.city], radiusKm: METRO_RADIUS_KM[p.city], zip: zipOf(p.address), zips: areas });
+      if (!check.ok) {
+        log(`${p.id}: point ${p.lat},${p.lng} dropped (${check.flags.join('; ')})`);
+        p.lat = p.lng = null;
+        delete p.location;
+        delete p.locatedFrom;
+      } else if (check.flags.length && p.location) p.location.flags = check.flags;
+      if (p.lat != null) continue;
     }
-    for (const p of missing) {
-      const zip = zipOf(p.address)!;
-      const center = centers.get(zip);
-      if (!center) continue;
-      const index = perZip.get(zip) ?? 0;
-      perZip.set(zip, index + 1);
-      [p.lat, p.lng] = spread(center, index);
-      p.approximate = true;
-    }
+    const zip = zipOf(p.address);
+    const area = zip ? areas.get(zip) : undefined;
+    if (!zip || !area || distanceKm(area.at, CITY_CENTERS[p.city]) > METRO_RADIUS_KM[p.city]) continue;
+    [p.lat, p.lng] = area.at;
+    p.approximate = true;
+    p.location = locationInfo('zip-area', `Census ZIP code tabulation area ${zip} (gazetteer)`, dayOf(now), { zip, areaKm: Math.round(area.radiusKm * 10) / 10 });
   }
   for (const m of metros) Object.assign(m, locationCounts(projects.filter((p) => p.city === m.city)));
   const exact = projects.filter((p) => p.lat != null && !p.approximate).length;
@@ -1120,7 +1162,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       log(`trace ${id}: not listed (not among the current filings read)`);
       continue;
     }
-    log(`trace ${id}: listed in ${p.city}${p.headline ? ' (headline)' : ''}; ${p.awaiting ? 'page not read yet' : before.has(id) ? 'page from an earlier build' : saved.has(id) ? 'page from the checkpoint' : 'page read this build'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP center)' : p.locatedFrom ? `(${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
+    log(`trace ${id}: listed in ${p.city}${p.headline ? ' (headline)' : ''}; ${p.awaiting ? 'page not read yet' : before.has(id) ? 'page from an earlier build' : saved.has(id) ? 'page from the checkpoint' : 'page read this build'}; pin ${p.lat ?? '-'},${p.lng ?? '-'} ${p.approximate ? '(ZIP area, not verified)' : p.locatedFrom ? `(${p.locatedFrom})` : p.lat != null ? '(geocoded address)' : '(none)'}; aliases ${JSON.stringify(p.aliases ?? [])}`);
   }
   // Builds keep going while pages wait; a page that failed this build is tried next time but doesn't hold the cache open.
   const waiting = projects.filter((p) => p.awaiting && !failed.has(p.id)).length;
