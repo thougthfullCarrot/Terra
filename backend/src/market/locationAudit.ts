@@ -210,9 +210,10 @@ export async function verifySample(rows: AuditRow[], projects: Map<string, Devel
     const area = zip ? zips.get(zip) : undefined;
     // The lending permit's own address must be the same site.
     const lent = p.locatedFrom && official ? sameSite({ address: p.address, place: p.place, names: [p.name] }, { address: official.matched ?? null, place: (PERMIT_TOWNS[p.city] ?? [])[0] ?? null }) : null;
-    if (row.at && lent && !lent.same) {
-      verdict = 'confirmed error';
-      why = `the city's record puts permit ${permit} at "${official!.matched}", not this project's address (${lent.reason})`;
+    if (row.at && lent && !lent.same && official?.at && km(row.at, official.at) <= 0.5) {
+      // The point is the permit's own, but the records don't prove one site: a rule refusal, not a proven wrong pin.
+      verdict = 'suspected error';
+      why = `the point is permit ${permit}'s own ("${official!.matched}"), but the records are not proven the same site (${lent.reason})`;
     } else if (row.at && ref?.at) {
       const d = km(row.at, ref.at);
       const outOfZip = area ? km(row.at, area.at) > zipSlackKm(area) : false;

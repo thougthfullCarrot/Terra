@@ -266,7 +266,9 @@ export function sameAddress(a: SiteRecord, b: SiteRecord): SameSite {
   } else if (!zipA || !zipB) {
     if (!placeA || !placeB) return { same: false, reason: 'no ZIP or town to compare' };
     if (placeA !== placeB) return { same: false, reason: `different town (${a.place ?? x.place} vs ${b.place ?? y.place})` };
-  } else if (placeA && placeB && placeA !== placeB) return { same: false, reason: `different town (${a.place ?? x.place} vs ${b.place ?? y.place})` };
+  }
+  // Same ZIP with different town names is usual: a mailing town (Crowley,
+  // Haslet) for a site inside Fort Worth's limits, or a county for a town.
   if (x.unit && y.unit && x.unit !== y.unit) return { same: false, reason: `different building or unit (${x.unit} vs ${y.unit})` };
   return { same: true, reason: 'same street address', ...(flag ? { flag } : {}) };
 }

@@ -191,3 +191,10 @@ describe('auditLocations', async () => {
     expect(pickSample(rows, 2, 8).map((r) => r.id)).toEqual(expect.arrayContaining(['borrowed', 'far', 'a', 'b']));
   });
 });
+
+describe('mailing town vs jurisdiction', () => {
+  it('accepts the same ZIP under two town names (Crowley mailing address, Fort Worth permit)', () => {
+    expect(sameSite({ address: '10350 W. Cleburne Rd, Crowley, TX 76036', place: 'Crowley' }, { address: '10350 W CLEBURNE RD, Fort Worth, TX 76036', place: 'Fort Worth' }).same).toBe(true);
+    expect(sameSite({ address: '10350 W. Cleburne Rd, Crowley, TX', place: 'Crowley' }, { address: '10350 W CLEBURNE RD, Fort Worth, TX', place: 'Fort Worth' }).same).toBe(false);
+  });
+});
