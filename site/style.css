@@ -4881,11 +4881,10 @@ svg.bars text {
 
 .tick small {
   display: block;
-  overflow: hidden;
   font-size: 12px;
+  line-height: 1.3;
   color: var(--muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .tick b {
@@ -11575,4 +11574,260 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
   stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* City data page: header, headline figures, topic tabs and one detail table (markets-view.js cityView). */
+.city-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 6px;
+}
+.city-head-name {
+  min-width: 0;
+}
+.city-head-name .firm {
+  margin: 2px 0 0;
+}
+.city-picker {
+  display: grid;
+  gap: 4px;
+  min-width: 200px;
+}
+.city-coverage {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  max-width: 70ch;
+}
+.city-kpis .kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.city-kpis .figure-source {
+  margin-top: auto;
+  padding-top: 6px;
+}
+.city-topics {
+  padding: 0;
+  overflow: hidden;
+}
+.city-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.city-tab {
+  font: 500 14px var(--ui);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  min-height: 36px;
+}
+.city-tab:hover {
+  color: var(--ink);
+  background: var(--chip-hover);
+}
+.city-tab[aria-selected='true'] {
+  color: var(--on-tint);
+  background: var(--tint);
+}
+.city-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.city-panel {
+  padding: 20px 24px 24px;
+}
+.city-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 15px;
+}
+.city-table thead th {
+  font: 500 12.5px var(--ui);
+  color: var(--muted);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.city-table thead th.num {
+  text-align: right;
+}
+.city-table tbody th,
+.city-table tbody td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  text-align: left;
+}
+.city-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.city-table tbody th {
+  font-weight: 500;
+}
+.city-table td.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 16px;
+}
+.city-table .city-period {
+  color: var(--muted);
+  white-space: nowrap;
+  width: 1%;
+}
+.city-metric-name {
+  display: block;
+}
+.city-fold summary {
+  cursor: pointer;
+  font: 500 13px var(--ui);
+  color: var(--muted);
+  width: fit-content;
+  padding: 4px 0;
+}
+.city-fold summary:hover {
+  color: var(--ink);
+}
+.city-fold summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.city-fold p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.city-fold-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 6px 0 2px;
+  font: 400 13px var(--ui);
+  color: var(--muted);
+  max-width: 62ch;
+}
+.city-fold-list dt {
+  font-weight: 600;
+  color: var(--ink);
+}
+.city-fold-list dd {
+  margin: 0;
+}
+.city-fold-list a {
+  color: var(--accent);
+}
+.city-note,
+.city-empty {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.city-missing {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--sunk);
+}
+.city-missing-list {
+  margin: 8px 0 2px;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .city-picker {
+    width: 100%;
+  }
+  .city-panel {
+    padding: 16px;
+  }
+  .city-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .city-table,
+  .city-table tbody,
+  .city-table tr {
+    display: block;
+  }
+  .city-table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'name value' 'fold period';
+    gap: 2px 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .city-table tbody th,
+  .city-table tbody td {
+    padding: 0;
+    border: 0;
+  }
+  .city-table tbody th {
+    display: contents;
+  }
+  .city-table .city-metric-name {
+    grid-area: name;
+  }
+  .city-table tbody th .city-fold {
+    grid-area: fold;
+  }
+  .city-table td.num {
+    grid-area: value;
+  }
+  .city-table .city-period {
+    grid-area: period;
+    width: auto;
+    text-align: right;
+    font-size: 13px;
+  }
+}
+.city-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1000px) {
+  .city-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Rates strip: even rows at every width; the last tile closes its row (markets-view.js rates()). */
+.ticker {
+  grid-template-columns: repeat(var(--cols-wide, 5), minmax(0, 1fr));
+}
+.ticker .tick:last-child {
+  grid-column: span var(--span-wide, 1);
+}
+@media (max-width: 1000px) {
+  .ticker {
+    grid-template-columns: repeat(var(--cols-mid, 3), minmax(0, 1fr));
+  }
+  .ticker .tick:last-child {
+    grid-column: span var(--span-mid, 1);
+  }
+}
+@media (max-width: 640px) {
+  .ticker {
+    grid-template-columns: repeat(var(--cols-narrow, 2), minmax(0, 1fr));
+  }
+  .ticker .tick:last-child {
+    grid-column: span var(--span-narrow, 1);
+  }
 }

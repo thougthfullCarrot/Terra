@@ -6,14 +6,19 @@
 // or the members-only Supabase row when accounts are on.
 import { homeOpen } from './home-view.js';
 import {
-  barPercent,
   figureSource,
   CATEGORY_LABELS,
   defaultOrder,
   formatDate,
   formatPoints,
+  pointsText,
+  stripLayout,
   formatValue,
   GEOGRAPHY_LABELS,
+  HEADLINE_METRICS,
+  cityRows,
+  coverage,
+  metricSource,
   ordinal,
   pruneSnapshot,
   rankedCount,
@@ -220,6 +225,7 @@ function render() {
     else link.removeAttribute('aria-current');
   }
 
+  $('m-filters').hidden = false;
   disposeMap();
   if (tool === 'map') {
     $('m-blurb').textContent = '';
@@ -239,7 +245,9 @@ function render() {
     return;
   }
 
-  $('m-blurb').textContent = group.blurb ?? '';
+  // A city's page has its own picker and topic tabs.
+  $('m-filters').hidden = Boolean(state.city);
+  $('m-blurb').textContent = state.city ? '' : (group.blurb ?? '');
   $('m-rates').replaceChildren(rates());
   // All markets: the comparison table beside the picked city's panel, the map's entry and the chart under it.
   $('m-chart').replaceChildren();
@@ -409,13 +417,6 @@ function table(group, me = '', onPick = null) {
       if (notes.length) text.title = notes.join('\n');
       cell.append(text);
       if (valueStatus(market, metric.key) === 'retained') cell.append(staleMark());
-      if (metric.key === state.sort && value != null) {
-        const bar = el('span', 'bar');
-        const fill = el('i');
-        fill.style.width = `${barPercent(value, snapshot.markets.map((m) => m.values[metric.key]), metric.unit)}%`;
-        bar.append(fill);
-        cell.append(bar);
-      }
       row.append(cell);
     }
     body.append(row);
@@ -565,55 +566,215 @@ function columnSource(metric) {
   return [metric.source, seen.length ? mode(seen) : ''].filter(Boolean).join(' · ');
 }
 
+/**
+ * One city's page: a header with the city picker and how much of the data it
+ * has, the four headline figures, then one topic at a time as a plain table
+ * of metric, value and period. Sources, areas and methods fold under each row;
+ * figures with nothing published are summed up in one note instead of rows of dashes.
+ */
 function cityView(city, focus) {
   const market = snapshot.markets.find((m) => m.city === city);
   const frag = document.createDocumentFragment();
+  frag.append(cityHead(market), headline(market));
 
-  const head = el('div', 'card market-head');
-  const back = el('a', 'link', '← All markets');
-  back.href = writeMarketHash({ ...state, city: '' });
-  head.append(back, el('h2', 'role', market.city), el('p', 'firm', market.metro ?? ''));
-  const follow = watchControls(market.city);
-  if (follow) head.append(follow);
-  const fresh = freshnessLine();
-  if (fresh) head.append(el('p', 'market-asof', fresh));
-  // Only this city's figures here; the all-markets chart and table live on the All markets page.
-  frag.append(head, kpis(market, focus));
+  const box = el('section', 'card city-topics');
+  box.setAttribute('aria-label', `${market.city} figures by topic`);
+  const tabs = el('div', 'city-tabs');
+  tabs.setAttribute('role', 'tablist');
+  tabs.setAttribute('aria-label', 'Topic');
+  const buttons = snapshot.groups.map((group) => {
+    const tab = el('button', 'city-tab', group.label);
+    tab.type = 'button';
+    tab.id = `city-tab-${group.key}`;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-controls', 'city-panel');
+    const on = group.key === focus.key;
+    tab.setAttribute('aria-selected', String(on));
+    tab.tabIndex = on ? 0 : -1;
+    tab.addEventListener('click', () => pickTopic(group.key));
+    return tab;
+  });
+  // Arrow keys move between topics, as in any tab list; Home and End jump to the ends.
+  tabs.addEventListener('keydown', (event) => {
+    const at = buttons.indexOf(document.activeElement);
+    if (at < 0) return;
+    const next = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: buttons.length - 1 }[event.key];
+    if (next == null) return;
+    event.preventDefault();
+    pickTopic(snapshot.groups[(next + buttons.length) % buttons.length].key);
+  });
+  tabs.append(...buttons);
+
+  const panel = el('div', 'city-panel');
+  panel.id = 'city-panel';
+  panel.setAttribute('role', 'tabpanel');
+  panel.setAttribute('aria-labelledby', `city-tab-${focus.key}`);
+  panel.append(el('h3', 'group-title', focus.label));
+  if (focus.blurb) panel.append(el('p', 'group-blurb', focus.blurb));
+  const { rows, missing } = cityRows(snapshot, market, focus);
+  const shown = focus.metrics.filter((key) => HEADLINE_METRICS.includes(key)).length;
+  if (rows.length) panel.append(detailTable(market, focus, rows));
+  else panel.append(el('p', 'city-empty', shown ? 'This topic\'s figures are the headline figures above.' : `No figures in this topic have been published for ${market.city} yet.`));
+  if (rows.length && shown) panel.append(el('p', 'city-note', `${shown === 1 ? 'One figure' : `${shown} figures`} in this topic ${shown === 1 ? 'is' : 'are'} shown in the headline figures above.`));
+  if (missing.length) panel.append(missingNote(market, missing));
+  box.append(tabs, panel);
+  frag.append(box);
+
   const points = talkingPoints(market, focus);
   if (points) frag.append(points);
   frag.append(devTeaser(city));
-
-  // The chosen property type first, then the rest.
-  const groups = [focus, ...snapshot.groups.filter((g) => g.key !== focus.key)];
-  const grid = el('div', 'market-groups');
-  for (const group of groups) {
-    const card = el('section', `card market-group${group.key === focus.key ? ' focus' : ''}`);
-    card.append(el('h3', 'group-title', group.label));
-    if (group.blurb) card.append(el('p', 'group-blurb', group.blurb));
-    const list = el('dl', 'metric-list');
-    for (const key of group.metrics) {
-      const metric = metricFor(key);
-      if (!metric) continue;
-      const value = market.values[key];
-      const place = ranks(snapshot.markets, metric).get(city);
-      const term = el('dt', '', metric.label);
-      term.title = metricTitle(metric);
-      if (metric.category && metric.category !== 'economic') term.append(' ', el('span', 'cat-tag', CATEGORY_LABELS[metric.category] ?? ''));
-      const detail = el('dd');
-      detail.append(el('span', `value ${tone(value, metric)}`, formatValue(value, metric.unit)));
-      if (valueStatus(market, key) === 'retained') detail.append(staleMark());
-      if (value != null) detail.append(strip(key, value));
-      const bits = [];
-      if (place) bits.push(`${ordinal(place)} of ${rankedCount(snapshot.markets, key)}`);
-      bits.push(...valueNotes(market, metric));
-      if (bits.length) detail.append(el('span', 'metric-meta', bits.join(' · ')));
-      list.append(term, detail);
-    }
-    card.append(list);
-    grid.append(card);
-  }
-  frag.append(grid);
   return frag;
+}
+
+/** Open another topic and keep focus on its tab, so arrow keys keep working after the redraw. */
+function pickTopic(key) {
+  const group = snapshot.groups.find((g) => g.key === key);
+  update({ focus: key, sort: group?.metrics[0] ?? 'city', order: defaultOrder(metricFor(group?.metrics[0])) });
+  document.getElementById(`city-tab-${key}`)?.focus();
+}
+
+/** The city's name, a picker for another city, its metro, and how much of the data it has. */
+function cityHead(market) {
+  const head = el('div', 'card market-head city-head');
+  const back = el('a', 'link', '← All markets');
+  back.href = writeMarketHash({ ...state, city: '' });
+  const top = el('div', 'city-head-top');
+  const name = el('div', 'city-head-name');
+  name.append(el('h2', 'role', market.city), el('p', 'firm', market.metro ? `Metro: ${market.metro}` : ''));
+  const picker = el('label', 'city-picker');
+  const select = el('select');
+  select.append(...snapshot.markets.map((m) => new Option(m.city, m.city)));
+  select.value = market.city;
+  select.addEventListener('change', () => update({ city: select.value }));
+  picker.append(el('span', 'eyebrow', 'City'), select);
+  top.append(name, picker);
+  head.append(back, top);
+  const { have, total } = coverage(snapshot, market);
+  const line = [`${have} of ${total} figures published for ${market.city}`];
+  const built = formatDate(snapshot.generatedAt);
+  if (built) line.push(`updated ${built}`);
+  head.append(el('p', 'city-coverage', `${line.join(' · ')}. Figures cover different areas (city limits, county or metro) and periods; each row says which.`));
+  const fresh = freshnessLine();
+  if (fresh && fresh !== `Updated ${built}`) {
+    const more = el('details', 'city-fold');
+    more.append(el('summary', '', 'Data freshness'), el('p', '', fresh));
+    head.append(more);
+  }
+  const follow = watchControls(market.city);
+  if (follow) head.append(follow);
+  return head;
+}
+
+/** Job growth, unemployment, population growth and net migration, each with its own period and area. */
+function headline(market) {
+  const box = el('section', 'kpis city-kpis');
+  box.setAttribute('aria-label', `${market.city} headline figures`);
+  for (const key of HEADLINE_METRICS) {
+    const metric = metricFor(key);
+    if (!metric) continue;
+    const value = market.values[key];
+    const tile = el('div', 'card kpi');
+    tile.append(el('small', '', metric.label), el('b', `num value ${tone(value, metric)}`, formatValue(value, metric.unit)));
+    if (value != null) {
+      // Real periods often name their area already ("Sep 2026, San Antonio metro"); don't say it twice.
+      const period = market.periods?.[key];
+      const bits = [period, period?.includes(',') ? '' : areaText(market, metric)].filter(Boolean);
+      tile.append(el('span', 'kpi-rank', bits.join(' · ')));
+      if (valueStatus(market, key) === 'retained') tile.append(el('span', 'kpi-rank', 'Not refreshed on the latest update'));
+    } else tile.append(el('span', 'kpi-rank', 'Not published yet'));
+    tile.append(el('span', 'figure-source', key === 'pepGrowth' ? 'Census population estimates' : metric.source));
+    box.append(tile);
+  }
+  return box;
+}
+
+/**
+ * A metric's name in the detail table. The survey's population figures carry
+ * "(ACS)" so they never read as the same measure as the Census estimates.
+ */
+function cityLabel(metric) {
+  if (metric.key === 'taxRateChange') return 'Tax rate change (percent change in the rate, not points)';
+  return metric.source === 'Census ACS' && /^Population/.test(metric.label) ? `${metric.label} (ACS)` : metric.label;
+}
+
+/** The area a figure covers, naming the city it repeats when it is another city's metro figure. */
+function areaText(market, metric) {
+  const where = GEOGRAPHY_LABELS[metric.geography] ?? '';
+  const same = sharedWith(market, metric.key);
+  return same ? `${same}'s ${where || 'area'}` : where;
+}
+
+/** The topic's figures: metric, value and period, with source, area and method folded under each name. */
+function detailTable(market, group, rows) {
+  const tableNode = el('table', 'city-table');
+  tableNode.append(el('caption', 'visually-hidden', `${market.city}: ${group.label}`));
+  const head = el('tr');
+  for (const [label, cls] of [['Metric', 'city-metric'], ['Value', 'num'], ['Period', 'city-period']]) {
+    const th = el('th', cls, label);
+    th.scope = 'col';
+    head.append(th);
+  }
+  const thead = el('thead');
+  thead.append(head);
+  const body = el('tbody');
+  for (const { metric, value, period, status } of rows) {
+    const tr = el('tr');
+    const name = el('th', 'city-metric');
+    name.scope = 'row';
+    name.append(el('span', 'city-metric-name', cityLabel(metric)), sourceFold(market, metric));
+    const cell = el('td', 'num', '');
+    cell.dataset.label = 'Value';
+    cell.append(el('span', `value ${tone(value, metric)}`, formatValue(value, metric.unit)));
+    if (status === 'retained') cell.append(staleMark());
+    const when = el('td', 'city-period', period ?? 'Not stated');
+    when.dataset.label = 'Period';
+    tr.append(name, cell, when);
+    body.append(tr);
+  }
+  tableNode.append(thead, body);
+  return tableNode;
+}
+
+/** A row's "Source and method" fold: what the figure is, the area it covers, and a link to its publisher. */
+function sourceFold(market, metric) {
+  const fold = el('details', 'city-fold');
+  const summary = el('summary', '', 'Source and method');
+  summary.setAttribute('aria-label', `Source and method for ${metric.label}`);
+  fold.append(summary);
+  const list = el('dl', 'city-fold-list');
+  const add = (term, node) => {
+    const dd = el('dd');
+    dd.append(node);
+    list.append(el('dt', '', term), dd);
+  };
+  const source = metricSource(snapshot, metric);
+  if (source) {
+    const a = el('a', '', source.name);
+    a.href = source.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    add('Source', a);
+  } else add('Source', document.createTextNode(metric.source));
+  add('Area', document.createTextNode(areaText(market, metric) || 'Not stated'));
+  if (metric.note) add('Method', document.createTextNode(metric.note));
+  const extra = valueNotes(market, metric).filter((line) => /^(Not refreshed|Same figure)/.test(line));
+  if (extra.length) add('Note', document.createTextNode(extra.join(' ')));
+  fold.append(list);
+  return fold;
+}
+
+/** One line for the figures a topic has nothing published for, with the list folded under it. */
+function missingNote(market, missing) {
+  const fold = el('details', 'city-fold city-missing');
+  const n = missing.length;
+  fold.append(el('summary', '', `${n === 1 ? 'One figure is' : `${n} figures are`} not available for ${market.city}`));
+  const list = el('ul', 'city-missing-list');
+  for (const { metric, status } of missing) {
+    const why = status === 'expired' ? 'removed: the source stopped answering' : 'not published for this area';
+    list.append(el('li', '', `${metric.label} (${metric.source}): ${why}`));
+  }
+  fold.append(list);
+  return fold;
 }
 
 /**
@@ -728,7 +889,7 @@ function talkingPoints(market, group) {
   const treasury = (snapshot.rates ?? []).find((r) => /10-year treasury/i.test(r.label));
   if (treasury && treasury.change != null && Math.abs(treasury.change) >= 0.05) {
     lines.push(
-      `The 10-year Treasury is ${formatValue(treasury.value, 'taxRate')}, ${treasury.change > 0 ? 'up' : 'down'} ${formatPoints(Math.abs(treasury.change)).replace(/^\+/, '')} from a year ago (${treasury.period}), which moves what buyers can pay.`
+      `The 10-year Treasury is ${formatValue(treasury.value, 'taxRate')}, ${treasury.change > 0 ? 'up' : 'down'} ${pointsText(treasury.change)} from a year ago (${treasury.period}), which moves what buyers can pay.`
     );
   }
   if (lines.length < 2) return null;
@@ -742,24 +903,6 @@ function talkingPoints(market, group) {
   });
   box.append(list, el('p', 'talk-note', 'Written from the numbers on this page. Check them before you quote them.'));
   return box;
-}
-
-/** Every market as a tick on one line, this one as a dot: where it sits at a glance. */
-function strip(key, value) {
-  const all = snapshot.markets.map((m) => m.values[key]).filter((v) => v != null && Number.isFinite(v));
-  const min = Math.min(...all);
-  const span = Math.max(...all) - min || 1;
-  const line = el('span', 'strip');
-  line.setAttribute('aria-hidden', 'true');
-  for (const v of all) {
-    const tick = el('i');
-    tick.style.left = `${((v - min) / span) * 100}%`;
-    line.append(tick);
-  }
-  const dot = el('b');
-  dot.style.left = `${((value - min) / span) * 100}%`;
-  line.append(dot);
-  return line;
 }
 
 /** Green for a change for the better, red for the worse, on growth figures only. A rise is worse where lower is better (tax rates). */
@@ -780,6 +923,12 @@ function rates() {
   if (!list.length) return '';
   const box = el('section', 'card ticker');
   box.setAttribute('aria-label', 'Interest rates and lending, change from a year earlier');
+  // Even rows: the last tile stretches to close its row at each width (style.css).
+  for (const [name, max] of [['wide', 5], ['mid', 3], ['narrow', 2]]) {
+    const { cols, span } = stripLayout(list.length, max);
+    box.style.setProperty(`--cols-${name}`, String(cols));
+    box.style.setProperty(`--span-${name}`, String(span));
+  }
   for (const rate of list) {
     const tile = el('a', 'tick');
     tile.href = rate.url;
@@ -795,7 +944,7 @@ function rates() {
         '',
         rate.format === 'index' ? (Math.round(rate.value * 10) / 10).toFixed(1) : survey ? formatValue(rate.value, 'rate') : formatValue(rate.value, 'taxRate')
       ),
-      el('span', `tick-change${dir}`, rate.change == null ? rate.period : `${formatPoints(rate.change)} yoy`)
+      el('span', `tick-change${dir}`, rate.change == null ? rate.period : rate.format === 'index' ? `${formatPoints(rate.change).replace(' pts', ' index pts')} yoy` : `${formatPoints(rate.change)} yoy`)
     );
     box.append(tile);
   }
