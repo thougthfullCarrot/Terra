@@ -11576,3 +11576,8 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* Location not verified: only the ZIP code area is known. */
+.devx-tag.dev-unverified {
+  border-style: dashed;
+}

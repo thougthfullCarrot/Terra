@@ -1096,11 +1096,13 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       nextSpecks.push({ p, color: catOf.get(projectCategory(p))?.color ?? '#9b958d' });
     }
     const sited = shown.filter((p) => !p.approximate);
+    // Rings count as drawn: the project is on the map, as an area.
+    const rings = shown.length - sited.length;
     for (const p of sited) {
       const k = spotOf.get(p);
       spots.set(k, [...(spots.get(k) ?? []), p]);
     }
-    let count = 0;
+    let count = rings;
     if (zoom >= SPREAD_ZOOM) {
       for (const members of spots.values()) {
         fan(members);
@@ -1296,7 +1298,7 @@ function drawList(projects, catOf, hiringFor, onPick, onHover) {
     if (project.status) tags.append(el('span', 'devx-tag', project.status));
     if (project.awaiting) tags.append(el('span', 'devx-tag dev-off', 'Details pending from the state'));
     else if (project.lat == null || project.lng == null) tags.append(el('span', 'devx-tag dev-off', 'Not on the map'));
-    else if (project.approximate) tags.append(el('span', 'devx-tag dev-off', 'Location not verified'));
+    else if (project.approximate) tags.append(el('span', 'devx-tag dev-unverified', 'Location not verified'));
     else if (project.locatedFrom) tags.append(el('span', 'devx-tag', 'Site point'));
     const hiring = hiringFor(project);
     if (hiring.length) {
