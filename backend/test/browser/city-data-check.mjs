@@ -130,6 +130,34 @@ if (zeroCase) {
 log('no page errors (desktop)', page.errors.length === 0, page.errors.join('; '));
 await page.context().close();
 
+// Every city and topic on a phone: no sideways scroll, no clipped label, every row with a period, no dash rows.
+{
+  const phone = await open({ width: 390, height: 844 }, `#markets&city=${encodeURIComponent(first)}`, { phone: true });
+  const problems = [];
+  let views = 0;
+  for (const city of cities)
+    for (const g of market.groups) {
+      await phone.evaluate((h) => (location.hash = h), `#markets&city=${encodeURIComponent(city)}&focus=${g.key}`);
+      await phone.waitForFunction((c) => document.querySelector('.city-head h2')?.textContent === c, city);
+      const bad = await phone.evaluate(() => {
+        const out = [];
+        if (document.documentElement.scrollWidth > document.documentElement.clientWidth) out.push('sideways scroll');
+        for (const n of document.querySelectorAll('.city-metric-name, .city-kpis small, .city-tab'))
+          if (n.scrollWidth > n.clientWidth + 1) out.push(`clipped: ${n.textContent}`);
+        for (const tr of document.querySelectorAll('.city-table tbody tr')) {
+          if (tr.querySelector('td.num')?.textContent.trim() === '—') out.push(`dash row: ${tr.querySelector('.city-metric-name').textContent}`);
+          if (!tr.querySelector('.city-period')?.textContent.trim()) out.push('row without period');
+        }
+        return out;
+      });
+      views++;
+      for (const b of bad) problems.push(`${city}/${g.key}: ${b}`);
+    }
+  log('every city and topic reads cleanly on a phone', problems.length === 0, problems.length ? problems.slice(0, 8).join('; ') : `${views} views`);
+  log('no page errors (all views)', phone.errors.length === 0, phone.errors.join('; '));
+  await phone.context().close();
+}
+
 // Phone, and 200% zoom (a 720px-wide window at twice the scale), in both themes.
 for (const theme of ['light', 'dark']) {
   const phone = await open({ width: 390, height: 844 }, `#markets&city=${encodeURIComponent(first)}`, { phone: true, theme });
