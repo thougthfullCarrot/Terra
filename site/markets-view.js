@@ -674,7 +674,9 @@ function headline(market) {
     const tile = el('div', 'card kpi');
     tile.append(el('small', '', metric.label), el('b', `num value ${tone(value, metric)}`, formatValue(value, metric.unit)));
     if (value != null) {
-      const bits = [market.periods?.[key], areaText(market, metric)].filter(Boolean);
+      // Real periods often name their area already ("Sep 2026, San Antonio metro"); don't say it twice.
+      const period = market.periods?.[key];
+      const bits = [period, period?.includes(',') ? '' : areaText(market, metric)].filter(Boolean);
       tile.append(el('span', 'kpi-rank', bits.join(' · ')));
       if (valueStatus(market, key) === 'retained') tile.append(el('span', 'kpi-rank', 'Not refreshed on the latest update'));
     } else tile.append(el('span', 'kpi-rank', 'Not published yet'));
