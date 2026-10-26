@@ -43,6 +43,7 @@
     <link rel="stylesheet" href="style.css" />
     <script type="module" src="app.js"></script>
     <script type="module" src="terrain.js"></script>
+    <script type="module" src="contour.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -91,7 +92,7 @@
         <div class="hero-copy">
           <!-- Live counts from stats.json (live.js startLanding); stays hidden until they arrive. -->
           <p class="live-pill" id="live-pill" hidden><span class="pulse" aria-hidden="true"></span><span><b id="live-roles">0</b> open roles at <b id="live-firms">0</b> firms<span id="live-updated"></span></span></p>
-          <h1 id="gate-title">Explore Texas real estate.</h1>
+          <h1 id="gate-title">Explore Texas <em>real estate.</em></h1>
           <p class="lede">Find jobs, see what’s being built, follow industry news and discover local events—all in one place.</p>
           <!-- Create free account and Sign in share one email-code form; the mode only changes the wording and whether a new account may be made (account.js). -->
           <div class="auth-modes" role="group" aria-label="Create an account or sign in">
@@ -135,7 +136,7 @@
       <div id="welcome" class="welcome" hidden>
         <section class="welcome-block" aria-labelledby="how-title">
           <p class="eyebrow">How it works</p>
-          <h2 id="how-title">Three steps to get started.</h2>
+          <h2 id="how-title">Three moves. No password.</h2>
           <ol class="steps">
             <li>
               <span class="step-num" aria-hidden="true">1</span>
@@ -185,7 +186,7 @@
         <div class="welcome-pair">
         <section class="welcome-block" aria-labelledby="free-title">
           <p class="eyebrow">Free access</p>
-          <h2 id="free-title">Free for everyone. No credit card required.</h2>
+          <h2 id="free-title">$0. For anyone.</h2>
           <div class="free-card">
             <p>
               Create an account with any email address. Every feature is included: jobs, the Development map, news and

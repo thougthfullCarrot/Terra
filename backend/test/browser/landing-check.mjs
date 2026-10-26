@@ -239,7 +239,7 @@ if (!before) {
     log('hero lede', (await page.locator('#gate .lede').innerText()).includes('Find jobs, see what’s being built, follow industry news and discover local events—all in one place.'));
     log('hero note', (await page.locator('#gate-lede').innerText()) === 'Free to use. Create an account to get started.');
     log('main actions are Create free account and Sign in', (await page.locator('#mode-create').innerText()) === 'Create free account' && (await page.locator('#mode-signin').innerText()) === 'Sign in');
-    log('free-access section', (await page.locator('#free-title').innerText()) === 'Free for everyone. No credit card required.');
+    log('free-access section', (await page.locator('#free-title').innerText()) === '$0. For anyone.');
     const nav = await page.locator('nav.landing-nav a').allInnerTexts();
     log('no Pricing in the landing nav', !nav.some((t) => /pric/i.test(t)), JSON.stringify(nav));
     for (const href of await page.locator('nav.landing-nav a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) {
