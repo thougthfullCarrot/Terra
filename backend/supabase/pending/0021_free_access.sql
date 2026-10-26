@@ -9,6 +9,10 @@
 --   * access_level() returns 'member' for any confirmed address. 'college' and
 --     'subscriber' still come back first for those accounts, so nothing that
 --     reads the label breaks, and subscriptions are left exactly as they are.
+--     An unconfirmed address gets 'none' whatever its subscription (before,
+--     an active subscription opened an unconfirmed account).
+--   * free_access_version() exists so site.yml can check, before deploying,
+--     that this migration ran (the free-access gate). It reveals nothing.
 --   * The policies that checked ('college', 'subscriber') also accept 'member'.
 --   * Alert and watch-digest recipients drop the college/subscriber test; they
 --     still need a confirmed address and the member's own opt-in.
@@ -21,15 +25,16 @@ language sql stable security definer
 set search_path = public, auth
 as $$
   select case
-    when u.email_confirmed_at is not null and public.is_college_email(u.email) then 'college'
+    -- No confirmed address, no access: not even an active or trialing subscription opens it.
+    when u.email_confirmed_at is null then 'none'
+    when public.is_college_email(u.email) then 'college'
     when exists (
       select 1 from public.subscriptions s
       where s.user_id = u.id
         and s.status in ('active', 'trialing')
         and (s.current_period_end is null or s.current_period_end > now())
     ) then 'subscriber'
-    when u.email_confirmed_at is not null then 'member'
-    else 'none'
+    else 'member'
   end
   from auth.users u
   where u.id = auth.uid()
@@ -117,3 +122,9 @@ $$;
 
 revoke execute on function public.watch_recipients() from public, anon, authenticated;
 grant execute on function public.watch_recipients() to service_role;
+
+-- The deploy gate's marker (site.yml "Free-access gate"): the site's free-access
+-- pages publish only once this answers 21.
+create or replace function public.free_access_version() returns int
+language sql immutable as $$ select 21 $$;
+grant execute on function public.free_access_version() to anon, authenticated;

@@ -11,7 +11,7 @@
 # Accounts (docs/accounts-setup.md): once the repository has the variables
 # SUPABASE_URL and SUPABASE_ANON_KEY and the secret SUPABASE_SERVICE_ROLE_KEY,
 # the site asks visitors to sign in. The snapshot then goes to Supabase, where
-# only college emails and subscribers can read it, and postings.json is left
+# only signed-in accounts with a confirmed email can read it, and postings.json is left
 # out of the published site. Without them the site stays open, as before.
 #
 # Market data (site/market.json, from BLS, the Census, Zillow, Apartment List,
@@ -611,6 +611,20 @@ jobs:
             echo 'GitHub Pages is off. Turn it on once under **Settings > Pages >'
             echo 'Build and deployment > Source: GitHub Actions**; the next run publishes.'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The site promises free access for every confirmed email; it must not go
+      # live before the database does that (docs/free-access.md). A failed,
+      # skipped or not-yet-approved migration fails this step, and nothing
+      # publishes.
+      - name: Free-access gate
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Check the database grants free access
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: .github/scripts/free-access-gate.sh
 
       - name: Deploy
         id: deployment

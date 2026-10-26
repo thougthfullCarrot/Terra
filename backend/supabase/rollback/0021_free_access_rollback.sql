@@ -1,6 +1,10 @@
 -- Undo pending/0021_free_access.sql: access goes back to a confirmed college
 -- email or an active subscription. Copies the definitions from 0005, 0007,
 -- 0008 and 0017 unchanged. Run by hand in the Supabase SQL editor.
+-- Dropping the marker makes site.yml's free-access gate block deploys again,
+-- so revert the free-access site too (see docs/free-access.md).
+
+drop function if exists public.free_access_version();
 
 create or replace function public.access_level() returns text
 language sql stable security definer

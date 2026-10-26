@@ -31,7 +31,8 @@ const ids = {
   subscriber: '00000000-0000-4000-8000-000000000102',
   none: '00000000-0000-4000-8000-000000000103',
   lapsed: '00000000-0000-4000-8000-000000000104',
-  unconfirmed: '00000000-0000-4000-8000-000000000105'
+  unconfirmed: '00000000-0000-4000-8000-000000000105',
+  unconfirmedPaid: '00000000-0000-4000-8000-000000000106'
 };
 const ROWS = ['market', 'developments/houston.json', 'developments/san-antonio.json'];
 const visible = (run: (q: string) => string) => run(`select string_agg(id, ',' order by id) from site_snapshots where id = any(array['${ROWS.join("','")}'])`);
@@ -45,11 +46,13 @@ describe.skipIf(!conn)('members-only snapshot rows on a real database', () => {
         ('${ids.subscriber}', 'pat@gmail.com', now(), '{}'),
         ('${ids.none}', 'lee@gmail.com', now(), '{}'),
         ('${ids.lapsed}', 'kim@gmail.com', now(), '{}'),
-        ('${ids.unconfirmed}', 'ana@tamu.edu', null, '{}');
+        ('${ids.unconfirmed}', 'ana@tamu.edu', null, '{}'),
+        ('${ids.unconfirmedPaid}', 'rio@gmail.com', null, '{}');
       insert into profiles (id) select id from auth.users on conflict do nothing;
       insert into subscriptions (user_id, stripe_customer_id, stripe_subscription_id, status, current_period_end) values
         ('${ids.subscriber}', 'cus_s1', 'sub_s1', 'active', now() + interval '20 days'),
-        ('${ids.lapsed}', 'cus_s2', 'sub_s2', 'canceled', now() - interval '2 days');
+        ('${ids.lapsed}', 'cus_s2', 'sub_s2', 'canceled', now() - interval '2 days'),
+        ('${ids.unconfirmedPaid}', 'cus_s3', 'sub_s3', 'active', now() + interval '20 days');
       insert into site_snapshots (id, data) values
         ${ROWS.map((id) => `('${id}', '{"projects": []}')`).join(',\n        ')}
       on conflict (id) do update set data = excluded.data;
@@ -81,7 +84,21 @@ describe.skipIf(!conn)('members-only snapshot rows on a real database', () => {
     expect(as(ids.none)(`select public.access_level()`)).toBe('member');
     expect(as(ids.lapsed)(`select public.access_level()`)).toBe('member');
     expect(as(ids.unconfirmed)(`select public.access_level()`)).toBe('none');
-    expect(sql({ role: 'service_role' }, `select string_agg(status, ',' order by status) from subscriptions`)).toBe('active,canceled');
+    expect(sql({ role: 'service_role' }, `select string_agg(status, ',' order by status) from subscriptions`)).toBe('active,active,canceled');
+  });
+
+  it('gives an unconfirmed account nothing, even with an active subscription', () => {
+    const paid = as(ids.unconfirmedPaid);
+    expect(paid(`select public.access_level()`)).toBe('none');
+    expect(visible(paid)).toBe('');
+    expect(() => paid(`insert into tracked_jobs (user_id, job_id) values ('${ids.unconfirmedPaid}', 'x')`)).toThrow();
+    execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-c', `update profiles set email_alerts = true where id in ('${ids.unconfirmedPaid}', '${ids.none}')`]);
+    const recipients = sql({ role: 'service_role' }, `select string_agg(email, ',' order by email) from alert_recipients()`);
+    expect(recipients).toBe('lee@gmail.com');
+  });
+
+  it('answers the deploy gate marker for anyone, and only with the version', () => {
+    expect(anon(`select public.free_access_version()`)).toBe('21');
   });
 
   it('lets a free member add to their own tracker but never to someone else\'s', () => {
@@ -108,8 +125,11 @@ describe.skipIf(!conn)('members-only snapshot rows on a real database', () => {
     execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', file('rollback/0021_free_access_rollback.sql')], { stdio: ['ignore', 'pipe', 'pipe'] });
     expect(as(ids.none)(`select public.access_level()`)).toBe('none');
     expect(visible(as(ids.none))).toBe('');
+    expect(() => anon(`select public.free_access_version()`)).toThrow(/does not exist/);
     expect(visible(as(ids.student))).toBe(ROWS.slice().sort().join(','));
     execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', file('pending/0021_free_access.sql')], { stdio: ['ignore', 'pipe', 'pipe'] });
     expect(as(ids.none)(`select public.access_level()`)).toBe('member');
+    expect(as(ids.unconfirmedPaid)(`select public.access_level()`)).toBe('none');
+    expect(anon(`select public.free_access_version()`)).toBe('21');
   });
 });
