@@ -397,8 +397,9 @@ jobs:
 
       # Pull requests only: the Profile page layout (completion card heading, bar and one step per row without
       # overlap, two-column About you on desktop and one on phones, aligned sections, saving, keyboard, 200% zoom).
+      # always(): an earlier real-data check failing must not skip this one.
       - name: Check the Profile page layout
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request' && hashFiles('site/vendor/supabase.js') != ''
         run: |
           npx playwright-core install --with-deps chromium > /dev/null
           set -o pipefail
