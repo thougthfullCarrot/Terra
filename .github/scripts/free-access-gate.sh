@@ -7,10 +7,11 @@
 #
 #   SUPABASE_URL=... SUPABASE_ANON_KEY=... .github/scripts/free-access-gate.sh
 set -euo pipefail
+# Fails closed: production must never publish without sign-in, so missing
+# account settings stop the deploy too (TERRA never falls back to an open site).
 if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
-  # No accounts: the open site has no sign-in to gate.
-  echo "::notice::Accounts are not configured; the free-access gate does not apply."
-  exit 0
+  echo "::error::Free-access gate: SUPABASE_URL or SUPABASE_ANON_KEY is not set. Production requires sign-in; not publishing."
+  exit 1
 fi
 answer="$(curl -sS -m 20 -X POST "${SUPABASE_URL%/}/rest/v1/rpc/free_access_version" \
   -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \

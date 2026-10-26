@@ -27,8 +27,21 @@ enforced, not assumed:
 - So merging PR #98 before the migration is safe but stops every deploy,
   including the two-hourly job refresh, until the migration lands. The live site
   keeps its last published version until then.
-- With no `SUPABASE_URL`/`SUPABASE_ANON_KEY` (the open site, no sign-in) the gate
-  doesn't apply.
+- Missing or incomplete account settings fail closed. TERRA never falls back
+  to an open, no-sign-in site in production:
+  - site.yml's "Write account settings" step fails a non-pull-request build
+    when `SUPABASE_URL`, `SUPABASE_ANON_KEY` or `SUPABASE_SERVICE_ROLE_KEY` is
+    missing.
+  - `.github/scripts/production-site-check.sh` runs on the built folder before
+    packaging. It fails unless `config.js` names a Supabase project and anon
+    key, and no members-only file (`postings.json`, `market.json`,
+    `developments/`) is in it.
+  - The free-access gate fails when either setting is missing.
+- Pull-request builds and local or fixture previews (`npm run build:site`, the
+  browser checks) don't run these production checks and are never deployed.
+- `backend/test/deployGates.test.ts` covers every case: missing, partial or
+  empty settings, migration not applied, database unreachable, open-site
+  config, and members-only files present.
 
 ## Exact sequence (each production step waits for Rod's approval)
 

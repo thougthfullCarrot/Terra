@@ -12,7 +12,9 @@
 # SUPABASE_URL and SUPABASE_ANON_KEY and the secret SUPABASE_SERVICE_ROLE_KEY,
 # the site asks visitors to sign in. The snapshot then goes to Supabase, where
 # only signed-in accounts with a confirmed email can read it, and postings.json is left
-# out of the published site. Without them the site stays open, as before.
+# out of the published site. Without them a production build fails: TERRA never
+# falls back to an open site (only pull-request builds, never deployed, may
+# build without accounts).
 #
 # Market data (site/market.json, from BLS, the Census, Zillow, Apartment List,
 # city zoning agendas, the appraisal district summary appraisal.yml caches and
@@ -471,7 +473,13 @@ jobs:
           DEVELOPMENT_REPORTS_ENABLED: ${{ vars.DEVELOPMENT_REPORTS_ENABLED }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
-            echo "Accounts not configured; publishing the open site."
+            # Production never falls back to an open site; only pull-request
+            # builds (never deployed) may build without accounts.
+            if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+              echo "::error::SUPABASE_URL, SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY is not set. TERRA requires sign-in; not building a public site."
+              exit 1
+            fi
+            echo "Accounts not configured; pull-request build only (never deployed)."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -578,6 +586,10 @@ jobs:
       - name: Keep the feed out of the public site
         if: steps.accounts.outputs.enabled == 'true'
         run: rm -rf ../site/postings.json ../site/market.json ../site/developments
+
+      - name: Check the site requires sign-in
+        if: github.event_name != 'pull_request'
+        run: ../.github/scripts/production-site-check.sh ../site
 
       - name: Package the site
         uses: actions/upload-pages-artifact@v3
