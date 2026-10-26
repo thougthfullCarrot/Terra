@@ -40,13 +40,15 @@ export interface LocationInfo {
   rules?: number;
   /** The point this one replaced or removed on revalidation, kept for the record. */
   previous?: [number, number];
+  /** A revalidation that could not finish (timeout, blocked or malformed response): the point is kept and checked again later. */
+  retry?: { attempts: number; last: string; reason: string };
 }
 
 /**
  * The current version of the location checks. A geocoded point checked under
  * an older version (or never) is geocoded again and must pass today's rules.
  */
-export const RULES = 2;
+export const RULES = 3;
 
 export const ACCURACY: Record<LocationMethod, LocationAccuracy> = {
   'permit-point': 'address-or-parcel',

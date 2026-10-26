@@ -559,6 +559,8 @@ export async function geocode(address: string, city: City, options: FetchJsonOpt
 /** geocode, with the matched address or the reason a match was refused (for the audit). */
 export async function geocodeChecked(address: string, city: City, options: FetchJsonOptions = {}): Promise<{ at: [number, number] | null; matched?: string; rejected?: string; flag?: string }> {
   const data = await fetchJson<GeocodeResponse>(geocodeUrl(address), { timeoutMs: 30_000, ...options });
+  // A response without a match list is a broken answer, not "no match": callers keep what they have.
+  if (!Array.isArray(data?.result?.addressMatches)) throw new Error('malformed geocoder response');
   const pick = pickGeocode(address, data.result?.addressMatches);
   if (!pick.at) return pick;
   // A match across the state is a wrong match; a metro spans about 80 km from its center.
@@ -578,65 +580,88 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export const isConflict = (rejected: string | undefined) => !!rejected && rejected !== 'no match';
 
 /** What revalidating one cached point did. */
-export type Revalidation = 'kept' | 'moved' | 'removed: address conflict' | 'removed: no longer matches' | 'skipped: not geocodable' | 'error';
+export type Revalidation = 'kept' | 'moved' | 'restored' | 'removed: address conflict' | 'removed: no longer matches' | 'skipped: not geocodable' | 'error';
 
 /** Geocoded points checked under older rules, revalidated per build (the rest wait for the next build). */
 export const REVALIDATE_PER_BUILD = 150;
 /** Revalidation stops starting new geocodes after this long, so the Website job keeps inside its 30 minutes. */
 export const REVALIDATE_MS = 3 * 60_000;
 
-/** A cached geocoded point that has not passed today's checks. Permit and same-site points are independent evidence and are left alone. */
-export const needsRevalidation = (p: { lat: number | null; lng: number | null; approximate?: boolean; locatedFrom?: string; source?: string; location?: LocationInfo }) =>
-  p.lat != null && p.lng != null && inferMethod(p) === 'geocoded-address' && (p.location?.rules ?? 1) < RULES;
+type Checkable = { lat: number | null; lng: number | null; approximate?: boolean; locatedFrom?: string; source?: string; location?: LocationInfo };
+
+/** A point an earlier revalidation or page read removed for failing the checks of its day. */
+const removedByChecks = (p: Checkable) => p.lat == null && p.location?.method === 'none' && !!p.location.flags?.some((f) => f === 'address conflict' || f === 'no match');
+
+/**
+ * Due for revalidation: a cached geocoded point that has not passed today's
+ * checks, or a point older checks removed (so a rule fix can bring it back).
+ * Permit and same-site points are independent evidence and are left alone.
+ */
+export const needsRevalidation = (p: Checkable) =>
+  (p.location?.rules ?? 1) < RULES && ((p.lat != null && p.lng != null && inferMethod(p) === 'geocoded-address') || removedByChecks(p));
 
 /**
  * Geocode a cached point's filed address again under today's rules. A match
  * within 250 m keeps the point; a validated match elsewhere moves it (the old
  * point is kept in location.previous); a refusal removes it: "location
  * unavailable" for an address conflict (no ZIP area either, since the filed
- * ZIP may be the wrong part), or no longer matched. A failed request changes
- * nothing. Changes the project in place.
+ * ZIP may be the wrong part), or no longer matched. A point removed under
+ * older rules is restored when today's rules accept the match. A timeout,
+ * blocked request or malformed answer changes nothing but a retry note: the
+ * point stays and is checked again after the rest of the queue.
+ * Changes the project in place.
  */
 export async function revalidatePoint(p: Development, now: Date, http: FetchJsonOptions = {}): Promise<Revalidation> {
   const address = geocodable(p.address);
-  const old: [number, number] = [p.lat!, p.lng!];
+  const wasRemoved = p.lat == null;
+  const old: [number, number] | null = !wasRemoved ? [p.lat!, p.lng!] : (p.location?.previous ?? null);
   if (!address) {
     p.lat = p.lng = null;
-    p.location = locationInfo('none', 'cached point removed: the filed address has no street number to check', dayOf(now), { previous: old, rules: RULES });
+    p.location = locationInfo('none', wasRemoved ? (p.location?.source ?? 'Location unavailable') : 'cached point removed: the filed address has no street number to check', dayOf(now), { ...(old ? { previous: old } : {}), rules: RULES, flags: p.location?.flags });
     return 'skipped: not geocodable';
   }
   let got: Awaited<ReturnType<typeof geocodeChecked>>;
   try {
     got = await geocodeChecked(address, p.city, http);
-  } catch {
+  } catch (e) {
+    const before = p.location?.retry;
+    const base = p.location ?? locationInfo(inferMethod(p), CENSUS_SOURCE, 'not recorded', { rules: 1 });
+    p.location = { ...base, retry: { attempts: (before?.attempts ?? 0) + 1, last: dayOf(now), reason: e instanceof Error ? e.message.slice(0, 120) : 'request failed' } };
     return 'error';
   }
   if (got.at) {
-    const d = km(got.at, old);
+    const d = old ? km(got.at, old) : Number.POSITIVE_INFINITY;
     const flags = got.flag ? [got.flag] : [];
     if (d <= 0.25) {
-      p.location = locationInfo('geocoded-address', `${CENSUS_SOURCE} (revalidated)`, dayOf(now), flags.length ? { flags } : {});
-      return 'kept';
+      [p.lat, p.lng] = old!;
+      p.location = locationInfo('geocoded-address', `${CENSUS_SOURCE} (${wasRemoved ? 'restored: today\'s checks accept the match' : 'revalidated'})`, dayOf(now), flags.length ? { flags } : {});
+      return wasRemoved ? 'restored' : 'kept';
     }
     [p.lat, p.lng] = got.at;
-    p.location = locationInfo('geocoded-address', `${CENSUS_SOURCE} (revalidated; moved ${d.toFixed(1)} km from the cached match)`, dayOf(now), { previous: old, flags });
-    return 'moved';
+    p.location = locationInfo('geocoded-address', `${CENSUS_SOURCE} (revalidated; ${old ? `moved ${d.toFixed(1)} km from the cached match` : 'placed: today\'s checks accept the match'}${got.matched ? `; match: ${got.matched}` : ''})`, dayOf(now), { ...(old ? { previous: old } : {}), flags });
+    return wasRemoved ? 'restored' : 'moved';
   }
   p.lat = p.lng = null;
   const conflict = isConflict(got.rejected);
   p.location = locationInfo('none', conflict ? `Location unavailable: ${got.rejected}` : 'Location unavailable: the geocoder no longer matches the filed address', dayOf(now), {
-    previous: old,
+    ...(old ? { previous: old } : {}),
     rules: RULES,
     flags: [conflict ? 'address conflict' : 'no match']
   });
   return conflict ? 'removed: address conflict' : 'removed: no longer matches';
 }
 
-/** Revalidate up to `budget` cached points, biggest projects first; returns the outcome of each. */
+/**
+ * Revalidate up to `budget` due points, biggest projects first; points whose
+ * last try failed wait behind the rest (fewest failed tries first), so one
+ * stuck record never holds up the queue. Each outcome but 'error' stamps the
+ * point with RULES, so the next build moves on to the next batch.
+ */
 export async function revalidatePoints(projects: Development[], now: Date, o: { budget?: number; http?: FetchJsonOptions; pauseMs?: number; log?: (l: string) => void; timeMs?: number; clock?: () => number } = {}): Promise<Map<string, Revalidation>> {
   const { budget = REVALIDATE_PER_BUILD, http = {}, pauseMs = 300, log = () => {}, timeMs = REVALIDATE_MS, clock = Date.now } = o;
   const out = new Map<string, Revalidation>();
-  const due = projects.filter(needsRevalidation).sort((a, b) => b.cost - a.cost);
+  const tries = (p: Development) => p.location?.retry?.attempts ?? 0;
+  const due = projects.filter(needsRevalidation).sort((a, b) => tries(a) - tries(b) || b.cost - a.cost);
   const started = clock();
   for (const p of due.slice(0, budget)) {
     if (clock() - started > timeMs) break;
@@ -645,7 +670,7 @@ export async function revalidatePoints(projects: Development[], now: Date, o: { 
   }
   const tally = new Map<Revalidation, number>();
   for (const v of out.values()) tally.set(v, (tally.get(v) ?? 0) + 1);
-  log(`revalidated ${out.size} of ${due.length} cached geocoded points: ${[...tally].map(([k, n]) => `${n} ${k}`).join(', ') || 'none due'}`);
+  log(`revalidated ${out.size} of ${due.length} due points: ${[...tally].map(([k, n]) => `${n} ${k}`).join(', ') || 'none due'}; ${due.length - out.size + (tally.get('error') ?? 0)} left for later builds`);
   return out;
 }
 
@@ -1143,7 +1168,8 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
       // A point saved before provenance was kept is the filed address's geocode.
       if (lat != null && lng != null && !location) location = locationInfo(inferMethod({ lat, lng }), CENSUS_SOURCE, 'not recorded', { rules: 1 });
       // A project with no point gets another try: the geocoder learns new streets.
-      if (d && !fresh.has(row.ProjectNumber) && lat == null && retries > 0) {
+      // A point removed by today's checks is not tried again here; revalidation retries it when the checks change.
+      if (d && !fresh.has(row.ProjectNumber) && lat == null && retries > 0 && !(location?.method === 'none' && (location.rules ?? 1) >= RULES)) {
         const address = geocodable(d.address);
         if (address) {
           retries--;

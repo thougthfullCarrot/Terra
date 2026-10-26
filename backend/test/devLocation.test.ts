@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fetchCityPermitProjects, type PermitSource } from '../src/market/cityPermits.js';
-import { addressKey, checkPoint, inferMethod, mayReplace, parseAddress, townsMatch, pickGeocode, sameAddress, sameSite, locationInfo } from '../src/market/devLocation.js';
+import { addressKey, checkPoint, inferMethod, mayReplace, parseAddress, townsMatch, pickGeocode, sameAddress, sameSite, locationInfo, RULES } from '../src/market/devLocation.js';
 import type { Development } from '../src/market/developments.js';
 
 describe('parseAddress', () => {
@@ -225,7 +225,7 @@ describe('revalidating cached points', async () => {
   it('keeps a cached point the validated match confirms, and moves one it contradicts', async () => {
     const ok = cached({ address: '100 N Main Ave, San Antonio, TX 78205', lat: 29.43, lng: -98.49 });
     expect(await revalidatePoint(ok, now, census([{ matchedAddress: '100 N MAIN AVE, SAN ANTONIO, TX, 78205', coordinates: { x: -98.4901, y: 29.4301 }, addressComponents: { state: 'TX', zip: '78205', preDirection: 'N' } }]))).toBe('kept');
-    expect(ok.location).toMatchObject({ method: 'geocoded-address', rules: 2 });
+    expect(ok.location).toMatchObject({ method: 'geocoded-address', rules: RULES });
     const moved = cached({ address: '100 N Main Ave, San Antonio, TX 78205', lat: 29.5, lng: -98.6 });
     expect(await revalidatePoint(moved, now, census([{ matchedAddress: '100 N MAIN AVE, SAN ANTONIO, TX, 78205', coordinates: { x: -98.49, y: 29.43 }, addressComponents: { state: 'TX', zip: '78205', preDirection: 'N' } }]))).toBe('moved');
     expect(moved).toMatchObject({ lat: 29.43, lng: -98.49, location: { previous: [29.5, -98.6] } });
@@ -240,6 +240,80 @@ describe('revalidating cached points', async () => {
     expect(down.lat).toBe(29.21914);
     const done = await revalidatePoints([permit, lent], now, { http: census([]) });
     expect(done.size).toBe(0);
+  });
+});
+
+describe('revalidation queue across builds', async () => {
+  const { revalidatePoint, revalidatePoints, needsRevalidation } = await import('../src/market/developments.js');
+  const now = new Date('2026-10-26T00:00:00Z');
+  const at = (i: number): [number, number] => [29.4 + i / 1000, -98.5];
+  const project = (i: number, over: Partial<Development> = {}): Development =>
+    ({ id: `TABS${i}`, city: 'San Antonio', place: 'San Antonio', name: `P${i}`, cost: 1_000_000 * (10 - i), address: `${100 + i} N Main Ave, San Antonio, TX 78205`, lat: at(i)[0], lng: at(i)[1], approximate: false, url: '', ...over }) as Development;
+  // A Census stand-in that answers each address with its own point, and counts the calls.
+  const fake = (calls: string[], fail: (address: string) => Response | null = () => null) => ({
+    fetchImpl: (async (url: string | URL) => {
+      const address = new URL(String(url)).searchParams.get('address') ?? '';
+      calls.push(address);
+      const bad = fail(address);
+      if (bad) return bad;
+      const i = Number(/^(\d+)/.exec(address)![1]) - 100;
+      return new Response(JSON.stringify({ result: { addressMatches: [{ matchedAddress: `${100 + i} N MAIN AVE, SAN ANTONIO, TX, 78205`, coordinates: { x: at(i)[1], y: at(i)[0] }, addressComponents: { state: 'TX', zip: '78205', preDirection: 'N' } }] } }));
+    }) as typeof fetch,
+    retries: 0
+  });
+
+  it('keeps the point and leaves it due on a timeout, a blocked request or a malformed answer', async () => {
+    const answers: Array<[string, () => Promise<Response>]> = [
+      ['timeout', async () => { throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }); }],
+      ['blocked', async () => new Response('Forbidden', { status: 403 })],
+      ['malformed', async () => new Response('<html>not json</html>')],
+      ['no result', async () => new Response(JSON.stringify({ errors: ['busy'] }))]
+    ];
+    for (const [, answer] of answers) {
+      const p = project(1);
+      expect(await revalidatePoint(p, now, { fetchImpl: answer as unknown as typeof fetch, retries: 0 })).toBe('error');
+      expect([p.lat, p.lng]).toEqual(at(1));
+      expect(needsRevalidation(p)).toBe(true);
+      expect(p.location?.retry?.attempts).toBe(1);
+    }
+  });
+
+  it('advances 3 a build through 8 due points, survives a restart, and checks each record once', async () => {
+    let saved = JSON.stringify(Array.from({ length: 8 }, (_, i) => project(i)));
+    const calls: string[] = [];
+    const per: number[] = [];
+    for (let build = 0; build < 5; build++) {
+      // Each build starts from the saved lists, as after a restart.
+      const projects = JSON.parse(saved) as Development[];
+      const done = await revalidatePoints(projects, now, { budget: 3, pauseMs: 0, http: fake(calls) });
+      per.push(done.size);
+      saved = JSON.stringify(projects);
+    }
+    expect(per).toEqual([3, 3, 2, 0, 0]);
+    expect(new Set(calls).size).toBe(calls.length);
+    expect((JSON.parse(saved) as Development[]).every((p) => !needsRevalidation(p) && p.location?.rules === RULES)).toBe(true);
+  });
+
+  it('puts a failing record behind the rest, so it never holds the queue', async () => {
+    const projects = Array.from({ length: 4 }, (_, i) => project(i));
+    const calls: string[] = [];
+    const http = fake(calls, (a) => (a.startsWith('100 ') ? new Response('', { status: 503 }) : null));
+    const first = await revalidatePoints(projects, now, { budget: 2, pauseMs: 0, http });
+    expect([...first.values()]).toEqual(['error', 'kept']);
+    const second = await revalidatePoints(projects, now, { budget: 2, pauseMs: 0, http });
+    expect([...second.keys()]).toEqual(['San Antonio|TABS2', 'San Antonio|TABS3']);
+    expect(projects[0]!.lat).toBe(at(0)[0]);
+  });
+
+  it('brings back a point removed under older checks once the checks accept it', async () => {
+    // Removed by the rules-2 parser ("S. W." read as S + W ...), with its old point kept.
+    const p = project(5, { lat: null, lng: null, location: { method: 'none', accuracy: 'none', source: 'Location unavailable: match is not the filed address', verified: '2026-10-26', rules: RULES - 1, previous: at(5), flags: ['address conflict'] } });
+    expect(needsRevalidation(p)).toBe(true);
+    expect(await revalidatePoint(p, now, fake([]))).toBe('restored');
+    expect(p).toMatchObject({ lat: at(5)[0], lng: at(5)[1], location: { method: 'geocoded-address', rules: RULES } });
+    // Removed under today's checks: not retried until the checks change.
+    const gone = project(6, { lat: null, lng: null, location: { method: 'none', accuracy: 'none', source: 'x', verified: '2026-10-26', rules: RULES, previous: at(6), flags: ['address conflict'] } });
+    expect(needsRevalidation(gone)).toBe(false);
   });
 });
 

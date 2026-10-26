@@ -13,7 +13,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fetchCityPermitProjects } from '../market/cityPermits.js';
 import { readMarketFiles } from '../market/devFiles.js';
-import { CITY_CENTERS, METRO_RADIUS_KM, distanceKm, fetchZipAreas, revalidatePoints, type Development, type Revalidation } from '../market/developments.js';
+import { CITY_CENTERS, METRO_RADIUS_KM, distanceKm, REVALIDATE_PER_BUILD, fetchZipAreas, needsRevalidation, revalidatePoints, type Development, type Revalidation } from '../market/developments.js';
 import { inferMethod } from '../market/devLocation.js';
 import { auditLocations, marketReport, pickSample, verifySample, type AuditRow, type Verified } from '../market/locationAudit.js';
 import type { City } from '../types.js';
@@ -52,10 +52,30 @@ const byKey = new Map(projects.map((p) => [keyOf(p), p]));
 // ZIP-area step for what it removed. These are the actual results the build gives.
 const after = new Map<string, Development>();
 const outcomes = new Map<string, Revalidation>();
+// Run as consecutive builds: REVALIDATE_PER_BUILD points a build, the lists
+// saved and read back between builds (as after a restart), until nothing is
+// due. Records each build's batch and any record checked more than once.
+const batches: string[] = [];
 if (process.argv.includes('--revalidate')) {
-  const copies = projects.map((p) => ({ ...p, ...(p.location ? { location: { ...p.location } } : {}) }) as Development);
-  for (const [k, v] of await revalidatePoints(copies, new Date(), { budget: Number.POSITIVE_INFINITY, timeMs: Number.POSITIVE_INFINITY, pauseMs: 250, log: console.log })) outcomes.set(k, v);
-  for (const c of copies) after.set(keyOf(c), c);
+  let saved = JSON.stringify(projects);
+  const seen = new Map<string, number>();
+  for (let build = 1; build <= 80; build++) {
+    const copies = JSON.parse(saved) as Development[];
+    const done = await revalidatePoints(copies, new Date(), { budget: REVALIDATE_PER_BUILD, timeMs: Number.POSITIVE_INFINITY, pauseMs: 250, log: (l) => console.log(`build ${build}: ${l}`) });
+    saved = JSON.stringify(copies);
+    if (!done.size) break;
+    const t = new Map<Revalidation, number>();
+    for (const [k, v] of done) {
+      t.set(v, (t.get(v) ?? 0) + 1);
+      seen.set(k, (seen.get(k) ?? 0) + 1);
+      // The last outcome wins; an error that later succeeds is replaced.
+      outcomes.set(k, v);
+    }
+    batches.push(`| ${build} | ${done.size} | ${[...t].map(([k, n]) => `${n} ${k}`).join(', ')} |`);
+  }
+  for (const c of JSON.parse(saved) as Development[]) after.set(keyOf(c), c);
+  const again = [...seen].filter(([, n]) => n > 1);
+  batches.unshift('', '## Consecutive builds', '', `${batches.length} builds of up to ${REVALIDATE_PER_BUILD}, the lists saved and read back between builds. Records checked more than once: ${again.length}${again.length ? ` (${again.map(([k, n]) => `${k} ×${n}`).join(', ')}; each retried after a failed request)` : ''}. Still due afterwards: ${(JSON.parse(saved) as Development[]).filter(needsRevalidation).length}.`, '', '| Build | Checked | Outcomes |', '|---|---|---|');
 }
 const afterOf = (r: AuditRow) => {
   const a = after.get(`${r.city}|${r.id}`);
@@ -66,12 +86,12 @@ const markets = [...new Set(rows.map((r) => r.city))].sort() as City[];
 await mkdir(out, { recursive: true });
 const sections: string[] = [];
 const totals: string[] = [
-  '| Market | Listed | Permit point | Same-site permit | Geocoded | ZIP area | None | Conflicting | Suspicious | Revalidated: kept | moved | removed (conflict) | removed (no match) | Sample: confirmed (official) | Sample: suspected | Sample: agrees, official | Sample: agrees, Census only |',
-  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'
+  '| Market | Listed | Permit point | Same-site permit | Geocoded | ZIP area | None | Conflicting | Suspicious | Revalidated: kept | moved | restored | removed (conflict) | removed (no match) | error | Sample: confirmed (official) | Sample: suspected | Sample: agrees, official | Sample: agrees, Census only |',
+  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'
 ];
 const allVerified: Verified[] = [];
 const revalLines: string[] = [];
-const sum = new Array<number>(16).fill(0);
+const sum = new Array<number>(18).fill(0);
 for (const city of markets) {
   const here = rows.filter((r) => r.city === city);
   const verified = verifyN > 0 ? await verifySample(pickSample(here, verifyN, flaggedN), byKey, zips, { log: console.log, afterOf: after.size ? afterOf : undefined }) : [];
@@ -93,8 +113,10 @@ for (const city of markets) {
     n((r) => r.findings.includes('suspicious')),
     o('kept'),
     o('moved'),
+    o('restored'),
     o('removed: address conflict'),
     o('removed: no longer matches'),
+    o('error'),
     v((x) => x.verdict === 'confirmed error'),
     v((x) => x.verdict === 'suspected error'),
     v((x) => x.verdict === 'agrees' && x.evidence === 'official record'),
@@ -141,7 +163,7 @@ if (process.argv.includes('--rematch')) {
 const reval = outcomes.size
   ? ['', '## Cached points revalidated by the updated build', '', `${outcomes.size} cached geocoded points checked again under today's rules. Moved or removed:`, '', '| Market | Project | Filed address | Outcome | Before (live) | After (updated build) | Source |', '|---|---|---|---|---|---|---|', ...revalLines]
   : [];
-const summary = [`# Development Map location audit`, '', `Run ${new Date().toISOString()}; ${projects.length} market listings (${new Set(projects.map((p) => p.id)).size} distinct filings; Galveston County filings appear on both the Houston and Galveston maps).`, '', ...totals, ...reval, ...rematch].join('\n');
+const summary = [`# Development Map location audit`, '', `Run ${new Date().toISOString()}; ${projects.length} market listings (${new Set(projects.map((p) => p.id)).size} distinct filings; Galveston County filings appear on both the Houston and Galveston maps).`, '', ...totals, ...batches, ...reval, ...rematch].join('\n');
 await writeFile(join(out, 'summary.md'), `${summary}\n`);
 await writeFile(join(out, 'rows.json'), JSON.stringify({ rows, verified: allVerified }, null, 1));
 console.log(`=====FILE summary.md=====\n${summary}\n`);
