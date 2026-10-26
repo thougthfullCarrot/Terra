@@ -54,7 +54,7 @@ const after = new Map<string, Development>();
 const outcomes = new Map<string, Revalidation>();
 if (process.argv.includes('--revalidate')) {
   const copies = projects.map((p) => ({ ...p, ...(p.location ? { location: { ...p.location } } : {}) }) as Development);
-  for (const [k, v] of await revalidatePoints(copies, new Date(), { budget: Number.POSITIVE_INFINITY, pauseMs: 250, log: console.log })) outcomes.set(k, v);
+  for (const [k, v] of await revalidatePoints(copies, new Date(), { budget: Number.POSITIVE_INFINITY, timeMs: Number.POSITIVE_INFINITY, pauseMs: 250, log: console.log })) outcomes.set(k, v);
   for (const c of copies) after.set(keyOf(c), c);
 }
 const afterOf = (r: AuditRow) => {

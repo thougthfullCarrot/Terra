@@ -242,3 +242,16 @@ describe('revalidating cached points', async () => {
     expect(done.size).toBe(0);
   });
 });
+
+describe('ranges and units found in the first revalidation run', () => {
+  const m = (matchedAddress: string, zip: string, city: string) => [{ matchedAddress, coordinates: { x: -97, y: 32.8 }, addressComponents: { state: 'TX', zip, city } }];
+  it('accepts a match at any number of a filed range', () => {
+    expect(pickGeocode('2122-2154 Estrada Pkwy, Irving, TX 75061', m('2154 ESTRADA PKWY, IRVING, TX, 75061', '75061', 'IRVING')).at).not.toBeNull();
+    expect(pickGeocode('6301 and 6351 NE Loop 820, North Richland Hills, TX 76180', m('6351 NE LOOP 820, NORTH RICHLAND HILLS, TX, 76180', '76180', 'NORTH RICHLAND HILLS')).at).not.toBeNull();
+    expect(pickGeocode('2122-2154 Estrada Pkwy, Irving, TX 75061', m('2200 ESTRADA PKWY, IRVING, TX, 75061', '75061', 'IRVING')).at).toBeNull();
+  });
+  it('reads the town before the state, not a building part', () => {
+    expect(parseAddress('13330 Theis Lane, Bldg3, Tomball, TX 77057')).toMatchObject({ place: 'TOMBALL', zip: '77057' });
+    expect(pickGeocode('13330 Theis Lane, Bldg3, Tomball, TX 77057', m('13330 THEIS LN, TOMBALL, TX, 77375', '77375', 'TOMBALL')).flag).toMatch(/filed ZIP 77057/);
+  });
+});

@@ -138,7 +138,13 @@ export function parseAddress(address: string | null | undefined): ParsedAddress 
   let line = (parts[0] ?? '').toUpperCase().replace(/\./g, '').replace(/#/g, ' # ');
   const tail = parts.slice(1).join(', ').toUpperCase();
   const zip = /\b(\d{5})(?:-\d{4})?\s*$/.exec(tail)?.[1] ?? /\b(\d{5})(?:-\d{4})?\s*$/.exec(line)?.[1] ?? null;
-  const place = parts.length > 1 ? (/^\s*(?:CITY OF\s+)?([A-Z][A-Z .'-]*?)\s*(?:,|\s+(?:TX|TEXAS)\b|\s+\d{5}|$)/.exec(tail)?.[1]?.trim() ?? null) : null;
+  // The town is the part just before the state ("…, Bldg3, Tomball, TX 77057" → TOMBALL), else the first part after the street.
+  const towns = tail.split(',').map((t) => t.trim());
+  const stateAt = towns.findIndex((t) => /^(?:TX|TEXAS)\b/.test(t));
+  const named = (t: string | undefined) => /^\s*(?:CITY OF\s+)?([A-Z][A-Z .'-]*?)\s*(?:\s+(?:TX|TEXAS)\b|\s+\d{5}|$)/.exec(t ?? '')?.[1]?.trim() ?? null;
+  const unitish = (t: string | null) => !t || /^(?:BLDG|BUILDING|STE|SUITE|UNIT|APT|#)/.test(t) || /\d/.test(t);
+  const inline = towns.map(named).find((t, i) => /\s(?:TX|TEXAS)\b/.test(towns[i]!) && !unitish(t));
+  const place = parts.length > 1 ? (inline ?? (stateAt > 0 && !unitish(named(towns[stateAt - 1])) ? named(towns[stateAt - 1]) : towns.map(named).find((t) => !unitish(t)) ?? null)) : null;
   // Units and buildings: "BLDG 3", "BUILDING A", "STE 100", "UNIT 4", "# 12".
   let unit: string | null = null;
   line = line.replace(/\s+(?:BLDG|BUILDING|STE|SUITE|UNIT|APT|#)\s*([A-Z0-9-]+)\b.*$/, (_m, u: string) => {
@@ -350,6 +356,14 @@ export interface GeocodePick {
  * another town and ZIP is refused. Several matches that disagree by more than
  * a kilometre are ambiguous and give no point.
  */
+/** Whether a house number is one a filing names: itself, or inside a range's ends. */
+export function numberFits(n: string, filed: string[]): boolean {
+  if (filed.includes(n)) return true;
+  const v = parseInt(n, 10);
+  const ends = filed.map((f) => parseInt(f, 10)).filter(Number.isFinite);
+  return ends.length > 1 && v >= Math.min(...ends) && v <= Math.max(...ends) && v % 2 === ends[0]! % 2;
+}
+
 export function pickGeocode(address: string, matches: CensusMatch[] | undefined): GeocodePick {
   const filed = parseAddress(address);
   const usable = (matches ?? []).filter((m) => Number.isFinite(m.coordinates?.x) && Number.isFinite(m.coordinates?.y));
@@ -358,7 +372,8 @@ export function pickGeocode(address: string, matches: CensusMatch[] | undefined)
     const c = m.addressComponents ?? {};
     if (c.state && c.state.toUpperCase() !== 'TX') return false;
     const got = parseAddress(m.matchedAddress);
-    if (filed?.number && got?.number && got.number !== filed.number) return false;
+    // A range ("2122-2154", "6301 and 6351") matches any number it names, or one between its ends.
+    if (filed?.number && got?.number && !numberFits(got.number, filed.numbers)) return false;
     const dir = (c.preDirection || c.suffixDirection || got?.dir || '').toUpperCase();
     if (filed?.dir && dir && dir !== filed.dir) return false;
     return true;

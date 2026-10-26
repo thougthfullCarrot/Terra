@@ -581,7 +581,9 @@ export const isConflict = (rejected: string | undefined) => !!rejected && reject
 export type Revalidation = 'kept' | 'moved' | 'removed: address conflict' | 'removed: no longer matches' | 'skipped: not geocodable' | 'error';
 
 /** Geocoded points checked under older rules, revalidated per build (the rest wait for the next build). */
-export const REVALIDATE_PER_BUILD = 400;
+export const REVALIDATE_PER_BUILD = 150;
+/** Revalidation stops starting new geocodes after this long, so the Website job keeps inside its 30 minutes. */
+export const REVALIDATE_MS = 3 * 60_000;
 
 /** A cached geocoded point that has not passed today's checks. Permit and same-site points are independent evidence and are left alone. */
 export const needsRevalidation = (p: { lat: number | null; lng: number | null; approximate?: boolean; locatedFrom?: string; source?: string; location?: LocationInfo }) =>
@@ -631,11 +633,13 @@ export async function revalidatePoint(p: Development, now: Date, http: FetchJson
 }
 
 /** Revalidate up to `budget` cached points, biggest projects first; returns the outcome of each. */
-export async function revalidatePoints(projects: Development[], now: Date, o: { budget?: number; http?: FetchJsonOptions; pauseMs?: number; log?: (l: string) => void } = {}): Promise<Map<string, Revalidation>> {
-  const { budget = REVALIDATE_PER_BUILD, http = {}, pauseMs = 300, log = () => {} } = o;
+export async function revalidatePoints(projects: Development[], now: Date, o: { budget?: number; http?: FetchJsonOptions; pauseMs?: number; log?: (l: string) => void; timeMs?: number; clock?: () => number } = {}): Promise<Map<string, Revalidation>> {
+  const { budget = REVALIDATE_PER_BUILD, http = {}, pauseMs = 300, log = () => {}, timeMs = REVALIDATE_MS, clock = Date.now } = o;
   const out = new Map<string, Revalidation>();
   const due = projects.filter(needsRevalidation).sort((a, b) => b.cost - a.cost);
+  const started = clock();
   for (const p of due.slice(0, budget)) {
+    if (clock() - started > timeMs) break;
     if (out.size) await pause(pauseMs);
     out.set(`${p.city}|${p.id}`, await revalidatePoint(p, now, http));
   }
