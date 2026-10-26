@@ -231,6 +231,14 @@ describe('revalidating cached points', async () => {
     expect(moved).toMatchObject({ lat: 29.43, lng: -98.49, location: { previous: [29.5, -98.6] } });
   });
 
+  it('keeps a cached point rather than move it to a match outside the filed ZIP (a corridor filed at two addresses)', async () => {
+    const p = cached({ id: 'TABS2026017456', city: 'Houston', place: 'Houston', address: '7841 Airline Dr 2521 Airline Dr, Houston, TX 77022', lat: 29.81027, lng: -95.38208 });
+    const r = await revalidatePoint(p, now, census([{ matchedAddress: '7841 AIRLINE DR, HOUSTON, TX, 77037', coordinates: { x: -95.38616, y: 29.87488 }, addressComponents: { state: 'TX', zip: '77037', city: 'HOUSTON' } }]));
+    expect(r).toBe('kept');
+    expect(p).toMatchObject({ lat: 29.81027, lng: -95.38208, location: { rules: RULES } });
+    expect(p.location?.flags).toContain('second match elsewhere');
+  });
+
   it('leaves independently supported points alone and keeps a point when the geocoder fails', async () => {
     const permit = cached({ source: 'city' });
     const lent = cached({ locatedFrom: 'City permit X at this address' });

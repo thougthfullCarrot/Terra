@@ -637,6 +637,12 @@ export async function revalidatePoint(p: Development, now: Date, http: FetchJson
       p.location = locationInfo('geocoded-address', `${CENSUS_SOURCE} (${wasRemoved ? 'restored: today\'s checks accept the match' : 'revalidated'})`, dayOf(now), flags.length ? { flags } : {});
       return wasRemoved ? 'restored' : 'kept';
     }
+    // A match that is itself flagged (outside the filed ZIP, say) is weaker
+    // evidence than a cached point it can't rule out: keep that point, flagged.
+    if (old && !wasRemoved && got.flag) {
+      p.location = locationInfo('geocoded-address', `${CENSUS_SOURCE} (revalidated; kept: today's match${got.matched ? ` ${got.matched}` : ''} is ${d.toFixed(1)} km away but outside the filed ZIP)`, dayOf(now), { flags: [got.flag, 'second match elsewhere'] });
+      return 'kept';
+    }
     [p.lat, p.lng] = got.at;
     p.location = locationInfo('geocoded-address', `${CENSUS_SOURCE} (revalidated; ${old ? `moved ${d.toFixed(1)} km from the cached match` : 'placed: today\'s checks accept the match'}${got.matched ? `; match: ${got.matched}` : ''})`, dayOf(now), { ...(old ? { previous: old } : {}), flags });
     return wasRemoved ? 'restored' : 'moved';
