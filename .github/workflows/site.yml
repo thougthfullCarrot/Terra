@@ -395,6 +395,26 @@ jobs:
           node test/browser/calm-check.mjs ../site 2>&1 | tee /tmp/calm-check.log
           { echo '## Calm pages check'; echo '```'; cat /tmp/calm-check.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
+      # Pull requests only: the Profile page layout (completion card heading, bar and one step per row without
+      # overlap, two-column About you on desktop and one on phones, aligned sections, saving, keyboard, 200% zoom).
+      - name: Check the Profile page layout
+        if: github.event_name == 'pull_request'
+        run: |
+          npx playwright-core install --with-deps chromium > /dev/null
+          set -o pipefail
+          node test/browser/profile-check.mjs ../site /tmp/profile-shots 2>&1 | tee /tmp/profile-check.log
+          { echo '## Profile page check'; echo '```'; cat /tmp/profile-check.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the profile check screenshots
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-check
+          path: |
+            /tmp/profile-shots
+            /tmp/profile-check.log
+          retention-days: 7
+
       - name: Keep the events check screenshots
         if: always() && github.event_name == 'pull_request' && hashFiles('site/events.json') != ''
         uses: actions/upload-artifact@v4
