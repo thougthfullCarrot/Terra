@@ -6,15 +6,13 @@
 # time, so this runs on its own once a week rather than in every site build.
 # It keeps only the per-market summary (salaries.json, a few hundred KB) and
 # saves it to the Actions cache, where site.yml picks up the newest.
+#
+# Retired with the salary check (Terra's four-feature simplification): the
+# weekly schedule and push trigger are off. It can still be run by hand.
 name: Salary filings
 
 on:
-  schedule:
-    - cron: '10 10 * * 1'
   workflow_dispatch:
-  push:
-    branches: [claude/new-session-6xvm0u]
-    paths: ['backend/src/market/salaries.ts', 'backend/src/bin/export-salaries.ts', 'backend/src/lib/xlsx.ts', '.github/workflows/salaries.yml']
 
 concurrency:
   group: salaries-${{ github.ref }}
