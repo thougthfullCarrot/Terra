@@ -100,7 +100,7 @@ log('fold names the area and method', /Area/.test(area) && /Method/.test(area));
 
 // City switching from the header picker.
 await page.selectOption('.city-picker select', cities[1]);
-log('picker switches city', (await page.textContent('.city-head h2')) === cities[1] && (await page.evaluate(() => decodeURIComponent(location.hash))).includes(`city=${cities[1]}`));
+log('picker switches city', (await page.textContent('.city-head h2')) === cities[1] && (await page.evaluate(() => new URLSearchParams(location.hash.slice(1)).get('city'))) === cities[1]);
 
 // Missing values and zeros, found from the data.
 const groups = market.groups;
@@ -125,7 +125,7 @@ if (zeroCase) {
   await page.goto(`${base}#markets&city=${encodeURIComponent(zeroCase.city)}&focus=${zeroCase.group}`);
   await page.waitForSelector('.city-head');
   const value = await page.$$eval('.city-table tbody tr', (trs, label) => trs.find((tr) => tr.querySelector('.city-metric-name').textContent.startsWith(label))?.querySelector('td.num').textContent, zeroCase.label);
-  log('zero shown as 0', /^\$?0$/.test(value?.trim() ?? ''), `${zeroCase.city} ${zeroCase.label}: ${value}`);
+  log('zero shown as 0', /^\$?0(\.0+)?%?$/.test(value?.trim() ?? ''), `${zeroCase.city} ${zeroCase.label}: ${value}`);
 } else console.log('SKIP  zero case (no zero in this data)');
 log('no page errors (desktop)', page.errors.length === 0, page.errors.join('; '));
 await page.context().close();

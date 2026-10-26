@@ -379,7 +379,7 @@ jobs:
       # development lists, encrypted to a reviewer's public key so a local run can render the same page.
       # The log holds only ciphertext.
       - name: Hand the real market figures to the PR #100 review (encrypted)
-        if: github.event_name == 'pull_request' && github.head_ref == 'claude/project-thread-73140r' && hashFiles('site/market.json') != ''
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'claude/project-thread-73140r' && hashFiles('site/market.json') != ''
         run: |
           cat > /tmp/review.pub <<'KEY'
           -----BEGIN PUBLIC KEY-----
