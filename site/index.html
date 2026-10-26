@@ -63,11 +63,10 @@
         <nav class="tabs" aria-label="Sections">
           <a href="#" id="tab-jobs" class="tab" aria-current="page">Jobs<span class="tab-count" id="tab-jobs-count"></span></a>
           <a href="#tracker" id="tab-tracker" class="tab" hidden>Tracker</a>
+          <a href="#markets&amp;tool=map" id="tab-map" class="tab">Development map</a>
           <a href="#markets" id="tab-markets" class="tab">Markets</a>
-          <a href="#property" id="tab-property" class="tab">Property</a>
           <a href="#news" id="tab-news" class="tab">News</a>
           <a href="#events" id="tab-events" class="tab">Events</a>
-          <a href="#career" id="tab-career" class="tab">Career</a>
         </nav>
         <div class="appbar-actions">
           <label class="search head-search">
@@ -483,7 +482,6 @@
                 <select id="jp-stage"></select>
               </label>
               <button type="button" class="secondary" id="jp-share">Copy link</button>
-              <a class="secondary" id="jp-brief">Interview brief</a>
             </div>
             <section id="jp-why-wrap" hidden>
               <h3 class="sheet-h">Why it fits you</h3>
@@ -528,13 +526,8 @@
           <nav class="market-tools" aria-label="Market data views">
             <a href="#markets" id="m-tool-data" class="chip">City data</a>
             <a href="#markets&amp;tool=map" id="m-tool-map" class="chip">Development map</a>
-            <a href="#markets&amp;tool=compare" id="m-tool-compare" class="chip">Compare cities</a>
-            <a href="#markets&amp;tool=calc" id="m-tool-calc" class="chip">Deal calculator</a>
-            <a href="#markets&amp;tool=uw" id="m-tool-uw" class="chip">Underwriting model</a>
             <a href="#markets&amp;tool=leases" id="m-tool-leases" class="chip">Lease rates</a>
-            <a href="#markets&amp;tool=sites" id="m-tool-sites" class="chip">Site finder</a>
             <a href="#markets&amp;tool=reports" id="m-tool-reports" class="chip">Market reports</a>
-            <a href="#markets&amp;tool=pay" id="m-tool-pay" class="chip">Salary check</a>
             <a href="#markets&amp;tool=zoning" id="m-tool-zoning" class="chip">Zoning alerts</a>
             <a href="#markets&amp;tool=growth" id="m-tool-growth" class="chip">Hiring vs. building</a>
           </nav>
@@ -567,57 +560,38 @@
         <div id="m-sources" class="market-sources"></div>
       </section>
 
-      <!-- Property tools (owner lookup, lease radar, distress, drive time, deal of the week): property-view.js. -->
-      <section id="property-view" hidden aria-labelledby="property-title">
-        <h1 id="property-title" class="page-title section-head">Property</h1>
-        <form class="controls" id="property-controls" onsubmit="return false">
-          <nav class="market-tools" id="p-tools" aria-label="Property tools"></nav>
-          <div class="filters market-filters">
-            <label>
-              <span class="eyebrow">Market</span>
-              <select id="p-city"></select>
-            </label>
-          </div>
-        </form>
-        <div class="summary"><p id="p-blurb" class="market-blurb"></p></div>
-        <div id="p-body"></div>
-        <div id="p-sources" class="market-sources"></div>
-      </section>
-
-      <!-- Career tools (interview brief, title decoder, skills, new-agent sponsors, near campus, market tour): career-view.js. -->
-      <section id="career-view" hidden aria-labelledby="career-title">
-        <h1 id="career-title" class="page-title section-head">Career</h1>
-        <form class="controls" id="career-controls" onsubmit="return false">
-          <nav class="market-tools" id="c-tools" aria-label="Career tools"></nav>
-          <div class="filters market-filters">
-            <label id="c-city-label">
-              <span class="eyebrow">Market</span>
-              <select id="c-city"></select>
-            </label>
-          </div>
-        </form>
-        <div class="summary"><p id="c-blurb" class="market-blurb"></p></div>
-        <div id="c-body"></div>
-      </section>
-
       <!-- Commercial real estate headlines by city: news-view.js draws them from news.json. -->
       <section id="news-view" hidden aria-labelledby="news-title">
         <h1 id="news-title" class="page-title section-head">News</h1>
         <form class="controls" id="news-controls" onsubmit="return false">
-          <div class="filters news-filters">
+          <nav class="market-tools" aria-label="News sections">
+            <a href="#news" id="n-tab-headlines" class="chip" aria-current="page">Headlines</a>
+            <a href="#news&amp;view=deal" id="n-tab-deal" class="chip">Deal of the week</a>
+          </nav>
+          <div class="filters news-filters" id="n-headline-filters">
             <label>
               <span class="eyebrow">City</span>
               <select id="n-city"><option value="">All cities</option></select>
             </label>
           </div>
-          <div class="chip-group">
+          <div class="chip-group" id="n-topics-group">
             <span class="eyebrow">Topic</span>
             <div class="chip-row" id="n-topics" role="group" aria-label="Topic"></div>
           </div>
+          <div class="filters market-filters" id="n-deal-filters" hidden>
+            <label>
+              <span class="eyebrow">Market</span>
+              <select id="n-deal-city"></select>
+            </label>
+          </div>
         </form>
-        <div class="summary"><p id="n-count" aria-live="polite"></p></div>
+        <div class="summary" id="n-summary"><p id="n-count" aria-live="polite"></p></div>
         <section id="n-list" class="list news-list" aria-label="Headlines"></section>
         <div id="n-sources" class="market-sources"></div>
+        <!-- Deal of the week (deal-view.js): one Texas sale from the news, walked through step by step. -->
+        <div class="summary" id="n-deal-blurb" hidden><p class="market-blurb">One real Texas sale from this week's news, walked through step by step: the price, the income it implies, the loan and whether the debt helps the buyer. Reported facts come first; the estimates under them are for learning.</p></div>
+        <div id="n-deal" class="deal-section" hidden></div>
+        <div id="n-deal-sources" class="market-sources" hidden></div>
       </section>
 
       <!-- Real estate networking events by city: events-view.js draws them from events.json. -->

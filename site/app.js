@@ -31,9 +31,8 @@ import { STAGES, followUpLabel, importRows } from './tracker.js';
 import { importTracked, setTrackerStore, stageOf, startTracker, track, trackedIds, trackedRows, trackerOn, untrack } from './tracker-view.js';
 import { startNews } from './news-view.js';
 import { startEvents } from './events-view.js';
-import { startProperty } from './property-view.js';
-import { startCareer } from './career-view.js';
-import { jobFlags, TITLE_GUIDE, writeCareerHash } from './career.js';
+import { jobFlags, TITLE_GUIDE } from './career.js';
+import { retiredRoute } from './retired.js';
 import { startPitch } from './pitch.js';
 import { stateBox } from './labels.js';
 import { startGateMap, startLanding, startTabSlider } from './live.js';
@@ -703,9 +702,6 @@ function openPanel(job, { auto = false } = {}) {
     })
   );
   $('jp-flags').hidden = !flags.length;
-  $('jp-brief').href = writeCareerHash({ tool: 'brief', firm: job.firm });
-  // The brief opens in the Career tab, so the panel steps aside for it.
-  $('jp-brief').onclick = () => panel.close();
 
   drawFacts(job, now);
   const match = scores.get(job.id);
@@ -953,6 +949,17 @@ async function loadMarketFile() {
   return response.json();
 }
 
+/** An old link to a retired tool opens its new home (or the nearest live tool) with a short note. */
+function redirectRetired() {
+  const route = retiredRoute(location.hash);
+  if (!route) return;
+  history.replaceState(null, '', `${location.pathname}${location.search}${route.hash === '#' ? '' : route.hash}`);
+  toast(route.note);
+}
+redirectRetired();
+// Registered before the sections' own listeners, so they read the new hash.
+window.addEventListener('hashchange', redirectRetired);
+
 startTheme();
 startMarkets();
 startTracker({
@@ -973,8 +980,6 @@ handleUnsubscribe(CONFIG, location).then((result) => {
 });
 
 startEvents();
-startProperty();
-startCareer();
 startPitch();
 
 if (isConfigured(CONFIG)) {

@@ -11,6 +11,9 @@ export function readNewsHash(hash, file) {
   const topics = file?.topics ?? [];
   return {
     open: params.has('news'),
+    // view=deal: the Deal of the week section (deal-view.js), with its own market list.
+    view: params.get('view') === 'deal' ? 'deal' : '',
+    dealCity: params.get('city') ?? '',
     city: cities.includes(params.get('city')) ? params.get('city') : '',
     topic: topics.includes(params.get('topic')) ? params.get('topic') : ''
   };
@@ -18,6 +21,11 @@ export function readNewsHash(hash, file) {
 
 export function writeNewsHash(state) {
   const params = new URLSearchParams();
+  if (state.view === 'deal') {
+    params.set('view', 'deal');
+    if (state.dealCity) params.set('city', state.dealCity);
+    return `#news&${params.toString()}`;
+  }
   if (state.city) params.set('city', state.city);
   if (state.topic) params.set('topic', state.topic);
   const text = params.toString();

@@ -5,6 +5,7 @@
 // publisher; the page shows only the headline, source and date.
 import { filterHeadlines, newsDate, readNewsHash, topicCounts, writeNewsHash } from './news.js';
 import { stateBox } from './labels.js';
+import { DEAL_MARKETS, dealView, writeDealHash } from './deal-view.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +19,12 @@ export function startNews() {
   bound = true;
   window.addEventListener('hashchange', show);
   $('n-city').addEventListener('change', (e) => update({ city: e.target.value }));
+  const dealCity = $('n-deal-city');
+  dealCity.append(new Option('All markets', ''), ...DEAL_MARKETS.map((m) => new Option(m, m)));
+  dealCity.addEventListener('change', () => {
+    history.replaceState(null, '', `${location.pathname}${location.search}${writeDealHash(dealCity.value)}`);
+    show();
+  });
   show();
 }
 
@@ -38,6 +45,12 @@ async function show() {
   const open = readNewsHash(location.hash, null).open;
   $('news-view').hidden = !open;
   if (!open) return;
+  const deal = readNewsHash(location.hash, null).view === 'deal';
+  drawViews(deal);
+  if (deal) {
+    showDeal();
+    return;
+  }
   if (!file) {
     message('Loading headlines…', 'loading');
     loading ??= load();
@@ -59,6 +72,33 @@ async function show() {
   const city = $('n-city');
   city.replaceChildren(new Option('All cities', ''), ...file.cities.map((c) => new Option(c.city, c.city)));
   render();
+}
+
+/** Headlines and Deal of the week: two sections of News, each with its own controls. */
+function drawViews(deal) {
+  $('n-tab-headlines').href = writeNewsHash({ city: state?.city ?? '' });
+  $('n-tab-deal').href = writeDealHash(DEAL_MARKETS.includes(state?.city) ? state.city : '');
+  if (deal) $('n-tab-deal').setAttribute('aria-current', 'page');
+  else $('n-tab-deal').removeAttribute('aria-current');
+  if (deal) $('n-tab-headlines').removeAttribute('aria-current');
+  else $('n-tab-headlines').setAttribute('aria-current', 'page');
+  for (const id of ['n-headline-filters', 'n-topics-group', 'n-summary', 'n-list', 'n-sources']) $(id).hidden = deal;
+  for (const id of ['n-deal-filters', 'n-deal-blurb', 'n-deal', 'n-deal-sources']) $(id).hidden = !deal;
+}
+
+let dealRenders = 0;
+function showDeal() {
+  const raw = readNewsHash(location.hash, null).dealCity;
+  const city = DEAL_MARKETS.includes(raw) ? raw : '';
+  $('n-deal-city').value = city;
+  const body = $('n-deal');
+  body.replaceChildren(stateBox('Loading…', 'loading'));
+  $('n-deal-sources').replaceChildren();
+  const gen = ++dealRenders;
+  const live = () => gen === dealRenders && readNewsHash(location.hash, null).view === 'deal';
+  dealView(body, $('n-deal-sources'), city, live).catch(
+    (error) => live() && body.replaceChildren(stateBox(`Couldn't load the deal of the week. ${error instanceof Error ? error.message : ''}`.trim(), 'error', { retry: true }))
+  );
 }
 
 function render() {
