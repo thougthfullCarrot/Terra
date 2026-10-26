@@ -903,6 +903,13 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   map.getPanes().overlayPane.appendChild(speckCanvas);
   let speckPts = [];
   let hoverSpeck = null;
+  // A project's category color, worked out once: draws on every filter change ask for thousands.
+  const colors = new Map();
+  const colorOf = (p) => {
+    let c = colors.get(p);
+    if (c == null) colors.set(p, (c = catOf.get(projectCategory(p))?.color ?? '#9b958d'));
+    return c;
+  };
   const paintSpecks = (list) => {
     if (list) speckPts = list;
     const size = map.getSize();
@@ -1108,14 +1115,16 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     // they are dashed rings at their ZIP area's center, whatever the zoom.
     for (const p of shown) if (p.approximate) {
       nextAt.set(p, where.get(p));
-      nextSpecks.push({ p, color: catOf.get(projectCategory(p))?.color ?? '#9b958d' });
+      nextSpecks.push({ p, color: colorOf(p) });
     }
     const sited = shown.filter((p) => !p.approximate);
     // Rings count as drawn: the project is on the map, as an area.
     const rings = shown.length - sited.length;
     for (const p of sited) {
       const k = spotOf.get(p);
-      spots.set(k, [...(spots.get(k) ?? []), p]);
+      const at = spots.get(k);
+      if (at) at.push(p);
+      else spots.set(k, [p]);
     }
     let count = rings;
     if (zoom >= SPREAD_ZOOM) {
@@ -1144,7 +1153,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
           if (!marker.getLatLng().equals(at)) marker.setLatLng(at);
           want.add(marker);
         } else {
-          nextSpecks.push({ p, color: catOf.get(projectCategory(p))?.color ?? '#9b958d' });
+          nextSpecks.push({ p, color: colorOf(p) });
         }
       }
     }
