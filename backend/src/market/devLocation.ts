@@ -132,6 +132,13 @@ export interface ParsedAddress {
 }
 
 /** Breaks a one-line address into comparable parts (upper case, abbreviations unified). */
+/** Town names agree, allowing a cut-off spelling such as the geocoder's "MANSFIEL" for Mansfield. */
+export function townsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [short, long] = a.length < b.length ? [a, b] : [b, a];
+  return short.length >= 6 && long.startsWith(short);
+}
+
 export function parseAddress(address: string | null | undefined): ParsedAddress | null {
   if (!address?.trim()) return null;
   const parts = address.split(',').map((p) => p.trim());
@@ -151,6 +158,8 @@ export function parseAddress(address: string | null | undefined): ParsedAddress 
     unit = u;
     return '';
   });
+  // "3459N COUNTRY CLUB" and "237 S W ANDERSON" are directions: N, SW.
+  line = line.replace(/^(\d+)([NSEW])\s/, '$1 $2 ').replace(/^(\d+\s+)([NS])\s+([EW])\s+(?=[A-Z])/, '$1$2$3 ');
   // House numbers: "5730-5734", "5730 & 5734", "5730/5734".
   const lead = /^(\d+[A-Z]?)((?:\s*(?:-|&|\/|AND)\s*\d+[A-Z]?)*)\s+/.exec(line);
   const numbers = lead ? [lead[1]!, ...(lead[2]!.match(/\d+[A-Z]?/g) ?? [])] : [];
@@ -282,7 +291,7 @@ export function sameAddress(a: SiteRecord, b: SiteRecord): SameSite {
     flag = `filed ZIP ${zipA} differs from ${zipB} on the other record`;
   } else if (!zipA || !zipB) {
     if (!placeA || !placeB) return { same: false, reason: 'no ZIP or town to compare' };
-    if (placeA !== placeB) return { same: false, reason: `different town (${a.place ?? x.place} vs ${b.place ?? y.place})` };
+    if (!townsMatch(placeA, placeB)) return { same: false, reason: `different town (${a.place ?? x.place} vs ${b.place ?? y.place})` };
   }
   // Same ZIP with different town names is usual: a mailing town (Crowley,
   // Haslet) for a site inside Fort Worth's limits, or a county for a town.
@@ -380,7 +389,7 @@ export function pickGeocode(address: string, matches: CensusMatch[] | undefined)
   });
   const zipOfMatch = (m: CensusMatch) => m.addressComponents?.zip ?? parseAddress(m.matchedAddress)?.zip ?? null;
   const townOfMatch = (m: CensusMatch) => m.addressComponents?.city ?? parseAddress(m.matchedAddress)?.place ?? null;
-  const sameTown = (m: CensusMatch) => !!filed?.place && !!townOfMatch(m) && norm(townOfMatch(m)) === norm(filed.place);
+  const sameTown = (m: CensusMatch) => !!filed?.place && !!townOfMatch(m) && townsMatch(norm(townOfMatch(m)), norm(filed.place));
   let fits = filed?.zip ? base.filter((m) => !zipOfMatch(m) || zipOfMatch(m) === filed.zip) : base.filter((m) => !filed?.place || !townOfMatch(m) || sameTown(m));
   let flag: string | undefined;
   if (!fits.length && filed?.zip) {

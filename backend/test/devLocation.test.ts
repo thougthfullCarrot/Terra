@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fetchCityPermitProjects, type PermitSource } from '../src/market/cityPermits.js';
-import { addressKey, checkPoint, inferMethod, mayReplace, parseAddress, pickGeocode, sameAddress, sameSite, locationInfo } from '../src/market/devLocation.js';
+import { addressKey, checkPoint, inferMethod, mayReplace, parseAddress, townsMatch, pickGeocode, sameAddress, sameSite, locationInfo } from '../src/market/devLocation.js';
 import type { Development } from '../src/market/developments.js';
 
 describe('parseAddress', () => {
@@ -253,5 +253,16 @@ describe('ranges and units found in the first revalidation run', () => {
   it('reads the town before the state, not a building part', () => {
     expect(parseAddress('13330 Theis Lane, Bldg3, Tomball, TX 77057')).toMatchObject({ place: 'TOMBALL', zip: '77057' });
     expect(pickGeocode('13330 Theis Lane, Bldg3, Tomball, TX 77057', m('13330 THEIS LN, TOMBALL, TX, 77375', '77375', 'TOMBALL')).flag).toMatch(/filed ZIP 77057/);
+  });
+});
+
+describe('revalidation false removals from the 6adb81f run', () => {
+  it('reads "S. W." and "3459N" as directions', () => {
+    expect(parseAddress('237 S. W. Anderson Street, Burleson, TX 76028')).toMatchObject({ number: '237', dir: 'SW', street: 'ANDERSON ST' });
+    expect(parseAddress('3459N Country Club Road, Irving, TX 75017')).toMatchObject({ number: '3459', dir: 'N', street: 'COUNTRY CLUB RD' });
+  });
+  it('accepts the geocoder cutting a town name short', () => {
+    expect(townsMatch('MANSFIEL', 'MANSFIELD')).toBe(true);
+    expect(townsMatch('ALLEN', 'ALLENDALE')).toBe(false);
   });
 });
