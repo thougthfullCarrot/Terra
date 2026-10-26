@@ -184,8 +184,8 @@ describe('news page rules', () => {
   };
 
   it('reads and writes the hash, ignoring unknown values', () => {
-    expect(readNewsHash('#news&city=Dallas&topic=Office', file)).toEqual({ open: true, city: 'Dallas', topic: 'Office' });
-    expect(readNewsHash('#news&city=Paris&topic=Nope', file)).toEqual({ open: true, city: '', topic: '' });
+    expect(readNewsHash('#news&city=Dallas&topic=Office', file)).toMatchObject({ open: true, view: '', city: 'Dallas', topic: 'Office' });
+    expect(readNewsHash('#news&city=Paris&topic=Nope', file)).toMatchObject({ open: true, view: '', city: '', topic: '' });
     expect(readNewsHash('#markets', file).open).toBe(false);
     expect(writeNewsHash({ city: 'Fort Worth', topic: '' })).toBe('#news&city=Fort+Worth');
     expect(writeNewsHash({})).toBe('#news');

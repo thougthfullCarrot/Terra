@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeDeal, DEFAULT_DEAL, monthlyPayment, readDeal, suggestedRate, writeDeal } from '../../site/deal.js';
-import { compareRows, readMarketHash, writeMarketHash, type Market, type Metric } from '../../site/market.js';
+import { compareRows, type Market, type Metric } from '../../site/market.js';
 
 const markets: Market[] = [
   { city: 'Austin', values: { jobsGrowth: 2.1, taxRate: 1.9, medianRent: 1700 } },
@@ -8,26 +8,9 @@ const markets: Market[] = [
   { city: 'Houston', values: { jobsGrowth: 2.1, taxRate: 2.4, medianRent: null } },
   { city: 'San Antonio', values: { jobsGrowth: 0.8, taxRate: 2.4, medianRent: null } }
 ];
-const snapshot = { groups: [{ key: 'overview', label: 'Overview', metrics: ['jobsGrowth'] }], metrics: [], markets };
 
 describe('city comparison', () => {
-  it('reads the cities from the hash, keeping two to four known ones', () => {
-    expect(readMarketHash('#markets&tool=compare&cities=Houston,Nowhere,Dallas,Houston', snapshot)).toMatchObject({
-      tool: 'compare',
-      compare: ['Houston', 'Dallas']
-    });
-    // Too few are topped up from the open city, then the list.
-    expect(readMarketHash('#markets&tool=compare&city=Houston', snapshot).compare).toEqual(['Houston', 'Austin']);
-    expect(readMarketHash('#markets&tool=compare&cities=Austin,Dallas,Houston,San Antonio,Austin', snapshot).compare).toHaveLength(4);
-    expect(readMarketHash('#markets&tool=bogus&cities=Austin', snapshot)).toMatchObject({ tool: '', compare: [] });
-  });
-
-  it('round-trips the tool through the hash', () => {
-    const state = readMarketHash(writeMarketHash({ focus: 'overview', tool: 'compare', compare: ['Dallas', 'San Antonio'] }), snapshot);
-    expect(state).toMatchObject({ tool: 'compare', compare: ['Dallas', 'San Antonio'] });
-    expect(writeMarketHash({ tool: 'calc', compare: ['Dallas'] })).toBe('#markets&tool=calc');
-  });
-
+  // The comparison's hash tests went with the retired Compare cities tool (retired.test.ts covers its old links).
   it('marks the best city per row, ties included, and none without a better end', () => {
     const metrics: Pick<Metric, 'key' | 'better'>[] = [
       { key: 'jobsGrowth', better: 'high' },

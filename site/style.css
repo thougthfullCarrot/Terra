@@ -3136,8 +3136,8 @@ th[aria-sort] .sort-button {
   margin-top: 12px;
 }
 
-/* Property tab: owner lookup, lease radar, distress, drive time, deal of the week (property-view.js). */
-#p-body {
+/* Deal of the week under News (deal-view.js). */
+#n-deal {
   display: grid;
   gap: 12px;
 }
