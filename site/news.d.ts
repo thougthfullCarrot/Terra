@@ -17,6 +17,10 @@ export interface NewsFile {
 
 export interface NewsState {
   open: boolean;
+  /** 'deal': the Deal of the week section. */
+  view: '' | 'deal';
+  /** The deal section's market, read as given (its list is the map's markets, not the news cities). */
+  dealCity: string;
   city: string;
   topic: string;
 }

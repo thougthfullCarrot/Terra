@@ -267,7 +267,7 @@ async function fillPill() {
 }
 
 function reveal() {
-  const nodes = document.querySelectorAll('#welcome .welcome-block > h2, #welcome .steps > li, #welcome .features > *, #welcome .plans > *, #welcome .faq details, #welcome .welcome-cta');
+  const nodes = document.querySelectorAll('#welcome .welcome-block > h2, #welcome .steps > li, #welcome .features > *, #welcome .free-card, #welcome .faq details, #welcome .welcome-cta');
   if (!nodes.length || !('IntersectionObserver' in window)) return;
   const seen = new IntersectionObserver(
     (entries) =>

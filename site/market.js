@@ -198,16 +198,16 @@ export function barPercent(value, values, unit) {
   return Math.max(4, Math.round(((value - min) / (max - min)) * 100));
 }
 
-export const TOOLS = ['map', 'compare', 'calc', 'uw', 'leases', 'reports', 'sites', 'pay', 'zoning', 'growth'];
+// Compare cities, the deal calculator, the underwriting model, the site finder and the salary check were retired (retired.js).
+export const TOOLS = ['map', 'leases', 'reports', 'zoning', 'growth'];
 
 /** The most cities the comparison puts side by side; fewer than two is filled up from the list. */
 export const MAX_COMPARE = 4;
 
 /**
  * The view state lives in the URL hash (#markets&city=Houston&focus=office), leaving the query string to the job filters.
- * tool=compare (with cities=Dallas,Houston), calc, leases, reports and sites open the comparison, the deal calculator,
- * broker lease rates, the market reports list, the site finder, the salary check, zoning alerts and who's hiring vs.
- * who's building; city= narrows all but the first two.
+ * tool=map, leases, reports, zoning and growth open the development map, broker lease rates, the market reports
+ * list, zoning alerts and who's hiring vs. who's building; city= narrows each.
  */
 export function readMarketHash(hash, snapshot) {
   const params = new URLSearchParams(String(hash ?? '').replace(/^#/, ''));

@@ -1,14 +1,15 @@
-// pitch.js — the pitch deck: a swipeable tour of Terra for signed-out visitors.
+// pitch.js — the tour: a short, skippable introduction to Terra's four
+// features (Jobs, Development map, News with Deal of the week, Events).
 //
 // account.js opens it once per visit for anyone signed out (sessionStorage, so
-// moving between tabs or reloading doesn't bring it back), and the "Take the
-// tour" link on the sign-in panel reopens it. ?tour opens it for anyone, which
+// moving between tabs or reloading doesn't bring it back), the "Take the tour"
+// link on the sign-in panel and the welcome screen reopen it. The last slide's
+// action fits the visitor: create an account or sign in when signed out, back
+// to the welcome screen when signed in. ?tour opens it for anyone, which
 // makes a shareable pitch link: https://thougthfullcarrot.github.io/Terra/?tour
 //
 // Arrow keys, the dots, swiping, and the Back/Next buttons all move between
 // slides. Escape or "Skip the tour" closes it.
-import { CONFIG } from './config.js';
-
 const $ = (id) => document.getElementById(id);
 const SEEN_KEY = 'terra-pitch-seen';
 /** How far a finger has to travel sideways before a swipe counts. */
@@ -38,15 +39,11 @@ export function startPitch() {
   $('pitch-skip').addEventListener('click', closePitch);
   $('pitch-explore').addEventListener('click', closePitch);
   $('pitch-start').addEventListener('click', start);
+  $('pitch-signin').addEventListener('click', () => start('signin'));
   $('pitch-open')?.addEventListener('click', () => openPitch());
   $('pitch').addEventListener('keydown', onKey);
   bindSwipe($('pitch-track'));
 
-  if (CONFIG.paymentLink && CONFIG.priceLabel) {
-    $('pitch-paid').hidden = false;
-    $('pitch-price').textContent = CONFIG.priceLabel;
-  }
-  showLiveCount();
 
   const params = new URLSearchParams(location.search);
   if (params.has('tour')) openPitch();
@@ -89,13 +86,20 @@ export function closePitch() {
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
 }
 
-/** The last slide's call to action: straight to the sign-in form when there is one, otherwise into the site. */
-function start() {
+/**
+ * The last slide's call to action: to the email form in "create" or "sign in"
+ * mode when signed out, to the welcome screen when signed in, otherwise (the
+ * open site, no accounts) just into the site.
+ */
+function start(mode = 'create') {
   closePitch();
   const gate = $('gate');
   if (gate && !gate.hidden) {
+    $(mode === 'signin' ? 'mode-signin' : 'mode-create')?.click();
     gate.scrollIntoView({ behavior: 'smooth', block: 'center' });
     ($('verify').hidden ? $('signin-email') : $('verify-code')).focus({ preventScroll: true });
+  } else if (signedIn()) {
+    location.hash = 'home';
   }
 }
 
@@ -115,9 +119,25 @@ function go(next, instant = false) {
   $('pitch-progress').style.width = `${((index + 1) / slides.length) * 100}%`;
   $('pitch-prev').disabled = index === 0;
   const last = index === slides.length - 1;
-  $('pitch-next').textContent = last ? (gateShown() ? 'Sign up free' : 'Start exploring') : 'Next';
-  $('pitch-start').textContent = gateShown() ? 'Sign up free' : 'Start exploring';
-  $('pitch-explore').hidden = !gateShown();
+  const out = gateShown();
+  const member = !out && signedIn();
+  const action = out ? 'Create free account' : member ? 'Go to my welcome screen' : 'Start exploring';
+  $('pitch-next').textContent = last ? action : 'Next';
+  $('pitch-start').textContent = action;
+  $('pitch-signin').hidden = !out;
+  $('pitch-explore').hidden = !out;
+  $('pitch-final-title').textContent = out ? 'Free for everyone.' : member ? "You're all set." : 'Ready when you are.';
+  $('pitch-final-lede').textContent = out
+    ? 'Create an account with any email address. No credit card required.'
+    : member
+      ? 'Your welcome screen links straight to each feature.'
+      : 'Jump in and look around.';
+}
+
+/** A member is signed in when the profile button shows (account.js). */
+function signedIn() {
+  const button = $('account-button');
+  return Boolean(button && !button.hidden);
 }
 
 function gateShown() {
@@ -189,27 +209,4 @@ function bindSwipe(track) {
   };
   track.addEventListener('pointerup', end);
   track.addEventListener('pointercancel', end);
-}
-
-/** The cover's live line, from the counts site.yml publishes (stats.json) or, on an open site, the feed itself. */
-async function showLiveCount() {
-  let roles = 0;
-  let firms = 0;
-  try {
-    const stats = await fetch('stats.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null));
-    if (stats?.roles) {
-      roles = stats.roles;
-      firms = stats.firms;
-    } else {
-      const feed = await fetch('postings.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null));
-      const jobs = feed?.jobs ?? [];
-      roles = jobs.length;
-      firms = new Set(jobs.map((job) => job.firm)).size;
-    }
-  } catch {
-    return;
-  }
-  if (!roles) return;
-  $('pitch-live').textContent = `${roles} open ${roles === 1 ? 'role' : 'roles'} at ${firms} ${firms === 1 ? 'firm' : 'firms'} right now`;
-  $('pitch-live').hidden = false;
 }

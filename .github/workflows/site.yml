@@ -11,8 +11,10 @@
 # Accounts (docs/accounts-setup.md): once the repository has the variables
 # SUPABASE_URL and SUPABASE_ANON_KEY and the secret SUPABASE_SERVICE_ROLE_KEY,
 # the site asks visitors to sign in. The snapshot then goes to Supabase, where
-# only college emails and subscribers can read it, and postings.json is left
-# out of the published site. Without them the site stays open, as before.
+# only signed-in accounts with a confirmed email can read it, and postings.json is left
+# out of the published site. Without them a production build fails: TERRA never
+# falls back to an open site (only pull-request builds, never deployed, may
+# build without accounts).
 #
 # Market data (site/market.json, from BLS, the Census, Zillow, Apartment List,
 # city zoning agendas, the appraisal district summary appraisal.yml caches and
@@ -31,10 +33,10 @@
 # Repeats of one event across sources are merged, the hand-typed copy winning.
 # Public like the news, so it stays published with accounts on.
 #
-# Property tools (site/property/*.json): census tracts for the drive-time
-# rings, the lease radar (TDLR build-outs; SEC 10-Ks when the variable
-# SEC_USER_AGENT names a contact email), tax sales and the deal of the week.
-# All from public records, so they stay published with accounts on.
+# Deal of the week (site/property/deal.json), shown under News: the week's
+# biggest Texas sale in the news, per market. Public, so it stays published
+# with accounts on. (The Property tab's other lists, the site finder and the
+# Career tab's sponsors were retired with those tools and are no longer built.)
 #
 # Google Sheets (docs/sheets-setup.md): with the secret
 # GOOGLE_SERVICE_ACCOUNT_JSON and the variable TERRA_SHEET_ID, the firm list
@@ -314,34 +316,10 @@ jobs:
           path: site/events.json
           key: events-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # Parcel values change once a year, so the site finder's list is rebuilt
-      # once a week; in between, the cached file is published as is.
-      - name: Restore the site finder list
-        uses: actions/cache/restore@v4
-        with:
-          path: site/sites.json
-          key: sites-none
-          restore-keys: sites-
-
-      - name: Export the site finder list
-        id: sites
-        # A parcel map outage must never hold back the job list.
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          npm run --silent export:sites -- --max-age-days 7 2>&1 | tee /tmp/sites.log
-
-      - name: Cache the site finder list
-        if: steps.sites.outcome == 'success'
-        uses: actions/cache/save@v4
-        with:
-          path: site/sites.json
-          key: sites-${{ github.run_id }}-${{ github.run_attempt }}
-
-      # The Property tab's lists (site/property/*.json): census tracts for the
-      # drive-time rings, the lease radar, tax sales and the deal of the week.
-      # Each file has its own refresh age (export-property.ts), so most runs
-      # publish the cached copies untouched.
+      # Deal of the week (site/property/deal.json), shown under News. The other
+      # property lists (drive-time tracts, lease radar, tax sales) fed tools that
+      # were retired, so only the deal is exported, and their old cached copies
+      # are dropped from the published site below.
       - name: Restore the property files
         uses: actions/cache/restore@v4
         with:
@@ -353,13 +331,10 @@ jobs:
         id: property
         # A property source outage must never hold back the job list.
         continue-on-error: true
-        env:
-          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
-          # Optional: "Name contact@email" turns on the 10-K half of the lease radar (SEC asks for a contact).
-          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
         run: |
+          rm -f ../site/property/tracts.json ../site/property/leases.json ../site/property/distress.json
           set -o pipefail
-          npm run --silent export:property 2>&1 | tee /tmp/property.log
+          npm run --silent export:property -- --only deal 2>&1 | tee /tmp/property.log
 
       # The whole deal file in the log, so a review can check each market's
       # pick against the real build without downloading the site.
@@ -377,30 +352,6 @@ jobs:
         with:
           path: site/property
           key: property-${{ github.run_id }}-${{ github.run_attempt }}
-
-      # The Career tab's new-agent sponsors (site/career/sponsors.json), from
-      # the Texas Real Estate Commission's open data set; rebuilt weekly.
-      - name: Restore the new-agent sponsors
-        uses: actions/cache/restore@v4
-        with:
-          path: site/career
-          key: career-none
-          restore-keys: career-
-
-      - name: Export the new-agent sponsors
-        id: sponsors
-        # A licensing data outage must never hold back the job list.
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          npm run --silent export:sponsors -- --max-age-days 7 2>&1 | tee /tmp/sponsors.log
-
-      - name: Cache the new-agent sponsors
-        if: steps.sponsors.outcome == 'success'
-        uses: actions/cache/save@v4
-        with:
-          path: site/career
-          key: career-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Pull requests only: the development map filters against the real
       # market.json this run built, and the city permit grouping against the
@@ -496,15 +447,9 @@ jobs:
             cat /tmp/events.log 2>/dev/null || true
             echo '```'
             echo
-            echo '## Career'
+            echo '## Deal of the week'
             echo
-            echo '```'
-            cat /tmp/sponsors.log 2>/dev/null || true
-            echo '```'
-            echo
-            echo '## Property tools'
-            echo
-            for f in tracts leases distress deal; do
+            for f in deal; do
               if [ -f "../site/property/$f.json" ]; then
                 echo "- $f.json: $(wc -c < "../site/property/$f.json") bytes, built $(jq -r '.generatedAt' "../site/property/$f.json")"
               fi
@@ -528,7 +473,13 @@ jobs:
           DEVELOPMENT_REPORTS_ENABLED: ${{ vars.DEVELOPMENT_REPORTS_ENABLED }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
-            echo "Accounts not configured; publishing the open site."
+            # Production never falls back to an open site; only pull-request
+            # builds (never deployed) may build without accounts.
+            if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+              echo "::error::SUPABASE_URL, SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY is not set. TERRA requires sign-in; not building a public site."
+              exit 1
+            fi
+            echo "Accounts not configured; pull-request build only (never deployed)."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -636,6 +587,10 @@ jobs:
         if: steps.accounts.outputs.enabled == 'true'
         run: rm -rf ../site/postings.json ../site/market.json ../site/developments
 
+      - name: Check the site requires sign-in
+        if: github.event_name != 'pull_request'
+        run: ../.github/scripts/production-site-check.sh ../site
+
       - name: Package the site
         uses: actions/upload-pages-artifact@v3
         with:
@@ -668,6 +623,20 @@ jobs:
             echo 'GitHub Pages is off. Turn it on once under **Settings > Pages >'
             echo 'Build and deployment > Source: GitHub Actions**; the next run publishes.'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The site promises free access for every confirmed email; it must not go
+      # live before the database does that (docs/free-access.md). A failed,
+      # skipped or not-yet-approved migration fails this step, and nothing
+      # publishes.
+      - name: Free-access gate
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Check the database grants free access
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: .github/scripts/free-access-gate.sh
 
       - name: Deploy
         id: deployment

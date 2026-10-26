@@ -1,9 +1,10 @@
 // markets-view.js — draws the market data section. The rules live in market.js.
 //
-// The page has four sections, Jobs, Tracker, Market data and News, switched by the URL hash
+// The page's sections (Jobs, Tracker, the Development Map, Market data, News and Events) are switched by the URL hash
 // so a link can open a city's market directly (#markets&city=Houston). The
 // data comes from a loader app.js hands over: market.json on the open site,
 // or the members-only Supabase row when accounts are on.
+import { homeOpen } from './home-view.js';
 import {
   barPercent,
   figureSource,
@@ -28,14 +29,10 @@ import {
 import { developmentMap, disposeMap } from './devmap.js';
 import { followButton } from './watch-view.js';
 import { marketItem } from './watch.js';
-import { calculatorView, compareView, leasesView, reportsView } from './market-tools.js';
-import { underwriteView } from './underwrite-view.js';
-import { sitesView } from './sites-view.js';
-import { growthView, payView, zoningView } from './insights-view.js';
+import { leasesView, reportsView } from './market-tools.js';
+import { growthView, zoningView } from './insights-view.js';
 import { readNewsHash } from './news.js';
 import { readEventsHash } from './events.js';
-import { readPropertyHash } from './property.js';
-import { readCareerHash } from './career.js';
 import { stateBox } from './labels.js';
 import { countText, placeOf, texasMap } from './live.js';
 
@@ -79,9 +76,7 @@ export function setMarketLoader(next, devFileLoader = null) {
 }
 
 /**
- * The market data file, loaded once and shared with the Career tab, which
- * reads its development maps, zoning cases and salary filings. null when
- * signed out or not built yet.
+ * The market data file, loaded once. null when signed out or not built yet.
  */
 export async function marketSnapshot() {
   if (snapshot) return snapshot;
@@ -137,11 +132,10 @@ function update(change) {
 
 /** Which section the hash opens. The tracker only exists for signed-in members, so without its tab it falls back to jobs. */
 function section() {
+  if (homeOpen() && !$('tab-home').hidden) return 'home';
   if (readMarketHash(location.hash, null).open) return 'markets';
   if (readNewsHash(location.hash, null).open) return 'news';
   if (readEventsHash(location.hash, null).open) return 'events';
-  if (readPropertyHash(location.hash).open) return 'property';
-  if (readCareerHash(location.hash).open) return 'career';
   if (new URLSearchParams(location.hash.replace(/^#/, '')).has('tracker') && !$('tab-tracker').hidden) return 'tracker';
   return 'jobs';
 }
@@ -151,10 +145,13 @@ async function show() {
   const open = active === 'markets';
   // style.css keeps the job counts in the masthead to the Jobs tab.
   document.body.dataset.section = active;
-  // news-view.js, events-view.js and property-view.js show their own sections; the others step aside for it.
+  // news-view.js and events-view.js show their own sections; the others step aside for it.
   for (const name of ['jobs', 'markets', 'tracker']) $(`${name}-view`).hidden = name !== active;
-  for (const name of ['jobs', 'markets', 'tracker', 'news', 'events', 'property', 'career']) {
-    if (name === active) $(`tab-${name}`).setAttribute('aria-current', 'page');
+  $('home-view').hidden = active !== 'home';
+  // The Development Map has its own tab, though it lives in the market data section.
+  const tab = open && readMarketHash(location.hash, null).tool === 'map' ? 'map' : active;
+  for (const name of ['home', 'jobs', 'map', 'markets', 'tracker', 'news', 'events']) {
+    if (name === tab) $(`tab-${name}`).setAttribute('aria-current', 'page');
     else $(`tab-${name}`).removeAttribute('aria-current');
   }
   if (!open) {
@@ -211,16 +208,14 @@ function render() {
   // The overview's table sorts from its own column headers.
   $('m-sort-label').hidden = true;
   $('m-order-label').hidden = true;
-  // The comparison picks its own cities; the calculator brings its own inputs; the topic means nothing to the broker views.
-  $('m-city-label').hidden = tool === 'compare';
-  $('m-focus-label').hidden = ['leases', 'reports', 'sites', ...INSIGHTS].includes(tool);
-  $('m-filters').hidden = tool === 'calc' || tool === 'uw';
+  // The topic means nothing to the broker views.
+  $('m-focus-label').hidden = ['leases', 'reports', ...INSIGHTS].includes(tool);
   // The development map is its own full-height workspace under the header.
   if (tool === 'map') document.body.dataset.workspace = 'map';
   else delete document.body.dataset.workspace;
-  for (const name of ['', 'map', 'compare', 'calc', 'uw', 'leases', 'sites', 'reports', ...INSIGHTS]) {
+  for (const name of ['', 'map', 'leases', 'reports', ...INSIGHTS]) {
     const link = $(`m-tool-${name || 'data'}`);
-    link.href = writeMarketHash({ ...state, tool: name, compare: name === 'compare' ? state.compare : [] });
+    link.href = writeMarketHash({ ...state, tool: name, compare: [] });
     if (tool === name) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
@@ -239,8 +234,8 @@ function render() {
     $('m-rates').replaceChildren();
     $('m-chart').replaceChildren();
     $('m-body').replaceChildren(toolView(tool));
-    // The broker and parcel tools carry their own source notes.
-    $('m-sources').replaceChildren(...(['leases', 'reports', 'sites', ...INSIGHTS].includes(tool) ? [] : [sources()]));
+    // The broker tools carry their own source notes.
+    $('m-sources').replaceChildren(...(['leases', 'reports', ...INSIGHTS].includes(tool) ? [] : [sources()]));
     return;
   }
 
@@ -254,30 +249,20 @@ function render() {
 }
 
 /** Tools that carry their own source notes and need no topic (insights-view.js). */
-const INSIGHTS = ['pay', 'zoning', 'growth'];
+const INSIGHTS = ['zoning', 'growth'];
 
 const TOOL_BLURBS = {
-  compare: 'Rents, permits, job growth and taxes for the cities you pick, side by side.',
-  calc: "Run the numbers on a property with today's rates and a Texas city's property tax.",
-  uw: 'A 10-year hold with IRR, equity multiple and a sensitivity grid, downloadable to Excel with live formulas.',
   leases: 'Office, industrial and retail vacancy and asking rents from brokerages\' free quarterly reports.',
-  sites: 'Land and buildings from county appraisal rolls, with zoning from the city: filter by use, size and appraised value per square foot.',
   reports: 'The latest free quarterly market reports from the big brokerages, by city.',
-  pay: 'What commercial real estate firms actually offer, by job title and city, from Labor Department wage filings.',
   zoning: 'Rezoning requests and special use permits on city agendas: the earliest public sign of a new project.',
   growth: "Firms posting jobs lined up against the projects they are building, and the developers who will likely hire next."
 };
 
 function toolView(tool) {
-  if (tool === 'calc') return calculatorView(snapshot);
-  if (tool === 'uw') return underwriteView(snapshot);
-  if (tool === 'compare') return compareView(snapshot, state, update);
   if (tool === 'leases') return leasesView(snapshot, state.city);
   if (tool === 'reports') return reportsView(snapshot, state.city);
-  if (tool === 'pay') return payView(snapshot, state.city);
   if (tool === 'zoning') return zoningView(snapshot, state.city);
-  if (tool === 'growth') return growthView(snapshot, state.city);
-  return sitesView(snapshot, state.city);
+  return growthView(snapshot, state.city);
 }
 
 /** The city the all-markets panel shows; a table row's click picks it. */

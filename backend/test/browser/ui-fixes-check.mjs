@@ -12,9 +12,8 @@
 // light and dark:
 //   - Deal of the week shows the picked market's own deal, an older local
 //     deal labeled with its date, or a plain "none" note, never another
-//     market's; "All markets" shows the statewide pick; the lookup's side
-//     panel follows the market; rapid switching ends on the last pick.
-//   - Pill links center their label like pill buttons (Career brief and tour).
+//     market's; "All markets" shows the statewide pick; rapid switching
+//     ends on the last pick. (Deal of the week lives under News now.)
 //   - Dropdown options have a solid background with readable text.
 //   - Jobs rows: bookmark, match score and dates don't overlap, line up
 //     across rows, and the phone page doesn't scroll sideways.
@@ -102,7 +101,6 @@ async function open(size, theme, hash, { dealDelay = 0 } = {}) {
     if (dealDelay) await new Promise((r) => setTimeout(r, dealDelay));
     await route.fulfill({ json: realDeal ?? dealFile }).catch(() => {});
   });
-  await page.route(/property\/distress\.json/, (route) => route.fulfill({ status: 404 }));
   await page.addInitScript(() => {
     try {
       sessionStorage.setItem('terra-pitch-seen', '1');
@@ -137,7 +135,7 @@ if (realDeal) {
     for (const city of ['', ...MARKETS]) {
       const want = expect(city);
       const name = `real ${size} ${theme}: ${city || 'All markets'} (${want.status})`;
-      const page = await open(size, theme, `#property&tool=deal${city ? `&city=${encodeURIComponent(city)}` : ''}`);
+      const page = await open(size, theme, `#news&view=deal${city ? `&city=${encodeURIComponent(city)}` : ''}`);
       await card(page).waitFor({ timeout: 15000 }).catch(() => {});
       const shown = await page.locator('.deal-card').getAttribute('data-deal-url').catch(() => null);
       const status = await page.locator('.deal-card').getAttribute('data-deal-status').catch(() => null);
@@ -155,39 +153,27 @@ if (realDeal) {
       await page.close();
     }
   }
-  for (const city of ['San Antonio', 'Dallas', 'Houston', 'Lubbock', '']) {
-    const want = expect(city);
-    const page = await open('desk', 'light', `#property${city ? `&city=${encodeURIComponent(city)}` : ''}`);
-    await page.locator('.owner-side-card').waitFor({ timeout: 15000 }).catch(() => {});
-    const shown = await page.locator('.owner-side-card').getAttribute('data-deal-url').catch(() => null);
-    const text = await page.locator('.owner-side-card').innerText().catch(() => '');
-    const ok = want.status === 'none' ? !shown && text.includes(`No ${city} sale`) : shown === want.url;
-    log(`real lookup side panel: ${city || 'All markets'} (${want.status})`, ok, text.replace(/\s+/g, ' ').slice(0, 140));
-    if (shots) await page.screenshot({ path: `${shots}/real-lookup-${(city || 'all').replace(/\W+/g, '-').toLowerCase()}.png` });
-    await page.close();
-  }
 }
 
 // ---- 1. Deal of the week by market (fixture)
 for (const [size, theme] of realDeal ? [] : [['desk', 'light'], ['phone', 'dark']]) {
-  const page = await open(size, theme, '#property&tool=deal&city=San%20Antonio');
+  const page = await open(size, theme, '#news&view=deal&city=San%20Antonio');
   await card(page).waitFor();
   const text = async () => (await card(page).innerText()).replace(/\s+/g, ' ');
   log(`${size} ${theme}: San Antonio shows its own deal`, (await card(page).getAttribute('data-deal-url')) === sa.url && !/Dallas/.test(await text()));
-  const calc = await page.locator('.deal-card a[href*="#markets&tool=calc"]').getAttribute('href');
-  log(`${size} ${theme}: the calculator link carries the deal's market and price`, /taxcity=San(\+|%20)Antonio/.test(calc ?? '') && /price=48000000/.test(calc ?? ''), calc ?? 'no link');
+  log(`${size} ${theme}: no link to the retired deal calculator`, !(await page.locator('.deal-card a[href*="tool=calc"]').count()));
   log(`${size} ${theme}: reported facts are set apart from estimates`, (await page.locator('.deal-reported').count()) === 1 && /teaching estimates/.test(await text()));
   log(`${size} ${theme}: a market page doesn't list other markets' sales`, !(await page.locator('text=Other Texas sales in the news').count()));
 
-  await page.selectOption('#p-city', 'Austin');
+  await page.selectOption('#n-deal-city', 'Austin');
   await page.waitForFunction(() => document.querySelector('.deal-card')?.dataset.dealUrl === 'https://example.com/rr');
   log(`${size} ${theme}: Austin offers its older local deal, labeled with its date`, /week of Sep 21, 2026/.test(await page.locator('.deal-older-note').innerText()), await page.locator('.deal-older-note').innerText());
 
-  await page.selectOption('#p-city', 'Lubbock');
+  await page.selectOption('#n-deal-city', 'Lubbock');
   await page.locator('.deal-none').waitFor();
   log(`${size} ${theme}: Lubbock says no local deal instead of showing Dallas`, /No verified Lubbock sale/.test(await text()) && !(await page.locator('.deal-card').count()));
 
-  await page.selectOption('#p-city', '');
+  await page.selectOption('#n-deal-city', '');
   await page.waitForFunction(() => document.querySelector('.deal-card')?.dataset.dealStatus === 'statewide');
   log(`${size} ${theme}: All markets shows the statewide pick`, (await card(page).getAttribute('data-deal-url')) === dallas.url);
   await page.close();
@@ -195,49 +181,20 @@ for (const [size, theme] of realDeal ? [] : [['desk', 'light'], ['phone', 'dark'
 
 // Rapid switching with a slow file: the last pick wins.
 if (!realDeal) {
-  const page = await open('desk', 'light', '#property&tool=deal&city=Dallas', { dealDelay: 1200 });
-  await page.locator('#p-city option').nth(3).waitFor({ state: 'attached' });
-  for (const city of ['San Antonio', 'Lubbock', 'Dallas', 'Austin']) await page.selectOption('#p-city', city);
+  const page = await open('desk', 'light', '#news&view=deal&city=Dallas', { dealDelay: 1200 });
+  await page.locator('#n-deal-city option').nth(3).waitFor({ state: 'attached' });
+  for (const city of ['San Antonio', 'Lubbock', 'Dallas', 'Austin']) await page.selectOption('#n-deal-city', city);
   await page.waitForTimeout(2500);
   const url = await page.locator('.deal-card').getAttribute('data-deal-url').catch(() => null);
   log('rapid market switching ends on the last market picked (Austin)', url === austinOld.url && (await page.locator('.deal-card, .deal-none').count()) === 1, String(url));
   await page.close();
 }
 
-// The lookup's side panel follows the market.
-for (const [city, want] of realDeal ? [] : [['San Antonio', sa.url], ['Dallas', dallas.url], ['', dallas.url]]) {
-  const page = await open('desk', 'light', `#property${city ? `&city=${encodeURIComponent(city)}` : ''}`);
-  await page.locator('.owner-side-card').waitFor();
-  log(`lookup side panel for ${city || 'All markets'} shows ${want.split('/').pop()}`, (await page.locator('.owner-side-card').getAttribute('data-deal-url')) === want);
-  await page.close();
-}
-if (!realDeal) {
-  const page = await open('desk', 'light', '#property&city=Lubbock');
-  await page.locator('.owner-side-card').waitFor();
-  log('lookup side panel for Lubbock says there is no local deal', /No Lubbock sale/.test(await page.locator('.owner-side-card').innerText()) && !(await page.locator('.owner-side-card[data-deal-url]').count()));
-  await page.close();
-}
-
 // ---- 2-4. Buttons, dropdowns, Jobs rows
-const centered = (page, selector) =>
-  page.locator(selector).evaluate((node) => {
-    const box = node.getBoundingClientRect();
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    const text = range.getBoundingClientRect();
-    return { dy: Math.abs(text.top + text.height / 2 - (box.top + box.height / 2)), dx: Math.abs(text.left + text.width / 2 - (box.left + box.width / 2)), h: box.height };
-  });
 for (const size of ['desk', 'phone']) {
   for (const theme of ['light', 'dark']) {
     const tag = `${size} ${theme}`;
-    let page = await open(size, theme, '#career&firm=CBRE');
-    await page.locator('.brief-actions a.secondary').waitFor();
-    const link = await centered(page, '.brief-actions a.secondary');
-    const button = await centered(page, '.brief-actions button.secondary');
-    const tops = await page.locator('.brief-actions > *').evaluateAll((n) => n.map((x) => Math.round(x.getBoundingClientRect().top)));
-    log(`${tag}: "See its jobs" label is centered and lines up with "Print or save as PDF"`, link.dy <= 1.5 && link.dx <= 1.5 && button.dy <= 1.5 && (size === 'phone' || new Set(tops).size === 1) && link.h >= 40, JSON.stringify({ link, button, tops }));
-    await page.close();
-
+    let page;
     page = await open(size, theme, '');
     await page.locator('#list .card').first().waitFor();
     for (const id of ['firm', 'sector', 'sort']) {
