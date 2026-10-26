@@ -4881,11 +4881,10 @@ svg.bars text {
 
 .tick small {
   display: block;
-  overflow: hidden;
   font-size: 12px;
+  line-height: 1.3;
   color: var(--muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .tick b {
@@ -11806,5 +11805,29 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
 @media (max-width: 1000px) {
   .city-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Rates strip: even rows at every width; the last tile closes its row (markets-view.js rates()). */
+.ticker {
+  grid-template-columns: repeat(var(--cols-wide, 5), minmax(0, 1fr));
+}
+.ticker .tick:last-child {
+  grid-column: span var(--span-wide, 1);
+}
+@media (max-width: 1000px) {
+  .ticker {
+    grid-template-columns: repeat(var(--cols-mid, 3), minmax(0, 1fr));
+  }
+  .ticker .tick:last-child {
+    grid-column: span var(--span-mid, 1);
+  }
+}
+@media (max-width: 640px) {
+  .ticker {
+    grid-template-columns: repeat(var(--cols-narrow, 2), minmax(0, 1fr));
+  }
+  .ticker .tick:last-child {
+    grid-column: span var(--span-narrow, 1);
   }
 }

@@ -38,3 +38,18 @@ describe('city data page rules', () => {
     expect(coverage({ metrics: METRICS.slice(0, 3) }, { values: { [METRICS[0]!.key]: 0 } })).toEqual({ have: 1, total: 3 });
   });
 });
+
+describe('rate change wording and strip layout', () => {
+  it('words a rate change as percentage points', async () => {
+    // @ts-expect-error plain JS module shared with the site
+    const { pointsText, stripLayout } = await import('../../site/market.js');
+    expect(pointsText(0.99)).toBe('0.99 percentage points');
+    expect(pointsText(-0.21)).toBe('0.21 percentage points');
+    expect(pointsText(1)).toBe('1.00 percentage point');
+    expect(pointsText(0.99)).not.toMatch(/%/);
+    expect(stripLayout(9, 5)).toEqual({ cols: 5, span: 2 });
+    expect(stripLayout(9, 2)).toEqual({ cols: 2, span: 2 });
+    expect(stripLayout(8, 5)).toEqual({ cols: 4, span: 1 });
+    expect(stripLayout(9, 3)).toEqual({ cols: 3, span: 1 });
+  });
+});

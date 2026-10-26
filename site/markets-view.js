@@ -11,6 +11,8 @@ import {
   defaultOrder,
   formatDate,
   formatPoints,
+  pointsText,
+  stripLayout,
   formatValue,
   GEOGRAPHY_LABELS,
   HEADLINE_METRICS,
@@ -691,6 +693,7 @@ function headline(market) {
  * "(ACS)" so they never read as the same measure as the Census estimates.
  */
 function cityLabel(metric) {
+  if (metric.key === 'taxRateChange') return 'Tax rate change (percent change in the rate, not points)';
   return metric.source === 'Census ACS' && /^Population/.test(metric.label) ? `${metric.label} (ACS)` : metric.label;
 }
 
@@ -886,7 +889,7 @@ function talkingPoints(market, group) {
   const treasury = (snapshot.rates ?? []).find((r) => /10-year treasury/i.test(r.label));
   if (treasury && treasury.change != null && Math.abs(treasury.change) >= 0.05) {
     lines.push(
-      `The 10-year Treasury is ${formatValue(treasury.value, 'taxRate')}, ${treasury.change > 0 ? 'up' : 'down'} ${formatPoints(Math.abs(treasury.change)).replace(/^\+/, '')} from a year ago (${treasury.period}), which moves what buyers can pay.`
+      `The 10-year Treasury is ${formatValue(treasury.value, 'taxRate')}, ${treasury.change > 0 ? 'up' : 'down'} ${pointsText(treasury.change)} from a year ago (${treasury.period}), which moves what buyers can pay.`
     );
   }
   if (lines.length < 2) return null;
@@ -920,6 +923,12 @@ function rates() {
   if (!list.length) return '';
   const box = el('section', 'card ticker');
   box.setAttribute('aria-label', 'Interest rates and lending, change from a year earlier');
+  // Even rows: the last tile stretches to close its row at each width (style.css).
+  for (const [name, max] of [['wide', 5], ['mid', 3], ['narrow', 2]]) {
+    const { cols, span } = stripLayout(list.length, max);
+    box.style.setProperty(`--cols-${name}`, String(cols));
+    box.style.setProperty(`--span-${name}`, String(span));
+  }
   for (const rate of list) {
     const tile = el('a', 'tick');
     tile.href = rate.url;
@@ -935,7 +944,7 @@ function rates() {
         '',
         rate.format === 'index' ? (Math.round(rate.value * 10) / 10).toFixed(1) : survey ? formatValue(rate.value, 'rate') : formatValue(rate.value, 'taxRate')
       ),
-      el('span', `tick-change${dir}`, rate.change == null ? rate.period : `${formatPoints(rate.change)} yoy`)
+      el('span', `tick-change${dir}`, rate.change == null ? rate.period : rate.format === 'index' ? `${formatPoints(rate.change).replace(' pts', ' index pts')} yoy` : `${formatPoints(rate.change)} yoy`)
     );
     box.append(tile);
   }

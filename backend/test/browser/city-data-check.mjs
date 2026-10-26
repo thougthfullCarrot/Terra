@@ -7,7 +7,9 @@
 // line; the four headline figures; switching city and topic (click and arrow
 // keys) with the URL following; one table row per metric with a period; the
 // source fold's link; the missing-figures note; a zero shown as 0; no ranking
-// strips; and no sideways scrolling on a phone or at 200% zoom. Read-only and offline.
+// strips; rate changes worded as percentage points, never "%"; the rates strip's
+// labels wrapping (never cut off) with even rows; and no sideways scrolling on a
+// phone or at 200% zoom. Read-only and offline.
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
@@ -127,8 +129,52 @@ if (zeroCase) {
   const value = await page.$$eval('.city-table tbody tr', (trs, label) => trs.find((tr) => tr.querySelector('.city-metric-name').textContent.startsWith(label))?.querySelector('td.num').textContent, zeroCase.label);
   log('zero shown as 0', /^\$?0(\.0+)?%?$/.test(value?.trim() ?? ''), `${zeroCase.city} ${zeroCase.label}: ${value}`);
 } else console.log('SKIP  zero case (no zero in this data)');
+// Rate changes in sentences are percentage points, never a bare "%" (0.99 points is not 0.99%).
+const talk = await page.$$eval('.talk li', (n) => n.map((x) => x.textContent));
+const pointLines = talk.filter((t) => /Treasury|rate/i.test(t) && /\b(up|down)\b/.test(t));
+log('rate changes read as percentage points', pointLines.every((t) => /percentage points?/.test(t) && !/\b(up|down) [\d.]+%/.test(t)), pointLines.join(' | ') || 'no rate sentence on this page');
+const tickTitles = await page.$$eval('.tick', (n) => n.map((x) => x.querySelector('.tick-change')?.textContent ?? ''));
+log('rates strip changes are in points', tickTitles.every((t) => !/[\d.]+%\s*yoy/.test(t)), tickTitles.join(' | '));
+
 log('no page errors (desktop)', page.errors.length === 0, page.errors.join('; '));
 await page.context().close();
+
+// The rates strip: labels wrap rather than truncate, and its rows are even (the last tile closes its row).
+async function stripCheck(p, name) {
+  const r = await p.evaluate(() => {
+    const box = document.querySelector('.ticker');
+    if (!box) return null;
+    const tiles = [...box.querySelectorAll('.tick')];
+    const clipped = tiles.map((t) => t.querySelector('small')).filter((s) => s && (s.scrollWidth > s.clientWidth + 1 || getComputedStyle(s).textOverflow === 'ellipsis' || getComputedStyle(s).whiteSpace === 'nowrap')).map((s) => s.textContent);
+    const b = box.getBoundingClientRect();
+    const rows = new Map();
+    for (const t of tiles) {
+      const r = t.getBoundingClientRect();
+      const key = Math.round(r.top);
+      rows.set(key, Math.max(rows.get(key) ?? 0, r.right));
+    }
+    const ragged = [...rows.values()].filter((right) => Math.abs(right - b.right) > 3).length;
+    const last = tiles.at(-1).getBoundingClientRect();
+    const perRow = [...rows.keys()].map((k) => tiles.filter((t) => Math.round(t.getBoundingClientRect().top) === k).length);
+    return { n: tiles.length, clipped, ragged, perRow, lastFull: Math.abs(last.left - b.left) < 3 && Math.abs(last.right - b.right) < 3 };
+  });
+  if (!r) return log(`${name}: rates strip present`, false);
+  log(`${name}: rates strip labels wrap, none cut off`, r.clipped.length === 0, r.clipped.join(' | '));
+  log(`${name}: rates strip rows even`, r.ragged === 0, `${r.n} tiles, rows ${r.perRow.join('+')}`);
+  return r;
+}
+{
+  const desk = await open({ width: 1440, height: 900 }, `#markets&city=${encodeURIComponent(first)}`);
+  await stripCheck(desk, 'desktop');
+  await desk.context().close();
+  const mid = await open({ width: 820, height: 900 }, `#markets&city=${encodeURIComponent(first)}`);
+  await stripCheck(mid, 'tablet');
+  await mid.context().close();
+  const phone = await open({ width: 390, height: 844 }, `#markets&city=${encodeURIComponent(first)}`, { phone: true });
+  const r = await stripCheck(phone, 'phone');
+  if (r && r.n % 2) log('phone: the last rates tile spans both columns', r.lastFull);
+  await phone.context().close();
+}
 
 // Every city and topic on a phone: no sideways scroll, no clipped label, every row with a period, no dash rows.
 {

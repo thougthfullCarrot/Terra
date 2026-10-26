@@ -165,6 +165,27 @@ export function formatValue(value, unit) {
   }
 }
 
+/**
+ * A change in a rate in words, for sentences: "0.99 percentage points"
+ * (never "0.99%", which would read as a relative change). Unsigned.
+ */
+export function pointsText(value) {
+  if (value == null || !Number.isFinite(value)) return '';
+  const n = Math.abs(Math.round(value * 100) / 100);
+  return `${n.toFixed(2)} percentage point${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * How many columns a strip of n tiles takes at most per row, and how far its
+ * last tile stretches to close the final row: { cols, span }.
+ */
+export function stripLayout(n, maxCols) {
+  if (n <= 0) return { cols: 1, span: 1 };
+  const rows = Math.ceil(n / maxCols);
+  const cols = Math.ceil(n / rows);
+  return { cols, span: cols * rows - n + 1 };
+}
+
 /** A change in a rate, in percentage points: +0.25 pts. */
 export function formatPoints(value) {
   if (value == null || !Number.isFinite(value)) return '—';
