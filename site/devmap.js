@@ -915,30 +915,45 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     speckCanvas.style.height = `${size.y}px`;
     const g = speckCanvas.getContext('2d');
     g.scale(ratio, ratio);
+    // ZIP-area rings: many projects share one ZIP center, so each ring is
+    // stroked once, batched by color under a single dash pattern.
+    const rings = new Map();
     for (const s of speckPts) {
       const c = map.latLngToContainerPoint(where.get(s.p));
       s.x = c.x;
       s.y = c.y;
+      if (c.x < -8 || c.y < -8 || c.x > size.x + 8 || c.y > size.y + 8) continue;
       const r = s.p === hoverSpeck ? 6 : 3.5;
+      if (s.p.approximate) {
+        const key = `${Math.round(c.x)},${Math.round(c.y)},${r}`;
+        const byColor = rings.get(s.color) ?? new Map();
+        byColor.set(key, [c.x, c.y, r]);
+        rings.set(s.color, byColor);
+        continue;
+      }
       g.beginPath();
       g.arc(c.x, c.y, r, 0, Math.PI * 2);
-      if (s.p.approximate) {
-        g.setLineDash([2, 2]);
-        g.strokeStyle = s.color;
-        g.lineWidth = 1.5;
-        g.stroke();
-        g.setLineDash([]);
-      } else {
-        g.globalAlpha = 0.85;
-        g.fillStyle = s.color;
-        g.fill();
-        g.globalAlpha = 0.5;
-        g.strokeStyle = '#000000';
-        g.lineWidth = 1;
-        g.stroke();
-        g.globalAlpha = 1;
-      }
+      g.globalAlpha = 0.85;
+      g.fillStyle = s.color;
+      g.fill();
+      g.globalAlpha = 0.5;
+      g.strokeStyle = '#000000';
+      g.lineWidth = 1;
+      g.stroke();
+      g.globalAlpha = 1;
     }
+    g.setLineDash([2, 2]);
+    g.lineWidth = 1.5;
+    for (const [color, byColor] of rings) {
+      g.beginPath();
+      for (const [x, y, r] of byColor.values()) {
+        g.moveTo(x + r, y);
+        g.arc(x, y, r, 0, Math.PI * 2);
+      }
+      g.strokeStyle = color;
+      g.stroke();
+    }
+    g.setLineDash([]);
   };
   const speckAt = (point) => {
     let best = null;
