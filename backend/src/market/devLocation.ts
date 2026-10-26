@@ -327,33 +327,40 @@ export interface GeocodePick {
   matched?: string;
   /** Why no point was taken. */
   rejected?: string;
+  /** Taken, but worth a look: the filed ZIP disagrees with the match in the same town. */
+  flag?: string;
 }
 
 /**
  * The geocoder's match, only if it is the filed address: same house number,
- * direction, ZIP (or town when no ZIP was filed), in Texas. Several matches
- * that disagree by more than a kilometre are ambiguous and give no point.
+ * direction, and ZIP, in Texas. Filings often carry a wrong ZIP (TDLR has an
+ * Austin storage site in 78209, a San Antonio ZIP), so a match in the filed
+ * town with the same number and direction is taken too, flagged. A match in
+ * another town and ZIP is refused. Several matches that disagree by more than
+ * a kilometre are ambiguous and give no point.
  */
 export function pickGeocode(address: string, matches: CensusMatch[] | undefined): GeocodePick {
   const filed = parseAddress(address);
   const usable = (matches ?? []).filter((m) => Number.isFinite(m.coordinates?.x) && Number.isFinite(m.coordinates?.y));
   if (!usable.length) return { at: null, rejected: 'no match' };
-  const fits = usable.filter((m) => {
+  const base = usable.filter((m) => {
     const c = m.addressComponents ?? {};
     if (c.state && c.state.toUpperCase() !== 'TX') return false;
     const got = parseAddress(m.matchedAddress);
-    if (filed?.zip) {
-      const zip = c.zip ?? got?.zip;
-      if (zip && zip !== filed.zip) return false;
-    } else if (filed?.place) {
-      const city = c.city ?? got?.place;
-      if (city && norm(city) !== norm(filed.place)) return false;
-    }
     if (filed?.number && got?.number && got.number !== filed.number) return false;
     const dir = (c.preDirection || c.suffixDirection || got?.dir || '').toUpperCase();
     if (filed?.dir && dir && dir !== filed.dir) return false;
     return true;
   });
+  const zipOfMatch = (m: CensusMatch) => m.addressComponents?.zip ?? parseAddress(m.matchedAddress)?.zip ?? null;
+  const townOfMatch = (m: CensusMatch) => m.addressComponents?.city ?? parseAddress(m.matchedAddress)?.place ?? null;
+  const sameTown = (m: CensusMatch) => !!filed?.place && !!townOfMatch(m) && norm(townOfMatch(m)) === norm(filed.place);
+  let fits = filed?.zip ? base.filter((m) => !zipOfMatch(m) || zipOfMatch(m) === filed.zip) : base.filter((m) => !filed?.place || !townOfMatch(m) || sameTown(m));
+  let flag: string | undefined;
+  if (!fits.length && filed?.zip) {
+    fits = base.filter(sameTown);
+    if (fits.length) flag = `filed ZIP ${filed.zip}, but the address is in ${zipOfMatch(fits[0]!)} (same town)`;
+  }
   if (!fits.length) {
     const m = usable[0]!;
     return { at: null, matched: m.matchedAddress, rejected: `match is not the filed address (${m.matchedAddress ?? 'no address'})` };
@@ -361,5 +368,5 @@ export function pickGeocode(address: string, matches: CensusMatch[] | undefined)
   const points = fits.map((m) => [m.coordinates!.y, m.coordinates!.x] as [number, number]);
   const spreadKm = Math.max(...points.map((p) => km(p, points[0]!)));
   if (spreadKm > 1) return { at: null, matched: fits[0]!.matchedAddress, rejected: `${fits.length} matches up to ${spreadKm.toFixed(1)} km apart` };
-  return { at: points[0]!, matched: fits[0]!.matchedAddress };
+  return { at: points[0]!, matched: fits[0]!.matchedAddress, ...(flag ? { flag } : {}) };
 }

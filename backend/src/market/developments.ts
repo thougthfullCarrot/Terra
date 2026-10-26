@@ -467,6 +467,8 @@ export function geocodable(address: string | null): string | null {
 /** The five-digit ZIP at the end of an address, unless it covers many places. */
 export function zipOf(address: string | null): string | null {
   if (!address || /\bvarious\b|multiple locations/i.test(address)) return null;
+  // Two different ZIPs in one address ("…, New Braunfels, TX 78130, New Braunfels, TX 78204"): neither can be trusted for an area.
+  if (new Set(address.match(/\b\d{5}\b(?=(?:-\d{4})?\s*(?:,|$))/g) ?? []).size > 1) return null;
   return /\b(\d{5})(?:-\d{4})?\s*$/.exec(address)?.[1] ?? null;
 }
 

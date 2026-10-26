@@ -91,9 +91,15 @@ describe('pickGeocode', () => {
   });
 
   it('refuses a match in another ZIP, on the other side of the street, or at another number', () => {
-    expect(pickGeocode('100 Main St, Boerne, TX 78006', [match('100 MAIN ST, SAN ANTONIO, TX, 78205', 29.43, -98.49, { zip: '78205' })]).at).toBeNull();
+    expect(pickGeocode('100 Main St, Boerne, TX 78006', [match('100 MAIN ST, SAN ANTONIO, TX, 78205', 29.43, -98.49, { zip: '78205', city: 'SAN ANTONIO' })]).at).toBeNull();
     expect(pickGeocode('100 N Main St, San Antonio, TX 78205', [match('100 S MAIN ST, SAN ANTONIO, TX, 78205', 29.42, -98.49, { zip: '78205', preDirection: 'S' })]).at).toBeNull();
     expect(pickGeocode('120 Main St, San Antonio, TX 78205', [match('100 MAIN ST, SAN ANTONIO, TX, 78205', 29.42, -98.49, { zip: '78205' })]).at).toBeNull();
+  });
+
+  it('takes a same-town match when the filing has a wrong ZIP, flagged (TDLR: an Austin site filed in 78209)', () => {
+    const r = pickGeocode('7032 US 290 Hwy, Austin, TX 78209', [match('7032 US HWY 290, AUSTIN, TX, 78736', 30.233, -97.875, { zip: '78736', city: 'AUSTIN' })]);
+    expect(r.at).toEqual([30.233, -97.875]);
+    expect(r.flag).toMatch(/filed ZIP 78209/);
   });
 
   it('checks the town when no ZIP was filed', () => {
