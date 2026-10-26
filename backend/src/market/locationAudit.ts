@@ -102,7 +102,9 @@ export function auditLocations(projects: Development[], zips: Map<string, ZipAre
   const byPoint = new Map<string, AuditRow[]>();
   for (const r of rows) if (r.at && r.method !== 'zip-area') byPoint.set(`${r.at[0].toFixed(6)},${r.at[1].toFixed(6)}`, [...(byPoint.get(`${r.at[0].toFixed(6)},${r.at[1].toFixed(6)}`) ?? []), r]);
   for (const group of byPoint.values()) {
-    const keys = new Set(group.map((r) => addressKey(r.address) ?? r.id));
+    // "750 E New Hope" and "750 E. New Hope Drive" are one address: compare without the street type.
+    const loose = (a: string | null) => addressKey(a)?.replace(/ (ST|AVE|BLVD|RD|DR|LN|PKWY|CT|CIR|PL|TRL|WAY|HWY|FWY|EXPY|LOOP|TER|CV)\|/, '|') ?? null;
+    const keys = new Set(group.map((r) => loose(r.address) ?? r.id));
     if (keys.size < 2) continue;
     for (const r of group) {
       if (!r.findings.includes('conflicting')) r.findings.push('conflicting');
@@ -226,7 +228,7 @@ export async function verifySample(rows: AuditRow[], projects: Map<string, Devel
     if (verdict === 'confirmed error' || verdict === 'suspected error' || row.method === 'zip-area') {
       if (row.method === 'permit-point' && official?.at) [after, afterMethod] = [official.at, 'permit-point'];
       else if (census?.at) [after, afterMethod] = [census.at, 'geocoded-address'];
-      else if (area) [after, afterMethod] = [area.at, 'zip-area'];
+      else if (area && km(area.at, CITY_CENTERS[p.city]) <= METRO_RADIUS_KM[p.city]) [after, afterMethod] = [area.at, 'zip-area'];
       else [after, afterMethod] = [null, 'none'];
     }
     out.push({ row, references: refs, verdict, after, afterMethod, why });
