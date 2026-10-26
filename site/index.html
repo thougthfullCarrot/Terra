@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Terra · Texas CRE Jobs</title>
+    <title>Terra · Explore Texas real estate</title>
     <meta
       name="description"
-      content="Internships and entry-level commercial real estate jobs in Texas, collected from firm career boards every two hours."
+      content="Find Texas commercial real estate jobs, see what's being built, follow industry news and discover local events, all in one place. Free to use with an account."
     />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#161412" media="(prefers-color-scheme: dark)" />
@@ -15,16 +15,16 @@
     <!-- The preview card when a Terra link is shared in a text, Slack, LinkedIn or Discord. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Terra" />
-    <meta property="og:title" content="Terra · Texas CRE Jobs" />
+    <meta property="og:title" content="Terra · Explore Texas real estate" />
     <meta
       property="og:description"
-      content="Internships and entry-level commercial real estate jobs in Texas, read straight from firm career boards every two hours. Free for students."
+      content="Find Texas commercial real estate jobs, see what's being built, follow industry news and discover local events, all in one place. Free to use with an account."
     />
     <meta property="og:url" content="https://thougthfullcarrot.github.io/Terra/" />
     <meta property="og:image" content="https://thougthfullcarrot.github.io/Terra/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Terra: your first job in Texas commercial real estate." />
+    <meta property="og:image:alt" content="Terra: explore Texas real estate. Jobs, development map, news and events." />
     <meta name="twitter:card" content="summary_large_image" />
     <script>
       // Before first paint, so a dark-mode visitor never sees a white flash.
@@ -55,12 +55,13 @@
         <!-- Signed out: jumps to the landing sections. -->
         <nav class="landing-nav" aria-label="About Terra">
           <a href="#how-title">How it works</a>
-          <a href="#why-title">Markets</a>
-          <a href="#price-title">Pricing</a>
+          <a href="#features-title">Features</a>
+          <a href="#free-title">Free access</a>
           <a href="#faq-title">Questions</a>
         </nav>
         <!-- Signed in: the sections (markets-view.js marks the open one). -->
         <nav class="tabs" aria-label="Sections">
+          <a href="#home" id="tab-home" class="tab" hidden>Home</a>
           <a href="#" id="tab-jobs" class="tab" aria-current="page">Jobs<span class="tab-count" id="tab-jobs-count"></span></a>
           <a href="#tracker" id="tab-tracker" class="tab" hidden>Tracker</a>
           <a href="#markets&amp;tool=map" id="tab-map" class="tab">Development map</a>
@@ -90,14 +91,19 @@
         <div class="hero-copy">
           <!-- Live counts from stats.json (live.js startLanding); stays hidden until they arrive. -->
           <p class="live-pill" id="live-pill" hidden><span class="pulse" aria-hidden="true"></span><span><b id="live-roles">0</b> open roles at <b id="live-firms">0</b> firms<span id="live-updated"></span></span></p>
-          <h1 id="gate-title">Your first job in Texas commercial real estate.</h1>
-          <p class="lede">Internships and roles asking for 0-2 years, read straight from firm career boards every two hours, with the markets and projects you need to sound sharp in the interview.</p>
+          <h1 id="gate-title">Explore Texas real estate.</h1>
+          <p class="lede">Find jobs, see what’s being built, follow industry news and discover local events—all in one place.</p>
+          <!-- Create free account and Sign in share one email-code form; the mode only changes the wording and whether a new account may be made (account.js). -->
+          <div class="auth-modes" role="group" aria-label="Create an account or sign in">
+            <button type="button" class="auth-mode" id="mode-create" aria-pressed="true">Create free account</button>
+            <button type="button" class="auth-mode" id="mode-signin" aria-pressed="false">Sign in</button>
+          </div>
           <form id="signin" class="signin pill-form" novalidate>
             <label>
               <span class="visually-hidden">Email</span>
-              <input id="signin-email" type="email" autocomplete="email" placeholder="you@school.edu" required />
+              <input id="signin-email" type="email" autocomplete="email" placeholder="you@example.com" required />
             </label>
-            <button type="submit" class="primary" id="signin-submit">Email me a sign-in code</button>
+            <button type="submit" class="primary" id="signin-submit">Create free account</button>
           </form>
           <form id="verify" class="signin pill-form" novalidate hidden>
             <label>
@@ -107,7 +113,7 @@
             <button type="submit" class="primary" id="verify-submit">Sign in</button>
           </form>
           <p class="notice" id="signin-status" aria-live="polite" hidden></p>
-          <p class="hero-note"><span id="gate-lede">Terra is free for students. Sign in with your college (.edu) email.</span> <button type="button" class="link tour-link" id="pitch-open">New here? Take the 1-minute tour</button></p>
+          <p class="hero-note"><span id="gate-lede">Free to use. Create an account to get started.</span> <button type="button" class="link tour-link" id="pitch-open">New here? Take the quick tour</button></p>
           <!-- account.js writes the same counts here as a sentence; the live pill shows them, so this is for screen readers. -->
           <p class="visually-hidden" id="teaser" aria-live="polite"></p>
         </div>
@@ -129,84 +135,63 @@
       <div id="welcome" class="welcome" hidden>
         <section class="welcome-block" aria-labelledby="how-title">
           <p class="eyebrow">How it works</p>
-          <h2 id="how-title">Three steps, done properly.</h2>
+          <h2 id="how-title">Three steps to get started.</h2>
           <ol class="steps">
             <li>
               <span class="step-num" aria-hidden="true">1</span>
-              <h3>Sign in with your email</h3>
-              <p>We email you a 6-digit code. No password to remember.</p>
+              <h3>Create a free account</h3>
+              <p>Enter any email address and we email you a 6-digit code to confirm it's yours. No password to remember.</p>
             </li>
             <li>
               <span class="step-num" aria-hidden="true">2</span>
-              <h3>Add your resume</h3>
-              <p>Upload it on your profile and Terra scores every job against your skills, city and class year.</p>
+              <h3>Pick a starting point</h3>
+              <p>Jobs, the Development map, News or Events. Your welcome screen links straight to each one.</p>
             </li>
             <li>
               <span class="step-num" aria-hidden="true">3</span>
-              <h3>Apply at the firm</h3>
-              <p>Every apply button goes straight to the firm's own career page. Terra never stands in between.</p>
+              <h3>Make it yours</h3>
+              <p>Save jobs, track applications, and add a resume on your profile if you want matches scored for you.</p>
             </li>
           </ol>
         </section>
 
-        <section class="welcome-block" aria-labelledby="why-title">
-          <p class="eyebrow">Why Terra</p>
-          <h2 id="why-title">Built for students breaking into Texas real estate</h2>
-          <div class="features">
+        <section class="welcome-block" aria-labelledby="features-title">
+          <p class="eyebrow">What's inside</p>
+          <h2 id="features-title">Four ways to follow Texas real estate</h2>
+          <div class="features core-features">
             <article class="feature">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-              <h3>Fresh every two hours</h3>
-              <p>Read straight from firm career boards like JLL, Hines, Transwestern and Lincoln, so you see roles the day they open.</p>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4z" /><path d="M9 8V5h6v3" /></svg>
+              <h3>Jobs</h3>
+              <p>Internships and roles asking for 0-2 years, read from firm career boards. Apply buttons go to the firm's own page.</p>
             </article>
             <article class="feature">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
-              <h3>Only 0-2 years</h3>
-              <p>Internships and entry-level roles only. Anything asking for more experience is filtered out.</p>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>
+              <h3>Development map</h3>
+              <p>Projects from public building records on a map, with the stage and who is building them where the record says.</p>
             </article>
             <article class="feature">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.6 5.5 6 .8-4.4 4.2 1 6L12 16.7 6.8 19.5l1-6L3.4 9.3l6-.8z" /></svg>
-              <h3>Your best matches first</h3>
-              <p>Jobs that fit your resume are marked <strong>Best match</strong> and sorted to the top.</p>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z" /><path d="M17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5" /></svg>
+              <h3>News</h3>
+              <p>Commercial real estate headlines by city. <strong>Deal of the week</strong> lives here too: one reported Texas sale, walked through step by step.</p>
             </article>
             <article class="feature">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6" /></svg>
-              <h3>Market data by city</h3>
-              <p>Rents, vacancy, jobs and population for Dallas, Fort Worth, Houston, Austin, San Antonio, El Paso, New Braunfels, College Station, Galveston, Lubbock and Midland, plus local development and deal headlines.</p>
-            </article>
-            <article class="feature">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></svg>
-              <h3>New jobs in your inbox</h3>
-              <p>Turn on daily alerts and each morning brings the new roles that fit your resume, cities and role type.</p>
-            </article>
-            <article class="feature">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z" /><path d="m8 9 2 2 4-4M8 15h8" /></svg>
-              <h3>Track every application</h3>
-              <p>Move jobs from Saved to Applied to Interviewing, keep notes, and get a reminder when it's time to follow up.</p>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>
+              <h3>Events</h3>
+              <p>Networking and industry events from local organizers, with dates, places and a link to register.</p>
             </article>
           </div>
         </section>
 
         <div class="welcome-pair">
-        <section class="welcome-block" aria-labelledby="price-title">
-          <p class="eyebrow">Pricing</p>
-          <h2 id="price-title">Free for students</h2>
-          <div class="plans">
-            <article class="plan featured">
-              <h3>Students</h3>
-              <p class="plan-price">Free</p>
-              <p>
-                Sign in with any college email ending in .edu. Every job, resume matching, daily alerts, the application
-                tracker and market data included.
-              </p>
-            </article>
-            <article class="plan" id="plan-paid" hidden>
-              <h3>Everyone else</h3>
-              <p class="plan-price" id="plan-price">Monthly</p>
-              <p>
-                Not in school? Subscribe with any email for the same access: every job, daily alerts matched to your resume,
-                the application tracker with reminders, and market data. Cancel anytime.
-              </p>
-            </article>
+        <section class="welcome-block" aria-labelledby="free-title">
+          <p class="eyebrow">Free access</p>
+          <h2 id="free-title">Free for everyone. No credit card required.</h2>
+          <div class="free-card">
+            <p>
+              Create an account with any email address. Every feature is included: jobs, the Development map, news and
+              Deal of the week, events, saved jobs and the application tracker.
+            </p>
+            <p class="muted">An account keeps your saved jobs, tracker and resume private to you.</p>
           </div>
         </section>
 
@@ -214,6 +199,10 @@
           <p class="eyebrow">Questions</p>
           <h2 id="faq-title">Good to know</h2>
           <div class="faq">
+            <details>
+              <summary>Why do I need an account?</summary>
+              <p>Signing in confirms your email and keeps your saved jobs, tracker and profile private to you. It's free and needs only an email address.</p>
+            </details>
             <details>
               <summary>Where do the jobs come from?</summary>
               <p>From each firm's own Greenhouse, Lever, Ashby, SmartRecruiters, Workday and iCIMS boards, plus a few listings from Adzuna. Terra checks them every two hours.</p>
@@ -224,7 +213,7 @@
             </details>
             <details>
               <summary>Which cities are covered?</summary>
-              <p>Dallas, Fort Worth, Houston, Austin, San Antonio, El Paso, New Braunfels, College Station, Galveston, Lubbock and Midland.</p>
+              <p>Dallas, Fort Worth, Houston, Austin, San Antonio, El Paso, New Braunfels, College Station, Galveston, Lubbock and Midland. How much each feature has varies by city and by what public sources publish.</p>
             </details>
           </div>
         </section>
@@ -232,18 +221,20 @@
         </div>
 
         <section class="welcome-cta">
-          <h2>Ready to find your first role?</h2>
-          <button type="button" class="primary" id="welcome-start">Get started</button>
+          <h2>Ready to explore?</h2>
+          <div class="welcome-cta-actions">
+            <button type="button" class="primary" id="welcome-start">Create free account</button>
+            <button type="button" class="link" id="welcome-signin">Sign in</button>
+          </div>
         </section>
       </div>
 
-      <!-- Signed in, but neither a college email nor a subscription. -->
+      <!-- Signed in, but the database hasn't opened the account (an unconfirmed email, or access_level() not updated yet). -->
       <section id="paywall" class="panel" hidden aria-labelledby="paywall-title">
-        <h2 id="paywall-title">Subscribe to see the jobs</h2>
+        <h2 id="paywall-title">Your account isn't open yet</h2>
         <p class="panel-lede" id="paywall-lede"></p>
         <div class="actions">
-          <a class="primary" id="subscribe" hidden>Subscribe</a>
-          <button type="button" class="link" id="paywall-signout">Use a different email</button>
+          <button type="button" class="link" id="paywall-signout">Sign out</button>
         </div>
         <p class="notice" id="paywall-status" aria-live="polite" hidden></p>
       </section>
@@ -385,6 +376,50 @@
       </section>
 
       <div id="feed">
+
+      <!-- Signed in: the welcome screen (home-view.js), at #home and right after signing in. -->
+      <section id="home-view" class="home" hidden aria-labelledby="home-title">
+        <div class="home-head">
+          <p class="eyebrow">Welcome</p>
+          <h1 id="home-title">Welcome to Terra</h1>
+          <p class="lede">Pick a place to start. Everything here is free with your account.</p>
+        </div>
+        <nav class="home-cards" aria-label="Terra features">
+          <a class="home-card" href="#" id="home-jobs">
+            <span class="home-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h16v12H4z" /><path d="M9 8V5h6v3" /></svg></span>
+            <span class="home-card-title">Jobs</span>
+            <span class="home-card-text">Internships and 0-2 year roles from firm career boards.</span>
+            <span class="home-card-count" id="home-jobs-count" hidden></span>
+          </a>
+          <a class="home-card" href="#markets&amp;tool=map" id="home-map">
+            <span class="home-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg></span>
+            <span class="home-card-title">Development map</span>
+            <span class="home-card-text">Projects from public building records, by city and stage.</span>
+          </a>
+          <a class="home-card" href="#news" id="home-news">
+            <span class="home-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z" /><path d="M17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5" /></svg></span>
+            <span class="home-card-title">News</span>
+            <span class="home-card-text">Headlines by city, plus Deal of the week.</span>
+            <span class="home-card-count" id="home-news-count" hidden></span>
+          </a>
+          <a class="home-card" href="#events" id="home-events">
+            <span class="home-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg></span>
+            <span class="home-card-title">Events</span>
+            <span class="home-card-text">Networking and industry events near you.</span>
+            <span class="home-card-count" id="home-events-count" hidden></span>
+          </a>
+        </nav>
+        <p class="home-deal"><a href="#news&amp;view=deal" id="home-deal">Deal of the week</a> <span class="muted">One reported Texas sale, walked through step by step, in News.</span></p>
+        <section class="home-mine" aria-labelledby="home-mine-title">
+          <h2 id="home-mine-title">Your account</h2>
+          <ul class="home-links">
+            <li><button type="button" class="link" id="home-profile">Profile</button></li>
+            <li><a href="?saved=1" id="home-saved">Saved jobs</a></li>
+            <li id="home-tracker-item" hidden><a href="#tracker" id="home-tracker">Application tracker</a></li>
+            <li><button type="button" class="link" id="home-tour">Take the tour again</button></li>
+          </ul>
+        </section>
+      </section>
 
       <div id="jobs-view">
       <div class="page-head">
@@ -663,8 +698,8 @@
       </div>
     </dialog>
 
-    <!-- The pitch deck: a swipeable tour for signed-out visitors (pitch.js). Opens once per visit, or with ?tour. -->
-    <div id="pitch" class="pitch" role="dialog" aria-modal="true" aria-roledescription="carousel" aria-label="What Terra does" hidden>
+    <!-- The tour: a short, skippable introduction (pitch.js). Opens once per visit for signed-out visitors, from "Take the tour", or with ?tour. -->
+    <div id="pitch" class="pitch" role="dialog" aria-modal="true" aria-roledescription="carousel" aria-label="Terra tour" hidden>
       <div class="pitch-frame">
         <div class="pitch-top">
           <span class="brand">
@@ -677,193 +712,79 @@
         <div class="pitch-bar" aria-hidden="true"><span id="pitch-progress"></span></div>
 
         <div class="pitch-track" id="pitch-track">
-          <section class="pitch-slide cover" aria-roledescription="slide" aria-label="1 of 9: Terra">
+          <section class="pitch-slide cover" aria-roledescription="slide" aria-label="1 of 6: Welcome">
             <div class="pitch-copy">
-              <p class="eyebrow">Texas · commercial real estate · entry level</p>
-              <h2>Break into Texas commercial real estate.</h2>
-              <p class="pitch-lede">
-                The internships and 0-2 year roles in one place, plus the market know-how to stand out in the interview.
-              </p>
-              <p class="pitch-live" id="pitch-live" hidden></p>
+              <p class="eyebrow">Welcome to Terra</p>
+              <h2>Explore Texas real estate.</h2>
+              <p class="pitch-lede">Find jobs, see what’s being built, follow industry news and discover local events—all in one place.</p>
+              <p class="pitch-lede">Free to use. This takes about a minute; skip it any time.</p>
             </div>
             <div class="pitch-art" aria-hidden="true">
-              <svg class="skyline" viewBox="0 0 320 220">
-                <path class="sun" d="M232 70a34 34 0 1 1 0 .1z" />
-                <rect class="b1" x="20" y="120" width="40" height="90" rx="3" />
-                <rect class="b2" x="66" y="70" width="46" height="140" rx="3" />
-                <path class="b3" d="M118 210V48l24-22 24 22v162z" />
-                <rect class="b1" x="172" y="96" width="38" height="114" rx="3" />
-                <rect class="b2" x="216" y="130" width="50" height="80" rx="3" />
-                <rect class="b3" x="272" y="110" width="30" height="100" rx="3" />
-                <g class="win">
-                  <rect x="76" y="84" width="8" height="8" /><rect x="94" y="84" width="8" height="8" />
-                  <rect x="76" y="104" width="8" height="8" /><rect x="94" y="104" width="8" height="8" />
-                  <rect x="76" y="124" width="8" height="8" /><rect x="94" y="124" width="8" height="8" />
-                  <rect x="132" y="64" width="8" height="8" /><rect x="146" y="64" width="8" height="8" />
-                  <rect x="132" y="84" width="8" height="8" /><rect x="146" y="84" width="8" height="8" />
-                  <rect x="132" y="104" width="8" height="8" /><rect x="146" y="104" width="8" height="8" />
-                  <rect x="182" y="110" width="7" height="7" /><rect x="194" y="110" width="7" height="7" />
-                  <rect x="182" y="128" width="7" height="7" /><rect x="194" y="128" width="7" height="7" />
-                </g>
-                <path class="ground" d="M8 210h304" />
-              </svg>
+              <div class="pitch-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6" /></svg></div>
             </div>
           </section>
-
-          <section class="pitch-slide" aria-roledescription="slide" aria-label="2 of 9: The problem">
-            <div class="pitch-copy">
-              <p class="eyebrow">The problem</p>
-              <h2>Entry-level CRE jobs are hard to find.</h2>
-              <ul class="pitch-points">
-                <li><strong>Scattered.</strong> Each firm posts on its own career board, from Greenhouse to Workday.</li>
-                <li><strong>Buried.</strong> Big job sites mix them in with roles asking for 5+ years.</li>
-                <li><strong>Unprepared.</strong> Students rarely know the market they are interviewing for.</li>
-              </ul>
-            </div>
-            <div class="pitch-art" aria-hidden="true">
-              <div class="funnel">
-                <span>Greenhouse</span><span>Workday</span><span>iCIMS</span><span>Lever</span><span>Ashby</span
-                ><span>SmartRecruiters</span><span>Adzuna</span>
-                <svg viewBox="0 0 24 24" class="funnel-arrow"><path d="M12 4v15M6 13l6 6 6-6" /></svg>
-                <b class="brand-mark">T</b>
-              </div>
-            </div>
-          </section>
-
-          <section class="pitch-slide" aria-roledescription="slide" aria-label="3 of 9: Jobs">
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="2 of 6: Jobs">
             <div class="pitch-copy">
               <p class="eyebrow">Jobs</p>
-              <h2>Every role asks for 0-2 years.</h2>
+              <h2>Entry-level roles, straight from the firms.</h2>
               <ul class="pitch-points">
-                <li>Read straight from firm career boards every two hours.</li>
-                <li>Eleven Texas markets, from Dallas and Houston to Lubbock and Midland.</li>
-                <li>Add your resume and your best matches rise to the top.</li>
-                <li>Apply buttons go straight to the firm.</li>
+                <li>Internships and roles asking for 0-2 years, read from firm career boards.</li>
+                <li>Save jobs and move them through the application tracker.</li>
+                <li>Add a resume on your profile and strong matches are marked for you.</li>
               </ul>
             </div>
             <div class="pitch-art" aria-hidden="true">
-              <div class="mock-stack">
-                <div class="mock-job best">
-                  <span class="mock-badge">BEST MATCH · 94%</span>
-                  <b>Acquisitions Analyst Intern</b><small>Austin · Internship · $25/hr</small>
-                </div>
-                <div class="mock-job"><b>Leasing Associate</b><small>Dallas · Full time</small></div>
-                <div class="mock-job"><b>Property Management Coordinator</b><small>Houston · Full time</small></div>
-              </div>
+              <div class="pitch-icon"><svg viewBox="0 0 24 24"><path d="M4 8h16v12H4z" /><path d="M9 8V5h6v3" /></svg></div>
             </div>
           </section>
-
-          <section class="pitch-slide" aria-roledescription="slide" aria-label="4 of 9: Alerts and tracker">
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="3 of 6: Development map">
             <div class="pitch-copy">
-              <p class="eyebrow">Alerts + tracker</p>
-              <h2>Never miss a role, never lose track.</h2>
+              <p class="eyebrow">Development map</p>
+              <h2>See what’s being built.</h2>
               <ul class="pitch-points">
-                <li><strong>Daily alerts.</strong> Each morning, the new jobs that fit your resume and cities land in your inbox.</li>
-                <li><strong>Application tracker.</strong> Move jobs from Saved to Applied to Interviewing, keep notes, and get a nudge to follow up.</li>
+                <li>Projects from public building records, placed on a map.</li>
+                <li>Filter by city, category and stage, and open a project for its details.</li>
               </ul>
             </div>
             <div class="pitch-art" aria-hidden="true">
-              <div class="mock-mail"><b>3 new matches today</b><small>Analyst Intern · Leasing Associate · Asset Mgmt</small></div>
-              <div class="mock-board">
-                <div><h4>Saved</h4><i></i><i></i><i></i></div>
-                <div><h4>Applied</h4><i></i><i></i></div>
-                <div><h4>Interviewing</h4><i class="hot"></i></div>
-              </div>
+              <div class="pitch-icon"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg></div>
             </div>
           </section>
-
-          <section class="pitch-slide" aria-roledescription="slide" aria-label="5 of 9: Market data">
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="4 of 6: News and Deal of the week">
             <div class="pitch-copy">
-              <p class="eyebrow">Market data</p>
-              <h2>Walk into the interview knowing the market.</h2>
+              <p class="eyebrow">News</p>
+              <h2>Follow industry news.</h2>
               <ul class="pitch-points">
-                <li>Rents, vacancy, jobs and population for every city, from BLS and the Census.</li>
-                <li><strong>Salary check.</strong> What CRE employers actually pay, from public filings.</li>
-                <li><strong>Hiring vs. building.</strong> Firms posting jobs lined up against what they are building.</li>
-                <li>A deal calculator and city comparisons for practice.</li>
+                <li>Commercial real estate headlines for each city Terra covers.</li>
+                <li><strong>Deal of the week</strong> is a section of News: one reported Texas sale, walked through step by step, with reported facts kept apart from teaching estimates.</li>
               </ul>
             </div>
             <div class="pitch-art" aria-hidden="true">
-              <svg class="bars" viewBox="0 0 300 200">
-                <path class="axis" d="M30 170h260" />
-                <rect x="44" y="70" width="30" height="100" rx="3" /><rect x="90" y="50" width="30" height="120" rx="3" />
-                <rect x="136" y="90" width="30" height="80" rx="3" /><rect class="hi" x="182" y="30" width="30" height="140" rx="3" />
-                <rect x="228" y="100" width="30" height="70" rx="3" />
-                <text x="59" y="188">DAL</text><text x="105" y="188">HOU</text><text x="151" y="188">SAT</text>
-                <text x="197" y="188">AUS</text><text x="243" y="188">ELP</text>
-              </svg>
-              <div class="mock-pill">Example · Analyst I · Dallas · <b>$68k median</b></div>
+              <div class="pitch-icon"><svg viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z" /><path d="M17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5" /></svg></div>
             </div>
           </section>
-
-          <section class="pitch-slide" aria-roledescription="slide" aria-label="6 of 9: Development">
+          <section class="pitch-slide" aria-roledescription="slide" aria-label="5 of 6: Events">
             <div class="pitch-copy">
-              <p class="eyebrow">Development</p>
-              <h2>See what is getting built, and who is building it.</h2>
+              <p class="eyebrow">Events</p>
+              <h2>Discover local events.</h2>
               <ul class="pitch-points">
-                <li><strong>Development maps.</strong> Projects across Texas on a map, with the owner, architect and stage.</li>
-                <li><strong>Zoning alerts.</strong> Rezonings and special use permits pulled from city council agendas.</li>
+                <li>Networking and industry events from local organizers.</li>
+                <li>Dates, places and a link to register, by city.</li>
               </ul>
             </div>
             <div class="pitch-art" aria-hidden="true">
-              <div class="mock-map">
-                <span class="pin" style="left: 22%; top: 30%"></span><span class="pin" style="left: 48%; top: 52%"></span>
-                <span class="pin big" style="left: 66%; top: 26%"></span><span class="pin" style="left: 34%; top: 70%"></span>
-                <span class="pin" style="left: 78%; top: 62%"></span>
-                <p class="mock-tag">Rezoning · 14 acres · Mixed use</p>
-              </div>
+              <div class="pitch-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg></div>
             </div>
           </section>
-
-          <section class="pitch-slide" aria-roledescription="slide" aria-label="7 of 9: Property tools">
+          <section class="pitch-slide final" aria-roledescription="slide" aria-label="6 of 6: Get started">
             <div class="pitch-copy">
-              <p class="eyebrow">Property tools</p>
-              <h2>Do the homework a first-year analyst does.</h2>
-              <p class="pitch-lede">Public records turned into five quick tools, so you can talk deals with confidence.</p>
-            </div>
-            <div class="pitch-art">
-              <ul class="tool-grid">
-                <li><b>Who owns this?</b><small>Look up a parcel and its owner.</small></li>
-                <li><b>Lease radar</b><small>Tenants building out new space.</small></li>
-                <li><b>Distress</b><small>Tax sales and delinquent accounts.</small></li>
-                <li><b>Drive time</b><small>Who lives within a 10, 20 or 30 minute drive.</small></li>
-                <li class="wide"><b>Deal of the week</b><small>One real Texas deal, broken down.</small></li>
-              </ul>
-            </div>
-          </section>
-
-          <section class="pitch-slide" aria-roledescription="slide" aria-label="8 of 9: News and events">
-            <div class="pitch-copy">
-              <p class="eyebrow">News + events</p>
-              <h2>Stay in the conversation.</h2>
-              <ul class="pitch-points">
-                <li><strong>News.</strong> Commercial real estate headlines for your city, so you have something to talk about.</li>
-                <li><strong>Events.</strong> Networking events near you, where the people hiring actually are.</li>
-              </ul>
-            </div>
-            <div class="pitch-art" aria-hidden="true">
-              <ul class="mock-news">
-                <li><span>HOUSTON</span>Industrial park breaks ground on the east side</li>
-                <li><span>AUSTIN</span>Office tower lands a new anchor tenant</li>
-              </ul>
-              <div class="mock-events">
-                <p><b>OCT<br />16</b>Young professionals mixer · Dallas</p>
-                <p><b>OCT<br />23</b>Student CRE night · San Antonio</p>
-              </div>
-            </div>
-          </section>
-
-          <section class="pitch-slide final" aria-roledescription="slide" aria-label="9 of 9: Get started">
-            <div class="pitch-copy">
-              <p class="eyebrow">Pricing</p>
-              <h2>Free for students.</h2>
-              <div class="pitch-plans">
-                <p><b>Students</b><span class="price">Free</span><small>Any college email ending in .edu. Everything included.</small></p>
-                <p id="pitch-paid" hidden><b>Everyone else</b><span class="price" id="pitch-price">Monthly</span><small>Same access with any email. Cancel anytime.</small></p>
-              </div>
+              <p class="eyebrow">Get started</p>
+              <h2 id="pitch-final-title">Free for everyone.</h2>
+              <p class="pitch-lede" id="pitch-final-lede">Create an account with any email address. No credit card required.</p>
               <div class="pitch-ctas">
-                <button type="button" class="primary" id="pitch-start">Sign up free</button>
-                <button type="button" class="link" id="pitch-explore">Explore the site first</button>
+                <button type="button" class="primary" id="pitch-start">Create free account</button>
+                <button type="button" class="link" id="pitch-signin">Sign in</button>
+                <button type="button" class="link" id="pitch-explore">Look around first</button>
               </div>
             </div>
           </section>

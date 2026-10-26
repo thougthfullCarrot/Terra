@@ -71,12 +71,13 @@ describe.skipIf(!conn)('watchlists on a real database', () => {
     `]);
   });
 
-  it('lets a college member and a subscriber follow items, and nobody else', () => {
+  // With pending/0021_free_access.sql loaded, any confirmed address is a member.
+  it('lets any confirmed member follow items, and nobody unconfirmed or signed out', () => {
     expect(as(ids.student)(`insert into watchlist_items (kind, city) values ('market', 'Austin') returning kind`)).toBe('market');
     expect(as(ids.subscriber)(`insert into watchlist_items (kind, city, ref) values ('project', 'Houston', 'TABS2026000001') returning ref`)).toBe(
       'TABS2026000001'
     );
-    expect(() => as(ids.none)(`insert into watchlist_items (kind, city) values ('area', 'Dallas')`)).toThrow(/row-level security/);
+    expect(as(ids.none)(`insert into watchlist_items (kind, city) values ('area', 'Dallas') returning city`)).toBe('Dallas');
     expect(() => as(ids.unconfirmed)(`insert into watchlist_items (kind, city) values ('area', 'Dallas')`)).toThrow(/row-level security/);
     expect(() => anon(`insert into watchlist_items (user_id, kind, city) values ('${ids.student}', 'area', 'Dallas')`)).toThrow();
   });
@@ -91,11 +92,11 @@ describe.skipIf(!conn)('watchlists on a real database', () => {
     expect(anon(`select count(*) from watchlist_items`)).toBe('0');
   });
 
-  it('lets a lapsed subscriber see and remove items but not add any', () => {
+  it('treats a lapsed subscriber as a free member who keeps their own items', () => {
     admin(`insert into watchlist_items (user_id, kind, city) values ('${ids.lapsed}', 'area', 'Austin')`);
     expect(as(ids.lapsed)(`select count(*) from watchlist_items`)).toBe('1');
-    expect(() => as(ids.lapsed)(`insert into watchlist_items (kind, city) values ('area', 'Dallas')`)).toThrow(/row-level security/);
-    expect(as(ids.lapsed)(`delete from watchlist_items returning city`)).toBe('Austin');
+    expect(as(ids.lapsed)(`insert into watchlist_items (kind, city) values ('area', 'Dallas') returning city`)).toBe('Dallas');
+    expect(as(ids.lapsed)(`delete from watchlist_items returning city`).split('\n').sort()).toEqual(['Austin', 'Dallas']);
   });
 
   it('stops at 25 items', () => {
@@ -142,7 +143,8 @@ describe.skipIf(!conn)('watchlists on a real database', () => {
     admin(`update profiles set watch_emails = true`);
     admin(`insert into watchlist_items (user_id, kind, city) values ('${ids.testUser}', 'area', 'Austin'), ('${ids.lapsed}', 'area', 'Austin'), ('${ids.unconfirmed}', 'area', 'Austin')`);
     const rows = admin(`select email || '|' || digest_frequency || '|' || jsonb_array_length(items) from watch_recipients() order by email`).split('\n');
-    expect(rows).toEqual(['max@rice.edu|weekly|25', 'pat@gmail.com|weekly|1', 'sam@mail.utexas.edu|weekly|1']);
+    // Free members count; the test account and the unconfirmed address never do.
+    expect(rows).toEqual(['kim@gmail.com|weekly|1', 'lee@gmail.com|weekly|1', 'max@rice.edu|weekly|25', 'pat@gmail.com|weekly|1', 'sam@mail.utexas.edu|weekly|1']);
   });
 
   it('turns emails off from a signed link, without signing in, and refuses a forged one', () => {

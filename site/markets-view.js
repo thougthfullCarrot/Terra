@@ -4,6 +4,7 @@
 // so a link can open a city's market directly (#markets&city=Houston). The
 // data comes from a loader app.js hands over: market.json on the open site,
 // or the members-only Supabase row when accounts are on.
+import { homeOpen } from './home-view.js';
 import {
   barPercent,
   figureSource,
@@ -131,6 +132,7 @@ function update(change) {
 
 /** Which section the hash opens. The tracker only exists for signed-in members, so without its tab it falls back to jobs. */
 function section() {
+  if (homeOpen() && !$('tab-home').hidden) return 'home';
   if (readMarketHash(location.hash, null).open) return 'markets';
   if (readNewsHash(location.hash, null).open) return 'news';
   if (readEventsHash(location.hash, null).open) return 'events';
@@ -145,9 +147,10 @@ async function show() {
   document.body.dataset.section = active;
   // news-view.js and events-view.js show their own sections; the others step aside for it.
   for (const name of ['jobs', 'markets', 'tracker']) $(`${name}-view`).hidden = name !== active;
+  $('home-view').hidden = active !== 'home';
   // The Development Map has its own tab, though it lives in the market data section.
   const tab = open && readMarketHash(location.hash, null).tool === 'map' ? 'map' : active;
-  for (const name of ['jobs', 'map', 'markets', 'tracker', 'news', 'events']) {
+  for (const name of ['home', 'jobs', 'map', 'markets', 'tracker', 'news', 'events']) {
     if (name === tab) $(`tab-${name}`).setAttribute('aria-current', 'page');
     else $(`tab-${name}`).removeAttribute('aria-current');
   }

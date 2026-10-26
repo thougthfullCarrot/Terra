@@ -34,6 +34,7 @@ import { startEvents } from './events-view.js';
 import { jobFlags, TITLE_GUIDE } from './career.js';
 import { retiredRoute } from './retired.js';
 import { startPitch } from './pitch.js';
+import { setHomeJobs, startHome } from './home-view.js';
 import { stateBox } from './labels.js';
 import { startGateMap, startLanding, startTabSlider } from './live.js';
 
@@ -137,6 +138,7 @@ function hideFeed(message) {
   $('count').textContent = '';
   $('jobs-total').textContent = '';
   $('tab-jobs-count').textContent = '';
+  setHomeJobs(0);
   $('stats').hidden = true;
   $('today').hidden = true;
   if ($('job-panel').open) $('job-panel').close();
@@ -328,6 +330,7 @@ function render() {
   $('clear').hidden = !filtered;
   $('jobs-total').textContent = String(shown.length);
   $('tab-jobs-count').textContent = String(jobs.length);
+  setHomeJobs(jobs.length);
   drawSavedToggle();
 
   if (!jobs.length) {
@@ -972,6 +975,7 @@ startTracker({
   }
 });
 startNews();
+startHome();
 // An unsubscribe link from an alert email works without signing in.
 handleUnsubscribe(CONFIG, location).then((result) => {
   if (!result) return;

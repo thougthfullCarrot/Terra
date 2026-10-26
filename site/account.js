@@ -1,13 +1,12 @@
 // account.js — sign-in, access, and the profile page. Loaded by app.js only
 // when config.js names a Supabase project.
 //
-// Who sees what:
-//   signed out                     -> sign-in form (magic link to any email)
-//   signed in, college (.edu)      -> the feed, free
-//   signed in, active subscription -> the feed
-//   signed in, neither             -> subscribe (Stripe Payment Link)
-// The database enforces the same rule (access_level() in migration 0005);
-// this file only decides which panel to show.
+// Who sees what (TERRA is free for everyone):
+//   signed out                      -> landing page with the email-code form
+//   signed in, confirmed email      -> the app, starting at the welcome screen
+//   signed in, not opened (none)    -> a short "not open yet" note
+// The database enforces the same rule (access_level(), pending migration
+// 0021_free_access); this file only decides which panel to show.
 import { CONFIG } from './config.js';
 import {
   ALERT_GOOD_MATCH,
@@ -15,11 +14,9 @@ import {
   PROFILE_CITIES,
   PROFILE_SECTORS,
   alertRow,
-  checkoutUrl,
   fileProblem,
   gradYears,
   initials,
-  isCollegeEmail,
   isEmail,
   profileRow,
   resumeContentType,
@@ -27,7 +24,8 @@ import {
 } from './access.js';
 import { schoolFor } from './school.js';
 import { updatedLabel } from './feed.js';
-import { closePitch, showPitchOnce } from './pitch.js';
+import { closePitch, openPitch, showPitchOnce } from './pitch.js';
+import { setHomeAccount } from './home-view.js';
 import { DEFAULT_FREQUENCY, digestRow } from './watch.js';
 import { drawWatchList, onWatchChange, setWatchStore, watchOn } from './watch-view.js';
 import { setReportStore } from './devreports-view.js';
@@ -36,9 +34,8 @@ import { metricName } from './markets-view.js';
 const $ = (id) => document.getElementById(id);
 /** Resume text kept for matching. A long resume is a few thousand characters; this leaves room without storing a novel. */
 const RESUME_TEXT_LIMIT = 50000;
-/** After Stripe checkout, how long to wait for the webhook to record the subscription. */
-const CHECKOUT_POLLS = 10;
-const CHECKOUT_POLL_MS = 3000;
+/** The access_level() answers that open the app; 'member' is any confirmed email (0021_free_access). */
+const OPEN = new Set(['member', 'college', 'subscriber']);
 
 let supabase;
 let app;
@@ -97,12 +94,7 @@ function signedOut() {
   feedJobs = [];
   app.hideFeed();
   app.setProfile(null);
-  const price = CONFIG.paymentLink && CONFIG.priceLabel ? ` (${CONFIG.priceLabel})` : '';
-  $('gate-lede').textContent = CONFIG.paymentLink
-    ? `Terra is free with a college (.edu) email. Any other email can subscribe${price}.`
-    : 'Terra is free for students. Sign in with your college (.edu) email.';
-  $('plan-paid').hidden = !CONFIG.paymentLink;
-  $('plan-price').textContent = CONFIG.priceLabel || 'Monthly';
+  setHomeAccount(null);
   show('gate');
   showTeaser();
   showPitchOnce();
@@ -135,17 +127,19 @@ async function signedIn(next) {
   access = await accessLevel();
   await loadProfile();
 
-  if (access === 'college' || access === 'subscriber') {
-    clearCheckoutFlag();
+  if (OPEN.has(access)) {
     show('feed');
+    // Straight from the email code: start on the welcome screen. A reload or a shared link keeps its own section.
+    if (justSignedIn && !location.hash) location.hash = 'home';
+    justSignedIn = false;
     await loadFeed();
+    setHomeAccount({ openProfile, openTour: () => openPitch() });
     promptForProfile();
     return;
   }
 
   app.hideFeed();
   showPaywall();
-  if (new URLSearchParams(location.search).get('checkout') === 'success') await waitForSubscription();
 }
 
 async function accessLevel() {
@@ -295,43 +289,10 @@ function metricLabel(key) {
   return metricName(key);
 }
 
+/** Signed in, but the database hasn't opened the account. No payment is ever asked for. */
 function showPaywall() {
-  const link = CONFIG.paymentLink ? checkoutUrl(CONFIG.paymentLink, { userId: user.id, email: user.email }) : null;
-  const subscribe = $('subscribe');
-  if (link) {
-    const price = CONFIG.priceLabel ? ` for ${CONFIG.priceLabel}` : '';
-    $('paywall-title').textContent = 'Subscribe to see the jobs';
-    $('paywall-lede').textContent = `You're signed in as ${user.email}. Terra is free with a college (.edu) email; any other email can subscribe${price}. Cancel anytime.`;
-    subscribe.href = link;
-    subscribe.textContent = CONFIG.priceLabel ? `Subscribe · ${CONFIG.priceLabel}` : 'Subscribe';
-    subscribe.hidden = false;
-  } else {
-    $('paywall-title').textContent = 'A college email is required';
-    $('paywall-lede').textContent = `You're signed in as ${user.email}. Terra is open to college (.edu) emails right now. Sign in with your school email to see the jobs.`;
-    subscribe.hidden = true;
-  }
+  $('paywall-lede').textContent = `You're signed in as ${user.email}, but Terra couldn't open your account yet. Sign out and sign in again with a fresh email code. If it keeps happening, Terra may be mid-update; try again later.`;
   show('paywall');
-}
-
-/** Stripe sends people back with ?checkout=success; the webhook may land a few seconds later. */
-async function waitForSubscription() {
-  note('paywall-status', 'Confirming your payment…');
-  for (let i = 0; i < CHECKOUT_POLLS; i++) {
-    await new Promise((resolve) => setTimeout(resolve, CHECKOUT_POLL_MS));
-    if ((await accessLevel()) === 'subscriber') {
-      note('paywall-status', '');
-      return signedIn(user);
-    }
-  }
-  note('paywall-status', "We haven't seen your payment yet. Refresh in a minute; if it still doesn't show, reply to your Stripe receipt.", true);
-}
-
-function clearCheckoutFlag() {
-  const params = new URLSearchParams(location.search);
-  if (!params.has('checkout')) return;
-  params.delete('checkout');
-  const query = params.toString();
-  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -339,39 +300,55 @@ function clearCheckoutFlag() {
 // ---------------------------------------------------------------------------
 
 let pendingEmail = '';
+/** 'create' makes an account for a new address; 'signin' only signs in an existing one. */
+let authMode = 'create';
+/** Set when a code was just accepted, so the welcome screen opens once. */
+let justSignedIn = false;
+
+function setAuthMode(mode) {
+  authMode = mode;
+  $('mode-create').setAttribute('aria-pressed', String(mode === 'create'));
+  $('mode-signin').setAttribute('aria-pressed', String(mode === 'signin'));
+  $('signin-submit').textContent = mode === 'create' ? 'Create free account' : 'Email me a sign-in code';
+}
+
+function toForm(mode) {
+  setAuthMode(mode);
+  $('gate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  ($('verify').hidden ? $('signin-email') : $('verify-code')).focus({ preventScroll: true });
+}
 
 function bindSignIn() {
-  $('signin-jump').addEventListener('click', () => $('welcome-start').click());
-  $('welcome-start').addEventListener('click', () => {
-    $('gate').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    ($('verify').hidden ? $('signin-email') : $('verify-code')).focus({ preventScroll: true });
-  });
+  $('mode-create').addEventListener('click', () => setAuthMode('create'));
+  $('mode-signin').addEventListener('click', () => setAuthMode('signin'));
+  $('signin-jump').addEventListener('click', () => toForm('signin'));
+  $('welcome-start').addEventListener('click', () => toForm('create'));
+  $('welcome-signin').addEventListener('click', () => toForm('signin'));
   $('signin').addEventListener('submit', async (event) => {
     event.preventDefault();
     const email = $('signin-email').value.trim();
     if (!isEmail(email)) return note('signin-status', 'Enter your email address.', true);
-    if (!isCollegeEmail(email) && !CONFIG.paymentLink) {
-      return note('signin-status', 'Terra is open to college (.edu) emails right now. Use your school email.', true);
-    }
 
     $('signin-submit').disabled = true;
     // A typed code rather than a link: school mail filters often flag sign-in
     // links as suspicious, and a code also works when the email is opened on
-    // another device.
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    // another device. The code is also what confirms the address.
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: authMode === 'create' } });
     $('signin-submit').disabled = false;
 
     if (error) {
       const busy = error.status === 429 || /rate limit/i.test(error.message);
+      const unknown = authMode === 'signin' && /signups? not allowed|user not found/i.test(error.message);
       return note('signin-status', busy
         ? 'Too many sign-in emails were sent in the last hour. Please try again in a little while.'
-        : `Couldn't send the code: ${error.message}`, true);
+        : unknown
+          ? 'No account uses that email yet. Choose "Create free account" to make one.'
+          : `Couldn't send the code: ${error.message}`, true);
     }
     pendingEmail = email;
     $('verify').hidden = false;
     $('verify-code').focus();
-    const extra = isCollegeEmail(email) ? '' : " Since it isn't a college email, you'll be asked to subscribe after signing in.";
-    note('signin-status', `We emailed a code to ${email}. Enter it above. It expires in an hour.${extra}`);
+    note('signin-status', `We emailed a code to ${email}. Enter it above. It expires in an hour.`);
   });
 
   $('verify').addEventListener('submit', async (event) => {
@@ -382,6 +359,7 @@ function bindSignIn() {
     const { error } = await supabase.auth.verifyOtp({ email: pendingEmail, token, type: 'email' });
     $('verify-submit').disabled = false;
     if (error) return note('signin-status', "That code didn't work. Check it, or send a new one.", true);
+    justSignedIn = true;
     $('verify').hidden = true;
     $('verify-code').value = '';
     $('signin-status').hidden = true;
@@ -482,7 +460,7 @@ function openProfile() {
 }
 
 function closeProfile() {
-  if (access === 'college' || access === 'subscriber') show('feed');
+  if (OPEN.has(access)) show('feed');
   else showPaywall();
 }
 
@@ -563,7 +541,7 @@ function fillProfile() {
   $('profile-email').textContent = user.email;
   drawSchool(user.email);
   $('profile-access').textContent =
-    access === 'college' ? 'Student · free access' : access === 'subscriber' ? 'Subscriber' : 'No access yet';
+    OPEN.has(access) ? 'Free account' : 'Not open yet';
   const billing = $('billing');
   billing.hidden = !(access === 'subscriber' && CONFIG.billingPortalLink);
   if (!billing.hidden) billing.href = CONFIG.billingPortalLink;

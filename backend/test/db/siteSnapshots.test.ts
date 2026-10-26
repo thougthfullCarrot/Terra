@@ -68,9 +68,28 @@ describe.skipIf(!conn)('members-only snapshot rows on a real database', () => {
     expect(() => anon(`insert into site_snapshots (id, data) values ('developments/x.json', '{}')`)).toThrow();
   });
 
-  it('shows a market list to exactly the members who can read market data', () => {
-    for (const member of [ids.student, ids.subscriber]) expect(visible(as(member))).toBe(ROWS.slice().sort().join(','));
-    for (const outsider of [ids.none, ids.lapsed, ids.unconfirmed]) expect(visible(as(outsider))).toBe('');
+  // pending/0021_free_access.sql (loaded by run.sh): any confirmed address is a
+  // member, college email or not, subscription or not. Unconfirmed still sees nothing.
+  it('shows the rows to every confirmed account and to no unconfirmed one', () => {
+    for (const member of [ids.student, ids.subscriber, ids.none, ids.lapsed]) expect(visible(as(member))).toBe(ROWS.slice().sort().join(','));
+    expect(visible(as(ids.unconfirmed))).toBe('');
+  });
+
+  it('labels access without touching subscriptions', () => {
+    expect(as(ids.student)(`select public.access_level()`)).toBe('college');
+    expect(as(ids.subscriber)(`select public.access_level()`)).toBe('subscriber');
+    expect(as(ids.none)(`select public.access_level()`)).toBe('member');
+    expect(as(ids.lapsed)(`select public.access_level()`)).toBe('member');
+    expect(as(ids.unconfirmed)(`select public.access_level()`)).toBe('none');
+    expect(sql({ role: 'service_role' }, `select string_agg(status, ',' order by status) from subscriptions`)).toBe('active,canceled');
+  });
+
+  it('lets a free member add to their own tracker but never to someone else\'s', () => {
+    const job = 'free-access-test';
+    expect(as(ids.none)(`insert into tracked_jobs (user_id, job_id) values ('${ids.none}', '${job}') returning job_id`)).toBe(job);
+    expect(() => as(ids.none)(`insert into tracked_jobs (user_id, job_id) values ('${ids.student}', '${job}')`)).toThrow();
+    expect(() => as(ids.unconfirmed)(`insert into tracked_jobs (user_id, job_id) values ('${ids.unconfirmed}', '${job}')`)).toThrow();
+    expect(as(ids.student)(`select count(*) from tracked_jobs where user_id = '${ids.none}'`)).toBe('0');
   });
 
   it('lets no signed-in user write or change the rows', () => {
@@ -82,5 +101,15 @@ describe.skipIf(!conn)('members-only snapshot rows on a real database', () => {
       changed = '';
     }
     expect(changed).toBe('');
+  });
+
+  it('rolls back to college-or-subscriber access and can be re-applied', () => {
+    const file = (f: string) => new URL(`../../supabase/${f}`, import.meta.url).pathname;
+    execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', file('rollback/0021_free_access_rollback.sql')], { stdio: ['ignore', 'pipe', 'pipe'] });
+    expect(as(ids.none)(`select public.access_level()`)).toBe('none');
+    expect(visible(as(ids.none))).toBe('');
+    expect(visible(as(ids.student))).toBe(ROWS.slice().sort().join(','));
+    execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', file('pending/0021_free_access.sql')], { stdio: ['ignore', 'pipe', 'pipe'] });
+    expect(as(ids.none)(`select public.access_level()`)).toBe('member');
   });
 });
