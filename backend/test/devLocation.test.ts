@@ -204,3 +204,41 @@ describe('mailing town vs jurisdiction', () => {
     expect(sameSite({ address: '10350 W. Cleburne Rd, Crowley, TX', place: 'Crowley' }, { address: '10350 W CLEBURNE RD, Fort Worth, TX', place: 'Fort Worth' }).same).toBe(false);
   });
 });
+
+describe('revalidating cached points', async () => {
+  const { revalidatePoint, revalidatePoints, needsRevalidation } = await import('../src/market/developments.js');
+  const cached = (over: Partial<Development> = {}): Development =>
+    ({ id: 'TABS2025022344', city: 'San Antonio', place: 'San Antonio', name: 'Marbach Brake Check', cost: 1_500_000, address: '2328 W Loop 1604 S, San Antonio, TX 78245', lat: 29.21914, lng: -98.54791, approximate: false, url: '', ...over }) as Development;
+  const census = (matches: object[]) => ({ fetchImpl: (async () => new Response(JSON.stringify({ result: { addressMatches: matches } }))) as typeof fetch });
+  const now = new Date('2026-10-26T00:00:00Z');
+
+  it('removes a cached point whose address now matches the other side of the road, and adds no ZIP area', async () => {
+    const p = cached();
+    expect(needsRevalidation(p)).toBe(true);
+    // The geocoder's match is on Loop 1604 E, not W: the old point was a bad directional match.
+    const r = await revalidatePoint(p, now, census([{ matchedAddress: '2328 SE LOOP 1604, SAN ANTONIO, TX, 78264', coordinates: { x: -98.54791, y: 29.21914 }, addressComponents: { state: 'TX', zip: '78264', preDirection: 'E', city: 'SAN ANTONIO' } }]));
+    expect(r).toBe('removed: address conflict');
+    expect(p).toMatchObject({ lat: null, lng: null, location: { method: 'none', previous: [29.21914, -98.54791], flags: ['address conflict'] } });
+    expect(needsRevalidation(p)).toBe(false);
+  });
+
+  it('keeps a cached point the validated match confirms, and moves one it contradicts', async () => {
+    const ok = cached({ address: '100 N Main Ave, San Antonio, TX 78205', lat: 29.43, lng: -98.49 });
+    expect(await revalidatePoint(ok, now, census([{ matchedAddress: '100 N MAIN AVE, SAN ANTONIO, TX, 78205', coordinates: { x: -98.4901, y: 29.4301 }, addressComponents: { state: 'TX', zip: '78205', preDirection: 'N' } }]))).toBe('kept');
+    expect(ok.location).toMatchObject({ method: 'geocoded-address', rules: 2 });
+    const moved = cached({ address: '100 N Main Ave, San Antonio, TX 78205', lat: 29.5, lng: -98.6 });
+    expect(await revalidatePoint(moved, now, census([{ matchedAddress: '100 N MAIN AVE, SAN ANTONIO, TX, 78205', coordinates: { x: -98.49, y: 29.43 }, addressComponents: { state: 'TX', zip: '78205', preDirection: 'N' } }]))).toBe('moved');
+    expect(moved).toMatchObject({ lat: 29.43, lng: -98.49, location: { previous: [29.5, -98.6] } });
+  });
+
+  it('leaves independently supported points alone and keeps a point when the geocoder fails', async () => {
+    const permit = cached({ source: 'city' });
+    const lent = cached({ locatedFrom: 'City permit X at this address' });
+    expect(needsRevalidation(permit) || needsRevalidation(lent)).toBe(false);
+    const down = cached();
+    expect(await revalidatePoint(down, now, { fetchImpl: (async () => new Response('', { status: 503 })) as typeof fetch })).toBe('error');
+    expect(down.lat).toBe(29.21914);
+    const done = await revalidatePoints([permit, lent], now, { http: census([]) });
+    expect(done.size).toBe(0);
+  });
+});

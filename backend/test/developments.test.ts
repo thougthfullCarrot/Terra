@@ -222,7 +222,7 @@ describe('fetchDevelopments', () => {
 
   it('reads new projects, reuses earlier ones, and places them on the map', async () => {
     const calls: string[] = [];
-    const old = { id: 'OLD1', address: '1 Old St', owner: 'Hines', tenant: null, designFirm: null, scope: null, squareFeet: null, isPublic: false, lat: 29.7, lng: -95.4 } as Development;
+    const old = { id: 'OLD1', address: '1 Old St', owner: 'Hines', tenant: null, designFirm: null, scope: null, squareFeet: null, isPublic: false, lat: 29.7, lng: -95.4, location: { method: 'geocoded-address', accuracy: 'street-interpolated', source: 'Census', verified: '2026-10-04', rules: 2 } } as Development;
     const result = await fetchDevelopments(['Houston'], {
       now: new Date('2026-10-05T00:00:00Z'),
       previous: [old],

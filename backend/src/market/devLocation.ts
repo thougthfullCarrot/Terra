@@ -36,7 +36,17 @@ export interface LocationInfo {
   areaKm?: number;
   /** Checks the point failed, kept for the audit (it is still the best evidence there is). */
   flags?: string[];
+  /** The version of the checks the point passed (RULES); older points are revalidated. */
+  rules?: number;
+  /** The point this one replaced or removed on revalidation, kept for the record. */
+  previous?: [number, number];
 }
+
+/**
+ * The current version of the location checks. A geocoded point checked under
+ * an older version (or never) is geocoded again and must pass today's rules.
+ */
+export const RULES = 2;
 
 export const ACCURACY: Record<LocationMethod, LocationAccuracy> = {
   'permit-point': 'address-or-parcel',
@@ -60,6 +70,7 @@ export const locationInfo = (method: LocationMethod, source: string, verified: s
   accuracy: ACCURACY[method],
   source,
   verified,
+  ...(method === 'geocoded-address' ? { rules: RULES } : {}),
   ...extra
 });
 

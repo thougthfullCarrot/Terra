@@ -1270,6 +1270,8 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
 /** Map location as the data supports it: an address match, a borrowed site point, a ZIP-center pin, or none yet. */
 function locationNote(project) {
   if (project.awaiting) return 'Details pending from the state: listed by name, number and cost until its TABS page is read.';
+  if ((project.lat == null || project.lng == null) && project.location?.method === 'none')
+    return `Location unavailable: ${project.location.source.replace(/^Location unavailable: /, '')}. Not shown on the map, not even as a ZIP area, because the filed address itself may be wrong.`;
   if (project.lat == null || project.lng == null) return 'Not on the map: no reliable location for this filing yet.';
   const checked = project.location?.verified && project.location.verified !== 'not recorded' ? ` Checked ${project.location.verified}.` : '';
   if (project.approximate) return `Location not verified: only the ZIP code is known, so the dashed ring is the ZIP code center and area${project.location?.zip ? ` (${project.location.zip})` : ''}, not the site.${checked}`;

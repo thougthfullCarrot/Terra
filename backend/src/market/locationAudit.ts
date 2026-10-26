@@ -132,6 +132,11 @@ export interface Verified {
   row: AuditRow;
   references: Reference[];
   verdict: 'agrees' | 'confirmed error' | 'suspected error' | 'unverified';
+  /** For an agreement: an official record (city permit GIS) or only the Census geocoder again (same source, not independent). */
+  evidence: 'official record' | 'Census only (same source)' | 'none';
+  /** What kind of problem a suspected case is. */
+  kind?: 'address conflict' | 'missing coordinates' | 'uncertain shared site' | 'distance disagreement';
+  /** The point the updated build's checks actually leave (from the revalidation run), or null. */
   after: [number, number] | null;
   afterMethod: LocationMethod;
   why: string;
@@ -174,6 +179,7 @@ export async function cityRecord(city: City, place: string | null, permit: strin
   return null;
 }
 
+const isConflictReason = (r: string) => r !== 'no match';
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -183,11 +189,16 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * disagree by more than a kilometre, or the lending permit to be in another
  * town or ZIP area; anything else that disagrees is suspected.
  */
-export async function verifySample(rows: AuditRow[], projects: Map<string, Development>, zips: Map<string, ZipArea>, o: { http?: FetchJsonOptions; pauseMs?: number; log?: (l: string) => void } = {}): Promise<Verified[]> {
-  const { http = {}, pauseMs = 400, log = () => {} } = o;
+export async function verifySample(
+  rows: AuditRow[],
+  projects: Map<string, Development>,
+  zips: Map<string, ZipArea>,
+  o: { http?: FetchJsonOptions; pauseMs?: number; log?: (l: string) => void; afterOf?: (row: AuditRow) => { at: [number, number] | null; method: LocationMethod } | undefined } = {}
+): Promise<Verified[]> {
+  const { http = {}, pauseMs = 400, log = () => {}, afterOf = (r: AuditRow) => ({ at: r.at, method: r.method }) } = o;
   const out: Verified[] = [];
   for (const row of rows) {
-    const p = projects.get(row.id)!;
+    const p = projects.get(`${row.city}|${row.id}`)!;
     const refs: Reference[] = [];
     const address = p.address && /^\d/.test(p.address.trim()) && !/\bfrom:|\bto:/i.test(p.address) ? p.address : null;
     let census: Awaited<ReturnType<typeof geocodeChecked>> | null = null;
@@ -205,34 +216,32 @@ export async function verifySample(rows: AuditRow[], projects: Map<string, Devel
     const official = refs.find((r) => r.official && r.at);
     const ref = official ?? refs.find((r) => r.at);
     let verdict: Verified['verdict'] = 'unverified';
+    let kind: Verified['kind'];
     let why = 'no reference point to compare';
     const zip = zipOf(p.address);
     const area = zip ? zips.get(zip) : undefined;
+    // Agreement with the Census geocoder only repeats the source of a geocoded point; only a city record is independent.
+    const evidence: Verified['evidence'] = official ? 'official record' : ref?.at ? 'Census only (same source)' : 'none';
     // The lending permit's own address must be the same site.
     const lent = p.locatedFrom && official ? sameSite({ address: p.address, place: p.place, names: [p.name] }, { address: official.matched ?? null, place: (PERMIT_TOWNS[p.city] ?? [])[0] ?? null }) : null;
     if (row.at && lent && !lent.same && official?.at && km(row.at, official.at) <= 0.5) {
       // The point is the permit's own, but the records don't prove one site: a rule refusal, not a proven wrong pin.
-      verdict = 'suspected error';
+      [verdict, kind] = ['suspected error', 'uncertain shared site'];
       why = `the point is permit ${permit}'s own ("${official!.matched}"), but the records are not proven the same site (${lent.reason})`;
     } else if (row.at && ref?.at) {
       const d = km(row.at, ref.at);
       const outOfZip = area ? km(row.at, area.at) > zipSlackKm(area) : false;
       if (d <= 0.5) [verdict, why] = ['agrees', `${(d * 1000).toFixed(0)} m from ${ref.source}`];
       else if (row.method === 'zip-area') [verdict, why] = ['agrees', `ZIP area only; the address is ${d.toFixed(1)} km from the area's center (expected for an area, it is not a site)`];
-      else if (d > 1 && (official || outOfZip)) [verdict, why] = ['confirmed error', `${d.toFixed(1)} km from ${ref.source}${outOfZip ? `, and outside its filed ZIP ${zip}` : ''}`];
-      else [verdict, why] = ['suspected error', `${d.toFixed(1)} km from ${ref.source}`];
-    } else if (!row.at && ref?.at) [verdict, why] = ['suspected error', `not placed, but ${ref.source} has a point`];
-    else if (row.at && census?.rejected && row.method === 'geocoded-address') [verdict, why] = ['suspected error', `today's validated geocode refuses the match (${census.rejected})`];
-    // After: what the new rules give from these sources (city record of its own permit, then a validated geocode, else the ZIP area).
-    let after: [number, number] | null = row.at;
-    let afterMethod = row.method;
-    if (verdict === 'confirmed error' || verdict === 'suspected error' || row.method === 'zip-area') {
-      if (row.method === 'permit-point' && official?.at) [after, afterMethod] = [official.at, 'permit-point'];
-      else if (census?.at) [after, afterMethod] = [census.at, 'geocoded-address'];
-      else if (area && km(area.at, CITY_CENTERS[p.city]) <= METRO_RADIUS_KM[p.city]) [after, afterMethod] = [area.at, 'zip-area'];
-      else [after, afterMethod] = [null, 'none'];
-    }
-    out.push({ row, references: refs, verdict, after, afterMethod, why });
+      else if (d > 1 && official) [verdict, kind, why] = ['confirmed error', 'distance disagreement', `${d.toFixed(1)} km from ${ref.source}${outOfZip ? `, and outside its filed ZIP ${zip}` : ''}`];
+      else [verdict, kind, why] = ['suspected error', 'distance disagreement', `${d.toFixed(1)} km from ${ref.source}${outOfZip ? `, outside its filed ZIP ${zip}` : ''} (Census only, not independent)`];
+    } else if (!row.at && ref?.at) [verdict, kind, why] = ['suspected error', 'missing coordinates', `not placed, but ${ref.source} has a point`];
+    else if (row.at && census?.rejected && row.method === 'geocoded-address')
+      [verdict, kind, why] = ['suspected error', isConflictReason(census.rejected) ? 'address conflict' : 'missing coordinates', `today's checks refuse the geocoder's match (${census.rejected})`];
+    const a = afterOf(row);
+    const after = a?.at ?? null;
+    const afterMethod = a?.method ?? row.method;
+    out.push({ row, references: refs, verdict, evidence, ...(kind ? { kind } : {}), after, afterMethod, why });
     log(`verify ${row.id}: ${verdict} (${why})`);
   }
   return out;
@@ -277,10 +286,10 @@ export function marketReport(city: City, rows: AuditRow[], verified: Verified[] 
     for (const v of ['confirmed error', 'suspected error', 'agrees', 'unverified'] as const) {
       const list = verified.filter((x) => x.verdict === v);
       if (!list.length) continue;
-      lines.push('', `### Sample: ${v} (${list.length})`, '', '| Project | Address | Method | Before | After (method) | Evidence |', '|---|---|---|---|---|---|');
+      lines.push('', `### Sample: ${v} (${list.length})`, '', '| Project | Address | Method | Kind / evidence | Before (live) | After (updated build) | Detail |', '|---|---|---|---|---|---|---|');
       for (const x of list)
         lines.push(
-          `| [${cell(x.row.id)}](${x.row.url}) ${cell(x.row.name)} | ${cell(x.row.address)} | ${x.row.method} | ${fmt(x.row.at)} | ${fmt(x.after)} (${x.afterMethod}) | ${cell(x.why)}; ${x.references.map((r) => `[${cell(r.source)}](${r.link})${r.matched ? ` matched "${cell(r.matched)}"` : ''}${r.at ? ` at ${fmt(r.at)}` : ` (${cell(r.note ?? 'no point')})`}`).join('; ')} |`
+          `| [${cell(x.row.id)}](${x.row.url}) ${cell(x.row.name)} | ${cell(x.row.address)} | ${x.row.method} | ${x.kind ?? ''}${x.kind ? '; ' : ''}${x.evidence} | ${fmt(x.row.at)} | ${fmt(x.after)} (${x.afterMethod}) | ${cell(x.why)}; ${x.references.map((r) => `[${cell(r.source)}](${r.link})${r.matched ? ` matched "${cell(r.matched)}"` : ''}${r.at ? ` at ${fmt(r.at)}` : ` (${cell(r.note ?? 'no point')})`}`).join('; ')} |`
         );
     }
   }
