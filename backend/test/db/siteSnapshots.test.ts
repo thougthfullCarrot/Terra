@@ -4,6 +4,7 @@
  * Checked on a real Postgres with every migration loaded: npm run test:db.
  */
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 const conn = process.env.TERRA_TEST_PG;
@@ -127,7 +128,9 @@ describe.skipIf(!conn)('members-only snapshot rows on a real database', () => {
     expect(visible(as(ids.none))).toBe('');
     expect(() => anon(`select public.free_access_version()`)).toThrow(/does not exist/);
     expect(visible(as(ids.student))).toBe(ROWS.slice().sort().join(','));
-    execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', file('pending/0021_free_access.sql')], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // pending/ until the rollout PR moves it to migrations/.
+    const applied = ['migrations/0021_free_access.sql', 'pending/0021_free_access.sql'].map(file).find((path) => existsSync(path))!;
+    execFileSync('psql', [conn!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', applied], { stdio: ['ignore', 'pipe', 'pipe'] });
     expect(as(ids.none)(`select public.access_level()`)).toBe('member');
     expect(as(ids.unconfirmedPaid)(`select public.access_level()`)).toBe('none');
     expect(anon(`select public.free_access_version()`)).toBe('21');

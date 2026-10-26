@@ -45,40 +45,50 @@ enforced, not assumed:
 
 ## Exact sequence (each production step waits for Rod's approval)
 
-1. **Read-only checks:** run the billing audit below and record the results.
-   Confirm `select count(*) from pg_proc where proname = 'free_access_version'`
-   returns 0, so 0021 isn't already applied.
+The rollout is two pieces, both prepared and both unmerged:
+
+- **PR #98** (`claude/project-thread-8f1v1x`): site, gates, tests. 0021 sits in
+  `pending/`, so merging #98 alone applies no migration. Its deploy would fail
+  at the free-access gate and the live site stays as it is.
+- **Rollout PR** (`claude/free-access-rollout`, based on #98): one commit that
+  moves `pending/0021_free_access.sql` to `migrations/`, unchanged. It targets
+  #98's branch, so merging it touches no production.
+
+Steps:
+
+1. **Read-only checks:** billing audit (below; done for the sandbox account).
+   In the SQL editor, `select count(*) from pg_proc where proname = 'free_access_version'`
+   must return 0.
 2. **Backup:** export `profiles`, `tracked_jobs`, `watchlist_items` and
    `subscriptions` as CSV from the Supabase table editor. Supabase Free has no
    automatic backups. Keep the files off GitHub.
-3. **Apply the migration:** open a one-file PR that moves
-   `pending/0021_free_access.sql` to `migrations/` and nothing else. When Rod
-   merges it, migrate.yml applies exactly that file. Check the run's summary
-   says `0021_free_access.sql: applied`. If it failed, stop: the gate keeps the
-   old site live.
-4. **Verify the database** (SQL editor, read-only):
+3. **Approve the rollout:** merge the rollout PR into #98's branch.
+4. **Merge PR #98** into `claude/new-session-6xvm0u`. That push starts two
+   workflows:
+   - **Database migrations** applies exactly `0021_free_access.sql`. Check its
+     summary says `applied`. If it failed, stop: the gate keeps every deploy
+     blocked and the old site stays live.
+   - **Website** builds the new site. Its deploy job runs the production site
+     check and the free-access gate. If it reached the gate before the
+     migration finished, it stops without deploying. Run "Website" again by hand
+     (or wait for the next 2-hourly build) once step 5 passes.
+5. **Verify the database** (SQL editor, read-only):
    - `select public.free_access_version();` returns `21`.
    - `select pg_get_functiondef('public.access_level()'::regprocedure);` shows
-     the `email_confirmed_at is null then 'none'` line first.
-5. **Merge PR #98.** The site build runs, the gate passes, and Pages deploys.
-6. **Verify the site** with a gmail test account: sign up with "Create free
-   account", enter the code, land on the welcome screen, see jobs, save one to
-   the tracker. Signed out, the landing page shows and no jobs load.
-
-If PR #98 is merged first, the step-3 push also starts a Website build, because
-site.yml watches `backend/**`. That build may reach the gate before migrate.yml
-finishes and stop without deploying, which is harmless. After step 4, run the
-"Website" workflow by hand or wait for the next scheduled build.
+     `when u.email_confirmed_at is null then 'none'` first.
+6. **Verify the site** with a gmail test account: "Create free account", enter
+   the code, land on the welcome screen, see jobs, save one to the tracker.
+   Signed out, the landing page shows and no jobs load. An account that never
+   entered its code sees nothing.
 
 ## Which migrations will run
 
 migrate.yml runs only files that a push **adds** under
 `backend/supabase/migrations/` (`.github/scripts/new-migrations.sh`):
 
-- PR #98 adds no file there. Checked with
+- PR #98 adds no file there (checked with the command below), and the rollout PR adds only `0021_free_access.sql`. Checked with
   `new-migrations.sh origin/claude/new-session-6xvm0u HEAD backend/supabase/migrations`,
   which printed nothing.
-- The step-3 PR adds only `0021_free_access.sql`.
 - `pending/0019_development_reports.sql` stays in `pending/` and isn't touched.
 
 ## Rollback
@@ -104,19 +114,21 @@ period. Making TERRA free doesn't cancel anything. The site no longer shows a
 Subscribe button, and current subscribers keep their "Manage subscription"
 link (if `STRIPE_BILLING_PORTAL_LINK` is set) so they can cancel themselves.
 
-Read-only audit status: **not run yet.** The cloud session that built this PR
-wasn't allowed to read production Stripe or Supabase. Rod (or a session he
-authorizes) should check, read-only:
+Read-only audit (2026-10-26, checked by Rod in the Stripe Dashboard):
 
-- Stripe Dashboard → Developers → API keys: is the account in test or live
-  mode? (As of 2026-10-05 it was test mode, with Rod's own test subscription.)
-- Stripe Dashboard → Subscriptions, filter **Active**, **Trialing** and
-  **Past due**: the count, whether each is live mode, its next invoice date and
-  amount, and whether it's set to cancel.
-- Stripe Dashboard → Payment Links: whether the $10/month link is still active.
-  Anyone holding the URL could still subscribe.
-- Supabase SQL editor:
-  `select status, count(*) from public.subscriptions group by 1;`
+- The Stripe account behind TERRA's payment link is **sandbox-only**. It
+  requires business verification before it can accept real payments, and
+  that hasn't been done.
+- The one visible $10 transaction is a **test payment**.
+- **No live billing was found in this account.**
+- Not independently checked: other Stripe accounts, and which keys the
+  production configuration (`STRIPE_SECRET_KEY`, `STRIPE_PAYMENT_LINK`,
+  webhook) points at. The cloud session couldn't read them.
+- Rod's instruction: don't activate live payments or verify the business.
+
+To re-check later, read-only: Stripe Dashboard → Subscriptions (Active,
+Trialing, Past due) and Payment Links; Supabase SQL editor
+`select status, count(*) from public.subscriptions group by 1;`.
 
 Stopping future charges (cancel at period end, refunds, deactivating the
 payment link, unsetting `STRIPE_PAYMENT_LINK`/`PRICE_LABEL`) is a separate
