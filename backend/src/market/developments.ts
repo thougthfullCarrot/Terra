@@ -227,8 +227,6 @@ export interface DevelopmentsResult {
   coverage?: TabsCoverage[];
   /** Projects inside a map's cap whose page waits for a later build (MAX_NEW_PAGES ran out). */
   waiting?: number;
-  /** Points still due for revalidation (needsRevalidation) after this build's share. */
-  revalidationDue?: number;
   /** Per metro: what the map shows against what TABS holds, for the coverage note. */
   metros?: MetroCoverage[];
   /** Current filings below each metro's cap that this build saw, listed without pins (no page read). Empty since every filing is in projects. */
@@ -1290,7 +1288,7 @@ export async function fetchDevelopments(cities: readonly City[], options: FetchD
   }
   // Builds keep going while pages wait; a page that failed this build is tried next time but doesn't hold the cache open.
   const waiting = projects.filter((p) => p.awaiting && !failed.has(p.id)).length;
-  return { asOf: now.toISOString(), projects, coverage, metros, smaller: [], waiting, revalidationDue: projects.filter(needsRevalidation).length };
+  return { asOf: now.toISOString(), projects, coverage, metros, smaller: [], waiting };
 }
 
 /** How a market's projects are located, for the coverage note. */
