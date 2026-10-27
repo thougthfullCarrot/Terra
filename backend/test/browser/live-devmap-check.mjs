@@ -71,7 +71,7 @@ async function session() {
 const ref = new URL(url).hostname.split('.')[0];
 const browser = await chromium.launch();
 
-async function open(mobile, city) {
+async function open(mobile, city, full = 0) {
   const context = await browser.newContext(mobile ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : { viewport: { width: 1366, height: 1000 }, deviceScaleFactor: 2 });
   await context.addInitScript(
     ([key, value, id]) => {
@@ -88,6 +88,8 @@ async function open(mobile, city) {
   page.on('pageerror', (e) => page.errors.push(e.message));
   await page.goto(`${SITE}?v=${Date.now()}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForSelector('.dev-map.leaflet-container', { timeout: 30000 });
+  // The biggest projects draw first; the metro's full list follows from its own row.
+  if (full) await page.waitForFunction((n) => Number(document.querySelector('.dev-count strong')?.textContent.replace(/,/g, '')) === n, full, { timeout: 60000 }).catch(() => {});
   await page.waitForTimeout(3000);
   await page.evaluate(() => document.querySelectorAll('dialog[open]').forEach((d) => d.close()));
   return page;
@@ -102,7 +104,7 @@ const search = async (page, q) => {
 try {
   for (const mobile of [false, true]) {
     const v = mobile ? 'phone' : 'desktop';
-    const page = await open(mobile, 'Houston');
+    const page = await open(mobile, 'Houston', houston.length);
     const all = await count(page);
     log(`${v}: Houston map lists every project`, all === houston.length, `${all} of ${houston.length}`);
     const specks = Number(await page.locator('.dev-map').getAttribute('data-specks'));
@@ -164,7 +166,7 @@ try {
 
     // PDL Club search in its metro.
     if (pdl) {
-      const sa = await open(mobile, pdl.city);
+      const sa = await open(mobile, pdl.city, data.projects.filter((p) => p.city === pdl.city).length);
       const small = (data.smaller ?? []).includes(pdl);
       for (const q of ['PDL Club', 'TABS2026006871']) {
         await search(sa, q);
