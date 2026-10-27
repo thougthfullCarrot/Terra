@@ -86,6 +86,16 @@ async function open(mobile, city, full = 0) {
   const page = await context.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(e.message));
+  // Which members-only rows the page asked for, and what came back.
+  page.on('response', async (r) => {
+    if (!r.url().includes('site_snapshots')) return;
+    const id = new URL(r.url()).searchParams.get('id');
+    let size = '?';
+    try { size = (await r.body()).length; } catch {}
+    console.log(`  row ${id}: HTTP ${r.status()}, ${size} bytes`);
+  });
+  page.on('requestfailed', (r) => r.url().includes('site_snapshots') && console.log(`  row request failed: ${new URL(r.url()).searchParams.get('id')} ${r.failure()?.errorText}`));
+  page.on('console', (m) => m.type() === 'error' && console.log(`  console error: ${m.text().slice(0, 200)}`));
   await page.goto(`${SITE}?v=${Date.now()}#markets&tool=map&city=${encodeURIComponent(city)}`);
   await page.waitForSelector('.dev-map.leaflet-container', { timeout: 30000 });
   // The biggest projects draw first; the metro's full list follows from its own row.
