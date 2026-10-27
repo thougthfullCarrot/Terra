@@ -1,0 +1,40 @@
+# One-off: checks the deployed Profile page as one flagged fake test account
+# (backend/test/browser/live-profile-check.mjs). Runs only on this branch.
+name: Live Profile check
+
+on:
+  push:
+    branches: [claude/project-thread-4vlb9w]
+    paths: ['backend/test/browser/live-profile-check.mjs', '.github/workflows/live-profile-check.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium > /dev/null
+      - name: Check the live Profile page
+        run: node test/browser/live-profile-check.mjs /tmp/live-profile
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-profile
+          path: /tmp/live-profile
+          retention-days: 7
