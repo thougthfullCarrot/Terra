@@ -396,7 +396,7 @@ describe('the development page queue', () => {
     const { readFile } = await import('node:fs/promises');
     const yml = await readFile(new URL('../../.github/workflows/site.yml', import.meta.url), 'utf8');
     const save = yml.slice(yml.indexOf('- name: Cache market data for the day'), yml.indexOf('- name: Restore the last headlines'));
-    expect(save).toMatch(/\(steps\.market\.outputs\.pages_waiting != '0' \|\| steps\.market\.outputs\.revalidation_due != '0'\) && format\('-queue-\{0\}', github\.run_id\)/);
+    expect(save).toMatch(/steps\.market\.outputs\.pages_waiting != '0' && format\('-queue-\{0\}', github\.run_id\)/);
     const restore = yml.slice(yml.indexOf('- name: Restore market data'), yml.indexOf('- name: Export market data'));
     expect(restore).toContain('restore-keys: market-');
   });
