@@ -284,7 +284,9 @@ async function main(): Promise<void> {
     // Development pages still queued: site.yml then saves the file under a
     // one-off key, so the next build the same day reads it and keeps going
     // instead of reusing the day's cache and leaving the queue where it is.
-    await appendFile(process.env.GITHUB_OUTPUT, `complete=${complete}\npages_waiting=${developments?.waiting ?? 0}\n`);
+    // Points still due for revalidation keep the key one-off the same way, so
+    // each build checks the next share instead of once a day.
+    await appendFile(process.env.GITHUB_OUTPUT, `complete=${complete}\npages_waiting=${developments?.waiting ?? 0}\nrevalidation_due=${developments?.revalidationDue ?? 0}\n`);
   }
 
   if (filledCount(snapshot) === 0) {
