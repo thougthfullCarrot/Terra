@@ -31,7 +31,8 @@ const server = createServer(async (req, res) => {
   const raw = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const path = raw.endsWith('/') ? `${raw}index.html` : raw;
   try {
-    res.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream' }).end(await readFile(join(siteDir, path)));
+    const body = await readFile(join(siteDir, path));
+    res.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream' }).end(body);
   } catch {
     res.writeHead(404).end();
   }
