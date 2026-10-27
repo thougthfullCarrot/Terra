@@ -516,6 +516,14 @@ for (const vp of [
     const offItem = offPage.locator('.dev-item:not([hidden]):has(.dev-off)').first();
     await offItem.scrollIntoViewIfNeeded();
     const offName = await offItem.locator('.dev-name').textContent();
+    // Searching its name finds it in the list too (removed pins stay searchable).
+    await offPage.locator('.devx-search input').fill(offName.trim());
+    await offPage.waitForTimeout(400);
+    const found = await offPage.locator('.dev-item:not([hidden]):has(.dev-off) .dev-name').allTextContents();
+    log(`${v}: search finds the project with no pin by name`, found.some((t) => t.trim() === offName.trim()));
+    await offPage.locator('.devx-search input').fill('');
+    await offPage.waitForTimeout(400);
+    await offItem.scrollIntoViewIfNeeded();
     await offItem.locator('.dev-pick').click();
     const shown = await offPage.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null);
     const current = await offItem.locator('.dev-pick').getAttribute('aria-current');
