@@ -141,7 +141,12 @@ try {
     log(`${v}: filter change paints within 150 ms`, worst < 150, `worst ${worst} ms, all ${runs.map((r) => r.ms).join('/')}`);
 
     // Selected pin: picking a list row opens the panel and marks its pin.
-    const target = cluster?.[0] ?? houston.find((p) => p.lat != null && !p.approximate);
+    // Pick from what the page actually lists (only the biggest load while the full list doesn't).
+    const listed = new Set(await page.$$eval('.dev-list .dev-item', (ns) => ns.map((n) => n.dataset.id)));
+    const shared = [...spots.values()].filter((m) => m.length >= 2 && m.every((p) => listed.has(p.id)) && new Set(m.map((p) => p.name)).size === m.length).sort((a, b) => b.length - a.length)[0];
+    const cluster = shared ?? null;
+    console.log(`  ${v}: listed shared spot: ${cluster ? `${cluster.length} projects` : 'none'}`);
+    const target = cluster?.[0] ?? houston.find((p) => listed.has(p.id) && p.lat != null && !p.approximate);
     await search(page, target.name);
     await page.locator(`.dev-list .dev-item[data-id="${target.id}"] .dev-pick`).first().click();
     await page.waitForTimeout(1500);
