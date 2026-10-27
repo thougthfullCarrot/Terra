@@ -8154,6 +8154,9 @@ nav.market-tools a.chip[aria-current='page'] {
   padding: 0;
   border: 0;
   background: none;
+  /* Rows scrolled out of view skip layout and paint: thousands of them made a filter change miss its frame. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 68px;
 }
 
 .devx-list .dev-pick {

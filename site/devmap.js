@@ -916,14 +916,21 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     const ratio = window.devicePixelRatio || 1;
     const origin = map.containerPointToLayerPoint([0, 0]);
     L.DomUtil.setPosition(speckCanvas, origin);
-    speckCanvas.width = size.x * ratio;
-    speckCanvas.height = size.y * ratio;
-    speckCanvas.style.width = `${size.x}px`;
-    speckCanvas.style.height = `${size.y}px`;
+    // Resizing a canvas reallocates it; only do that when the map's size changed.
+    if (speckCanvas.width !== size.x * ratio || speckCanvas.height !== size.y * ratio) {
+      speckCanvas.width = size.x * ratio;
+      speckCanvas.height = size.y * ratio;
+      speckCanvas.style.width = `${size.x}px`;
+      speckCanvas.style.height = `${size.y}px`;
+    }
     const g = speckCanvas.getContext('2d');
-    g.scale(ratio, ratio);
-    // ZIP-area rings: many projects share one ZIP center, so each ring is
-    // stroked once, batched by color under a single dash pattern.
+    g.setTransform(ratio, 0, 0, ratio, 0, 0);
+    g.clearRect(0, 0, size.x, size.y);
+    // Dots are batched into one path per color (filled, then outlined) and
+    // ZIP-area rings likewise: many projects share one ZIP center, so each ring
+    // is stroked once, under a single dash pattern. A path per dot made a
+    // filter change on a big metro miss its frame.
+    const dots = new Map();
     const rings = new Map();
     for (const s of speckPts) {
       const c = map.latLngToContainerPoint(where.get(s.p));
@@ -938,17 +945,25 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
         rings.set(s.color, byColor);
         continue;
       }
+      const list = dots.get(s.color) ?? [];
+      list.push(c.x, c.y, r);
+      dots.set(s.color, list);
+    }
+    g.lineWidth = 1;
+    for (const [color, list] of dots) {
       g.beginPath();
-      g.arc(c.x, c.y, r, 0, Math.PI * 2);
+      for (let i = 0; i < list.length; i += 3) {
+        g.moveTo(list[i] + list[i + 2], list[i + 1]);
+        g.arc(list[i], list[i + 1], list[i + 2], 0, Math.PI * 2);
+      }
       g.globalAlpha = 0.85;
-      g.fillStyle = s.color;
+      g.fillStyle = color;
       g.fill();
       g.globalAlpha = 0.5;
       g.strokeStyle = '#000000';
-      g.lineWidth = 1;
       g.stroke();
-      g.globalAlpha = 1;
     }
+    g.globalAlpha = 1;
     g.setLineDash([2, 2]);
     g.lineWidth = 1.5;
     for (const [color, byColor] of rings) {
@@ -1034,9 +1049,11 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       if (project === chosen) icon.setAttribute('aria-current', 'true');
       else icon.removeAttribute('aria-current');
     }
-    const speck = speckPts.some((s) => s.p === project) ? project : null;
-    if (speck !== hoverSpeck && (speck || hoverSpeck)) {
-      hoverSpeck = project === hovered ? speck : null;
+    // Repaint only when the enlarged speck actually changes: a pin added by
+    // draw() must not repaint thousands of specks once per pin.
+    const next = project === hovered && speckPts.some((s) => s.p === project) ? project : hoverSpeck === project ? null : hoverSpeck;
+    if (next !== hoverSpeck) {
+      hoverSpeck = next;
       paintSpecks();
     }
   };
@@ -1065,7 +1082,10 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   let drawnAt = new Map();
 
   /** Redraws the pins for this zoom and view. */
+  let drawing = 0;
   const draw = () => {
+    // A draw now makes any one queued by the fit's moveend redundant.
+    cancelAnimationFrame(drawing);
     if (map !== liveMap || !node.clientWidth) return;
     const started = performance.now();
     const zoom = map.getZoom();
@@ -1172,7 +1192,6 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     node.dataset.specks = String(nextSpecks.length);
     node.dataset.drawMs = String(Math.round(performance.now() - started));
   };
-  let drawing = 0;
   const redraw = () => {
     cancelAnimationFrame(drawing);
     drawing = requestAnimationFrame(draw);
