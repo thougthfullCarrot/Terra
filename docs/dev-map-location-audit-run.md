@@ -245,3 +245,21 @@ Removed points keep their old coordinates in `location.previous` and the rules v
 | San Antonio | [TABS2026018850](https://www.tdlr.texas.gov/TABS/Projects/TABS2026018850) Laser Hair Removal | 1322 W Loop 1604 N Suite 104, San Antonio, TX 78251 | removed: address conflict | 29.21419, -98.52164 | none | Location unavailable: match is not the filed address (1322 S LOOP 1604 W, SAN ANTONIO, TX, 78264) |
 | San Antonio | [TABS2026025349](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025349) Scale Building | 6981 E. Loop 1604, San Antonio, TX 78247 | removed: address conflict | 29.60340, -98.36172 | none | Location unavailable: match is not the filed address (6981 N LOOP 1604 E, SAN ANTONIO, TX, 78247) |
 
+
+## Website speed check: PR vs default branch (2026-10-27)
+
+Read-only workflow `devmap-timing.yml`, run 40510548478. The PR (9b6ce7d) and the default branch (3211761) were each built and served the same restored real data (Houston, 2,996 projects). Both used the devmap-check browser settings (1366×1000 desktop and 390×844 phone, scale 2) and the same six Estimated cost changes, each timed to the next frame. There were 3 alternating blocks of 4 fresh pages per site and viewport, so 12 rounds and 72 changes each.
+
+Columns:
+- "Round worst" is the slowest of the six changes in one page load. This is the number the 150 ms check compares.
+- "Mean per change" is the average of all 72 changes.
+- "Rounds ≥ 150 ms" counts how many of the 12 round worsts hit 150 ms or more.
+
+| Site | Viewport | Round worst, median (range) | Rounds ≥ 150 ms | Mean per change |
+|---|---|---|---|---|
+| PR #101 | desktop | 146 ms (125–167) | 3 of 12 | 88 ms |
+| Default branch | desktop | 161 ms (139–218) | 10 of 12 | 96 ms |
+| PR #101 | phone | 115 ms (109–149) | 0 of 12 | 63 ms |
+| Default branch | phone | 127 ms (119–177) | 1 of 12 | 74 ms |
+
+**Finding:** PR #101 does not cause the slowdown. On the same data it is faster than the default branch on both viewports (desktop median round worst 146 vs 161 ms). The default branch fails this check far more often (10 of 12 desktop rounds). The check sits right at the edge of what Houston's 2,996 projects take on a shared GitHub runner, so it fails intermittently on either code. It needs to be assessed separately (its limit, or the list and legend work that each filter change does). This PR leaves the limit unchanged.
