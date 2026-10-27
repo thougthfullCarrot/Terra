@@ -1,64 +1,114 @@
-# Development Map location audit: cached-point revalidation (actual results)
+# Development Map location audit: final rerun
 
-Updated 2026-10-26 after Rod's review of PR #101. Everything below comes from a real run of the updated code on commit 6adb81f
-(Actions run 40401806927, all 11 markets, read-only), not from hypothetical fresh geocodes. Nothing was merged or deployed.
+Final rerun 2026-10-27 on commit ee67d4e (Actions run 40423293672). This run is read-only, covers all 11 markets and uses real data. The backend in the final head commit (e777553) is the same code; that commit only merges the base branch to resolve a stylesheet conflict. PR #101 is still a draft and has not been merged or deployed.
 
-## What changed since the first report
+## Result
 
-1. **Existing cached points are revalidated.** Every geocoded point from older rules is geocoded again under today's rules. A point within 250 m is kept. A point the new match supports somewhere else is moved, with the old point saved. A point whose only match is a different address is removed and the project shows "Location unavailable". It is not moved to its filed ZIP, because that ZIP may itself be wrong. Permit points and same-site points are independent evidence and are left alone. The live build does 150 of these per run, biggest projects first, within 3 minutes, so the full set takes about 34 builds (roughly 3 days at one build every 2 hours). The audit run below did all of them at once.
-2. **Marbach Brake Check** (2328 W Loop 1604 S, 78245) was pinned to 2328 S Loop 1604 W, 78264, about 27 km away. It is now removed as an address conflict. A regression test reproduces it from a cached record.
-3. **Suspected cases are split by kind**, and agreement backed by the city's own permit record is counted apart from agreement backed only by another Census match.
+All 5,106 cached geocoded points were checked as **35 consecutive builds of 150**. The saved lists were written out and read back between builds, the same way a restart would load them.
+- **4,974 kept, 1 moved, 0 restored, 131 removed** as address conflicts, 0 errors.
+- **0 records were checked twice**, and **0 were still due** after build 35.
+- The earlier run (6adb81f) gave 4,966 kept, 3 moved and 137 removed.
 
-## Totals reconciled
+**Valid pins the parsing fixes preserved (7).** Each of these had been wrongly removed or moved in the earlier run and is now kept at its cached point:
+- Welding Shop, "519 Oak Ave, Highland": Census names the town "HIGHLANDS".
+- NIOS Mansfield, 1266 Lakeview Dr, and Industrial Complex Bldgs A and B, 1926 and 1930 Lone Star Rd: Census cut the town to "MANSFIEL".
+- Burleson Laundry, "237 S. W. Anderson": now read as SW.
+- Nexpoint Irving, "3459N Country Club": now read as 3459 N.
+- CHEP Phase 1, "317E Shady Grove": now read as 317 E. It had been moved 0.7 km; it is now kept.
 
-The earlier "3,981 ZIP-only" figure was my arithmetic mistake. The per-market column summed to 4,334 because Galveston was missing: its filings share ids with Houston's and were merged together. Records are now keyed by market and id, so all 11 markets appear. The correct total is **4,395**.
+## Moved pins reviewed
 
-There are 10,634 market listings for 10,511 distinct filings. Galveston County filings appear on both the Houston and Galveston maps, which accounts for the 123 duplicates.
+| Project | Filed | Before | After | Verdict |
+|---|---|---|---|---|
+| Tifa Chocolate & Gelato | 1085 Gessner Rd Ste 203, 77055 | 29.75150, -95.53937 | 29.78828, -95.54446 (match 1085 GESSNER DR, 77055) | **Moved, supported.** The new match is the filed number, on Gessner, in the filed ZIP 77055 (Spring Branch, north of I-10). The old point was 4.1 km south, outside 77055. The street type differs (Rd vs Dr), which the checks ignore. |
+| Airline Dr Intersections Improvement | 7841 Airline Dr 2521 Airline Dr, 77022 | 29.81027, -95.38208 | **kept** (fixed in ee67d4e) | A road project filed at two addresses. The new match, 7841 Airline Dr, is in 77037, not the filed 77022, so it is weaker evidence than the cached point. A flagged match no longer moves a point; the point is kept and flagged "second match elsewhere". A regression test covers it. |
+| CHEP Phase 1 | 317E Shady Grove Rd, Grand Prairie | | kept | The move was a parsing error, fixed as described above. |
 
-| Market | Listed | Permit point | Same-site permit | Geocoded | ZIP area | None | Conflicting | Suspicious | Revalidated: kept | moved | removed (conflict) | removed (no match) | Sample: confirmed (official) | Sample: suspected | Sample: agrees, official | Sample: agrees, Census only |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Austin | 1494 | 77 | 4 | 722 | 685 | 6 | 38 | 45 | 698 | 0 | 24 | 0 | 0 | 3 | 3 | 7 |
-| College Station | 139 | 0 | 0 | 92 | 47 | 0 | 12 | 2 | 92 | 0 | 0 | 0 | 0 | 0 | 0 | 14 |
-| Dallas | 2447 | 0 | 0 | 1118 | 1303 | 26 | 47 | 73 | 1079 | 1 | 38 | 0 | 0 | 0 | 0 | 12 |
-| El Paso | 211 | 0 | 0 | 118 | 92 | 1 | 6 | 2 | 117 | 0 | 1 | 0 | 0 | 0 | 0 | 14 |
-| Fort Worth | 1696 | 646 | 32 | 568 | 434 | 16 | 293 | 39 | 547 | 0 | 21 | 0 | 0 | 4 | 6 | 5 |
-| Galveston | 123 | 0 | 0 | 61 | 61 | 1 | 0 | 2 | 60 | 0 | 1 | 0 | 0 | 0 | 0 | 8 |
-| Houston | 2982 | 0 | 0 | 1720 | 1253 | 9 | 96 | 118 | 1687 | 2 | 31 | 0 | 0 | 0 | 0 | 12 |
-| Lubbock | 133 | 0 | 0 | 70 | 62 | 1 | 0 | 4 | 69 | 0 | 1 | 0 | 0 | 1 | 0 | 8 |
-| Midland | 134 | 0 | 0 | 78 | 56 | 0 | 2 | 2 | 74 | 0 | 4 | 0 | 0 | 0 | 0 | 10 |
-| New Braunfels | 135 | 0 | 0 | 72 | 62 | 1 | 2 | 5 | 71 | 0 | 1 | 0 | 0 | 0 | 0 | 12 |
-| San Antonio | 1140 | 271 | 36 | 487 | 340 | 6 | 24 | 46 | 472 | 0 | 15 | 0 | 0 | 3 | 8 | 5 |
-| **All 11 markets** | **10634** | **994** | **72** | **5106** | **4395** | **67** | **520** | **338** | **4966** | **3** | **137** | **0** | **0** | **11** | **17** | **107** |
+## Failures and retries
 
-Column notes:
-- "Conflicting" and "Suspicious" are the audit's flags before revalidation.
-- "Revalidated" columns are the actual outcomes for the 5,106 cached geocoded points: 4,966 kept, 3 moved, and 137 removed as address conflicts. An earlier run removed 188. The extra 51 were false removals from address ranges ("2122-2154 Estrada Pkwy") and units written before the town ("Bldg3, Tomball"), and both are fixed.
-- Commit 7cde6dd also fixes a few more false removals found in this list: "237 S. W. Anderson" (SW), "3459N Country Club" (N), and the geocoder's cut-off town "MANSFIEL". Those few points will be kept on the next run.
+These cases are covered by unit tests (`backend/test/devLocation.test.ts`, "revalidation queue across builds"). The real run hit 0 errors, so none of these paths has been exercised on live data.
+- A timeout, a blocked request (403), an HTML or non-JSON answer, or JSON with no match list returns `error`. The point stays as it was and gets `location.retry` (attempts, date, reason). It stays due.
+- A record that failed waits behind the records that have never been tried, so one stuck address can't hold up the 150-point batch.
+- A malformed geocoder answer is now an error, not "no match". Before this change it could have removed a valid point.
 
-## Sample: suspected cases by kind (11; 0 confirmed)
+## Removals stay recoverable
 
-A confirmed error requires the city's official permit record to put the site more than 1 km from our point. That happened 0 times. Of the sampled points that agree, **17 agree with an official city record**. **107 agree only with the Census geocoder**, which is the same source that made the point, so they count as repeat matches, not independent confirmation.
+Removed points keep their old coordinates in `location.previous` and the rules version they were checked under. When the checks change (the `RULES` number goes up), removed points are due again. If today's checks accept the match, the old point is restored; a test covers this. Points removed under the current rules are not retried every build. This change bumps the rules version to 3, so the live site rechecks everything once: about 35 builds, or roughly 3 days at one build every 2 hours.
 
-**Address conflict (6).** The Census match is a different address. Each point is removed and shown as "Location unavailable".
-- TDEM HQ Parking Garage and TDEM HQ Warehouse, 4125 S FM 973: the match is 4125 N FM 973 in 78725.
-- Malabar Hill Shops at Parmer, 5801 E Parmer Ln: the match is 5801 W Parmer Ln in 78727.
-- Texas Tech Shake Smart, 3219 Main St, Lubbock: two matches 7.3 km apart.
-- Methodist Metropolitan Parking Garage, filed with two addresses: the match is the second address in a different ZIP.
-- Marbach Brake Check: covered above.
+## CI
 
-**Missing coordinates (3).** TCU A Block Bldgs 1–3 in Fort Worth are city permits with no point. Census has a match, but that is the same source, so they are left unplaced.
+- Unit tests: 1,180 passed.
+- Audit run on the final backend code: passed.
+- Website build and the dev map browser check: see PR #101's checks on e777553. The earlier failures were a Houston filter-speed check at 173 to 191 ms against a 150 ms limit. Fixes pushed: dots off the screen are skipped, the dashed ZIP rings are drawn in one pass, and each project's color is worked out once.
 
-**Uncertain shared site (2).** Each point is the city permit's own point, which the official record supports, so both are kept and flagged for review.
-- New Middle School No 5, Crowley: the point is permit PB25-06095's own.
-- SARA Sheridan Campus, San Antonio.
+## Remaining limitations
 
-**Distance disagreement (0).**
+- Agreement checks against the official city record exist only for San Antonio, Austin and Fort Worth. Elsewhere a kept point is a repeat Census match, not independent confirmation.
+- 131 projects become "Location unavailable" and will stay that way until the filing is corrected or the rules change.
+- The failure paths are proven by tests only, because no request failed in the real runs.
+- PR builds cannot save the caches, so the multi-build behavior is shown by the audit's save-and-reload simulation, not by real scheduled builds. The live rollout starts after merge.
+- The Census geocoder interpolates along the street, so a "kept" point is accurate to the street segment, not to a building.
 
-## Every cached point the revalidation moved or removed
+## Totals
 
-## Cached points revalidated by the updated build
+| Market | Listed | Permit point | Same-site permit | Geocoded | ZIP area | None | Conflicting | Suspicious | Revalidated: kept | moved | restored | removed (conflict) | removed (no match) | error | Sample: confirmed (official) | Sample: suspected | Sample: agrees, official | Sample: agrees, Census only |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Austin | 1494 | 77 | 4 | 722 | 685 | 6 | 38 | 45 | 698 | 0 | 0 | 24 | 0 | 0 | 0 | 3 | 3 | 7 |
+| College Station | 139 | 0 | 0 | 92 | 47 | 0 | 12 | 2 | 92 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 14 |
+| Dallas | 2447 | 0 | 0 | 1118 | 1303 | 26 | 45 | 73 | 1082 | 0 | 0 | 36 | 0 | 0 | 0 | 0 | 0 | 12 |
+| El Paso | 211 | 0 | 0 | 118 | 92 | 1 | 6 | 2 | 117 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 14 |
+| Fort Worth | 1696 | 646 | 32 | 568 | 434 | 16 | 293 | 39 | 550 | 0 | 0 | 18 | 0 | 0 | 0 | 4 | 6 | 5 |
+| Galveston | 123 | 0 | 0 | 61 | 61 | 1 | 0 | 2 | 60 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 8 |
+| Houston | 2982 | 0 | 0 | 1720 | 1253 | 9 | 96 | 118 | 1689 | 1 | 0 | 30 | 0 | 0 | 0 | 0 | 0 | 12 |
+| Lubbock | 133 | 0 | 0 | 70 | 62 | 1 | 0 | 4 | 69 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 8 |
+| Midland | 134 | 0 | 0 | 78 | 56 | 0 | 2 | 2 | 74 | 0 | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 10 |
+| New Braunfels | 135 | 0 | 0 | 72 | 62 | 1 | 2 | 5 | 71 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 12 |
+| San Antonio | 1140 | 271 | 36 | 487 | 340 | 6 | 24 | 46 | 472 | 0 | 0 | 15 | 0 | 0 | 0 | 3 | 8 | 5 |
+| **All 11 markets** | **10634** | **994** | **72** | **5106** | **4395** | **67** | **518** | **338** | **4974** | **1** | **0** | **131** | **0** | **0** | **0** | **11** | **17** | **107** |
 
-5106 cached geocoded points checked again under today's rules. Moved or removed:
+## Consecutive builds
+
+35 builds of up to 150, the lists saved and read back between builds. Records checked more than once: 0. Still due afterwards: 0.
+
+| Build | Checked | Outcomes |
+|---|---|---|
+| 1 | 150 | 143 kept, 7 removed: address conflict |
+| 2 | 150 | 144 kept, 6 removed: address conflict |
+| 3 | 150 | 144 kept, 6 removed: address conflict |
+| 4 | 150 | 146 kept, 4 removed: address conflict |
+| 5 | 150 | 147 kept, 3 removed: address conflict |
+| 6 | 150 | 146 kept, 4 removed: address conflict |
+| 7 | 150 | 145 kept, 5 removed: address conflict |
+| 8 | 150 | 145 kept, 5 removed: address conflict |
+| 9 | 150 | 145 kept, 5 removed: address conflict |
+| 10 | 150 | 147 kept, 3 removed: address conflict |
+| 11 | 150 | 146 kept, 4 removed: address conflict |
+| 12 | 150 | 146 kept, 4 removed: address conflict |
+| 13 | 150 | 145 kept, 5 removed: address conflict |
+| 14 | 150 | 148 kept, 2 removed: address conflict |
+| 15 | 150 | 146 kept, 4 removed: address conflict |
+| 16 | 150 | 144 kept, 6 removed: address conflict |
+| 17 | 150 | 147 kept, 3 removed: address conflict |
+| 18 | 150 | 143 kept, 7 removed: address conflict |
+| 19 | 150 | 147 kept, 3 removed: address conflict |
+| 20 | 150 | 149 kept, 1 removed: address conflict |
+| 21 | 150 | 149 kept, 1 removed: address conflict |
+| 22 | 150 | 144 kept, 6 removed: address conflict |
+| 23 | 150 | 148 kept, 2 removed: address conflict |
+| 24 | 150 | 147 kept, 3 removed: address conflict |
+| 25 | 150 | 148 kept, 2 removed: address conflict |
+| 26 | 150 | 149 kept, 1 removed: address conflict |
+| 27 | 150 | 144 kept, 6 removed: address conflict |
+| 28 | 150 | 149 kept, 1 removed: address conflict |
+| 29 | 150 | 145 kept, 4 removed: address conflict, 1 moved |
+| 30 | 150 | 145 kept, 5 removed: address conflict |
+| 31 | 150 | 149 kept, 1 removed: address conflict |
+| 32 | 150 | 145 kept, 5 removed: address conflict |
+| 33 | 150 | 146 kept, 4 removed: address conflict |
+| 34 | 150 | 147 kept, 3 removed: address conflict |
+| 35 | 6 | 6 kept |
+
+## Every cached point moved or removed
 
 | Market | Project | Filed address | Outcome | Before (live) | After (updated build) | Source |
 |---|---|---|---|---|---|---|
@@ -99,14 +149,11 @@ A confirmed error requires the city's official permit record to put the site mor
 | Dallas | [TABS2026025993](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025993) Dallas Police Law Enforcement Training Center - Criminal Justice Center | 1800 E. Camp Wisdom Road, Building 1, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
 | Dallas | [TABS2026026004](https://www.tdlr.texas.gov/TABS/Projects/TABS2026026004) Dallas Police Law Enforcement Training Center - Reality Based Training - Basic | 1800 E. Camp Wisdom Road, Building 5, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
 | Dallas | [TABS2026013630](https://www.tdlr.texas.gov/TABS/Projects/TABS2026013630) Red Oak ISD High School Gym Addition | 220 TX-342, Red Oak, TX 75154 | removed: address conflict | 32.52059, -96.79821 | none | Location unavailable: 2 matches up to 1.2 km apart |
-| Dallas | [TABS2027001569](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001569) Nexpoint Irving Self Storage and Flex buildings | 3459N Country Club Road, Irving, TX 75017 | removed: address conflict | 32.85307, -96.97778 | none | Location unavailable: match is not the filed address (3459 COUNTRY CLUB RD N, IRVING, TX, 75062) |
 | Dallas | [TABS2026006484](https://www.tdlr.texas.gov/TABS/Projects/TABS2026006484) Red Oak ISD HS Site Athletic Improvements | 220 TX-342, Red Oak, TX 75154 | removed: address conflict | 32.52059, -96.79821 | none | Location unavailable: 2 matches up to 1.2 km apart |
 | Dallas | [TABS2026026010](https://www.tdlr.texas.gov/TABS/Projects/TABS2026026010) Dallas Police Law Enforcement Training Center - Reality Based Training - In-Service | 1800 E. Camp Wisdome Road, Building 6, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
 | Dallas | [TABS2025023562](https://www.tdlr.texas.gov/TABS/Projects/TABS2025023562) City of Terrell Pet Adoption Center | 1100 N. State Highway 34, Terrell, TX 75160 | removed: address conflict | 32.72610, -96.27658 | none | Location unavailable: match is not the filed address (1100 HWY 34 S, TERRELL, TX, 75160) |
-| Dallas | [TABS2026024378](https://www.tdlr.texas.gov/TABS/Projects/TABS2026024378) CHEP Phase 1 | 317E Shady Grove Road, Grand Prairie, TX 75050 | moved | 32.80489, -97.00091 | 32.80475, -97.00873 | Census Geocoder (Public_AR_Current) match of the filed address (revalidated; moved 0.7 km from the cached match) |
 | Dallas | [TABS2026006933](https://www.tdlr.texas.gov/TABS/Projects/TABS2026006933) Texans CU McKinney | 3950 W University Drive, Mckinney, TX 75071 | removed: address conflict | 33.19134, -96.55217 | none | Location unavailable: match is not the filed address (3950 E UNIVERSITY DR, MC KINNEY, TX, 75069) |
 | Dallas | [TABS2027004095](https://www.tdlr.texas.gov/TABS/Projects/TABS2027004095) Chase Centerville Garland - Relo Redev | 1000 W Centerville Road, Garland, TX 75041 | removed: address conflict | 32.88147, -96.61805 | none | Location unavailable: match is not the filed address (1000 E CENTERVILLE RD, GARLAND, TX, 75041) |
-| Dallas | [TABS2026015408](https://www.tdlr.texas.gov/TABS/Projects/TABS2026015408) NIOS Mansfield | 1266 Lakeview Drive, Mansfield, TX 76065 | removed: address conflict | 32.50542, -97.07173 | none | Location unavailable: match is not the filed address (1266 LAKEVIEW DR, MANSFIEL, TX, 76084) |
 | Dallas | [TABS2026016135](https://www.tdlr.texas.gov/TABS/Projects/TABS2026016135) Anna Buzz Center | 1005 South Powell Parkway, Anna, TX 75409 | removed: address conflict | 33.35756, -96.55033 | none | Location unavailable: match is not the filed address (1005 N POWELL PKWY, ANNA, TX, 75409) |
 | Dallas | [TABS2026019781](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019781) 25172 - 725 Wintergreen | 725 W Wintergreen, Hutchins, TX 75141 | removed: address conflict | 32.63280, -96.69889 | none | Location unavailable: match is not the filed address (725 E WINTERGREEN RD, HUTCHINS, TX, 75141) |
 | Dallas | [TABS2026008907](https://www.tdlr.texas.gov/TABS/Projects/TABS2026008907) Mac Haik Desoto Ford Service Building Addition | 515 S. Interstate 35 E, Desoto, TX 75115 | removed: address conflict | 32.58922, -96.82257 | none | Location unavailable: match is not the filed address (515 I- 35 E, DESOTO, TX, 75115) |
@@ -130,15 +177,12 @@ A confirmed error requires the city's official permit record to put the site mor
 | Fort Worth | [TABS2025016996](https://www.tdlr.texas.gov/TABS/Projects/TABS2025016996) Mansfield City Hall | 1200 Broad Street, Mansfield, TX 76063 | removed: address conflict | 32.55627, -97.16238 | none | Location unavailable: 2 matches up to 3.5 km apart |
 | Fort Worth | [TABS2025026844](https://www.tdlr.texas.gov/TABS/Projects/TABS2025026844) Dave & Buster's | 251 E. MACALISTER ROAD, Burleson, TX 76028 | removed: address conflict | 32.56150, -97.33920 | none | Location unavailable: match is not the filed address (251 NE MCALISTER RD, BURLESON, TX, 76028) |
 | Fort Worth | [TABS2026023887](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023887) WR Meadows Building #2 | 1290 Cantrell Sansom Road 2555 Northeast 33rd St, Fort Worth, TX 76111 | removed: address conflict | 32.80495, -97.31254 | none | Location unavailable: match is not the filed address (2555 NE 33RD ST, FORT WORTH, TX, 76111) |
-| Fort Worth | [TABS2026017606](https://www.tdlr.texas.gov/TABS/Projects/TABS2026017606) Industrial Complex Bldg B - Mansfield, TX | 1930 Lone Star Rd, Mansfield, TX 76063 | removed: address conflict | 32.53099, -97.10856 | none | Location unavailable: match is not the filed address (1930 LONE STAR RD, MANSFIEL, TX, 76084) |
-| Fort Worth | [TABS2026017590](https://www.tdlr.texas.gov/TABS/Projects/TABS2026017590) Industrial Complex Bldg A - Mansfield, TX | 1926 Lone Star Rd, Mansfield, TX 76063 | removed: address conflict | 32.53099, -97.10856 | none | Location unavailable: match is not the filed address (1926 LONE STAR RD, MANSFIEL, TX, 76084) |
 | Fort Worth | [TABS2026023542](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023542) 11436 FM RD 730 N | 11436 FM RD 730 N., Azle, TX 76020 | removed: address conflict | 32.87907, -97.58118 | none | Location unavailable: match is not the filed address (11436 S FM 730, AZLE, TX, 76020) |
 | Fort Worth | [TABS2026026482](https://www.tdlr.texas.gov/TABS/Projects/TABS2026026482) office building for Chad Harvey | 100 West Washburn, Decatur, TX 76109 | removed: address conflict | 33.23414, -97.59376 | none | Location unavailable: match is not the filed address (100 S WASHBURN ST, DECATUR, TX, 76234) |
 | Fort Worth | [TABS2026022610](https://www.tdlr.texas.gov/TABS/Projects/TABS2026022610) Southlake Nolen MOB 2 Shell | 325 S Nolen Dr., Southlake, TX 76092 | removed: address conflict | 32.94202, -97.10975 | none | Location unavailable: match is not the filed address (325 N NOLEN DR, SOUTHLAKE, TX, 76092) |
 | Fort Worth | [TABS2026025180](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025180) NFCU Saginaw NBO | 311 E Bond Ranch Rd, Fort Worth, TX 76131 | removed: address conflict | 32.92431, -97.36407 | none | Location unavailable: match is not the filed address (311 W BONDS RANCH RD, FORT WORTH, TX, 76131) |
 | Fort Worth | [TABS2027001815](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001815) QuikTrip #1989 | 1996 West Henderson Street, Cleburne, TX 76033 | removed: address conflict | 32.33058, -97.43424 | none | Location unavailable: match is not the filed address (1996 E HENDERSON ST, CLEBURNE, TX, 76033) |
 | Fort Worth | [TABS2026021279](https://www.tdlr.texas.gov/TABS/Projects/TABS2026021279) Chipotle #5689 Copper Ranch TI | 311 E. Bonds Ranch Road, Fort Worth, TX 76131 | removed: address conflict | 32.92431, -97.36407 | none | Location unavailable: match is not the filed address (311 W BONDS RANCH RD, FORT WORTH, TX, 76131) |
-| Fort Worth | [TABS2026023654](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023654) Burleson Laundry | 237 S. W. Anderson Street, Burleson, TX 76028 | removed: address conflict | 32.54224, -97.32864 | none | Location unavailable: match is not the filed address (237 SW ANDERSON ST, BURLESON, TX, 76028) |
 | Fort Worth | [TABS2025024327](https://www.tdlr.texas.gov/TABS/Projects/TABS2025024327) Southside Bank Burleson | 440 NW John Jones Drive, Burleson, TX 76028 | removed: address conflict | 32.51209, -97.34592 | none | Location unavailable: match is not the filed address (440 SE JOHN JONES DR, BURLESON, TX, 76028) |
 | Fort Worth | [TABS2026015787](https://www.tdlr.texas.gov/TABS/Projects/TABS2026015787) Race Street Retail Center | 3650 Race St 35000Fort Worth, TX, Fort Worth, TX 76104 | removed: address conflict | 32.77304, -97.29581 | none | Location unavailable: match is not the filed address (3650 RACE ST, FORT WORTH, TX, 76111) |
 | Fort Worth | [TABS2026018948](https://www.tdlr.texas.gov/TABS/Projects/TABS2026018948) FOX FITNESS | 6336 CROMWELL MARINE CREEK RD FT WORTH TX 76135, Fort Worth, TX 76135 | removed: address conflict | 32.85236, -97.42356 | none | Location unavailable: match is not the filed address (6336 CROMWELL MARINE CR RD, FT WORTH, TX, 76179) |
@@ -174,10 +218,8 @@ A confirmed error requires the city's official permit record to put the site mor
 | Houston | [TABS2026019057](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019057) Japhet Creek Phase 2 South Trails Package | 808 1/2 N York Street Suite 200, Houston, TX 77002 | removed: address conflict | 29.75088, -95.33799 | none | Location unavailable: match is not the filed address (2 N YORK ST, HOUSTON, TX, 77003) |
 | Houston | [TABS2026008522](https://www.tdlr.texas.gov/TABS/Projects/TABS2026008522) Grimes Industrial:  Building Expansion | 929 E. Main Street, Tomball, TX 77375 | removed: address conflict | 30.09337, -95.62444 | none | Location unavailable: match is not the filed address (929 W MAIN, TOMBALL, TX, 77375) |
 | Houston | [TABS2026012860](https://www.tdlr.texas.gov/TABS/Projects/TABS2026012860) McDonald's Houston MLK (42-3761) | 11411 Martin Luther King Blvd., Houston, TX 77048 | removed: address conflict | 29.62526, -95.33968 | none | Location unavailable: 2 matches up to 1.3 km apart |
-| Houston | [TABS2026017456](https://www.tdlr.texas.gov/TABS/Projects/TABS2026017456) Airline Dr Intersections Improvement | 7841 Airline Dr 2521 Airline Dr, Houston, TX 77022 | moved | 29.81027, -95.38208 | 29.87488, -95.38616 | Census Geocoder (Public_AR_Current) match of the filed address (revalidated; moved 7.2 km from the cached match) |
-| Houston | [TABS2026014415](https://www.tdlr.texas.gov/TABS/Projects/TABS2026014415) Welding Shop | 519 Oak Ave, Highland, TX 7756 | removed: address conflict | 29.82248, -95.05589 | none | Location unavailable: match is not the filed address (519 OAK AVE, HIGHLANDS, TX, 77562) |
 | Houston | [TABS2026016915](https://www.tdlr.texas.gov/TABS/Projects/TABS2026016915) Alliance Grayson Logistics Bldg 4 | 5905 E. Sam Houston S. Pkwy Suite 4100, Houston, TX 77034 | removed: address conflict | 29.60076, -95.31926 | none | Location unavailable: 2 matches up to 27.7 km apart |
-| Houston | [TABS2026011735](https://www.tdlr.texas.gov/TABS/Projects/TABS2026011735) Tifa Chocolate & Gelato | 1085 Gessner Rd. Ste 203, Houston, TX 77055 | moved | 29.75150, -95.53937 | 29.78828, -95.54446 | Census Geocoder (Public_AR_Current) match of the filed address (revalidated; moved 4.1 km from the cached match) |
+| Houston | [TABS2026011735](https://www.tdlr.texas.gov/TABS/Projects/TABS2026011735) Tifa Chocolate & Gelato | 1085 Gessner Rd. Ste 203, Houston, TX 77055 | moved | 29.75150, -95.53937 | 29.78828, -95.54446 | Census Geocoder (Public_AR_Current) match of the filed address (revalidated; moved 4.1 km from the cached match; match: 1085 GESSNER DR, HOUSTON, TX, 77055) |
 | Houston | [TABS2026006684](https://www.tdlr.texas.gov/TABS/Projects/TABS2026006684) North Wade Office Warehouse | 139 Wade Circle North, Conroe, TX 77304 | removed: address conflict | 30.30467, -95.48721 | none | Location unavailable: match is not the filed address (139 WADE CIR W, CONROE, TX, 77304) |
 | Houston | [TABS2026028327](https://www.tdlr.texas.gov/TABS/Projects/TABS2026028327) HTX WINE & SPIRITS #2 | 700 North Loop West Fwy. Suite B, Houston, TX 77018 | removed: address conflict | 29.81322, -95.41039 | none | Location unavailable: match is not the filed address (700 NORTH LOOP W, HOUSTON, TX, 77018) |
 | Houston | [TABS2025025964](https://www.tdlr.texas.gov/TABS/Projects/TABS2025025964) Tesla - Alvin, TX | 3100 S. Gordon Street, Alvin, TX 77511 | removed: address conflict | 29.45268, -95.24517 | none | Location unavailable: match is not the filed address (3100 N GORDON ST, ALVIN, TX, 77511) |
