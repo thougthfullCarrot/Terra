@@ -28,11 +28,17 @@ const log = (name, ok, detail = '') => {
 const js = await (await fetch(`${SITE}devmap.js`, { cache: 'no-store' })).text();
 log('live devmap.js carries PR #104', js.includes('A draw now makes any one queued by the fit'));
 
-// The live data, to pick a shared spot to fan out and to find PDL Club.
-const market = await (await fetch(`${SITE}market.json`, { cache: 'no-store' })).json();
+// The live data (the members-only site_snapshots rows the page reads), to pick
+// a shared spot to fan out and to find PDL Club.
+const row = async (id) => {
+  const { data: r, error } = await admin.from('site_snapshots').select('data').eq('id', id).maybeSingle();
+  if (error || !r) throw new Error(`site_snapshots ${id}: ${error?.message ?? 'missing'}`);
+  return r.data;
+};
+const market = await row('market');
 const data = market.developments;
 for (const [city, path] of Object.entries(data.files ?? {})) {
-  const file = await (await fetch(`${SITE}${path}`, { cache: 'no-store' })).json();
+  const file = await row(path);
   data.projects = [...data.projects.filter((p) => p.city !== city), ...file.projects];
 }
 const houston = data.projects.filter((p) => p.city === 'Houston');
