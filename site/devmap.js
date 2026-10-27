@@ -317,7 +317,7 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   const key = el('p', 'devx-key');
   key.innerHTML =
     '<span class="devx-key-item"><span class="devx-key-pill" aria-hidden="true">$12M</span>Biggest projects show their filed cost; small dots are the rest, zoom in or click to see them</span>' +
-    '<span class="devx-key-item"><span class="devx-key-approx" aria-hidden="true"></span>Dashed border: approximate location, near the ZIP code center</span>';
+    '<span class="devx-key-item"><span class="devx-key-approx" aria-hidden="true"></span>Dashed ring: location not verified, only the ZIP code area is known (not a site pin)</span>';
   side.append(dockHead, search, legend, listHead, smallerHint, list);
   summary.hidden = true;
   bar.hidden = true;
@@ -354,7 +354,7 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
   const waiting = all.filter((p) => p.awaiting).length;
   const parts = [`${placed.length.toLocaleString('en-US')} of ${all.length.toLocaleString('en-US')} projects have a map location`];
   if (site) parts.push(`${site.toLocaleString('en-US')} use the site's point from a city permit at the same address`);
-  if (near) parts.push(`${near.toLocaleString('en-US')} with a dashed outline sit at the center of their ZIP code because their new address is not on the Census street map yet`);
+  if (near) parts.push(`${near.toLocaleString('en-US')} are marked "Location not verified" and drawn as a dashed ring for their ZIP code area, because no permit point or confirmed address match exists yet`);
   if (waiting) parts.push(`${waiting.toLocaleString('en-US')} are listed by name, number and cost while their details wait to be read from the state`);
   const sources = all.some((p) => p.source === 'city') ? `state TABS filings and ${PERMIT_CITIES[city] ?? 'city'} building permits` : 'state TABS filings';
   note.textContent = all.length
@@ -822,7 +822,7 @@ function pressed(act) {
 
 /** A pin's accessible name and tooltip: name, category, cost, and an approximate spot said in words. */
 function pinLabel(project, cat) {
-  return [project.name, cat?.label, money(project.cost), project.approximate ? 'approximate location' : ''].filter(Boolean).join(', ');
+  return [project.name, cat?.label, money(project.cost), project.approximate ? 'location not verified, ZIP code area only' : ''].filter(Boolean).join(', ');
 }
 
 /**
@@ -903,6 +903,13 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   map.getPanes().overlayPane.appendChild(speckCanvas);
   let speckPts = [];
   let hoverSpeck = null;
+  // A project's category color, worked out once: draws on every filter change ask for thousands.
+  const colors = new Map();
+  const colorOf = (p) => {
+    let c = colors.get(p);
+    if (c == null) colors.set(p, (c = catOf.get(projectCategory(p))?.color ?? '#9b958d'));
+    return c;
+  };
   const paintSpecks = (list) => {
     if (list) speckPts = list;
     const size = map.getSize();
@@ -915,30 +922,45 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
     speckCanvas.style.height = `${size.y}px`;
     const g = speckCanvas.getContext('2d');
     g.scale(ratio, ratio);
+    // ZIP-area rings: many projects share one ZIP center, so each ring is
+    // stroked once, batched by color under a single dash pattern.
+    const rings = new Map();
     for (const s of speckPts) {
       const c = map.latLngToContainerPoint(where.get(s.p));
       s.x = c.x;
       s.y = c.y;
+      if (c.x < -8 || c.y < -8 || c.x > size.x + 8 || c.y > size.y + 8) continue;
       const r = s.p === hoverSpeck ? 6 : 3.5;
+      if (s.p.approximate) {
+        const key = `${Math.round(c.x)},${Math.round(c.y)},${r}`;
+        const byColor = rings.get(s.color) ?? new Map();
+        byColor.set(key, [c.x, c.y, r]);
+        rings.set(s.color, byColor);
+        continue;
+      }
       g.beginPath();
       g.arc(c.x, c.y, r, 0, Math.PI * 2);
-      if (s.p.approximate) {
-        g.setLineDash([2, 2]);
-        g.strokeStyle = s.color;
-        g.lineWidth = 1.5;
-        g.stroke();
-        g.setLineDash([]);
-      } else {
-        g.globalAlpha = 0.85;
-        g.fillStyle = s.color;
-        g.fill();
-        g.globalAlpha = 0.5;
-        g.strokeStyle = '#000000';
-        g.lineWidth = 1;
-        g.stroke();
-        g.globalAlpha = 1;
-      }
+      g.globalAlpha = 0.85;
+      g.fillStyle = s.color;
+      g.fill();
+      g.globalAlpha = 0.5;
+      g.strokeStyle = '#000000';
+      g.lineWidth = 1;
+      g.stroke();
+      g.globalAlpha = 1;
     }
+    g.setLineDash([2, 2]);
+    g.lineWidth = 1.5;
+    for (const [color, byColor] of rings) {
+      g.beginPath();
+      for (const [x, y, r] of byColor.values()) {
+        g.moveTo(x + r, y);
+        g.arc(x, y, r, 0, Math.PI * 2);
+      }
+      g.strokeStyle = color;
+      g.stroke();
+    }
+    g.setLineDash([]);
   };
   const speckAt = (point) => {
     let best = null;
@@ -952,7 +974,9 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   map.on('click', (event) => {
     if (reports?.picking()) return;
     const p = speckAt(event.containerPoint);
-    if (p) map.setView(where.get(p), Math.min(map.getZoom() + 2, SPREAD_ZOOM), { animate: !reduceMotion() });
+    // A not-verified project is only ever a ring, so a click opens it rather than zooming toward a spot that isn't its site.
+    if (p?.approximate) onPick(p);
+    else if (p) map.setView(where.get(p), Math.min(map.getZoom() + 2, SPREAD_ZOOM), { animate: !reduceMotion() });
   });
   map.on('mousemove', (event) => {
     const p = speckAt(event.containerPoint);
@@ -1000,6 +1024,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
   const pulse = L.marker([0, 0], { icon: L.divIcon({ className: 'devx-pulse-icon', html: '<span class="devx-pulse"></span>', iconSize: [0, 0] }), interactive: false, keyboard: false });
   let hovered = null;
   let chosen = null;
+  let area = null;
   /** The cluster each project sat in at the last draw, for the list's hover. */
   let clusterOf = new Map();
   const decorate = (project) => {
@@ -1086,11 +1111,22 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       }
     };
     const spots = new Map();
-    for (const p of shown) {
-      const k = spotOf.get(p);
-      spots.set(k, [...(spots.get(k) ?? []), p]);
+    // Projects whose location is not verified never get a site pin or a pill:
+    // they are dashed rings at their ZIP area's center, whatever the zoom.
+    for (const p of shown) if (p.approximate) {
+      nextAt.set(p, where.get(p));
+      nextSpecks.push({ p, color: colorOf(p) });
     }
-    let count = 0;
+    const sited = shown.filter((p) => !p.approximate);
+    // Rings count as drawn: the project is on the map, as an area.
+    const rings = shown.length - sited.length;
+    for (const p of sited) {
+      const k = spotOf.get(p);
+      const at = spots.get(k);
+      if (at) at.push(p);
+      else spots.set(k, [p]);
+    }
+    let count = rings;
     if (zoom >= SPREAD_ZOOM) {
       for (const members of spots.values()) {
         fan(members);
@@ -1101,7 +1137,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
       // placed, otherwise a small speck until zooming in makes room. The selected project always has its pill.
       const boxes = [];
       const free = (box) => boxes.every((b) => box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]);
-      const order = [...shown].sort((a, b) => (b === chosen) - (a === chosen) || (b.cost ?? 0) - (a.cost ?? 0));
+      const order = [...sited].sort((a, b) => (b === chosen) - (a === chosen) || (b.cost ?? 0) - (a.cost ?? 0));
       for (const p of order) {
         count++;
         const at = where.get(p);
@@ -1117,7 +1153,7 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
           if (!marker.getLatLng().equals(at)) marker.setLatLng(at);
           want.add(marker);
         } else {
-          nextSpecks.push({ p, color: catOf.get(projectCategory(p))?.color ?? '#9b958d' });
+          nextSpecks.push({ p, color: colorOf(p) });
         }
       }
     }
@@ -1225,6 +1261,14 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
         for (const m of [pins.get(was), pills.get(was)]) m?.setZIndexOffset(0);
         decorate(was);
       }
+      area?.remove();
+      area = null;
+      if (project?.approximate && where.has(project)) {
+        // The ZIP code area the project is somewhere in: a dashed circle, never a pin.
+        area = L.circle(where.get(project), { radius: (project.location?.areaKm ?? 2) * 1000, color: accent, weight: 1.5, dashArray: '6 6', fillOpacity: 0.06, interactive: false, className: 'devx-area' })
+          .bindTooltip(`Approximate area: ZIP ${project.location?.zip ?? ''} (location not verified)`.replace('ZIP  ', 'ZIP '), { permanent: false })
+          .addTo(map);
+      }
       if (!project || !where.has(project) || !shown.includes(project)) {
         pulse.remove();
         draw();
@@ -1250,10 +1294,15 @@ async function drawMap(node, wrap, projects, city, catOf, reports = null, small 
 /** Map location as the data supports it: an address match, a borrowed site point, a ZIP-center pin, or none yet. */
 function locationNote(project) {
   if (project.awaiting) return 'Details pending from the state: listed by name, number and cost until its TABS page is read.';
+  if ((project.lat == null || project.lng == null) && project.location?.method === 'none')
+    return `Location unavailable: ${project.location.source.replace(/^Location unavailable: /, '')}. Not shown on the map, not even as a ZIP area, because the filed address itself may be wrong.`;
   if (project.lat == null || project.lng == null) return 'Not on the map: no reliable location for this filing yet.';
-  if (project.approximate) return 'Approximate: the pin is near the ZIP code center, not the exact site.';
-  if (project.locatedFrom) return `Site point: the pin is the site's location from a city permit at the same address (${project.locatedFrom}), not the building's own point.`;
-  return project.source === 'city' ? "Pin at the permit's location." : "Pin at the filing's address.";
+  const checked = project.location?.verified && project.location.verified !== 'not recorded' ? ` Checked ${project.location.verified}.` : '';
+  if (project.approximate) return `Location not verified: only the ZIP code is known, so the dashed ring is the ZIP code center and area${project.location?.zip ? ` (${project.location.zip})` : ''}, not the site.${checked}`;
+  if (project.locatedFrom) return `Site point: the pin is the site's location from a city permit at the same address (${project.locatedFrom}), not the building's own point. Address or parcel level, not building level.${checked}`;
+  return project.source === 'city'
+    ? `Pin at the city permit's own point (address or parcel level, not the building).${checked}`
+    : `Pin at the filing's address, matched by the Census geocoder along the street (address level, not the building).${checked}`;
 }
 
 /** The list, every project once, as rows; apply() puts them in order. Returns project → item. */
@@ -1275,7 +1324,7 @@ function drawList(projects, catOf, hiringFor, onPick, onHover) {
     if (project.status) tags.append(el('span', 'devx-tag', project.status));
     if (project.awaiting) tags.append(el('span', 'devx-tag dev-off', 'Details pending from the state'));
     else if (project.lat == null || project.lng == null) tags.append(el('span', 'devx-tag dev-off', 'Not on the map'));
-    else if (project.approximate) tags.append(el('span', 'devx-tag', 'Approximate pin'));
+    else if (project.approximate) tags.append(el('span', 'devx-tag dev-unverified', 'Location not verified'));
     else if (project.locatedFrom) tags.append(el('span', 'devx-tag', 'Site point'));
     const hiring = hiringFor(project);
     if (hiring.length) {
@@ -1305,7 +1354,7 @@ function smallPopup(filing) {
   const box = el('div', 'dev-pop');
   box.append(el('strong', 'dev-pop-title', filing.name));
   if (filing.address) box.append(el('span', 'dev-pop-line muted', filing.address));
-  if (filing.approximate) box.append(el('span', 'dev-pop-line muted', 'Pin is near the ZIP code center, not the exact site.'));
+  if (filing.approximate) box.append(el('span', 'dev-pop-line muted', 'Location not verified: the dashed ring is the ZIP code center, not the site.'));
   box.append(el('span', 'dev-pop-line', [money(filing.cost), filing.work].filter(Boolean).join(' · ')));
   box.append(el('span', 'dev-pop-line muted', [filing.status, filing.owner ? `Owner: ${filing.owner}` : ''].filter(Boolean).join(' · ')));
   box.append(el('span', 'dev-pop-line muted', 'Smaller filing, below the map cutoff'));

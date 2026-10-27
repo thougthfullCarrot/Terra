@@ -11576,6 +11576,10 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
   stroke-linejoin: round;
 }
 
+/* Location not verified: only the ZIP code area is known. */
+.devx-tag.dev-unverified {
+  border-style: dashed;
+}
 /* City data page: header, headline figures, topic tabs and one detail table (markets-view.js cityView). */
 .city-head-top {
   display: flex;

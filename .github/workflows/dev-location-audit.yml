@@ -1,0 +1,80 @@
+name: Development Map location audit (read-only)
+
+# Audits the last site build's development locations (restored from the
+# Website build's caches) and checks a sample in every market against the
+# Census geocoder and the cities' own permit records. Read-only: no secrets,
+# no Supabase, no Sheet, no deploy. Runs by hand, and on pushes to the
+# location-audit branch.
+on:
+  workflow_dispatch:
+    inputs:
+      verify:
+        description: Points to check per market (plus up to 8 flagged ones)
+        required: false
+        default: '12'
+  push:
+    branches: ['claude/project-thread-kacweq']
+    paths:
+      - backend/src/market/devLocation.ts
+      - backend/src/market/locationAudit.ts
+      - backend/src/bin/audit-locations.ts
+      - backend/src/market/developments.ts
+      - .github/workflows/dev-location-audit.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-location-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      # The Website build's last data, from its caches on the default branch.
+      - name: Restore market data
+        uses: actions/cache/restore@v4
+        with:
+          path: site/market.json
+          key: market-none
+          restore-keys: market-
+      - name: Restore development lists
+        uses: actions/cache/restore@v4
+        with:
+          path: site/developments
+          key: devlists-none
+          restore-keys: devlists-
+
+      - name: Run the audit
+        env:
+          VERIFY: ${{ inputs.verify || '12' }}
+        run: |
+          set -o pipefail
+          ls -la ../site/developments ../site/market.json || true
+          npm run --silent audit:locations -- --dir ../site/developments --market-json ../site/market.json --out ../location-audit --verify "$VERIFY" --flagged 8 --rematch --revalidate 2>&1 | tee /tmp/audit.log
+
+      - name: Print reports
+        if: always()
+        run: |
+          for f in ../location-audit/*.md; do [ -f "$f" ] && { echo "=====FILE $(basename "$f")====="; cat "$f"; echo; }; done
+          cat ../location-audit/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: location-audit
+          path: location-audit
+          retention-days: 14

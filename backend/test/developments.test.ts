@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RULES } from '../src/market/devLocation.js';
 import { developerLink } from '../src/market/developers.js';
 import {
   currentDevelopments,
@@ -222,7 +223,7 @@ describe('fetchDevelopments', () => {
 
   it('reads new projects, reuses earlier ones, and places them on the map', async () => {
     const calls: string[] = [];
-    const old = { id: 'OLD1', address: '1 Old St', owner: 'Hines', tenant: null, designFirm: null, scope: null, squareFeet: null, isPublic: false, lat: 29.7, lng: -95.4 } as Development;
+    const old = { id: 'OLD1', address: '1 Old St', owner: 'Hines', tenant: null, designFirm: null, scope: null, squareFeet: null, isPublic: false, lat: 29.7, lng: -95.4, location: { method: 'geocoded-address', accuracy: 'street-interpolated', source: 'Census', verified: '2026-10-04', rules: RULES } } as Development;
     const result = await fetchDevelopments(['Houston'], {
       now: new Date('2026-10-05T00:00:00Z'),
       previous: [old],
@@ -270,7 +271,7 @@ describe('fetchDevelopments', () => {
     expect(result.projects[0]).toMatchObject({ lat: null, lng: null });
   });
 
-  it('puts an address the geocoder misses at its ZIP code center, marked approximate', async () => {
+  it('shows an address the geocoder misses as its ZIP area, marked not verified and never spread to look like sites', async () => {
     const calls: string[] = [];
     const base = fakeFetch(calls);
     const gazetteer = zipFile('2026_Gaz_zcta_national.txt', 'GEOID\tINTPTLAT\tINTPTLONG\n77073\t30.02\t-95.39\n');
@@ -282,8 +283,8 @@ describe('fetchDevelopments', () => {
     }) as typeof fetch;
     const result = await fetchDevelopments(['Houston'], { now: new Date('2026-10-05T00:00:00Z'), pauseMs: 0, fetchImpl: missThenZip });
     expect(result.projects[0]).toMatchObject({ lat: 30.02, lng: -95.39, approximate: true });
-    expect(result.projects[1]).toMatchObject({ approximate: true });
-    expect(result.projects[1]!.lat).not.toBe(30.02);
+    expect(result.projects[1]).toMatchObject({ lat: 30.02, lng: -95.39, approximate: true });
+    expect(result.projects[0]!.location).toMatchObject({ method: 'zip-area', accuracy: 'area', zip: '77073' });
   });
 });
 
