@@ -27,6 +27,8 @@ const log = (name, ok, detail = '') => {
 
 const js = await (await fetch(`${SITE}devmap.js`, { cache: 'no-store' })).text();
 log('live devmap.js carries PR #104', js.includes('A draw now makes any one queued by the fit'));
+const mv = await (await fetch(`${SITE}markets-view.js`, { cache: 'no-store' })).text();
+log('live markets-view.js carries PR #105', mv.includes('snapshot ??= pruneSnapshot(data)'));
 
 // The live data (the members-only site_snapshots rows the page reads), to pick
 // a shared spot to fan out and to find PDL Club.
@@ -156,7 +158,7 @@ try {
     if (shots) await page.screenshot({ path: `${shots}/${v}-selected.png` });
 
     // Cluster: projects sharing one point fan out with leader lines when zoomed in.
-    if (cluster) {
+    if (cluster && !mobile) {
       await search(page, '');
       await page.evaluate(() => document.querySelector('[aria-label="Close project details"]')?.click());
       await search(page, cluster[0].name);
