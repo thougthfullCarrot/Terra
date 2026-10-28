@@ -168,6 +168,11 @@ try {
       await row.scrollIntoViewIfNeeded();
       await row.click();
       await page.waitForTimeout(2000);
+      const zoomNow = () => page.evaluate(() => {
+        const t = [...document.querySelectorAll('.dev-map .leaflet-tile-loaded, .dev-map .leaflet-tile')].map((i) => i.src.match(/\/(\d+)\/\d+\/\d+/)?.[1]).filter(Boolean);
+        return t.length ? Math.max(...t.map(Number)) : null;
+      });
+      console.log(`  ${v}: zoom after picking the cluster: ${await zoomNow()}`);
       for (let i = 0; i < 4; i++) {
         await page.locator('.leaflet-control-zoom-in').click();
         await page.waitForTimeout(700);
@@ -178,6 +183,7 @@ try {
         const spots = new Set(at.map((n) => n.style.transform));
         return { shown: at.length, spots: spots.size, leaders: document.querySelectorAll('.devx-leader').length };
       }, ids);
+      console.log(`  ${v}: zoom after zooming in: ${await zoomNow()}`);
       console.log(`  ${v}: cluster check at zoom ${await page.locator('.dev-map').evaluate((n) => n.dataset.drawn + ' drawn, ' + n.dataset.specks + ' dots')}`);
       log(`${v}: shared-spot cluster fans out when zoomed in`, fanned.shown === ids.length && fanned.spots === ids.length && fanned.leaders >= ids.length, `${fanned.shown}/${ids.length} pins, ${fanned.spots} positions, ${fanned.leaders} leader lines`);
       if (shots) await page.screenshot({ path: `${shots}/${v}-cluster.png` });
