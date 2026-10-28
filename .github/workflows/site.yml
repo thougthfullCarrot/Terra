@@ -253,6 +253,26 @@ jobs:
           path: site/developments
           key: devlists-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Builds that reuse the day's market data still check the next share
+      # (150) of cached development pins, so the revalidation queue moves every
+      # build rather than once a day. Only the Census geocoder is asked, and
+      # only while points are due; no other source runs. The concurrency group
+      # above means one build at a time, and a cancelled one saves nothing, so
+      # its share is simply checked again next build.
+      - name: Revalidate development pins
+        id: pins
+        if: steps.market-cache.outputs.cache-hit == 'true' && hashFiles('site/developments/*.json') != ''
+        continue-on-error: true
+        timeout-minutes: 6
+        run: npm run --silent revalidate:pins
+
+      - name: Cache revalidated development lists
+        if: steps.pins.outcome == 'success' && steps.pins.outputs.checked != '0'
+        uses: actions/cache/save@v4
+        with:
+          path: site/developments
+          key: devlists-${{ github.run_id }}-${{ github.run_attempt }}
+
       # A build stopped mid-export (timeout, cancel) keeps the development pages
       # it read: the checkpoint is cached and the next build resumes from it.
       - name: Keep development pages from an interrupted export
