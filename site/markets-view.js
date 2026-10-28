@@ -177,7 +177,10 @@ async function show() {
         message('Market data is being built. Check back in a few minutes.');
         return;
       }
-      snapshot = pruneSnapshot(data);
+      // Two show() calls can await the same load (the tracker calls it when its
+      // tab appears); the first one's snapshot stands, or a development file
+      // already on its way would be dropped as stale.
+      snapshot ??= pruneSnapshot(data);
     } catch (error) {
       loading = null;
       message(`Couldn't load market data. ${error instanceof Error ? error.message : ''}`.trim(), true);
@@ -1035,7 +1038,11 @@ function loadDevFile(data, city) {
   const shown = snapshot;
   devLoader(path)
     .then((file) => {
-      if (snapshot !== shown || !Array.isArray(file?.projects)) return;
+      if (snapshot !== shown || !Array.isArray(file?.projects)) {
+        // Let a later render ask again rather than wait on this one forever.
+        if (devFiles.get(city) === 'loading') devFiles.delete(city);
+        return;
+      }
       data.projects = [...data.projects.filter((p) => p.city !== city), ...file.projects];
       devFiles.set(city, 'done');
       render();
