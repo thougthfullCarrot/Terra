@@ -177,13 +177,13 @@ try {
         await page.locator('.leaflet-control-zoom-in').click();
         await page.waitForTimeout(700);
       }
-      const ids = cluster.map((p) => p.id);
+      const ids = cluster.map((p) => String(p.id));
       const fanned = await page.evaluate((ids) => {
         const at = [...document.querySelectorAll('.devx-pin-icon')].filter((n) => ids.includes(n.dataset.id));
         const spots = new Set(at.map((n) => n.style.transform));
-        return { shown: at.length, spots: spots.size, leaders: document.querySelectorAll('.devx-leader').length };
+        return { shown: at.length, spots: spots.size, leaders: document.querySelectorAll('.devx-leader').length, pins: document.querySelectorAll('.devx-pin-icon').length, pills: document.querySelectorAll('.devx-pill-icon').length };
       }, ids);
-      console.log(`  ${v}: zoom after zooming in: ${await zoomNow()}`);
+      console.log(`  ${v}: zoom after zooming in: ${await zoomNow()}; ${fanned.pins} pins on screen (${fanned.pills} pills)`);
       console.log(`  ${v}: cluster check at zoom ${await page.locator('.dev-map').evaluate((n) => n.dataset.drawn + ' drawn, ' + n.dataset.specks + ' dots')}`);
       log(`${v}: shared-spot cluster fans out when zoomed in`, fanned.shown === ids.length && fanned.spots === ids.length && fanned.leaders >= ids.length, `${fanned.shown}/${ids.length} pins, ${fanned.spots} positions, ${fanned.leaders} leader lines`);
       if (shots) await page.screenshot({ path: `${shots}/${v}-cluster.png` });
