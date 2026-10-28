@@ -173,9 +173,18 @@ try {
         return t.length ? Math.max(...t.map(Number)) : null;
       });
       console.log(`  ${v}: zoom after picking the cluster: ${await zoomNow()}`);
-      for (let i = 0; i < 4; i++) {
-        await page.locator('.leaflet-control-zoom-in').click();
-        await page.waitForTimeout(700);
+      // Zoom with the wheel over the cluster's true spot so it stays on screen
+      // (the zoom buttons zoom around the map's center, which the open panel offsets).
+      const spot = await page.locator('.dev-map').evaluate((n, id) => {
+        const el = document.querySelector(`.devx-pin-icon[data-id="${id}"]`);
+        const r = (el ?? n).getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: el ? r.bottom - 4 : r.top + r.height / 2, found: Boolean(el) };
+      }, String(cluster[0].id));
+      console.log(`  ${v}: cluster pin on screen before zooming: ${spot.found}`);
+      await page.mouse.move(spot.x, spot.y);
+      for (let i = 0; i < 6; i++) {
+        await page.mouse.wheel(0, -240);
+        await page.waitForTimeout(600);
       }
       const ids = cluster.map((p) => String(p.id));
       const fanned = await page.evaluate((ids) => {
