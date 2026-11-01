@@ -2,6 +2,7 @@ import { fetchJson, type FetchJsonOptions } from '../lib/http.js';
 import type { City } from '../types.js';
 import { developerLink, isAddressName } from './developers.js';
 import type { Development } from './developments.js';
+import { locationInfo, sameAddress, sameSite } from './devLocation.js';
 
 /**
  * City building permits, to fill in the development maps.
@@ -34,7 +35,7 @@ export const CITY_MAX = 150;
 /** Building permits stay open while the work goes on; older than this is most likely finished. */
 const MONTHS = 18;
 /** Some portals' firewalls answer 502 to the collector's usual user agent. */
-const BROWSERISH = { 'user-agent': 'Mozilla/5.0 (compatible; TerraBot/0.1)' };
+export const BROWSERISH = { 'user-agent': 'Mozilla/5.0 (compatible; TerraBot/0.1)' };
 
 /** One permit from any city, in one shape. */
 export interface CityPermit {
@@ -292,6 +293,7 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX,
       lat: at?.lat ?? null,
       lng: at?.lng ?? null,
       approximate: false,
+      ...(at ? { location: locationInfo('permit-point', `${lead.place} permit ${at.permit}: the city's own point for the permit`, now.toISOString().slice(0, 10)) } : {}),
       developerUrl: link.url,
       developerDirect: link.direct,
       url: lead.url,
@@ -318,7 +320,7 @@ export function permitProjects(permits: CityPermit[], now: Date, max = CITY_MAX,
 
 // --- San Antonio: Development Services on the city's CKAN portal, daily. ---
 
-const COSA_CKAN = 'https://data.sanantonio.gov/api/3/action';
+export const COSA_CKAN = 'https://data.sanantonio.gov/api/3/action';
 /** "PERMITS ISSUED" in the Building Permits dataset: everything issued since January of last year. */
 export const COSA_PERMITS_RESOURCE = 'c21106f9-3ef5-4f3a-8604-f992b4db7512';
 export const COSA_DATASET_URL = 'https://data.sanantonio.gov/dataset/building-permits';
@@ -634,6 +636,8 @@ export async function fetchArlington(now: Date, { minValue = MIN_VALUE, ...optio
 
 /** A point another permit at the same street address carries, and what that permit was called. */
 export interface SitePoint {
+  /** The other permit's address as the city lists it, to prove it is the same site. */
+  address?: string | null;
   lat: number;
   lng: number;
   permit: string;
@@ -673,7 +677,7 @@ export async function locateSanAntonio(sites: Map<string, string>, now: Date, op
         continue;
       }
       if (!at) continue;
-      out.set(key, { lat: at[0], lng: at[1], permit: row['PERMIT #'] ?? '', names: name && !isAddressName(name) ? [name] : [] });
+      out.set(key, { address: tidyAddress(row.ADDRESS), lat: at[0], lng: at[1], permit: row['PERMIT #'] ?? '', names: name && !isAddressName(name) ? [name] : [] });
     }
   }
   return out;
@@ -740,20 +744,28 @@ export async function fetchCityPermitProjects(
     let projects: Development[] = [];
     const here = tabs.filter((p) => p.city === source.market);
     try {
-      const bySite = new Map(here.filter((p) => (p.source ?? 'tabs') === 'tabs' && keyed(p.address)).map((p) => [keyed(p.address)!, p]));
-      const known = new Set([...here, ...out.filter((p) => p.city === source.market)].map((p) => keyed(p.address)).filter((k): k is string => k != null));
-      const all = permitProjects(await source.fetch(now, { ...http, minValue }), now, max + known.size, minValue);
+      // Candidates share a street number and name; only a proven same site (sameSite) lends a point.
+      const bySite = new Map<string, Development[]>();
+      for (const p of here.filter((p) => (p.source ?? 'tabs') === 'tabs' && keyed(p.address))) bySite.set(keyed(p.address)!, [...(bySite.get(keyed(p.address)!) ?? []), p]);
+      const all = permitProjects(await source.fetch(now, { ...http, minValue }), now, max + here.length + out.length, minValue);
+      const record = (p: Development, names: (string | null | undefined)[] = []) => ({ address: p.address, place: p.place, names: [p.name, p.facility, ...names] });
+      const listed = [...here, ...out.filter((p) => p.city === source.market)];
+      // A city permit is already listed when a listed project has the same street address in the same ZIP or town.
+      const isListed = (p: Development) => (p.addresses ?? [p.address]).some((a) => listed.some((q) => keyed(q.address) === keyed(a) && sameAddress({ address: a, place: p.place }, { address: q.address, place: q.place }).same));
       for (const city of all) {
-        const filing = bySite.get(siteKey(city.address));
-        if (!filing) continue;
-        addAliases(filing, [...(city.aliases ?? []), isAddressName(city.name) ? null : city.name]);
-        if ((filing.lat == null || filing.approximate) && city.lat != null && city.lng != null && !city.approximate && inMetro(filing.city, [city.lat, city.lng])) {
-          [filing.lat, filing.lng] = [city.lat, city.lng];
-          filing.approximate = false;
-          filing.locatedFrom = `City permit ${city.aliases?.[0] ?? city.id} at this address`;
+        for (const filing of bySite.get(siteKey(city.address)) ?? []) {
+          const match = sameSite(record(filing), record(city, city.aliases ?? []));
+          if (!match.same) continue;
+          addAliases(filing, [...(city.aliases ?? []), isAddressName(city.name) ? null : city.name]);
+          if ((filing.lat == null || filing.approximate) && city.lat != null && city.lng != null && !city.approximate && inMetro(filing.city, [city.lat, city.lng])) {
+            [filing.lat, filing.lng] = [city.lat, city.lng];
+            filing.approximate = false;
+            filing.locatedFrom = `City permit ${city.aliases?.[0] ?? city.id} at this address`;
+            filing.location = locationInfo('same-site-permit', `${city.place} permit ${city.aliases?.[0] ?? city.id}: ${match.reason}`, now.toISOString().slice(0, 10), match.flag ? { flags: [match.flag] } : {});
+          }
         }
       }
-      projects = all.filter((p) => !(p.addresses ?? [p.address]).some((a) => known.has(siteKey(a)))).slice(0, max);
+      projects = all.filter((p) => !isListed(p)).slice(0, max);
       if (max !== CITY_MAX) projects.forEach((p, i) => i < CITY_MAX && (p.headline = true));
       out.push(...projects);
       log(`${source.name} city permits: ${projects.length} more projects`);
@@ -769,11 +781,15 @@ export async function fetchCityPermitProjects(
       for (const p of need) {
         const point = points.get(siteKey(p.address));
         if (!point) continue;
+        // The other permit must be the same site, not just the same number and street name.
+        const match = sameSite({ address: p.address, place: p.place, names: [p.name, p.facility] }, { address: point.address ?? null, place: source.name, names: point.names });
+        if (!match.same) continue;
         addAliases(p, point.names);
         if (!inMetro(p.city, [point.lat, point.lng])) continue;
         [p.lat, p.lng] = [point.lat, point.lng];
         p.approximate = false;
         p.locatedFrom = `City permit ${point.permit} at this address`;
+        p.location = locationInfo('same-site-permit', `${source.name} permit ${point.permit}: ${match.reason}`, now.toISOString().slice(0, 10), match.flag ? { flags: [match.flag] } : {});
         placed++;
       }
       log(`${source.name} site points: ${placed} of ${need.length} unplaced projects placed from other permits at their address`);

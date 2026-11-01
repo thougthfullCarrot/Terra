@@ -203,7 +203,7 @@ describe('a market: merge, locate, report', () => {
       ];
     },
     // A finish-out permit at PDL's address carries the site's point; it is not a project permit.
-    locate: async (sites) => new Map([...sites.keys()].filter((k) => k.startsWith('13735')).map((k) => [k, { lat: 29.5772, lng: -98.5943, permit: 'COM-BLG-PMT26-40200329', names: [] }]))
+    locate: async (sites) => new Map([...sites.keys()].filter((k) => k.startsWith('13735')).map((k) => [k, { address: '13735 IH 10 W, San Antonio, TX 78249', lat: 29.5772, lng: -98.5943, permit: 'COM-BLG-PMT26-40200329', names: [] }]))
   };
 
   async function run(extra: TabsRow[] = []) {

@@ -366,8 +366,8 @@ for (const vp of [
     const map = document.querySelector('.dev-map');
     const icons = new Set([...document.querySelectorAll('.devx-pin-icon')].map((n) => n.dataset.id));
     const inClusters = Number(map.dataset.specks);
-    // A located project with no icon of its own is a speck (or off screen).
-    const row = [...document.querySelectorAll('.dev-list .dev-item')].find((r) => !r.querySelector('.dev-off') && !icons.has(r.dataset.id));
+    // A located project with no icon of its own is a speck (or off screen). ZIP-area projects never get an icon, only a dashed area.
+    const row = [...document.querySelectorAll('.dev-list .dev-item')].find((r) => !r.querySelector('.dev-off, .dev-unverified') && !icons.has(r.dataset.id));
     return { clusters: Number(map.dataset.specks), inClusters, onPage: inClusters + icons.size, drawn: Number(map.dataset.drawn), id: row?.dataset.id, name: row?.querySelector('.dev-name').textContent };
   });
   log(`${v}: price pills and specks on the page hold no more than the ${grouped.drawn} pins`, grouped.clusters > 0 && grouped.onPage <= grouped.drawn, `${grouped.clusters} specks, ${grouped.onPage} on the page`);
@@ -516,6 +516,14 @@ for (const vp of [
     const offItem = offPage.locator('.dev-item:not([hidden]):has(.dev-off)').first();
     await offItem.scrollIntoViewIfNeeded();
     const offName = await offItem.locator('.dev-name').textContent();
+    // Searching its name finds it in the list too (removed pins stay searchable).
+    await offPage.locator('.devx-search input').fill(offName.trim());
+    await offPage.waitForTimeout(400);
+    const found = await offPage.locator('.dev-item:not([hidden]):has(.dev-off) .dev-name').allTextContents();
+    log(`${v}: search finds the project with no pin by name`, found.some((t) => t.trim() === offName.trim()));
+    await offPage.locator('.devx-search input').fill('');
+    await offPage.waitForTimeout(400);
+    await offItem.scrollIntoViewIfNeeded();
     await offItem.locator('.dev-pick').click();
     const shown = await offPage.locator('.devx-panel:not([hidden]) .dev-pop-title').textContent().catch(() => null);
     const current = await offItem.locator('.dev-pick').getAttribute('aria-current');

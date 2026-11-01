@@ -253,6 +253,26 @@ jobs:
           path: site/developments
           key: devlists-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Builds that reuse the day's market data still check the next share
+      # (150) of cached development pins, so the revalidation queue moves every
+      # build rather than once a day. Only the Census geocoder is asked, and
+      # only while points are due; no other source runs. The concurrency group
+      # above means one build at a time, and a cancelled one saves nothing, so
+      # its share is simply checked again next build.
+      - name: Revalidate development pins
+        id: pins
+        if: steps.market-cache.outputs.cache-hit == 'true' && hashFiles('site/developments/*.json') != ''
+        continue-on-error: true
+        timeout-minutes: 6
+        run: npm run --silent revalidate:pins
+
+      - name: Cache revalidated development lists
+        if: steps.pins.outcome == 'success' && steps.pins.outputs.checked != '0'
+        uses: actions/cache/save@v4
+        with:
+          path: site/developments
+          key: devlists-${{ github.run_id }}-${{ github.run_attempt }}
+
       # A build stopped mid-export (timeout, cancel) keeps the development pages
       # it read: the checkpoint is cached and the next build resumes from it.
       - name: Keep development pages from an interrupted export
@@ -394,6 +414,27 @@ jobs:
           set -o pipefail
           node test/browser/calm-check.mjs ../site 2>&1 | tee /tmp/calm-check.log
           { echo '## Calm pages check'; echo '```'; cat /tmp/calm-check.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # Pull requests only: the Profile page layout (completion card heading, bar and one step per row without
+      # overlap, two-column About you on desktop and one on phones, aligned sections, saving, keyboard, 200% zoom).
+      # always(): an earlier real-data check failing must not skip this one.
+      - name: Check the Profile page layout
+        if: always() && github.event_name == 'pull_request' && hashFiles('site/vendor/supabase.js') != ''
+        run: |
+          npx playwright-core install --with-deps chromium > /dev/null
+          set -o pipefail
+          node test/browser/profile-check.mjs ../site /tmp/profile-shots 2>&1 | tee /tmp/profile-check.log
+          { echo '## Profile page check'; echo '```'; cat /tmp/profile-check.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the profile check screenshots
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-check
+          path: |
+            /tmp/profile-shots
+            /tmp/profile-check.log
+          retention-days: 7
 
       - name: Keep the events check screenshots
         if: always() && github.event_name == 'pull_request' && hashFiles('site/events.json') != ''

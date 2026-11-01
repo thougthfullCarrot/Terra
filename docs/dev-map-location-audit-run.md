@@ -1,0 +1,265 @@
+# Development Map location audit: final rerun
+
+Final rerun 2026-10-27 on commit ee67d4e (Actions run 40423293672). This run is read-only, covers all 11 markets and uses real data. The backend in the final head commit (e777553) is the same code; that commit only merges the base branch to resolve a stylesheet conflict. PR #101 is still a draft and has not been merged or deployed.
+
+## Result
+
+All 5,106 cached geocoded points were checked as **35 consecutive builds of 150**. The saved lists were written out and read back between builds, the same way a restart would load them.
+- **4,974 kept, 1 moved, 0 restored, 131 removed** as address conflicts, 0 errors.
+- **0 records were checked twice**, and **0 were still due** after build 35.
+- The earlier run (6adb81f) gave 4,966 kept, 3 moved and 137 removed.
+
+**Valid pins the parsing fixes preserved (7).** Each of these had been wrongly removed or moved in the earlier run and is now kept at its cached point:
+- Welding Shop, "519 Oak Ave, Highland": Census names the town "HIGHLANDS".
+- NIOS Mansfield, 1266 Lakeview Dr, and Industrial Complex Bldgs A and B, 1926 and 1930 Lone Star Rd: Census cut the town to "MANSFIEL".
+- Burleson Laundry, "237 S. W. Anderson": now read as SW.
+- Nexpoint Irving, "3459N Country Club": now read as 3459 N.
+- CHEP Phase 1, "317E Shady Grove": now read as 317 E. It had been moved 0.7 km; it is now kept.
+
+## Moved pins reviewed
+
+| Project | Filed | Before | After | Verdict |
+|---|---|---|---|---|
+| Tifa Chocolate & Gelato | 1085 Gessner Rd Ste 203, 77055 | 29.75150, -95.53937 | 29.78828, -95.54446 (match 1085 GESSNER DR, 77055) | **Moved, supported.** The new match is the filed number, on Gessner, in the filed ZIP 77055 (Spring Branch, north of I-10). The old point was 4.1 km south, outside 77055. The street type differs (Rd vs Dr), which the checks ignore. |
+| Airline Dr Intersections Improvement | 7841 Airline Dr 2521 Airline Dr, 77022 | 29.81027, -95.38208 | **kept** (fixed in ee67d4e) | A road project filed at two addresses. The new match, 7841 Airline Dr, is in 77037, not the filed 77022, so it is weaker evidence than the cached point. A flagged match no longer moves a point; the point is kept and flagged "second match elsewhere". A regression test covers it. |
+| CHEP Phase 1 | 317E Shady Grove Rd, Grand Prairie | | kept | The move was a parsing error, fixed as described above. |
+
+## Failures and retries
+
+These cases are covered by unit tests (`backend/test/devLocation.test.ts`, "revalidation queue across builds"). The real run hit 0 errors, so none of these paths has been exercised on live data.
+- A timeout, a blocked request (403), an HTML or non-JSON answer, or JSON with no match list returns `error`. The point stays as it was and gets `location.retry` (attempts, date, reason). It stays due.
+- A record that failed waits behind the records that have never been tried, so one stuck address can't hold up the 150-point batch.
+- A malformed geocoder answer is now an error, not "no match". Before this change it could have removed a valid point.
+
+## Removals stay recoverable
+
+Removed points keep their old coordinates in `location.previous` and the rules version they were checked under. When the checks change (the `RULES` number goes up), removed points are due again. If today's checks accept the match, the old point is restored; a test covers this. Points removed under the current rules are not retried every build. This change bumps the rules version to 3, so the live site rechecks everything once: about 35 builds, or roughly 3 days at one build every 2 hours.
+
+## CI
+
+- Unit tests: 1,180 passed.
+- Audit run on the final backend code: passed.
+- Website build and the dev map browser check: see PR #101's checks on e777553. The earlier failures were a Houston filter-speed check at 173 to 191 ms against a 150 ms limit. Fixes pushed: dots off the screen are skipped, the dashed ZIP rings are drawn in one pass, and each project's color is worked out once.
+
+## Remaining limitations
+
+- Agreement checks against the official city record exist only for San Antonio, Austin and Fort Worth. Elsewhere a kept point is a repeat Census match, not independent confirmation.
+- 131 projects become "Location unavailable" and will stay that way until the filing is corrected or the rules change.
+- The failure paths are proven by tests only, because no request failed in the real runs.
+- PR builds cannot save the caches, so the multi-build behavior is shown by the audit's save-and-reload simulation, not by real scheduled builds. The live rollout starts after merge.
+- The Census geocoder interpolates along the street, so a "kept" point is accurate to the street segment, not to a building.
+
+## Totals
+
+| Market | Listed | Permit point | Same-site permit | Geocoded | ZIP area | None | Conflicting | Suspicious | Revalidated: kept | moved | restored | removed (conflict) | removed (no match) | error | Sample: confirmed (official) | Sample: suspected | Sample: agrees, official | Sample: agrees, Census only |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Austin | 1494 | 77 | 4 | 722 | 685 | 6 | 38 | 45 | 698 | 0 | 0 | 24 | 0 | 0 | 0 | 3 | 3 | 7 |
+| College Station | 139 | 0 | 0 | 92 | 47 | 0 | 12 | 2 | 92 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 14 |
+| Dallas | 2447 | 0 | 0 | 1118 | 1303 | 26 | 45 | 73 | 1082 | 0 | 0 | 36 | 0 | 0 | 0 | 0 | 0 | 12 |
+| El Paso | 211 | 0 | 0 | 118 | 92 | 1 | 6 | 2 | 117 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 14 |
+| Fort Worth | 1696 | 646 | 32 | 568 | 434 | 16 | 293 | 39 | 550 | 0 | 0 | 18 | 0 | 0 | 0 | 4 | 6 | 5 |
+| Galveston | 123 | 0 | 0 | 61 | 61 | 1 | 0 | 2 | 60 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 8 |
+| Houston | 2982 | 0 | 0 | 1720 | 1253 | 9 | 96 | 118 | 1689 | 1 | 0 | 30 | 0 | 0 | 0 | 0 | 0 | 12 |
+| Lubbock | 133 | 0 | 0 | 70 | 62 | 1 | 0 | 4 | 69 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 8 |
+| Midland | 134 | 0 | 0 | 78 | 56 | 0 | 2 | 2 | 74 | 0 | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 10 |
+| New Braunfels | 135 | 0 | 0 | 72 | 62 | 1 | 2 | 5 | 71 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 12 |
+| San Antonio | 1140 | 271 | 36 | 487 | 340 | 6 | 24 | 46 | 472 | 0 | 0 | 15 | 0 | 0 | 0 | 3 | 8 | 5 |
+| **All 11 markets** | **10634** | **994** | **72** | **5106** | **4395** | **67** | **518** | **338** | **4974** | **1** | **0** | **131** | **0** | **0** | **0** | **11** | **17** | **107** |
+
+## Consecutive builds
+
+35 builds of up to 150, the lists saved and read back between builds. Records checked more than once: 0. Still due afterwards: 0.
+
+| Build | Checked | Outcomes |
+|---|---|---|
+| 1 | 150 | 143 kept, 7 removed: address conflict |
+| 2 | 150 | 144 kept, 6 removed: address conflict |
+| 3 | 150 | 144 kept, 6 removed: address conflict |
+| 4 | 150 | 146 kept, 4 removed: address conflict |
+| 5 | 150 | 147 kept, 3 removed: address conflict |
+| 6 | 150 | 146 kept, 4 removed: address conflict |
+| 7 | 150 | 145 kept, 5 removed: address conflict |
+| 8 | 150 | 145 kept, 5 removed: address conflict |
+| 9 | 150 | 145 kept, 5 removed: address conflict |
+| 10 | 150 | 147 kept, 3 removed: address conflict |
+| 11 | 150 | 146 kept, 4 removed: address conflict |
+| 12 | 150 | 146 kept, 4 removed: address conflict |
+| 13 | 150 | 145 kept, 5 removed: address conflict |
+| 14 | 150 | 148 kept, 2 removed: address conflict |
+| 15 | 150 | 146 kept, 4 removed: address conflict |
+| 16 | 150 | 144 kept, 6 removed: address conflict |
+| 17 | 150 | 147 kept, 3 removed: address conflict |
+| 18 | 150 | 143 kept, 7 removed: address conflict |
+| 19 | 150 | 147 kept, 3 removed: address conflict |
+| 20 | 150 | 149 kept, 1 removed: address conflict |
+| 21 | 150 | 149 kept, 1 removed: address conflict |
+| 22 | 150 | 144 kept, 6 removed: address conflict |
+| 23 | 150 | 148 kept, 2 removed: address conflict |
+| 24 | 150 | 147 kept, 3 removed: address conflict |
+| 25 | 150 | 148 kept, 2 removed: address conflict |
+| 26 | 150 | 149 kept, 1 removed: address conflict |
+| 27 | 150 | 144 kept, 6 removed: address conflict |
+| 28 | 150 | 149 kept, 1 removed: address conflict |
+| 29 | 150 | 145 kept, 4 removed: address conflict, 1 moved |
+| 30 | 150 | 145 kept, 5 removed: address conflict |
+| 31 | 150 | 149 kept, 1 removed: address conflict |
+| 32 | 150 | 145 kept, 5 removed: address conflict |
+| 33 | 150 | 146 kept, 4 removed: address conflict |
+| 34 | 150 | 147 kept, 3 removed: address conflict |
+| 35 | 6 | 6 kept |
+
+## Every cached point moved or removed
+
+| Market | Project | Filed address | Outcome | Before (live) | After (updated build) | Source |
+|---|---|---|---|---|---|---|
+| Austin | [TABS2026016783](https://www.tdlr.texas.gov/TABS/Projects/TABS2026016783) ACCX-C1 , 2025-080245 PR | 500 EAST 3RD STREET, Austin, TX 78701 | removed: address conflict | 30.26661, -97.74848 | none | Location unavailable: match is not the filed address (500 W 3RD ST, AUSTIN, TX, 78701) |
+| Austin | [TABS2026023449](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023449) Cedar View | 750 E New Hope, Cedar Park, TX 78613 | removed: address conflict | 30.53058, -97.84207 | none | Location unavailable: match is not the filed address (750 W NEW HOPE DR, CEDAR PARK, TX, 78613) |
+| Austin | [TABS2025007940](https://www.tdlr.texas.gov/TABS/Projects/TABS2025007940) TDEM Headquarters and SEOC Parking Garage | 4125 S FM 973, Austin, TX 78719 | removed: address conflict | 30.25180, -97.61508 | none | Location unavailable: match is not the filed address (4125 N FM 973, AUSTIN, TX, 78725) |
+| Austin | [TABS2026019443](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019443) Target T-2981 | 13786 W US 290 Building 100, Suite 101, Austin, TX 78737 | removed: address conflict | 30.20304, -97.98468 | none | Location unavailable: match is not the filed address (13786 US HWY 290 E, AUSTIN, TX, 78737) |
+| Austin | [TABS2026024217](https://www.tdlr.texas.gov/TABS/Projects/TABS2026024217) Southwestern University 560 Development - Phase 1A | 1001 East University Avenue 29 HWY/188 CR GEORGETOWN, TX 78626, Georgetown, TX 78726 | removed: address conflict | 30.63340, -97.66754 | none | Location unavailable: match is not the filed address (1001 E UNIVERSITY AVE, GEORGETOWN, TX, 78626) |
+| Austin | [TABS2025007941](https://www.tdlr.texas.gov/TABS/Projects/TABS2025007941) TDEM Headquarters and SEOC Warehouse | 4125 S FM 973, Austin, TX 78719 | removed: address conflict | 30.25180, -97.61508 | none | Location unavailable: match is not the filed address (4125 N FM 973, AUSTIN, TX, 78725) |
+| Austin | [TABS2026021003](https://www.tdlr.texas.gov/TABS/Projects/TABS2026021003) One of the Kids Therapy Center | 964 N Bagdad Rd, Unit #28B, Leander, TX 78641 | removed: address conflict | 30.56234, -97.86293 | none | Location unavailable: match is not the filed address (964 S BAGDAD RD, LEANDER, TX, 78641) |
+| Austin | [TABS2026014060](https://www.tdlr.texas.gov/TABS/Projects/TABS2026014060) Crescent Bluff West Sections 9 & 10 | 4501 W SH 29, Georgetown, TX 78628 | removed: address conflict | 30.64407, -97.61746 | none | Location unavailable: match is not the filed address (4501 E STATE HWY 29, GEORGETOWN, TX, 78626) |
+| Austin | [TABS2026015278](https://www.tdlr.texas.gov/TABS/Projects/TABS2026015278) The Village at Dripping Springs | 13786 W US Hwy 290, Austin, TX 78737 | removed: address conflict | 30.20304, -97.98468 | none | Location unavailable: match is not the filed address (13786 US HWY 290 E, AUSTIN, TX, 78737) |
+| Austin | [TABS2027004148](https://www.tdlr.texas.gov/TABS/Projects/TABS2027004148) Haywire | 805 E. New Hope Drive, Cedar Park, TX 78613 | removed: address conflict | 30.53045, -97.84289 | none | Location unavailable: match is not the filed address (805 W NEW HOPE DR, CEDAR PARK, TX, 78613) |
+| Austin | [TABS2026014677](https://www.tdlr.texas.gov/TABS/Projects/TABS2026014677) UH Liberty Hill | 135 US-183, Liberty Hill, TX 78642 | removed: address conflict | 30.64765, -97.94900 | none | Location unavailable: match is not the filed address (183 LIBERTY HILL LN, LIBERTY HILL, TX, 78642) |
+| Austin | [TABS2027004344](https://www.tdlr.texas.gov/TABS/Projects/TABS2027004344) Fogo de Chao | 1005 East New Hope Drive, Cedar Park, TX 78613 | removed: address conflict | 30.52949, -97.84650 | none | Location unavailable: match is not the filed address (1005 W NEW HOPE DR, CEDAR PARK, TX, 78613) |
+| Austin | [TABS2026004969](https://www.tdlr.texas.gov/TABS/Projects/TABS2026004969) J Alexanders - Cedar Park TX | 750 E. New Hope Drive, Cedar Park, TX 78613 | removed: address conflict | 30.53058, -97.84207 | none | Location unavailable: match is not the filed address (750 W NEW HOPE DR, CEDAR PARK, TX, 78613) |
+| Austin | [TABS2026027919](https://www.tdlr.texas.gov/TABS/Projects/TABS2026027919) Wimberly ISD - Baseball / Softball Complex & Transportation | 290 BALLPARK ROAD 951 FM 2325, Wimberley, TX 78676 | removed: address conflict | 30.00621, -98.11386 | none | Location unavailable: match is not the filed address (951 FM 2325, WIMBERLEY, TX, 78676) |
+| Austin | [TABS2025025735](https://www.tdlr.texas.gov/TABS/Projects/TABS2025025735) The Shoppes at West Whitestone | 2907 West Whitestone Blvd, Cedar Park, TX 78613 | removed: address conflict | 30.53389, -97.78547 | none | Location unavailable: match is not the filed address (2907 E WHITESTONE BLVD, CEDAR PARK, TX, 78613) |
+| Austin | [TABS2026015035](https://www.tdlr.texas.gov/TABS/Projects/TABS2026015035) Starmart - Gas Station | 1646 N. Bagdad Road, Leander, TX 78641 | removed: address conflict | 30.55462, -97.85813 | none | Location unavailable: match is not the filed address (1646 S BAGDAD RD, LEANDER, TX, 78641) |
+| Austin | [TABS2025022269](https://www.tdlr.texas.gov/TABS/Projects/TABS2025022269) Malabar Hill Capital Shops at Parmer - Building 1 | 5801 E. Parmer Ln, Building 1, Austin, TX 78653 | removed: address conflict | 30.43936, -97.73918 | none | Location unavailable: match is not the filed address (5801 W PARMER LN, AUSTIN, TX, 78727) |
+| Austin | [TABS2026011894](https://www.tdlr.texas.gov/TABS/Projects/TABS2026011894) MCD 183 & LITTLE ELM – CEDAR PARK, TX | 1145 S. BELL BLVD, Cedar Park, TX 78613 | removed: address conflict | 30.52174, -97.83066 | none | Location unavailable: match is not the filed address (1145 N BELL BLVD, CEDAR PARK, TX, 78613) |
+| Austin | [TABS2026024038](https://www.tdlr.texas.gov/TABS/Projects/TABS2026024038) AAA Business Park Phase 2 | 1300 East Hwy 290, Dripping Springs, TX 78620 | removed: address conflict | 30.19696, -98.10537 | none | Location unavailable: match is not the filed address (1300 W HWY 290, DRIPPING SPRINGS, TX, 78620) |
+| Austin | [TABS2027001425](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001425) Tech Ridge I | 4687 1/2 E Yager Lane, Austin, TX 78754 | removed: address conflict | 30.39666, -97.66822 | none | Location unavailable: match is not the filed address (1 E YAGER LN, AUSTIN, TX, 78753) |
+| Austin | [TABS2027001825](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001825) Milano Nail Spa | 353 US 183,Suite 470, Liberty Hill, TX 78642 | removed: address conflict | 30.64765, -97.94900 | none | Location unavailable: match is not the filed address (183 LIBERTY HILL LN, LIBERTY HILL, TX, 78642) |
+| Austin | [TABS2026000124](https://www.tdlr.texas.gov/TABS/Projects/TABS2026000124) BUDDY'S BURGER | 309 N US 183 Georgetown, TX 78633, Leander, TX 78641 | removed: address conflict | 30.57415, -97.85099 | none | Location unavailable: match is not the filed address (309 S US HWY 183, LEANDER, TX, 78641) |
+| Austin | [TABS2026012666](https://www.tdlr.texas.gov/TABS/Projects/TABS2026012666) The UrbanMile - C2 Sports Club Phase I | 2403 N HWY 183, Leander, TX 78641 | removed: address conflict | 30.60871, -97.86167 | none | Location unavailable: 2 matches up to 7.1 km apart |
+| Austin | [TABS2027001428](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001428) Tech Ridge 2 | 4687 1/2 E Yager Lane, Austin, TX 78754 | removed: address conflict | 30.39666, -97.66822 | none | Location unavailable: match is not the filed address (1 E YAGER LN, AUSTIN, TX, 78753) |
+| Dallas | [TABS2025018789](https://www.tdlr.texas.gov/TABS/Projects/TABS2025018789) Texas Health Plano Bedtower Expansion and Renovations | 6200 Parker Road 1710 Waneta Dr, Plano, TX 75087 | removed: address conflict | 32.95298, -96.45289 | none | Location unavailable: match is not the filed address (1710 WANETA DR, ROCKWALL, TX, 75087) |
+| Dallas | [TABS2025021441](https://www.tdlr.texas.gov/TABS/Projects/TABS2025021441) QTS DFW2-DC4 | 794 W Beltline Road, Dallas, TX 75172 | removed: address conflict | 32.69068, -96.58469 | none | Location unavailable: match is not the filed address (794 S BELT LINE RD, DALLAS, TX, 75253) |
+| Dallas | [TABS2026016219](https://www.tdlr.texas.gov/TABS/Projects/TABS2026016219) Roanoke Hotel & Convention Center | 600 S. Oak Street, Roanoke, TX 76262 | removed: address conflict | 33.00331, -97.22653 | none | Location unavailable: match is not the filed address (600 N OAK ST, ROANOKE, TX, 76262) |
+| Dallas | [TABS2026013583](https://www.tdlr.texas.gov/TABS/Projects/TABS2026013583) Red Oak ISD New High School CTE | 220 TX-342, Red Oak, TX 75154 | removed: address conflict | 32.52059, -96.79821 | none | Location unavailable: 2 matches up to 1.2 km apart |
+| Dallas | [TABS2027000189](https://www.tdlr.texas.gov/TABS/Projects/TABS2027000189) MRMC Bed Tower Expansion | 2831 E President George Bush Hwy, Richardson, TX 75082 | removed: address conflict | 32.99527, -96.66851 | none | Location unavailable: match is not the filed address (2831 N PRESIDENT GEORGE BUSH HWY, RICHARDSON, TX, 75082) |
+| Dallas | [TABS2026026003](https://www.tdlr.texas.gov/TABS/Projects/TABS2026026003) Dallas Police Law Enforcement Training Center - Physical Training Pavilion | 1800 E. Camp Widsom Road, Building 4, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
+| Dallas | [TABS2026007801](https://www.tdlr.texas.gov/TABS/Projects/TABS2026007801) Core 5 - Pleasant Run - Spec Warehouse | 355 W. Pleasant Run Rd, Wilmer, TX 75172 | removed: address conflict | 32.60814, -96.69068 | none | Location unavailable: match is not the filed address (355 E PLEASANT RUN RD, WILMER, TX, 75172) |
+| Dallas | [TABS2026025999](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025999) Dallas Police Law Enforcement Training Center - Basic Academy | 1800 E. Camp Wisdom Road, Building 3, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
+| Dallas | [TABS2026000152](https://www.tdlr.texas.gov/TABS/Projects/TABS2026000152) Aura Fairways | 5201 Northwest Drive, Mesquite, TX 75150 | removed: address conflict | 32.80839, -96.63138 | none | Location unavailable: match is not the filed address (5201 N MESQUITE DR, MESQUITE, TX, 75150) |
+| Dallas | [TABS2026019318](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019318) Tempo Hotel by Hilton - Coppell | 1550 S BELT LINE RD, Coppell, TX 76210 | removed: address conflict | 32.95302, -96.95944 | none | Location unavailable: match is not the filed address (1550 E BELT LINE RD, COPPELL, TX, 75019) |
+| Dallas | [TABS2026025993](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025993) Dallas Police Law Enforcement Training Center - Criminal Justice Center | 1800 E. Camp Wisdom Road, Building 1, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
+| Dallas | [TABS2026026004](https://www.tdlr.texas.gov/TABS/Projects/TABS2026026004) Dallas Police Law Enforcement Training Center - Reality Based Training - Basic | 1800 E. Camp Wisdom Road, Building 5, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
+| Dallas | [TABS2026013630](https://www.tdlr.texas.gov/TABS/Projects/TABS2026013630) Red Oak ISD High School Gym Addition | 220 TX-342, Red Oak, TX 75154 | removed: address conflict | 32.52059, -96.79821 | none | Location unavailable: 2 matches up to 1.2 km apart |
+| Dallas | [TABS2026006484](https://www.tdlr.texas.gov/TABS/Projects/TABS2026006484) Red Oak ISD HS Site Athletic Improvements | 220 TX-342, Red Oak, TX 75154 | removed: address conflict | 32.52059, -96.79821 | none | Location unavailable: 2 matches up to 1.2 km apart |
+| Dallas | [TABS2026026010](https://www.tdlr.texas.gov/TABS/Projects/TABS2026026010) Dallas Police Law Enforcement Training Center - Reality Based Training - In-Service | 1800 E. Camp Wisdome Road, Building 6, Dallas, TX 75232 | removed: address conflict | 32.66203, -96.85056 | none | Location unavailable: match is not the filed address (1800 W CAMP WISDOM RD, DALLAS, TX, 75232) |
+| Dallas | [TABS2025023562](https://www.tdlr.texas.gov/TABS/Projects/TABS2025023562) City of Terrell Pet Adoption Center | 1100 N. State Highway 34, Terrell, TX 75160 | removed: address conflict | 32.72610, -96.27658 | none | Location unavailable: match is not the filed address (1100 HWY 34 S, TERRELL, TX, 75160) |
+| Dallas | [TABS2026006933](https://www.tdlr.texas.gov/TABS/Projects/TABS2026006933) Texans CU McKinney | 3950 W University Drive, Mckinney, TX 75071 | removed: address conflict | 33.19134, -96.55217 | none | Location unavailable: match is not the filed address (3950 E UNIVERSITY DR, MC KINNEY, TX, 75069) |
+| Dallas | [TABS2027004095](https://www.tdlr.texas.gov/TABS/Projects/TABS2027004095) Chase Centerville Garland - Relo Redev | 1000 W Centerville Road, Garland, TX 75041 | removed: address conflict | 32.88147, -96.61805 | none | Location unavailable: match is not the filed address (1000 E CENTERVILLE RD, GARLAND, TX, 75041) |
+| Dallas | [TABS2026016135](https://www.tdlr.texas.gov/TABS/Projects/TABS2026016135) Anna Buzz Center | 1005 South Powell Parkway, Anna, TX 75409 | removed: address conflict | 33.35756, -96.55033 | none | Location unavailable: match is not the filed address (1005 N POWELL PKWY, ANNA, TX, 75409) |
+| Dallas | [TABS2026019781](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019781) 25172 - 725 Wintergreen | 725 W Wintergreen, Hutchins, TX 75141 | removed: address conflict | 32.63280, -96.69889 | none | Location unavailable: match is not the filed address (725 E WINTERGREEN RD, HUTCHINS, TX, 75141) |
+| Dallas | [TABS2026008907](https://www.tdlr.texas.gov/TABS/Projects/TABS2026008907) Mac Haik Desoto Ford Service Building Addition | 515 S. Interstate 35 E, Desoto, TX 75115 | removed: address conflict | 32.58922, -96.82257 | none | Location unavailable: match is not the filed address (515 I- 35 E, DESOTO, TX, 75115) |
+| Dallas | [TABS2026017602](https://www.tdlr.texas.gov/TABS/Projects/TABS2026017602) Craig Crossing Shell Building | 3250 S. Central Expressway, Mckinney, TX 75070 | removed: address conflict | 33.23248, -96.63166 | none | Location unavailable: match is not the filed address (3250 N CENTRAL EXPY, MC KINNEY, TX, 75071) |
+| Dallas | [TABS2026023400](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023400) Point South Hutchins Fleet Building | 950 N IH-45, Hutchins, TX 75141 | removed: address conflict | 32.63593, -96.70059 | none | Location unavailable: match is not the filed address (950 S INTERSTATE 45 SVC RD, HUTCHINS, TX, 75141) |
+| Dallas | [TABS2026010164](https://www.tdlr.texas.gov/TABS/Projects/TABS2026010164) Feathers Smash Phase 2 | 400 W Vista Ridge Mall Dr, Lewisville, TX 75067 | removed: address conflict | 32.99829, -96.98051 | none | Location unavailable: match is not the filed address (400 E VISTA RIDGE MALL DR, LEWISVILLE, TX, 75067) |
+| Dallas | [TABS2026005093](https://www.tdlr.texas.gov/TABS/Projects/TABS2026005093) New Convenience Store | 1310 S Buckner Blvd, Dallas, TX 75127 | removed: address conflict | 32.73458, -96.68274 | none | Location unavailable: 2 matches up to 11.0 km apart |
+| Dallas | [TABS2026004661](https://www.tdlr.texas.gov/TABS/Projects/TABS2026004661) RETAIL BULDING AND LIQUOR STORE | 806 E I30, Garland, TX 75150 | removed: address conflict | 32.83705, -96.60222 | none | Location unavailable: match is not the filed address (806 W I- 30, GARLAND, TX, 75043) |
+| Dallas | [TABS2027002341](https://www.tdlr.texas.gov/TABS/Projects/TABS2027002341) Klegburg-Rylie Library Interior Restoration | 1301 Edd Road, Dallas Texas, 75253 3202 Canton Street, Dallas, TX 75226 | removed: address conflict | 32.78343, -96.77726 | none | Location unavailable: match is not the filed address (3202 CANTON ST, DALLAS, TX, 75226) |
+| Dallas | [TABS2026028110](https://www.tdlr.texas.gov/TABS/Projects/TABS2026028110) Huey's Coffee - Fate | 509 W E Crawford Ave, Fate, TX 78852 | removed: address conflict | 32.95347, -96.37880 | none | Location unavailable: match is not the filed address (509 N W E CRAWFORD AVE, FATE, TX, 75132) |
+| Dallas | [TABS2026014527](https://www.tdlr.texas.gov/TABS/Projects/TABS2026014527) The Great Greek - Coppell, TX | 1540 South Beltline Rd., Coppell, TX 75067 | removed: address conflict | 32.95308, -96.96021 | none | Location unavailable: match is not the filed address (1540 E BELT LINE RD, COPPELL, TX, 75019) |
+| Dallas | [TABS2026025704](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025704) RAZA, SYED | 153 W. FM 550 SUITE 101, McLendon-Chisholm, TX 75032 | removed: address conflict | 32.84971, -96.38520 | none | Location unavailable: match is not the filed address (153 E FM 550, ROCKWALL, TX, 75032) |
+| Dallas | [TABS2025008452](https://www.tdlr.texas.gov/TABS/Projects/TABS2025008452) Cockrell Hill Rd from La Reunion Pkwy to Singleton Blvd | 1801 S Cockrell Hill Rd 320 E. Jefferson Blvd, Dallas, TX 75203 | removed: address conflict | 32.74482, -96.82012 | none | Location unavailable: match is not the filed address (320 E JEFFERSON BLVD, DALLAS, TX, 75203) |
+| Dallas | [TABS2027003441](https://www.tdlr.texas.gov/TABS/Projects/TABS2027003441) Longhorn B2 Warehouse Restrooms | 2301 E. Longhorn Drive, Suite 200, Lancaster, TX 75134 | removed: address conflict | 32.61554, -96.81606 | none | Location unavailable: match is not the filed address (2301 W LONGHORN DR, LANCASTER, TX, 75134) |
+| Dallas | [TABS2026021238](https://www.tdlr.texas.gov/TABS/Projects/TABS2026021238) INLIFE WELLNESS REFORMER PILATES | 1225 W PRINCETON DR #STE. 600, Princeton, TX 75407 | removed: address conflict | 33.17313, -96.48704 | none | Location unavailable: match is not the filed address (1225 E PRINCETON DR, PRINCETON, TX, 75407) |
+| Dallas | [TABS2026002269](https://www.tdlr.texas.gov/TABS/Projects/TABS2026002269) Pi Kappa Alpha Pavilion | 117 W Highway 224 1862 Shady Lane, Commerce, TX 75002 | removed: address conflict | 33.10966, -96.56368 | none | Location unavailable: match is not the filed address (1862 SHADY LN, ALLEN, TX, 75002) |
+| Dallas | [TABS2027001228](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001228) Zouq Hookah Lounge | 5621 S. Custer Rd., Mckinney, TX 75070 | removed: address conflict | 33.25391, -96.73257 | none | Location unavailable: match is not the filed address (5621 N CUSTER RD, MC KINNEY, TX, 75071) |
+| Dallas | [TABS2026014467](https://www.tdlr.texas.gov/TABS/Projects/TABS2026014467) COFFEE SHOP | 3645 N JOSEY LN 1844 E ROSEMEADE PKWY, Carrollton, TX 75007 | removed: address conflict | 33.01144, -96.88851 | none | Location unavailable: match is not the filed address (1844 ROSEMEADE PKWY E, CARROLLTON, TX, 75007) |
+| El Paso | [TABS2026008110](https://www.tdlr.texas.gov/TABS/Projects/TABS2026008110) Sun City Lights at Pueblo Viejo Park | 233 Zaragosa Rd, El Paso, TX 79907 | removed: address conflict | 31.69750, -106.32653 | none | Location unavailable: 2 matches up to 1.0 km apart |
+| Fort Worth | [TABS2026006983](https://www.tdlr.texas.gov/TABS/Projects/TABS2026006983) Saginaw HS Additions and Renovations | 800 N Blue Mound Rd, Saginaw, TX 76131 | removed: address conflict | 32.85223, -97.34315 | none | Location unavailable: match is not the filed address (800 S BLUE MOUND RD, SAGINAW, TX, 76131) |
+| Fort Worth | [TABS2025016996](https://www.tdlr.texas.gov/TABS/Projects/TABS2025016996) Mansfield City Hall | 1200 Broad Street, Mansfield, TX 76063 | removed: address conflict | 32.55627, -97.16238 | none | Location unavailable: 2 matches up to 3.5 km apart |
+| Fort Worth | [TABS2025026844](https://www.tdlr.texas.gov/TABS/Projects/TABS2025026844) Dave & Buster's | 251 E. MACALISTER ROAD, Burleson, TX 76028 | removed: address conflict | 32.56150, -97.33920 | none | Location unavailable: match is not the filed address (251 NE MCALISTER RD, BURLESON, TX, 76028) |
+| Fort Worth | [TABS2026023887](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023887) WR Meadows Building #2 | 1290 Cantrell Sansom Road 2555 Northeast 33rd St, Fort Worth, TX 76111 | removed: address conflict | 32.80495, -97.31254 | none | Location unavailable: match is not the filed address (2555 NE 33RD ST, FORT WORTH, TX, 76111) |
+| Fort Worth | [TABS2026023542](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023542) 11436 FM RD 730 N | 11436 FM RD 730 N., Azle, TX 76020 | removed: address conflict | 32.87907, -97.58118 | none | Location unavailable: match is not the filed address (11436 S FM 730, AZLE, TX, 76020) |
+| Fort Worth | [TABS2026026482](https://www.tdlr.texas.gov/TABS/Projects/TABS2026026482) office building for Chad Harvey | 100 West Washburn, Decatur, TX 76109 | removed: address conflict | 33.23414, -97.59376 | none | Location unavailable: match is not the filed address (100 S WASHBURN ST, DECATUR, TX, 76234) |
+| Fort Worth | [TABS2026022610](https://www.tdlr.texas.gov/TABS/Projects/TABS2026022610) Southlake Nolen MOB 2 Shell | 325 S Nolen Dr., Southlake, TX 76092 | removed: address conflict | 32.94202, -97.10975 | none | Location unavailable: match is not the filed address (325 N NOLEN DR, SOUTHLAKE, TX, 76092) |
+| Fort Worth | [TABS2026025180](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025180) NFCU Saginaw NBO | 311 E Bond Ranch Rd, Fort Worth, TX 76131 | removed: address conflict | 32.92431, -97.36407 | none | Location unavailable: match is not the filed address (311 W BONDS RANCH RD, FORT WORTH, TX, 76131) |
+| Fort Worth | [TABS2027001815](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001815) QuikTrip #1989 | 1996 West Henderson Street, Cleburne, TX 76033 | removed: address conflict | 32.33058, -97.43424 | none | Location unavailable: match is not the filed address (1996 E HENDERSON ST, CLEBURNE, TX, 76033) |
+| Fort Worth | [TABS2026021279](https://www.tdlr.texas.gov/TABS/Projects/TABS2026021279) Chipotle #5689 Copper Ranch TI | 311 E. Bonds Ranch Road, Fort Worth, TX 76131 | removed: address conflict | 32.92431, -97.36407 | none | Location unavailable: match is not the filed address (311 W BONDS RANCH RD, FORT WORTH, TX, 76131) |
+| Fort Worth | [TABS2025024327](https://www.tdlr.texas.gov/TABS/Projects/TABS2025024327) Southside Bank Burleson | 440 NW John Jones Drive, Burleson, TX 76028 | removed: address conflict | 32.51209, -97.34592 | none | Location unavailable: match is not the filed address (440 SE JOHN JONES DR, BURLESON, TX, 76028) |
+| Fort Worth | [TABS2026015787](https://www.tdlr.texas.gov/TABS/Projects/TABS2026015787) Race Street Retail Center | 3650 Race St 35000Fort Worth, TX, Fort Worth, TX 76104 | removed: address conflict | 32.77304, -97.29581 | none | Location unavailable: match is not the filed address (3650 RACE ST, FORT WORTH, TX, 76111) |
+| Fort Worth | [TABS2026018948](https://www.tdlr.texas.gov/TABS/Projects/TABS2026018948) FOX FITNESS | 6336 CROMWELL MARINE CREEK RD FT WORTH TX 76135, Fort Worth, TX 76135 | removed: address conflict | 32.85236, -97.42356 | none | Location unavailable: match is not the filed address (6336 CROMWELL MARINE CR RD, FT WORTH, TX, 76179) |
+| Fort Worth | [TABS2025020153](https://www.tdlr.texas.gov/TABS/Projects/TABS2025020153) FM 157 AT FM 917 TURN LANES | 1170 S Main Street, Mansfield, TX 76063 | removed: address conflict | 32.57995, -97.15077 | none | Location unavailable: match is not the filed address (1170 N MAIN ST, MANSFIELD, TX, 76063) |
+| Fort Worth | [TABS2026021635](https://www.tdlr.texas.gov/TABS/Projects/TABS2026021635) C&C Donuts Shop | 417 W. 6th Street 8142 Mossberg Drive, Ferris, TX 76002 | removed: address conflict | 32.61481, -97.09532 | none | Location unavailable: match is not the filed address (8142 MOSSBERG DR, ARLINGTON, TX, 76002) |
+| Fort Worth | [TABS2026023565](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023565) Gas Station | 1555 W CARRIER PKWY, Grand Prairie, TX 75050 | removed: address conflict | 32.76195, -97.01993 | none | Location unavailable: match is not the filed address (1555 N CARRIER PKWY, GRAND PRAIRIE, TX, 75050) |
+| Fort Worth | [TABS2026015927](https://www.tdlr.texas.gov/TABS/Projects/TABS2026015927) Remedy Medical - Spec Suite 170 | 731Southlake Blvd Suite 170, Southlake, TX 76092 | removed: address conflict | 32.94115, -97.16189 | none | Location unavailable: 2 matches up to 2.0 km apart |
+| Fort Worth | [TABS2026013782](https://www.tdlr.texas.gov/TABS/Projects/TABS2026013782) Cleburne Honor Monument | 1628 W. Henderson St., Cleburne, TX 76033 | removed: address conflict | 32.33769, -97.41562 | none | Location unavailable: match is not the filed address (1628 E HENDERSON ST, CLEBURNE, TX, 76033) |
+| Galveston | [TABS2026014039](https://www.tdlr.texas.gov/TABS/Projects/TABS2026014039) Reconn Office HQ | 1625 Main Street, League City, TX 77573 | removed: address conflict | 29.50357, -95.11207 | none | Location unavailable: 2 matches up to 3.4 km apart |
+| Houston | [TABS2027002882](https://www.tdlr.texas.gov/TABS/Projects/TABS2027002882) TSU Catalyst for Urban Transformation & Nabrit Science | 3021 Wheeler st. 3100 Cleburne Street, Houston 77004, Houston, TX 77004 | removed: address conflict | 29.72464, -95.36266 | none | Location unavailable: match is not the filed address (3100 CLEBURNE ST, HOUSTON, TX, 77004) |
+| Houston | [TABS2025020833](https://www.tdlr.texas.gov/TABS/Projects/TABS2025020833) Sweeny Bulldog Stadium | 600 Ashley Wilson rd, Sweeny, TX 77480 | removed: address conflict | 29.04191, -95.71437 | none | Location unavailable: 2 matches up to 1.3 km apart |
+| Houston | [TABS2027001573](https://www.tdlr.texas.gov/TABS/Projects/TABS2027001573) TDC Beltway Pines | 9202 E. Sam Houston Pkwy N, Houston, TX 77044 | removed: address conflict | 29.90572, -95.55420 | none | Location unavailable: 2 matches up to 25.2 km apart |
+| Houston | [TABS2026012170](https://www.tdlr.texas.gov/TABS/Projects/TABS2026012170) Pamela Heights I Energy Center | 1108 Lavaca St Suite 110-349, Houston, TX 78701 | removed: address conflict | 29.71560, -95.27576 | none | Location unavailable: match outside the market |
+| Houston | [TABS2027002872](https://www.tdlr.texas.gov/TABS/Projects/TABS2027002872) TSU-Health and Wellness Center | 3390 Cleburne st, Houston, TX 77004 3100 Cleburne Street, Houston 77004, Houston, TX 77004 | removed: address conflict | 29.72464, -95.36266 | none | Location unavailable: match is not the filed address (3100 CLEBURNE ST, HOUSTON, TX, 77004) |
+| Houston | [TABS2026024484](https://www.tdlr.texas.gov/TABS/Projects/TABS2026024484) Construct Expansion Dorm at the Memorial Unit | 6999 FM 521 off Darrington Road 59 Darrington Road, Rosharon, TX 77583 | removed: address conflict | 29.39269, -95.48960 | none | Location unavailable: match is not the filed address (521 DARRINGTON RD, ROSHARON, TX, 77583) |
+| Houston | [TABS2026004972](https://www.tdlr.texas.gov/TABS/Projects/TABS2026004972) Pearland Industrial | 8110 South Sam Houston East Bldg 2, Houston, TX 77075 | removed: address conflict | 29.92998, -95.54510 | none | Location unavailable: 2 matches up to 26.5 km apart |
+| Houston | [TABS2025022914](https://www.tdlr.texas.gov/TABS/Projects/TABS2025022914) Harris County ESD 60 - New Fire Station No. 5 | 11159 W Lake Houston Parkway, Houston, TX 77044 | removed: address conflict | 29.89120, -95.23068 | none | Location unavailable: match is not the filed address (11159 N LAKE HOUSTON PKWY, HOUSTON, TX, 77044) |
+| Houston | [TABS2027003537](https://www.tdlr.texas.gov/TABS/Projects/TABS2027003537) HOU1 ODC1 MV Equipment Platform | 27816 Jones Road 11445 Compaq Center Drive, Houston, TX 77070 | removed: address conflict | 29.99323, -95.58411 | none | Location unavailable: match is not the filed address (11445 COMPAQ CENTER WEST DR, HOUSTON, TX, 77070) |
+| Houston | [TABS2025026197](https://www.tdlr.texas.gov/TABS/Projects/TABS2025026197) LOVETT GARVER - BLDG 05 | 3700 S SAM HOUSTON PKWY, Houston, TX 77053 | removed: address conflict | 29.93881, -95.33119 | none | Location unavailable: 2 matches up to 32.2 km apart |
+| Houston | [TABS2025026198](https://www.tdlr.texas.gov/TABS/Projects/TABS2025026198) LOVETT GARVER - BLDG 06 | 3800 S SAM HOUSTON PKWY, Houston, TX 77053 | removed: address conflict | 29.93878, -95.32955 | none | Location unavailable: 2 matches up to 32.7 km apart |
+| Houston | [TABS2026020138](https://www.tdlr.texas.gov/TABS/Projects/TABS2026020138) Residence Inn By Marriott | 1155 W Archer Road, Baytown, TX 77521 | removed: address conflict | 29.79207, -94.95059 | none | Location unavailable: match is not the filed address (1155 E ARCHER RD, BAYTOWN, TX, 77521) |
+| Houston | [TABS2026004196](https://www.tdlr.texas.gov/TABS/Projects/TABS2026004196) Fellows Road Phase III | 620 S. Sam Houston Pkwy. W., Houston, TX 77047 | removed: address conflict | 29.77372, -95.56236 | none | Location unavailable: match is not the filed address (620 W SAM HOUSTON PKWY S, HOUSTON, TX, 77024) |
+| Houston | [TABS2026024244](https://www.tdlr.texas.gov/TABS/Projects/TABS2026024244) Gagemaker Warehouse | 712 Southmore, Pasadena, TX 77502 | removed: address conflict | 29.69081, -95.20420 | none | Location unavailable: 2 matches up to 1.3 km apart |
+| Houston | [TABS2026004973](https://www.tdlr.texas.gov/TABS/Projects/TABS2026004973) Pearland Industrial | 8110 South Sam Houston East Bldg 1, Houston, TX 77075 | removed: address conflict | 29.92998, -95.54510 | none | Location unavailable: 2 matches up to 26.5 km apart |
+| Houston | [TABS2026002532](https://www.tdlr.texas.gov/TABS/Projects/TABS2026002532) Emmanuel Baptist Church - Phase 1 | 21862 Gene Campbell Road 21862 Tree Monkey Road, New Caney, TX 77357 | removed: address conflict | 30.16993, -95.25728 | none | Location unavailable: 2 matches up to 2.7 km apart |
+| Houston | [TABS2026021219](https://www.tdlr.texas.gov/TABS/Projects/TABS2026021219) Isabella Street and Truxillo Street Roadway Rehabilitation and Sidewalk Improvement Project | 4001 Fannin Street, Houston, TX 77006 | removed: address conflict | 29.73599, -95.38013 | none | Location unavailable: 2 matches up to 7.9 km apart |
+| Houston | [TABS2026028113](https://www.tdlr.texas.gov/TABS/Projects/TABS2026028113) IZZI MART | 700 North Loop West Fwy., Houston, TX 77018 | removed: address conflict | 29.81322, -95.41039 | none | Location unavailable: match is not the filed address (700 NORTH LOOP W, HOUSTON, TX, 77018) |
+| Houston | [TABS2027004277](https://www.tdlr.texas.gov/TABS/Projects/TABS2027004277) Hwy 36 Animal - Shell Building | 5510 SH 36 South, Rosenberg, TX 77471 | removed: address conflict | 29.50437, -95.80768 | none | Location unavailable: match is not the filed address (5510 STATE HWY 36 N, ROSENBERG, TX, 77471) |
+| Houston | [TABS2026014039](https://www.tdlr.texas.gov/TABS/Projects/TABS2026014039) Reconn Office HQ | 1625 Main Street, League City, TX 77573 | removed: address conflict | 29.50357, -95.11207 | none | Location unavailable: 2 matches up to 3.4 km apart |
+| Houston | [TABS2025014922](https://www.tdlr.texas.gov/TABS/Projects/TABS2025014922) Millwork Warehouse | 9621 N. Houston Rosslyn Rd., Houston, TX 77040 | removed: address conflict | 29.91873, -95.49477 | none | Location unavailable: 2 matches up to 4.3 km apart |
+| Houston | [TABS2026019060](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019060) Gold Star Memorial | 378 Interstate 45 N, Conroe, TX 77301 | removed: address conflict | 30.30684, -95.46937 | none | Location unavailable: match is not the filed address (378 I- 45 S, CONROE, TX, 77304) |
+| Houston | [TABS2026003771](https://www.tdlr.texas.gov/TABS/Projects/TABS2026003771) Generation Park – Grandfather’s Lake | 10414 West Lake Houston Pkwy, Houston, TX 77044 | removed: address conflict | 29.89401, -95.22982 | none | Location unavailable: match is not the filed address (10414 N LAKE HOUSTON PKWY, HOUSTON, TX, 77044) |
+| Houston | [TABS2026019057](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019057) Japhet Creek Phase 2 South Trails Package | 808 1/2 N York Street Suite 200, Houston, TX 77002 | removed: address conflict | 29.75088, -95.33799 | none | Location unavailable: match is not the filed address (2 N YORK ST, HOUSTON, TX, 77003) |
+| Houston | [TABS2026008522](https://www.tdlr.texas.gov/TABS/Projects/TABS2026008522) Grimes Industrial:  Building Expansion | 929 E. Main Street, Tomball, TX 77375 | removed: address conflict | 30.09337, -95.62444 | none | Location unavailable: match is not the filed address (929 W MAIN, TOMBALL, TX, 77375) |
+| Houston | [TABS2026012860](https://www.tdlr.texas.gov/TABS/Projects/TABS2026012860) McDonald's Houston MLK (42-3761) | 11411 Martin Luther King Blvd., Houston, TX 77048 | removed: address conflict | 29.62526, -95.33968 | none | Location unavailable: 2 matches up to 1.3 km apart |
+| Houston | [TABS2026016915](https://www.tdlr.texas.gov/TABS/Projects/TABS2026016915) Alliance Grayson Logistics Bldg 4 | 5905 E. Sam Houston S. Pkwy Suite 4100, Houston, TX 77034 | removed: address conflict | 29.60076, -95.31926 | none | Location unavailable: 2 matches up to 27.7 km apart |
+| Houston | [TABS2026011735](https://www.tdlr.texas.gov/TABS/Projects/TABS2026011735) Tifa Chocolate & Gelato | 1085 Gessner Rd. Ste 203, Houston, TX 77055 | moved | 29.75150, -95.53937 | 29.78828, -95.54446 | Census Geocoder (Public_AR_Current) match of the filed address (revalidated; moved 4.1 km from the cached match; match: 1085 GESSNER DR, HOUSTON, TX, 77055) |
+| Houston | [TABS2026006684](https://www.tdlr.texas.gov/TABS/Projects/TABS2026006684) North Wade Office Warehouse | 139 Wade Circle North, Conroe, TX 77304 | removed: address conflict | 30.30467, -95.48721 | none | Location unavailable: match is not the filed address (139 WADE CIR W, CONROE, TX, 77304) |
+| Houston | [TABS2026028327](https://www.tdlr.texas.gov/TABS/Projects/TABS2026028327) HTX WINE & SPIRITS #2 | 700 North Loop West Fwy. Suite B, Houston, TX 77018 | removed: address conflict | 29.81322, -95.41039 | none | Location unavailable: match is not the filed address (700 NORTH LOOP W, HOUSTON, TX, 77018) |
+| Houston | [TABS2025025964](https://www.tdlr.texas.gov/TABS/Projects/TABS2025025964) Tesla - Alvin, TX | 3100 S. Gordon Street, Alvin, TX 77511 | removed: address conflict | 29.45268, -95.24517 | none | Location unavailable: match is not the filed address (3100 N GORDON ST, ALVIN, TX, 77511) |
+| Lubbock | [TABS2026017570](https://www.tdlr.texas.gov/TABS/Projects/TABS2026017570) Texas Tech Shake Smart | 3219 Main St, Lubbock, TX 79409 | removed: address conflict | 33.58534, -101.88135 | none | Location unavailable: 2 matches up to 7.3 km apart |
+| Midland | [TABS2026019085](https://www.tdlr.texas.gov/TABS/Projects/TABS2026019085) TENARIS MIDLAND OFFICE BUILDING | 2418 N COUNTY RD 1119, Midland, TX 79706 | removed: address conflict | 32.00290, -101.95595 | none | Location unavailable: match is not the filed address (2418 S CO RD 1119, MIDLAND, TX, 79706) |
+| Midland | [TABS2026018705](https://www.tdlr.texas.gov/TABS/Projects/TABS2026018705) Circle K - Midkiff & I-20 | 3201 W I-20, Midland, TX 79706 | removed: address conflict | 31.99557, -102.02417 | none | Location unavailable: match is not the filed address (3201 E I- 20, MIDLAND, TX, 79706) |
+| Midland | [TABS2026024206](https://www.tdlr.texas.gov/TABS/Projects/TABS2026024206) New Retail Center | 415 W. Scharbauer, Midland, TX 79705 | removed: address conflict | 32.02069, -102.07429 | none | Location unavailable: match is not the filed address (415 E SCHARBAUER DR, MIDLAND, TX, 79705) |
+| Midland | [TABS2025026357](https://www.tdlr.texas.gov/TABS/Projects/TABS2025026357) Taco Bell _ Midland | 2300 Indiana Ave., Midland, TX 79701 | removed: address conflict | 31.99115, -102.09931 | none | Location unavailable: 2 matches up to 4.7 km apart |
+| New Braunfels | [TABS2025018898](https://www.tdlr.texas.gov/TABS/Projects/TABS2025018898) RPCC Hwy 46 Development | 710 State Hwy 46 S, New Braunfels, TX 78130 | removed: address conflict | 29.69681, -98.08933 | none | Location unavailable: match is not the filed address (710 STATE HWY 46 W, NEW BRAUNFELS, TX, 78130) |
+| San Antonio | [TABS2026022399](https://www.tdlr.texas.gov/TABS/Projects/TABS2026022399) SAT Terminal C Parking Garage | 9619 W Terminal Drive, San Antonio, TX 78216 | removed: address conflict | 29.52689, -98.47712 | none | Location unavailable: match is not the filed address (9619 N TERMINAL DR, SAN ANTONIO, TX, 78216) |
+| San Antonio | [TABS2025015565](https://www.tdlr.texas.gov/TABS/Projects/TABS2025015565) Methodist Hospital Metropolitan Parking Garage | 410 Ogden Street 1310 McCullough Avenue, San Antonio, TX 78209 | removed: address conflict | 29.44078, -98.49177 | none | Location unavailable: match is not the filed address (1310 MCCULLOUGH AVE, SAN ANTONIO, TX, 78212) |
+| San Antonio | [TABS2026012364](https://www.tdlr.texas.gov/TABS/Projects/TABS2026012364) New High Bay Maintenance Building | 6981 E. Loop 1604, San Antonio, TX 78247 | removed: address conflict | 29.60340, -98.36172 | none | Location unavailable: match is not the filed address (6981 N LOOP 1604 E, SAN ANTONIO, TX, 78247) |
+| San Antonio | [TABS2027004025](https://www.tdlr.texas.gov/TABS/Projects/TABS2027004025) JAUER FAMILY  INVESTMENTS HANGAR | 57 BOERNE STAGE AIRFIELD BOERNE, TEXAS 78006, Boerne, TX 78248 | removed: address conflict | 29.72691, -98.69668 | none | Location unavailable: match is not the filed address (57 BOERNE STAGE AIRFIELD, BOERNE, TX, 78006) |
+| San Antonio | [TABS2026027666](https://www.tdlr.texas.gov/TABS/Projects/TABS2026027666) Chinese Buffet - Cherry Ridge | 3145 NW Loop 410, San Antonio, TX 78254 | removed: address conflict | 29.38547, -98.39123 | none | Location unavailable: match is not the filed address (3145 SE LOOP 410, SAN ANTONIO, TX, 78222) |
+| San Antonio | [TABS2026027625](https://www.tdlr.texas.gov/TABS/Projects/TABS2026027625) EOC 26014 Seguin, Texas | 1100 State Highway 46 North, Seguin, TX 78155 | removed: address conflict | 29.58287, -97.99273 | none | Location unavailable: match is not the filed address (1100 STATE HWY 46 S, SEGUIN, TX, 78155) |
+| San Antonio | [TABS2025022344](https://www.tdlr.texas.gov/TABS/Projects/TABS2025022344) Marbach Brake Check | 2328 W Loop 1604 S, San Antonio, TX 78245 | removed: address conflict | 29.21914, -98.54791 | none | Location unavailable: match is not the filed address (2328 S LOOP 1604 W, SAN ANTONIO, TX, 78264) |
+| San Antonio | [TABS2026023970](https://www.tdlr.texas.gov/TABS/Projects/TABS2026023970) Midas Marvbach | 2332 W Loop 1604 S, San Antonio, TX 78245 | removed: address conflict | 29.21913, -98.54789 | none | Location unavailable: match is not the filed address (2332 S LOOP 1604 W, SAN ANTONIO, TX, 78264) |
+| San Antonio | [TABS2026021324](https://www.tdlr.texas.gov/TABS/Projects/TABS2026021324) New Daily Chapel | 4222 SW Loop 410, San Antonio, TX 78227 | removed: address conflict | 29.48893, -98.56660 | none | Location unavailable: match is not the filed address (4222 NW LOOP 410, SAN ANTONIO, TX, 78229) |
+| San Antonio | [TABS2026028463](https://www.tdlr.texas.gov/TABS/Projects/TABS2026028463) Sherwin Williams Wilderness Oaks | 24811 N US Hwy 281, San Antonio, TX 78260 | removed: address conflict | 29.66675, -98.45013 | none | Location unavailable: 2 matches up to 56.8 km apart |
+| San Antonio | [TABS2027003298](https://www.tdlr.texas.gov/TABS/Projects/TABS2027003298) Methodist Physicians Perinatal Clinic at Westover Hills | 5126 W Loop 1604 N Suite 132, San Antonio, TX 78251 | removed: address conflict | 29.60180, -98.38941 | none | Location unavailable: match is not the filed address (5126 N LOOP 1604 E, SAN ANTONIO, TX, 78247) |
+| San Antonio | [TABS2027003419](https://www.tdlr.texas.gov/TABS/Projects/TABS2027003419) Kendall Appraisal District | 118 Market Street, Boerne, Tx, 78006, San Antonio, TX 78006 | removed: address conflict | 29.42292, -98.48773 | none | Location unavailable: match is not the filed address (118 W MARKET ST, SAN ANTONIO, TX, 78205) |
+| San Antonio | [TABS2026017296](https://www.tdlr.texas.gov/TABS/Projects/TABS2026017296) Laika Cheesecake | 2230 TPC Parkway Suite 1103, San Antonio, TX 78258 | removed: address conflict | 29.64855, -98.44989 | none | Location unavailable: 2 matches up to 2.3 km apart |
+| San Antonio | [TABS2026018850](https://www.tdlr.texas.gov/TABS/Projects/TABS2026018850) Laser Hair Removal | 1322 W Loop 1604 N Suite 104, San Antonio, TX 78251 | removed: address conflict | 29.21419, -98.52164 | none | Location unavailable: match is not the filed address (1322 S LOOP 1604 W, SAN ANTONIO, TX, 78264) |
+| San Antonio | [TABS2026025349](https://www.tdlr.texas.gov/TABS/Projects/TABS2026025349) Scale Building | 6981 E. Loop 1604, San Antonio, TX 78247 | removed: address conflict | 29.60340, -98.36172 | none | Location unavailable: match is not the filed address (6981 N LOOP 1604 E, SAN ANTONIO, TX, 78247) |
+
+
+## Website speed check: PR vs default branch (2026-10-27)
+
+Read-only workflow `devmap-timing.yml`, run 40510548478. The PR (9b6ce7d) and the default branch (3211761) were each built and served the same restored real data (Houston, 2,996 projects). Both used the devmap-check browser settings (1366×1000 desktop and 390×844 phone, scale 2) and the same six Estimated cost changes, each timed to the next frame. There were 3 alternating blocks of 4 fresh pages per site and viewport, so 12 rounds and 72 changes each.
+
+Columns:
+- "Round worst" is the slowest of the six changes in one page load. This is the number the 150 ms check compares.
+- "Mean per change" is the average of all 72 changes.
+- "Rounds ≥ 150 ms" counts how many of the 12 round worsts hit 150 ms or more.
+
+| Site | Viewport | Round worst, median (range) | Rounds ≥ 150 ms | Mean per change |
+|---|---|---|---|---|
+| PR #101 | desktop | 146 ms (125–167) | 3 of 12 | 88 ms |
+| Default branch | desktop | 161 ms (139–218) | 10 of 12 | 96 ms |
+| PR #101 | phone | 115 ms (109–149) | 0 of 12 | 63 ms |
+| Default branch | phone | 127 ms (119–177) | 1 of 12 | 74 ms |
+
+**Finding:** PR #101 does not cause the slowdown. On the same data it is faster than the default branch on both viewports (desktop median round worst 146 vs 161 ms). The default branch fails this check far more often (10 of 12 desktop rounds). The check sits right at the edge of what Houston's 2,996 projects take on a shared GitHub runner, so it fails intermittently on either code. It needs to be assessed separately (its limit, or the list and legend work that each filter change does). This PR leaves the limit unchanged.

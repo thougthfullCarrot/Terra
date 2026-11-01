@@ -59,7 +59,7 @@ describe('the coverage note', () => {
   it('separates collected, awaiting-details, approximate and unlocated projects once every filing is listed', () => {
     const text = coverageNote({ metro: { filings: 3006, cap: 300, listed: 3120, exact: 2400, site: 90, approximate: 300, awaiting: 280, unlocated: 50, cutoff: null, complete: true } });
     expect(text).toMatch(/lists all 3,120 current state TABS filings and city permits collected for the metro.*no cost cutoff/);
-    expect(text).toMatch(/2,400 are pinned at the filed address, 90 at a point from another permit at the same site, 300 near their ZIP code center \(approximate, drawn dashed\), 50 have no point yet/);
+    expect(text).toMatch(/2,400 are pinned at the filed address, 90 at a point from another permit at the same site, 300 near their ZIP code center \(location not verified, drawn as a dashed ZIP area ring\), 50 have no point yet/);
     expect(text).toMatch(/280 still await their project details/);
     expect(text).not.toMatch(/biggest|get no pin/);
   });

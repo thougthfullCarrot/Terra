@@ -1,6 +1,7 @@
 import { fetchJson, fetchText, type FetchJsonOptions } from '../lib/http.js';
 import { CITIES, type City } from '../types.js';
 import { developerLink } from './developers.js';
+import { sameSite } from './devLocation.js';
 import { CITY_MAX, MIN_VALUE, PERMIT_SOURCES, permitProjects, siteKey, type PermitSource } from './cityPermits.js';
 import {
   CITY_CENTERS,
@@ -629,7 +630,7 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
     if (!need.length) continue;
     try {
       const key = `sites/${source.name}/${day(now)}/${need.length}`;
-      let points = await cache.get<[string, { lat: number; lng: number; permit: string; names: string[] }][]>(key);
+      let points = await cache.get<[string, { address?: string | null; lat: number; lng: number; permit: string; names: string[] }][]>(key);
       if (!points) {
         if (clock() > budget.deadline) throw new Error('run time used up');
         budget.used.cityReads++;
@@ -640,6 +641,11 @@ export async function auditMarket(market: City, opts: AuditOptions): Promise<Mar
       for (const r of need) {
         const p = at.get(siteKey(r.address));
         if (!p) continue;
+        const match = sameSite({ address: r.address, place: r.place, names: [r.name] }, { address: p.address ?? null, place: source.name, names: p.names });
+        if (!match.same) {
+          rejectedPoints.push(`${r.key}: permit ${p.permit} shares the street number and name but is not proven the same site (${match.reason}), not used`);
+          continue;
+        }
         if (!inMetro(market, [p.lat, p.lng])) {
           rejectedPoints.push(`${r.key}: site point from permit ${p.permit} outside the metro, not used`);
           continue;

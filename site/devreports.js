@@ -84,7 +84,7 @@ export function coverageNote({ metro, smaller = 0, pinned = 0, permits = null, r
     const where = [];
     if (metro.exact) where.push(`${n(metro.exact)} are pinned at the filed address`);
     if (metro.site) where.push(`${n(metro.site)} at a point from another permit at the same site`);
-    if (metro.approximate) where.push(`${n(metro.approximate)} near their ZIP code center (approximate, drawn dashed)`);
+    if (metro.approximate) where.push(`${n(metro.approximate)} near their ZIP code center (location not verified, drawn as a dashed ZIP area ring)`);
     if (metro.unlocated) where.push(`${n(metro.unlocated)} have no point yet and are only in the list`);
     if (where.length) parts.push(`Of those, ${where.join(', ')}.`);
     if (metro.awaiting) parts.push(`${n(metro.awaiting)} still await their project details from the state, so they show a name and cost without an address; later updates fill them in.`);
