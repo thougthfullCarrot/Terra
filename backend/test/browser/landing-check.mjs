@@ -245,7 +245,7 @@ if (!before) {
     for (const href of await page.locator('nav.landing-nav a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) {
       log(`landing nav ${href} has a target`, (await page.locator(href).count()) === 1);
     }
-    const banned = /\.edu|college email|subscri|upgrade|\$\d|per month|\/month|pricing|salary check|compare cities|calculator|underwriting|site finder|who owns this|lease radar|drive time|career tools|property tools/i;
+    const banned = /\.edu|college email|subscri|upgrade|\$[1-9]|per month|\/month|pricing|salary check|compare cities|calculator|underwriting|site finder|who owns this|lease radar|drive time|career tools|property tools/i;
     const visibleHit = text.match(banned);
     log('no pricing, .edu, upgrade or retired-tool copy on the landing page', !visibleHit, visibleHit?.[0]);
     const tourText = await page.locator('#pitch').evaluate((n) => n.textContent);

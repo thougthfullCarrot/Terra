@@ -195,3 +195,42 @@ for (const id of ['home-jobs-count', 'home-news-count', 'home-events-count']) {
   const node = document.getElementById(id);
   if (node) riseOnce(node);
 }
+
+// Tracker: drag a card to another stage with a mouse. It sets the card's own
+// stage picker, so saving works as it does from the picker; touch keeps
+// scrolling, and the picker stays the way to do this from a keyboard or phone.
+const tracker = document.getElementById('tracker-view');
+if (tracker) {
+  tracker.addEventListener('pointerdown', (down) => {
+    if (down.pointerType !== 'mouse' || down.button !== 0) return;
+    const card = down.target.closest('.track-card');
+    if (!card || down.target.closest('a, button, input, select, textarea, label')) return;
+    let over = null;
+    let moved = false;
+    const move = (e) => {
+      const x = e.clientX - down.clientX;
+      const y = e.clientY - down.clientY;
+      if (!moved && Math.hypot(x, y) < 6) return;
+      moved = true;
+      card.classList.add('dragging');
+      card.style.translate = `${x}px ${y}px`;
+      over = document.elementsFromPoint(e.clientX, e.clientY).filter((n) => !card.contains(n)).map((n) => n.closest('.board-col')).find(Boolean) ?? null;
+      for (const col of tracker.querySelectorAll('.board-col')) col.classList.toggle('drop', col === over);
+    };
+    const up = () => {
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+      card.classList.remove('dragging');
+      card.style.translate = '';
+      for (const col of tracker.querySelectorAll('.board-col')) col.classList.remove('drop');
+      const stage = over?.querySelector('.board-col-head')?.firstChild?.textContent?.trim();
+      const picker = card.querySelector('.track-controls select');
+      if (moved && stage && picker && picker.value !== stage && [...picker.options].some((o) => o.value === stage)) {
+        picker.value = stage;
+        picker.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+  });
+}

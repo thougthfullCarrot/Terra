@@ -12448,3 +12448,160 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Contour, the rest of the site: larger page titles, sunk cards without
+   borders, big figures, tinted picks. Nothing here reaches the development map.
+   --------------------------------------------------------------------------- */
+.page-title,
+.page-title.section-head {
+  font-size: clamp(36px, 4.4vw, 56px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+#today .today-stat {
+  padding: 18px 20px;
+  background: var(--sunk);
+  border: 0;
+  border-radius: 16px;
+}
+
+#today .today-stat b {
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+#list .card,
+.news-list .card,
+.event-card.card,
+.track-card.card,
+#markets-view .growth-card,
+#markets-view .zoning-item,
+.deal-card,
+.profile .profile-cards > .card,
+.prof-progress.card {
+  border-color: transparent;
+  border-radius: 16px;
+  background: var(--sunk);
+  transition: background 200ms ease, transform 300ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #list .card:hover,
+  .event-card.card:hover,
+  #markets-view .zoning-item:hover {
+    background: var(--tint);
+  }
+
+  .news-list .news-item:hover {
+    transform: translateX(4px);
+  }
+}
+
+#job-panel {
+  border-radius: 20px;
+}
+
+#job-panel .facts > div {
+  background: var(--sunk);
+  border-radius: 11px;
+}
+
+/* Tools and topics: the picked chip takes the tint, like the app's tabs. */
+#markets-view:not(:has(.devx-body, .dev-map)) .market-tools .chip[aria-current],
+#news-view .market-tools .chip[aria-current] {
+  color: var(--on-tint);
+  background: var(--tint);
+}
+
+#markets-view .market-table th,
+#markets-view .market-table td,
+#markets-view .lease-table th,
+#markets-view .lease-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The tracker's stages are lanes; a card lifts while it is dragged (contour.js). */
+#tracker-view .board-col {
+  padding: 14px;
+  background: var(--sunk);
+  border-radius: 18px;
+  outline: 2px dashed transparent;
+  outline-offset: -4px;
+  transition: background 200ms ease, outline-color 200ms ease;
+}
+
+#tracker-view .board-col.drop {
+  background: var(--tint);
+  outline-color: var(--accent);
+}
+
+#tracker-view .track-card.card {
+  background: var(--bg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #tracker-view .track-card {
+    cursor: grab;
+  }
+}
+
+#tracker-view .track-card.dragging {
+  position: relative;
+  z-index: 5;
+  cursor: grabbing;
+  rotate: -1.5deg;
+  box-shadow: var(--shadow-lg);
+  transition: none;
+}
+
+/* Events */
+.cal {
+  background: var(--sunk);
+  border: 0;
+  border-radius: 18px;
+}
+
+.event-card .date-block {
+  background: var(--bg);
+  border-radius: 12px;
+}
+
+/* The sign-in code reads as a code. */
+#verify-code {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+}
+
+#verify-code::placeholder {
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+/* The tour's pictures sit on contour rings. */
+#pitch .pitch-icon {
+  position: relative;
+  overflow: hidden;
+  background: var(--sunk);
+  border-radius: 22px;
+}
+
+#pitch .pitch-icon::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background: repeating-radial-gradient(circle, transparent 0 18px, color-mix(in oklch, var(--accent) 20%, transparent) 18px 19px);
+}
+
+#pitch .pitch-icon svg {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-list .news-item:hover {
+    transform: none;
+  }
+}
