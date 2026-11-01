@@ -69,7 +69,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Room for the development maps' first fill (about 400 project pages a build).
     timeout-minutes: 30
     defaults:
