@@ -107,10 +107,10 @@ occurrence of `CELL` in the file); `:1044` `let clusterOf = new Map();` with the
 comment at `:1043` ("The cluster each project sat in at the last draw, for the list's
 hover"); `:1095` `const nextCluster = new Map();` (never written); `:1186`
 `clusterOf = nextCluster;`; `:1191` `node.dataset.clusters = '0';`. `speckAt` still uses its
-own literal `let bestD = 64;` (`:982`). Also still true: `panel.prevStep = () => step(-1);`
-(`site/devmap.js:602`) and the exported-but-unused `toggleDetail` (`:1385`) / `dueDate`
-(`:1576`) — a grep across `site/` and `backend/test/` outside `site/devmap.js` returns
-nothing for all three.
+own literal `let bestD = 64;` (`:982`). The rest of the `dataset.*` family
+(`pins`, `drawn`, `specks`, `smallPins`, `matches`, `drawMs`) is a live test contract read by
+`devmap-check.mjs`; `clusters` is the one member nothing reads, so the performance notes'
+"delete it" conclusion stands. (`code-structure.md` holds the full dead-code inventory.)
 
 ### 7. Phone sheet geometry vs `select()`/`fit()` padding — CONFIRMED
 Unchanged on both sides. CSS at ≤640px: `site/style.css:9086-9091`
@@ -155,18 +155,18 @@ different reference boxes; the mixed-state window the reviewers described is int
   speck culling (`:939`), so the hover/paint path the reviewers called hottest is materially
   better.
 
+**Why the surviving three now matter more than when written.** The performance notes assumed
+this work was interaction-driven and therefore self-limiting: a keystroke, a click, a pan. The
+time-lapse changed that. While it plays, `apply()` runs on a 280 ms interval
+(`site/devmap.js:516`), so the bitstring, the three (now four) `filterProjects` sweeps, the
+per-draw re-sort and the marker churn all run about 3.5 times a second with no user input, for
+as long as the lapse lasts. The reviewers' ranked bottleneck list is unchanged in content but
+should be read as a sustained cost, not a per-gesture one.
+
 ## Other findings from the three notes
 
-### MOOT — everything about `site/property-view.js`
-The file is deleted, so these are all moot and need no further treatment: the second Leaflet
-integration and its naive `disposeMap` missing the zoom-animation fix (code-structure #2);
-the `driveView` `isConnected`/orphan-map race (#2b); the duplicated boot sequence; the
-`.dev-map` class reuse on `drive-map`; "property-view disposes on its own hidden path, the
-pattern markets-view needs already exists next door"; the two-`money`-formatters point; the
-isochrone fallback cited as the model for a degraded dependency; and `property-view.js`'s
-`CENTERS`/`MARKETS` import. `CENTERS` is still imported by `site/career-view.js` only, so the
-coupling finding (#8) is CHANGED: it now has one external consumer, not two, and
-`career-view.js` still destructures unguarded.
+### MOOT
+Only the deleted-view citations, listed under **Deletions** at the top of this file.
 
 ### CONFIRMED, unchanged in substance (current lines)
 - No map state in the hash: `writeMarketHash`/`readMarketHash` still carry only
@@ -188,9 +188,10 @@ coupling finding (#8) is CHANGED: it now has one external consumer, not two, and
   (`:559-561`), and reads `mapWrap.getBoundingClientRect().top` right after
   `panel.replaceChildren` + `classList.add('panel-open')` (`:563-568`). `close()` still runs
   two more full sweeps (`:587-588`). `step()` still `order.indexOf(selected)` (`:574`).
-- No `site/devmap.d.ts`; the untested pure helpers (`money`, `sqft`, `dueDate`, `MONTH_FMT`,
-  `monthLabel`, `locationNote`, `pinLabel`, `pillWidth`, `free`/fan-out geometry) are still
-  unexported-or-untested and still only covered through the browser check.
+- The untested pure helpers (`money`, `sqft`, `dueDate`, `MONTH_FMT`, `monthLabel`,
+  `locationNote`, `pinLabel`, `smallerOf`, `pillWidth`, `free`/fan-out geometry) are still
+  unexported-or-untested and still covered only through the browser check; no
+  `backend/test/devmap-site.test.ts` was added.
 - `cache: 'no-cache'` on both fetches: `site/app.js:949`, `site/markets-view.js:59`.
 
 ### CHANGED
@@ -205,10 +206,6 @@ coupling finding (#8) is CHANGED: it now has one external consumer, not two, and
   "Rings count as drawn: the project is on the map, as an area"). Any finding phrased as
   "approximate pins are invisible/uncounted" no longer holds; the `.devx-leader`/dashed
   rendering is still unasserted in the check.
-- **Function sizes.** `developmentMap` and `drawMap` are both larger, not smaller
-  (`developmentMap` now ~`site/devmap.js:117-640`, `drawMap` ~`:860-1310`), with the
-  time-lapse added as a further responsibility inside `developmentMap`
-  (`:370-530`). Finding #6 holds more strongly than when written.
 
 ### FIXED
 - Canvas reallocation per paint (`b01ce73`) and per-project color/pill-width recomputation
@@ -234,11 +231,9 @@ High confidence, all in the time-lapse added by `758ffc6`:
    the sole indication.
 3. **The time-lapse has no test coverage at all.** `backend/test/browser/devmap-check.mjs`
    contains no match for `lapse`, `blip` or `keepView`; the only thing standing between a
-   broken lapse and a green check is the `no page errors` assertion (`:689`). The lapse also
-   introduces the one `setInterval` in the file, cancelled only from inside its own tick
-   (`site/devmap.js:507` `if (!box.isConnected) return clearInterval(lapseTimer);`) — i.e. a
-   card rebuilt by `render()` leaves it running for up to 280 ms and relies on `box` having
-   been detached.
+   broken lapse and a green check is the `no page errors` assertion (`:689`). (The lapse's
+   `setInterval` lifetime against the tab-away path is covered in `code-structure.md`; it is
+   not restated here.)
 
 ## Undetermined
 None. Every finding above resolved from code at HEAD.
@@ -250,7 +245,7 @@ None. Every finding above resolved from code at HEAD.
 `accessibility.md` (269 lines) landed after this pass began and is verified here. It read the
 same stale 1341-line `site/devmap.js`; `site/style.css` has also moved, and the dev map's
 layout was reworked "map-first" since the review, which changes one of its findings
-materially.
+materially. Nothing in it cites either deleted view.
 
 ### A1. Focus never moves into the detail panel / phone sheet — CONFIRMED
 The machinery still exists and still nothing asks for it. `site/devmap.js:335`
