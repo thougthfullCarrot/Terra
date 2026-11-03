@@ -9127,7 +9127,6 @@ body[data-workspace='map'] .devx-body {
   scroll-margin-top: 64px;
 }
 
-/* Market data overview, redesign v3: the comparison table beside the picked city's panel. */
 /* ---------------------------------------------------------------------------
    Markets overview: the relief map. Every market is a peak on the Texas
    outline, sized by the figure picked above it, over the same contour field as
@@ -9194,7 +9193,7 @@ body[data-workspace='map'] .devx-body {
   max-height: 560px;
 }
 
-/* The side-panel map this inherits from is ~210px tall; at 440px the shared
+/* The side-panel map this inherits from is ~210px tall; at 560px the shared
    18px label scales up with the viewBox and reads far too large. */
 .relief-map .tx-label {
   font-size: 13px;
@@ -9414,6 +9413,8 @@ body[data-workspace='map'] .devx-body {
   }
 }
 
+/* The comparison table beside the picked city's panel: still used by the table
+   under the relief map's fold. */
 .market-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
