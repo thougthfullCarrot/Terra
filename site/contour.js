@@ -9,7 +9,7 @@ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
    It draws only while its section is on screen and the tab is visible.
    --------------------------------------------------------------------------- */
 
-function field(host, at) {
+export function field(host, at) {
   const canvas = document.createElement('canvas');
   canvas.className = 'topo';
   canvas.setAttribute('aria-hidden', 'true');
@@ -69,20 +69,34 @@ function field(host, at) {
     }
   };
 
-  new ResizeObserver(() => {
+  const resize = new ResizeObserver(() => {
     if (!canvas.clientWidth) return;
     size();
     if (!frame) draw();
-  }).observe(canvas);
-  new IntersectionObserver(([entry]) => {
+  });
+  resize.observe(canvas);
+  const onScreen = new IntersectionObserver(([entry]) => {
     seen = entry.isIntersecting;
     run();
-  }).observe(host);
+  });
+  onScreen.observe(host);
   document.addEventListener('visibilitychange', run);
   host.addEventListener('pointermove', (event) => {
     const box = host.getBoundingClientRect();
     mouse = [(event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height];
   });
+
+  // The landing page keeps one field for the life of the page, but a view that
+  // redraws itself has to be able to let one go.
+  return () => {
+    resize.disconnect();
+    onScreen.disconnect();
+    document.removeEventListener('visibilitychange', run);
+    seen = false;
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    canvas.remove();
+  };
 }
 
 /* ---------------------------------------------------------------------------
