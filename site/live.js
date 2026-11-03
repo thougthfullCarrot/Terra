@@ -101,9 +101,7 @@ export function placeOf(name) {
   return TEXAS_PLACES[first] ? { name: first, at: TEXAS_PLACES[first] } : null;
 }
 
-/** Longitude and latitude to the map's own units, so callers can measure
-    distances on it (markets-view.js spaces the relief map's labels). */
-export const project = ([lon, lat]) => [(lon + 106.8) * 26, (36.7 - lat) * 26 * 1.15];
+const project = ([lon, lat]) => [(lon + 106.8) * 26, (36.7 - lat) * 26 * 1.15];
 const LAND = `M${OUTLINE.map((p) => project(p).map((n) => n.toFixed(1)).join(',')).join('L')}Z`;
 const SVG = 'http://www.w3.org/2000/svg';
 const svgEl = (tag, attrs = {}) => {
