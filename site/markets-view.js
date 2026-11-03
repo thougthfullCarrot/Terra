@@ -256,7 +256,7 @@ function render() {
   $('m-rates').replaceChildren(rates());
   // All markets: the comparison table beside the picked city's panel, the map's entry and the chart under it.
   $('m-chart').replaceChildren();
-  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [overview(group), ...(group.key === 'development' ? [devTeaser()] : []), chartFold(group)]));
+  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [overview(group), ...(group.key === 'development' ? [devTeaser()] : [])]));
   if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
 }
@@ -381,32 +381,64 @@ function metricPills(group, metric) {
   return pills;
 }
 
-/** How close two dots may sit, in map units, before one drops its label. */
-const LABEL_CLEAR = 26;
+/** A label's size in map units: 13px type at ~0.6em a character, plus room
+    for the 4px stroke that keeps it legible over the contours. */
+const LABEL_H = 13;
+const LABEL_CH = 7.8;
+const LABEL_PAD = 3;
+
+const overlaps = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
 /**
- * Which markets can carry a label without landing on another one. Dallas and
- * Fort Worth, Houston and Galveston, and San Antonio and New Braunfels are each
- * close enough to collide, so the larger peak keeps its label and the smaller
- * one goes unlabelled; the picked market always keeps its own. Every dot still
- * names itself on hover and to a screen reader either way.
+ * Where each label goes, or whether it shows at all. Labels are placed biggest
+ * peak first (the picked market before anything), each trying its usual side
+ * and then the other, and kept on the first side where it covers no dot and no
+ * label already placed. Dallas and Fort Worth, Houston and Galveston, San
+ * Antonio and New Braunfels, and the Austin cluster are close enough that some
+ * labels find no clear side and are left off rather than drawn over a dot; the
+ * picked market always keeps its own. Every dot still names itself on hover
+ * and to a screen reader.
  */
-function labelled(places, picked) {
-  const keep = new Set();
-  const placed = [];
-  const order = [...places].sort((a, b) => {
-    if (a.market.city === picked) return -1;
-    if (b.market.city === picked) return 1;
-    return b.r - a.r;
+function placeLabels(places, picked) {
+  const dots = places.map((p) => {
+    const [x, y] = project(p.place.at);
+    // The dot blocks a label; its faint halo does not, since every label carries
+    // a stroke that reads over it. Counting the halo left Houston and Austin
+    // unlabelled on crowded figures.
+    return { p, x, y, box: [x - p.r - 2, y - p.r - 2, x + p.r + 2, y + p.r + 2] };
   });
-  for (const place of order) {
-    const [x, y] = project(place.place.at);
-    const clash = placed.some(([px, py]) => Math.hypot(x - px, y - py) < LABEL_CLEAR);
-    if (clash && place.market.city !== picked) continue;
-    keep.add(place.market.city);
-    placed.push([x, y]);
+  const order = [...dots].sort((a, b) => {
+    if (a.p.market.city === picked) return -1;
+    if (b.p.market.city === picked) return 1;
+    return b.p.r - a.p.r;
+  });
+  const placed = [];
+  const sides = new Map();
+  for (const d of order) {
+    const w = d.p.market.city.length * LABEL_CH;
+    const gap = d.p.r + 5;
+    const top = d.y - LABEL_H + 4 - LABEL_PAD;
+    const bottom = d.y + 4 + LABEL_PAD;
+    const boxFor = (side) =>
+      side > 0 ? [d.x + gap - LABEL_PAD, top, d.x + gap + w + LABEL_PAD, bottom] : [d.x - gap - w - LABEL_PAD, top, d.x - gap + LABEL_PAD, bottom];
+    const onDots = (box) => dots.filter((o) => o !== d && overlaps(box, o.box)).length;
+    const onLabels = (box) => placed.filter((b) => overlaps(box, b)).length;
+    const usual = d.p.place.at[0] < -97.5 ? -1 : 1;
+    const tries = [usual, -usual].map((side) => {
+      const box = boxFor(side);
+      return { side, box, dots: onDots(box), labels: onLabels(box) };
+    });
+    const clear = tries.find((t) => t.dots === 0 && t.labels === 0);
+    // Forcing big peaks to be named was tried and was worse: on the tax topics
+    // New Braunfels becomes a top peak and its label lands across three dots.
+    // Only the picked market, which has to be named, may take the least-bad side.
+    const fallback = d.p.market.city === picked ? [...tries].sort((a, b) => a.labels - b.labels || a.dots - b.dots)[0] : null;
+    const pick = clear ?? fallback;
+    if (!pick) continue;
+    sides.set(d.p.market.city, pick.side);
+    placed.push(pick.box);
   }
-  return keep;
+  return sides;
 }
 
 /** Every market as a peak, sized by the figure; picking one moves the panel. */
@@ -414,18 +446,27 @@ function reliefMap(metric) {
   const places = snapshot.markets.map((m) => ({ market: m, place: placeOf(m.city) })).filter((x) => x.place);
   if (places.length < 2) return null;
   const range = reliefRange(metric);
-  const sized = places.map((entry) => ({ ...entry, r: peakRadius(metric ? entry.market.values[metric.key] : null, range) }));
-  const names = labelled(sized, sideCity);
+  // A city repeating another's metro figure (Galveston showing Houston's) would
+  // otherwise draw a second peak the size of the first and count that metro
+  // twice, so it keeps a small marker on the map and the figure stays with the
+  // city it belongs to.
+  const copies = (market) => Boolean(metric && market.values[metric.key] != null && sharedWith(market, metric.key));
+  const sized = places.map((entry) => ({
+    ...entry,
+    copy: copies(entry.market),
+    r: copies(entry.market) ? 3 : peakRadius(metric ? entry.market.values[metric.key] : null, range)
+  }));
+  const sides = placeLabels(sized, sideCity);
   const box = el('div', 'relief-map');
   box.append(
     texasMap(
-      sized.map(({ market, place, r }) => ({
+      sized.map(({ market, place, r, copy }) => ({
         name: market.city,
         at: place.at,
         r,
-        label: names.has(market.city) ? market.city : '',
-        side: place.at[0] < -97.5 ? -1 : 1,
-        tone: metric && market.values[metric.key] == null ? 'blank' : '',
+        label: sides.has(market.city) ? market.city : '',
+        side: sides.get(market.city) ?? 1,
+        tone: copy ? 'shared' : metric && market.values[metric.key] == null ? 'blank' : '',
         onPick: (name) => {
           sideCity = name;
           render();
@@ -473,7 +514,16 @@ function reliefSide(group, metric, markets) {
   ranked.append(el('h2', 'relief-ranked-head', metric ? `Ranked by ${metric.label.toLowerCase()}` : 'Markets'));
   const range = reliefRange(metric);
   const list = el('ol', 'rank-list');
-  for (const [place, market] of markets.entries()) {
+  // On a tie, a city repeating another's metro figure follows the city it
+  // repeats, so Galveston comes after Houston rather than above it. Equal
+  // values are adjacent in the sorted list, which keeps this a total order.
+  const at = new Map(markets.map((m, i) => [m, i]));
+  const copy = (m) => (metric && sharedWith(m, metric.key) ? 1 : 0);
+  const order = [...markets].sort((a, b) => {
+    const tie = metric && a.values[metric.key] != null && a.values[metric.key] === b.values[metric.key];
+    return (tie ? copy(a) - copy(b) : 0) || at.get(a) - at.get(b);
+  });
+  for (const [place, market] of order.entries()) {
     const value = metric ? market.values[metric.key] : null;
     const row = el('li', `rank-row${market.city === sideCity ? ' on' : ''}`);
     const pick = el('button', 'rank-pick');
@@ -483,7 +533,16 @@ function reliefSide(group, metric, markets) {
       sideCity = market.city;
       render();
     });
-    pick.append(el('span', 'rank-n num', String(place + 1)), el('span', 'rank-city', market.city));
+    // New Braunfels repeats the San Antonio metro's figures, Galveston Houston's:
+    // correct, but two identical rows read as a bug unless the second says so.
+    const same = value != null && metric ? sharedWith(market, metric.key) : null;
+    if (same) {
+      row.classList.add('shared');
+      pick.title = `${market.city} shows the ${same} metro's figure`;
+    }
+    const name = el('span', 'rank-city', market.city);
+    if (same) name.append(el('small', 'rank-same', `same as ${same}`));
+    pick.append(el('span', 'rank-n num', String(place + 1)), name);
     const bar = el('span', 'rank-bar');
     if (value != null && range?.span) {
       const fill = el('i', '');
@@ -561,16 +620,6 @@ function countKpis(box, city) {
   return box;
 }
 
-/** The metric chart, folded under the table: the same figures as bars. */
-function chartFold(group) {
-  const fold = el('details', 'chart-fold');
-  fold.open = chartOpen;
-  fold.addEventListener('toggle', () => (chartOpen = fold.open));
-  fold.append(el('summary', 'chart-fold-summary', 'Show the figures as a chart'), chart(group));
-  return fold;
-}
-let chartOpen = false;
-
 function table(group, me = '', onPick = null) {
   const metrics = group.metrics.map(metricFor).filter(Boolean);
   const markets = sortMarkets(snapshot.markets, state.sort, state.order);
@@ -632,116 +681,6 @@ function table(group, me = '', onPick = null) {
   const frag = document.createDocumentFragment();
   frag.append(wrap, asOf(metrics));
   return frag;
-}
-
-/**
- * One metric across every market as horizontal bars, the metric picked from
- * the pills above it. A growth figure can be negative, so its bars grow either
- * way from a zero line; everything else starts at zero on the left. Hovering a
- * bar names its rank and period; clicking opens that market.
- */
-function chart(group, me = '') {
-  const metrics = group.metrics.map(metricFor).filter(Boolean);
-  const metric = metricFor(state.sort) ?? metrics[0];
-  const box = el('section', 'card chart-card');
-  if (!metric) return box;
-
-  const pills = el('div', 'metric-pills');
-  pills.setAttribute('role', 'group');
-  pills.setAttribute('aria-label', 'Metric to chart');
-  for (const m of metrics) {
-    const pill = el('button', 'chip', m.label);
-    pill.type = 'button';
-    pill.setAttribute('aria-pressed', String(m.key === metric.key));
-    pill.title = metricTitle(m);
-    pill.addEventListener('click', () => update({ sort: m.key, order: defaultOrder(m) }));
-    pills.append(pill);
-  }
-
-  const head = el('div', 'chart-head');
-  head.append(el('h3', 'group-title', metric.label), el('p', 'group-blurb', [categoryText(metric), metric.note].filter(Boolean).join(' · ')));
-
-  const markets = sortMarkets(snapshot.markets, metric.key, state.sort === metric.key ? state.order : defaultOrder(metric));
-  const values = markets.map((m) => m.values[metric.key]).filter((v) => v != null && Number.isFinite(v));
-  const min = Math.min(0, ...values);
-  const max = Math.max(0, ...values);
-  const span = max - min || 1;
-  const zero = ((0 - min) / span) * 100;
-  const place = ranks(snapshot.markets, metric);
-  const counted = rankedCount(snapshot.markets, metric.key);
-
-  const rows = el('ol', 'bars');
-  rows.setAttribute('aria-label', `${metric.label} by market`);
-  for (const market of markets) {
-    const value = market.values[metric.key];
-    const row = el('li', `bar-row${market.city === me ? ' me' : ''}`);
-    const link = el('a', 'bar-link');
-    link.href = writeMarketHash({ ...state, city: market.city });
-    const label = el('span', 'bar-label', market.city);
-    const track = el('span', 'bar-track');
-    if (min < 0) {
-      const axis = el('span', 'bar-zero');
-      axis.style.left = `${zero}%`;
-      track.append(axis);
-    }
-    if (value != null && Number.isFinite(value)) {
-      const fill = el('span', `bar-fill${value < 0 ? ' neg' : ''}`);
-      const from = value < 0 ? ((value - min) / span) * 100 : zero;
-      const width = (Math.abs(value) / span) * 100;
-      fill.style.left = `${from}%`;
-      fill.style.width = `${Math.max(width, 0.5)}%`;
-      track.append(fill);
-    }
-    const text = el('span', `bar-value value ${tone(value, metric)}`, formatValue(value, metric.unit));
-    link.append(label, track, text);
-
-    const rank = place.get(market.city);
-    const same = sharedWith(market, metric.key);
-    const tip = [
-      `${market.city}: ${formatValue(value, metric.unit)}`,
-      rank ? `${ordinal(rank)} of ${counted}` : same && value != null ? `Counted once, as ${same}` : 'No figure',
-      ...valueNotes(market, metric)
-    ].filter(Boolean);
-    link.setAttribute('aria-label', `${tip.join(', ')}. Open ${market.city}.`);
-    link.addEventListener('pointerenter', (event) => showTip(tip, event));
-    link.addEventListener('pointermove', moveTip);
-    link.addEventListener('pointerleave', hideTip);
-    link.addEventListener('focus', () => showTip(tip, null, link));
-    link.addEventListener('blur', hideTip);
-    row.append(link);
-    rows.append(row);
-  }
-
-  box.append(pills, head, rows);
-  return box;
-}
-
-let tipNode = null;
-
-function showTip(lines, event, anchor) {
-  tipNode ??= document.body.appendChild(el('div', 'chart-tip'));
-  tipNode.replaceChildren(el('strong', '', lines[0]), ...lines.slice(1).map((line) => el('span', '', line)));
-  tipNode.hidden = false;
-  if (event) moveTip(event);
-  else if (anchor) {
-    const box = anchor.getBoundingClientRect();
-    placeTip(box.left + box.width / 2, box.top);
-  }
-}
-
-function moveTip(event) {
-  placeTip(event.clientX, event.clientY);
-}
-
-function placeTip(x, y) {
-  if (!tipNode) return;
-  const width = tipNode.offsetWidth;
-  const left = Math.min(Math.max(8, x - width / 2), window.innerWidth - width - 8);
-  tipNode.style.transform = `translate(${left}px, ${Math.max(8, y - tipNode.offsetHeight - 14)}px)`;
-}
-
-function hideTip() {
-  if (tipNode) tipNode.hidden = true;
 }
 
 function headerCell(key, label, cls, metric) {

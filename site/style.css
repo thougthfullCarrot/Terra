@@ -9272,7 +9272,7 @@ body[data-workspace='map'] .devx-body {
 
 .rank-pick {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 68px 62px;
+  grid-template-columns: 20px minmax(0, 1fr) 46px 58px;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -9305,6 +9305,20 @@ body[data-workspace='map'] .devx-body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A figure repeated from another city's metro: named, and the bar stepped back. */
+.rank-same {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.rank-row.shared .rank-bar i {
+  opacity: 0.25;
 }
 
 .rank-bar {
@@ -9350,6 +9364,17 @@ body[data-workspace='map'] .devx-body {
 
 .relief-fold {
   margin-bottom: 24px;
+}
+
+/* A city repeating another's metro figure: a ring where it is, not a second peak. */
+.tx-pin.shared .tx-dot {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+}
+
+.tx-pin.shared .tx-halo {
+  opacity: 0;
 }
 
 /* A market with no figure for the chosen topic still shows where it is. */
