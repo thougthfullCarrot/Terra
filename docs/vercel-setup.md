@@ -8,12 +8,12 @@ everyone, so it fits. Do not upgrade to Pro (it costs money).
 
 ## One-time steps (Rod)
 
-1. **Create the project.** Sign in at https://vercel.com (Hobby). Install the
-   CLI-free route: Dashboard > **Add New... > Project**, but do NOT import the
-   repo (that turns push builds on). Instead create an empty project: on your
-   computer run `npx vercel@latest link` in any empty folder, choose
-   "Link to a new project", name it `terra`. This writes
-   `.vercel/project.json` with `orgId` and `projectId`.
+1. **Create the project.** Sign up at https://vercel.com on the free Hobby
+   plan. Don't import the GitHub repo (that turns push builds back on).
+   Instead, on your computer open a terminal in any empty folder and run
+   `npx vercel@latest link`, sign in, pick "Link to a new project", name it
+   `terra`. Open the new `.vercel/project.json` file: it holds `orgId` and
+   `projectId`.
 2. **Make a token.** https://vercel.com/account/tokens > **Create**, scope
    your account, no expiry (or a long one). Copy it once.
 3. **Add it to GitHub.** Repo > Settings > Secrets and variables > Actions:
