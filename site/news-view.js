@@ -122,7 +122,12 @@ function render() {
     return;
   }
   const now = new Date();
-  list.replaceChildren(...headlines.map((h, i) => item(h, i, now)));
+  // The newest headline leads; the rest stack in their own column beside it (one top-aligned column each).
+  const [lead, ...rest] = headlines.map((h, i) => item(h, i, now));
+  lead.classList.add('news-lead');
+  const more = el('div', 'news-more');
+  more.append(...rest);
+  list.replaceChildren(lead, ...(rest.length ? [more] : []));
 
   const updated = new Date(file.generatedAt);
   $('n-sources').replaceChildren(
