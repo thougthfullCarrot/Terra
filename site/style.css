@@ -9015,7 +9015,7 @@ body[data-workspace='map'] .devx-body {
   justify-content: space-between;
   gap: 16px 24px;
   margin: 0 0 20px;
-  padding: 20px 24px;
+  padding: 24px;
 }
 
 .devx-teaser-title {
@@ -13015,4 +13015,51 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
   #e-list .date-block { min-width: 3.75rem; padding: 6px 8px; }
   #e-list .event-actions { grid-column: 1 / -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; min-width: 0; }
   #e-list .event-actions > * { flex: 1 1 auto; min-height: 44px; padding-inline: 14px; }
+}
+
+/* Events cards, second pass (Rod's review of the live page): a quieter date tile, actions as two matching
+   compact buttons that sit beside the text instead of floating at the far edge, and no underlined link. */
+#e-list .event-card.card {
+  grid-template-columns: 4.5rem minmax(0, 1fr) max-content;
+  column-gap: 20px;
+  padding: 24px;
+}
+#e-list .date-block {
+  width: 4.5rem;
+  min-width: 0;
+  padding: 8px 0;
+  text-align: center;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line2);
+  border-radius: 12px;
+}
+#e-list .date-block > * { display: block; text-align: center; }
+#e-list .event-title { font-size: 16px; font-weight: 500; letter-spacing: 0; line-height: 1.35; }
+#e-list .event-body { gap: 8px; }
+#e-list .event-where { font-size: 13.5px; }
+#e-list .event-actions { display: flex; flex-direction: column; gap: 8px; width: 11.5rem; }
+#e-list .event-actions > * {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: normal;
+}
+#e-list .event-actions > a.link {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line2);
+}
+#e-list .event-actions > a.link:hover,
+#e-list .event-actions > a.link:focus-visible { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 640px) {
+  #e-list .event-card.card { grid-template-columns: 3.75rem minmax(0, 1fr); column-gap: 14px; padding: 16px; }
+  #e-list .date-block { width: 3.75rem; }
+  #e-list .event-actions { flex-direction: row; width: auto; }
+  #e-list .event-actions > * { min-height: 44px; flex: 1 1 0; }
 }
