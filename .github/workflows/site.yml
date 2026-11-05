@@ -758,6 +758,11 @@ jobs:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         run: |
+          # The project uploads finished files only: no root folder, framework
+          # or build step (an old Git import had pointed it at backend/).
+          curl -fsS -X PATCH "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+            -d '{"rootDirectory":null,"framework":null,"buildCommand":"","installCommand":"","outputDirectory":null}' > /dev/null
           url=$(npx --yes vercel@latest deploy /tmp/site --prod --yes --token "$VERCEL_TOKEN")
           echo "Deployed: $url"
           echo "## Vercel" >> "$GITHUB_STEP_SUMMARY"
