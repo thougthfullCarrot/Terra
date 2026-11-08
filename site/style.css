@@ -12220,9 +12220,9 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
 /* The live panel reads as a survey readout: glass over the lines. */
 #gate .hero-panel {
   padding: 10px;
-  background: color-mix(in oklch, var(--surface) 86%, transparent);
-  -webkit-backdrop-filter: blur(12px) saturate(1.3);
-  backdrop-filter: blur(12px) saturate(1.3);
+  /* Solid enough to read without a backdrop blur: blurring the moving contour
+     canvas behind it meant re-blurring that whole area every frame. */
+  background: color-mix(in oklch, var(--surface) 94%, transparent);
   border-radius: 20px;
   box-shadow: var(--shadow-lg);
 }
