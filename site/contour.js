@@ -22,9 +22,18 @@ export function field(host, at) {
   let t = 0;
   let frame = 0;
   let seen = false;
+  let last = 0;
+  // Read the accent once and again only when the theme changes: reading
+  // computed style every frame forced a style pass 60 times a second.
+  let ink = '';
+  const readInk = () => (ink = getComputedStyle(host).getPropertyValue('--accent').trim() || '#6a6fd6');
+  new MutationObserver(readInk).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', readInk);
 
   const size = () => {
-    const r = Math.min(devicePixelRatio || 1, 2);
+    // Faint 1px lines don't need retina pixels; a full-width canvas at 2x was
+    // ~6 million pixels to repaint and composite every frame.
+    const r = 1;
     w = canvas.clientWidth;
     h = canvas.clientHeight;
     canvas.width = Math.round(w * r);
@@ -32,11 +41,17 @@ export function field(host, at) {
     cx.setTransform(r, 0, 0, r, 0, 0);
   };
 
-  const draw = () => {
+  const draw = (now = 0) => {
+    // About 30 frames a second is plenty for a slow drift and halves the work.
+    if (now && now - last < 32) {
+      frame = seen && !still() && !document.hidden ? requestAnimationFrame(draw) : 0;
+      return;
+    }
+    last = now;
+    if (!ink) readInk();
     peak[0] += (at[0] + (mouse[0] - 0.5) * 0.08 - peak[0]) * 0.04;
     peak[1] += (at[1] + (mouse[1] - 0.5) * 0.08 - peak[1]) * 0.04;
     cx.clearRect(0, 0, w, h);
-    const ink = getComputedStyle(host).getPropertyValue('--accent').trim() || '#6a6fd6';
     const px = peak[0] * w;
     const py = peak[1] * h;
     const big = Math.max(w, h);
@@ -58,7 +73,7 @@ export function field(host, at) {
       cx.stroke();
     }
     cx.globalAlpha = 1;
-    t += 0.004;
+    t += 0.008;
     frame = seen && !still() && !document.hidden ? requestAnimationFrame(draw) : 0;
   };
 
