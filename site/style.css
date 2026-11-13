@@ -13063,3 +13063,168 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
   #e-list .event-actions { flex-direction: row; width: auto; }
   #e-list .event-actions > * { min-height: 44px; flex: 1 1 0; }
 }
+
+/* ---------------------------------------------------------------------------
+   Landing interactivity (landing-fx.js). Only applies once the script adds
+   .fx to <html>, which it skips under reduced motion.
+   --------------------------------------------------------------------------- */
+.fx-spot {
+  position: relative;
+  isolation: isolate;
+}
+.fx-spot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: radial-gradient(420px circle at var(--fx-x, 50%) var(--fx-y, 50%), color-mix(in srgb, var(--accent, #6a6fd6) 16%, transparent), transparent 70%);
+}
+.fx-spot.fx-on::after {
+  opacity: 1;
+}
+#welcome .feature.fx-spot::after,
+#welcome .steps li.fx-spot::after {
+  z-index: 0;
+  background: radial-gradient(220px circle at var(--fx-x, 50%) var(--fx-y, 50%), color-mix(in srgb, var(--accent, #6a6fd6) 14%, transparent), transparent 70%);
+}
+#welcome .feature.fx-spot > *,
+#welcome .steps li.fx-spot > * {
+  position: relative;
+  z-index: 1;
+}
+.fx-magnet {
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.fx-word {
+  display: inline-block;
+  transition: opacity 0.3s ease, transform 0.3s ease, filter 0.3s ease;
+}
+.fx-word.fx-out {
+  opacity: 0;
+  transform: translateY(0.25em);
+  filter: blur(4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-word.fx-out { opacity: 1; transform: none; filter: none; }
+}
+
+/* Intro title card (landing-fx.js). */
+.fx-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  background: var(--bg, #0d0b0a);
+  color: var(--text, #f3efe9);
+  transition: transform 0.85s cubic-bezier(0.76, 0, 0.24, 1), opacity 0.85s ease;
+}
+.fx-intro-on body { overflow: hidden; }
+.fx-intro-out { transform: translateY(-100%); opacity: 0.6; pointer-events: none; }
+.fx-intro-word { display: flex; overflow: hidden; font-weight: 700; letter-spacing: 0.08em; font-size: clamp(56px, 14vw, 180px); line-height: 1; }
+.fx-intro-word span { display: inline-block; transform: translateY(110%); animation: fx-rise 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; animation-delay: calc(var(--k) * 80ms + 100ms); }
+.fx-intro-line { width: min(60vw, 520px); height: 2px; background: var(--accent, #6a8cff); transform: scaleX(0); transform-origin: left; animation: fx-draw 0.7s 0.6s cubic-bezier(0.6, 0, 0.2, 1) forwards; }
+.fx-intro-tag { margin: 0; min-height: 1.4em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: clamp(14px, 2vw, 18px); letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.8; }
+@keyframes fx-rise { to { transform: none; } }
+@keyframes fx-draw { to { transform: scaleX(1); } }
+.fx-word { display: inline-grid; justify-items: start; }
+.fx-word > span { grid-area: 1 / 1; white-space: nowrap; }
+.fx-word .fx-size { visibility: hidden; }
+.fx-word .fx-live { width: 0; overflow: visible; }
+
+/* ---------------------------------------------------------------------------
+   Page motion and polish (pages-fx.js). Entrances only run once the script
+   adds .pfx to <html>, which it skips under reduced motion.
+   --------------------------------------------------------------------------- */
+@keyframes pfx-rise {
+  from { opacity: 0; transform: translateY(14px); }
+}
+.pfx .pfx-in {
+  animation: pfx-rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--pfx-i, 0) * 45ms);
+}
+
+/* Cards lift toward the pointer. */
+.news-item,
+.event-card,
+.deal-card,
+.kpi,
+.growth-card,
+.today-stat,
+.devx-teaser {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .news-item:hover,
+  .event-card:hover,
+  .deal-card:hover,
+  .kpi:hover,
+  .growth-card:hover,
+  .today-stat:hover,
+  .devx-teaser:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--line, transparent));
+    box-shadow: 0 14px 30px -20px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+}
+
+/* City page: the head becomes a hero with the city name set large. */
+.city-head {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 22%, var(--surface, var(--bg))), var(--surface, var(--bg)) 70%);
+}
+.city-head::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  pointer-events: none;
+  background: repeating-radial-gradient(circle at 82% 30%, transparent 0 26px, color-mix(in srgb, var(--accent) 10%, transparent) 26px 27px);
+}
+.pfx .city-head::after {
+  animation: pfx-spin 80s linear infinite;
+}
+@keyframes pfx-spin {
+  to { transform: rotate(360deg); }
+}
+.city-head-name .role {
+  font-size: clamp(40px, 7vw, 84px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin: 10px 0 6px;
+}
+.pfx-letter {
+  display: inline-block;
+  white-space: pre;
+}
+.pfx .pfx-letter {
+  animation: pfx-rise 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--pfx-i, 0) * 32ms);
+}
+.city-kpis .kpi .num {
+  font-size: clamp(26px, 3.4vw, 36px);
+}
+
+/* Topic tabs: the picked one fills with the accent. */
+.city-tab {
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.city-tab[aria-selected='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.pfx .city-panel {
+  animation: pfx-rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pfx-in, .pfx-letter, .city-panel { animation: none !important; }
+}
