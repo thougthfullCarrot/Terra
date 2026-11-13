@@ -235,7 +235,7 @@ if (!before) {
   {
     const page = await open('desk', 'light');
     const text = await page.locator('body').innerText();
-    log('hero headline', (await page.locator('#gate-title').innerText()) === 'Explore Texas real estate.');
+    log('hero headline', ((await page.locator('#gate-title').getAttribute('aria-label')) ?? (await page.locator('#gate-title').innerText())) === 'Explore Texas real estate.');
     log('hero lede', (await page.locator('#gate .lede').innerText()).includes('Find jobs, see what’s being built, follow industry news and discover local events—all in one place.'));
     log('hero note', (await page.locator('#gate-lede').innerText()) === 'Free to use. Create an account to get started.');
     log('main actions are Create free account and Sign in', (await page.locator('#mode-create').innerText()) === 'Create free account' && (await page.locator('#mode-signin').innerText()) === 'Sign in');
