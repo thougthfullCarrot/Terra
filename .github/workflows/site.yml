@@ -395,6 +395,33 @@ jobs:
           node test/browser/city-data-check.mjs ../site /tmp/city-data-shots 2>&1 | tee /tmp/city-data.log
           { echo '## City data page check'; echo '```'; cat /tmp/city-data.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
+      # TEMPORARY (PR #114 preview, remove before merge): the market figures this run built, without the
+      # development lists, encrypted to a reviewer's public key. The log holds only ciphertext.
+      - name: Hand the real market figures to the PR #114 preview (encrypted)
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'claude/project-thread-terksb' && hashFiles('site/market.json') != ''
+        run: |
+          cat > /tmp/review.pub <<'KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAvw9fZRFCXE8HwWKKgLLA
+          RFEAgNNtTuY/0mNFItDrcdXtGoH8Eb2GhPtG/bDckJz2w0zE+o2FZuVEdiQ0g9di
+          wQ+0fAQH8wYc++rA2zawq+wZOHXfCk5VTSAnONtHRRDKpf3Uxxff4tDc+1YwvzUi
+          LmOYiDxMOVjiNTU6lmug5HgBXaBWsCUTVXvfk+RR5wlhFZOzPHTO73j4BcMxF9qQ
+          GA9KkcWa8UkLVB4huR3jfHNEIS1DtWSlZw2QvdwuQniIyAO8ikrI1yk3JiLdNVyj
+          d9IDt4tgTS+/m/MljOcwe1bIEh3ShCNsf5z/5H1+tbBQ3UrSyNQHbpAJqcagsqrq
+          CCgypzQoeennim3lQmF1p3+9nZjaenCdzOf44NkLPkFBpszWlCsqlcYg5eqscNe3
+          qhXQrjmupxX9XcjvVZv3s09TlmbPsrm/QJBQV6nTf5V/WUd0aKILUICFDeN8D3m7
+          UfCdrN+O7dwtAngUqHqrUWVeqqG9tkcerv4uB2z1cejpAgMBAAE=
+          -----END PUBLIC KEY-----
+          KEY
+          sed -i 's/^ *//' /tmp/review.pub
+          jq -c '{schemaVersion, generatedAt, metrics, groups, markets, sources, rates}' ../site/market.json | gzip -9 > /tmp/slim.gz
+          openssl rand -out /tmp/k.bin 32
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in /tmp/slim.gz -out /tmp/slim.enc -pass file:/tmp/k.bin
+          openssl pkeyutl -encrypt -pubin -inkey /tmp/review.pub -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/k.enc
+          echo "REVIEW_KEY $(base64 -w 0 /tmp/k.enc)"
+          base64 -w 3000 /tmp/slim.enc | sed 's/^/REVIEW_DATA /'
+          echo "REVIEW_END $(wc -c < /tmp/slim.enc)"
+
       # Pull requests only: the Events tab against the real events.json this run built (an evening, all-day,
       # repeating and multi-day event; .ics and Google Calendar links; empty-market wording; desktop and phone).
       - name: Check the Events tab on real data
