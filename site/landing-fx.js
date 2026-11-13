@@ -39,11 +39,18 @@ function cycleWord(em, words) {
   if (h1 && !h1.hasAttribute('aria-label')) h1.setAttribute('aria-label', h1.textContent.trim());
   em.setAttribute('aria-hidden', 'true');
   em.classList.add('fx-word');
+  // Every word sits stacked in one grid cell, invisible, so the slot is always
+  // as wide as the longest word and the line never reflows while it changes.
+  em.replaceChildren(
+    ...words.map((w) => Object.assign(document.createElement('span'), { className: 'fx-size', textContent: w })),
+    Object.assign(document.createElement('span'), { className: 'fx-live', textContent: words[0] }),
+  );
+  const live = em.querySelector('.fx-live');
   let i = 0;
   setInterval(() => {
     if (document.hidden || still()) return;
     i = (i + 1) % words.length;
-    scramble(em, words[i], 520);
+    scramble(live, words[i], 520);
   }, 2600);
 }
 
