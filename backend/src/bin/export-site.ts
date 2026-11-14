@@ -206,6 +206,7 @@ function metricsTable(report: RunReport, firmsListed: number): string {
     lines.push(
       '',
       `Board pass: ${sec(report.boardPassMs ?? 0)} wall · fixed batches of 4 would wait ${sec(batched)} · ${sec(timed.reduce((n, b) => n + b.ms!, 0))} summed across boards`,
+      `Board reads: ${report.boards.length} boards · ${report.boards.filter((b) => b.status === 'ok').length} read in full · ${report.boards.filter((b) => b.status === 'incomplete').length} in part · ${report.boards.filter((b) => b.status === 'failed').length} failed · ${report.boards.reduce((n, b) => n + (b.requests ?? 0), 0)} requests · ${report.boards.reduce((n, b) => n + (b.retries ?? 0), 0)} retries (${report.boards.filter((b) => b.retries).map((b) => `${b.firm} ${b.retries}`).join(', ') || 'none'})`,
       `Slowest boards: ${timed.slice(0, 5).map((b) => `${b.firm} ${sec(b.ms!)}`).join(', ')}`
     );
   }

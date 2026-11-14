@@ -13,6 +13,7 @@ import { openingId } from './id.js';
 import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
+import { requestTally } from '../lib/http.js';
 
 /** Rejected postings kept per reason for the run log. */
 const SAMPLES_PER_REASON = 25;
@@ -85,6 +86,9 @@ export interface BoardStatus {
   error?: string;
   /** How long the board took to read, in milliseconds (list, details and retries). */
   ms?: number;
+  /** HTTP requests the board took, and how many of them were retries. */
+  requests?: number;
+  retries?: number;
 }
 
 /** A posting held back for a person to check, with the reason it was held. */
@@ -220,12 +224,16 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     const status: BoardStatus = { firm: firm.name, ats: firm.ats, status: 'ok', fetched: 0, kept: 0, review: 0, rejected: emptyRejected(), ids: [] };
     statuses.set(firm.id, status);
     const started = Date.now();
+    const tally = { retries: 0, requests: 0 };
+    await requestTally.run(tally, async () => {
     try {
       const count: BoardCount = {};
       try {
         reads.set(firm.id, forFirm(firm, await fetcher(firm, count)));
       } finally {
         status.ms = Date.now() - started;
+        status.requests = tally.requests;
+        status.retries = tally.retries;
         if (count.listed !== undefined) status.listed = count.listed;
         if (count.total !== undefined) status.total = count.total;
       }
@@ -242,6 +250,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
       reads.set(firm.id, forFirm(firm, error.jobs));
       await store.markFirmPolled(firm.id, { ok: true, error: message });
     }
+    });
   });
 
   report.boardPassMs = Date.now() - passStarted;
