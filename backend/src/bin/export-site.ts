@@ -197,6 +197,19 @@ function metricsTable(report: RunReport, firmsListed: number): string {
   for (const board of report.boards) {
     if (board.status !== 'ok') lines.push(`\nBoard ${board.status === 'failed' ? 'failed' : 'read in part'}: ${board.firm}: ${board.error ?? ''}`);
   }
+  const timed = report.boards.filter((b) => b.ms !== undefined).sort((a, b) => b.ms! - a.ms!);
+  if (timed.length) {
+    const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+    // What the old fixed batches of 4 (in firm-list order) would have waited, from these same read times.
+    let batched = 0;
+    for (let i = 0; i < report.boards.length; i += 4) batched += Math.max(0, ...report.boards.slice(i, i + 4).map((b) => b.ms ?? 0));
+    lines.push(
+      '',
+      `Board pass: ${sec(report.boardPassMs ?? 0)} wall · fixed batches of 4 would wait ${sec(batched)} · ${sec(timed.reduce((n, b) => n + b.ms!, 0))} summed across boards`,
+      `Board reads: ${report.boards.length} boards · ${report.boards.filter((b) => b.status === 'ok').length} read in full · ${report.boards.filter((b) => b.status === 'incomplete').length} in part · ${report.boards.filter((b) => b.status === 'failed').length} failed · ${report.boards.reduce((n, b) => n + (b.requests ?? 0), 0)} requests · ${report.boards.reduce((n, b) => n + (b.retries ?? 0), 0)} retries (${report.boards.filter((b) => b.retries).map((b) => `${b.firm} ${b.retries}`).join(', ') || 'none'})`,
+      `Slowest boards: ${timed.slice(0, 5).map((b) => `${b.firm} ${sec(b.ms!)}`).join(', ')}`
+    );
+  }
   lines.push('', '| Board | ATS | Status | Listed / total | Fetched | Published | Review | Not TX | Not entry | Over exp. | Off-topic |', '|---|---|---|---|---|---|---|---|---|---|---|');
   for (const board of report.boards) {
     const r = board.rejected;
