@@ -83,6 +83,8 @@ export interface BoardStatus {
   listed?: number;
   total?: number;
   error?: string;
+  /** How long the board took to read, in milliseconds (list, details and retries). */
+  ms?: number;
 }
 
 /** A posting held back for a person to check, with the reason it was held. */
@@ -211,14 +213,16 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
   const statuses = new Map<FirmRow['id'], BoardStatus>();
   const reads = new Map<FirmRow['id'], RawJob[]>();
 
-  await inBatches(firms, concurrency, async (firm) => {
+  await inPool(firms, concurrency, async (firm) => {
     const status: BoardStatus = { firm: firm.name, ats: firm.ats, status: 'ok', fetched: 0, kept: 0, review: 0, rejected: emptyRejected(), ids: [] };
     statuses.set(firm.id, status);
+    const started = Date.now();
     try {
       const count: BoardCount = {};
       try {
         reads.set(firm.id, forFirm(firm, await fetcher(firm, count)));
       } finally {
+        status.ms = Date.now() - started;
         if (count.listed !== undefined) status.listed = count.listed;
         if (count.total !== undefined) status.total = count.total;
       }
@@ -512,14 +516,22 @@ export async function fetchBoard(firm: FirmRow, count?: BoardCount): Promise<Raw
   }
 }
 
-async function inBatches<T>(
+/**
+ * Run `work` over `items` with at most `size` in flight. Each worker takes the
+ * next item as soon as its last one finishes, so one slow board (a Workday
+ * tenant retrying 5xx answers) no longer holds three idle slots until it is
+ * done, as fixed batches did. Same cap, same requests, less waiting.
+ */
+export async function inPool<T>(
   items: T[],
   size: number,
   work: (item: T) => Promise<void>
 ): Promise<void> {
-  for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(work));
-  }
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await work(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(size, items.length)) }, worker));
 }
 
 export { STRONG_MATCH };

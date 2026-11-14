@@ -197,6 +197,10 @@ function metricsTable(report: RunReport, firmsListed: number): string {
   for (const board of report.boards) {
     if (board.status !== 'ok') lines.push(`\nBoard ${board.status === 'failed' ? 'failed' : 'read in part'}: ${board.firm}: ${board.error ?? ''}`);
   }
+  const timed = report.boards.filter((b) => b.ms !== undefined).sort((a, b) => b.ms! - a.ms!);
+  if (timed.length) {
+    lines.push('', `Board read time: ${(timed.reduce((n, b) => n + b.ms!, 0) / 1000).toFixed(0)}s across boards · slowest: ${timed.slice(0, 5).map((b) => `${b.firm} ${(b.ms! / 1000).toFixed(1)}s`).join(', ')}`);
+  }
   lines.push('', '| Board | ATS | Status | Listed / total | Fetched | Published | Review | Not TX | Not entry | Over exp. | Off-topic |', '|---|---|---|---|---|---|---|---|---|---|---|');
   for (const board of report.boards) {
     const r = board.rejected;
