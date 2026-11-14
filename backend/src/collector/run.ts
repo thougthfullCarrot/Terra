@@ -126,6 +126,8 @@ export interface RunReport {
   bySource: Record<string, SourceCounts>;
   /** Per firm board, in firm-list order. */
   boards: BoardStatus[];
+  /** Wall-clock time of the board pass, in milliseconds. */
+  boardPassMs?: number;
   /** Boards read only in part this pass (counted in neither firmsFailed nor as clean). */
   firmsIncomplete: number;
   /** Openings that share a title and city with another on the same board, kept apart by their job ids. */
@@ -213,6 +215,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
   const statuses = new Map<FirmRow['id'], BoardStatus>();
   const reads = new Map<FirmRow['id'], RawJob[]>();
 
+  const passStarted = Date.now();
   await inPool(firms, concurrency, async (firm) => {
     const status: BoardStatus = { firm: firm.name, ats: firm.ats, status: 'ok', fetched: 0, kept: 0, review: 0, rejected: emptyRejected(), ids: [] };
     statuses.set(firm.id, status);
@@ -240,6 +243,8 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
       await store.markFirmPolled(firm.id, { ok: true, error: message });
     }
   });
+
+  report.boardPassMs = Date.now() - passStarted;
 
   /** legacy id -> the board that first kept a seat under it. */
   const legacyOwner = new Map<string, FirmRow['id']>();

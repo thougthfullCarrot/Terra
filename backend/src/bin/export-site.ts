@@ -199,7 +199,15 @@ function metricsTable(report: RunReport, firmsListed: number): string {
   }
   const timed = report.boards.filter((b) => b.ms !== undefined).sort((a, b) => b.ms! - a.ms!);
   if (timed.length) {
-    lines.push('', `Board read time: ${(timed.reduce((n, b) => n + b.ms!, 0) / 1000).toFixed(0)}s across boards · slowest: ${timed.slice(0, 5).map((b) => `${b.firm} ${(b.ms! / 1000).toFixed(1)}s`).join(', ')}`);
+    const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+    // What the old fixed batches of 4 (in firm-list order) would have waited, from these same read times.
+    let batched = 0;
+    for (let i = 0; i < report.boards.length; i += 4) batched += Math.max(0, ...report.boards.slice(i, i + 4).map((b) => b.ms ?? 0));
+    lines.push(
+      '',
+      `Board pass: ${sec(report.boardPassMs ?? 0)} wall · fixed batches of 4 would wait ${sec(batched)} · ${sec(timed.reduce((n, b) => n + b.ms!, 0))} summed across boards`,
+      `Slowest boards: ${timed.slice(0, 5).map((b) => `${b.firm} ${sec(b.ms!)}`).join(', ')}`
+    );
   }
   lines.push('', '| Board | ATS | Status | Listed / total | Fetched | Published | Review | Not TX | Not entry | Over exp. | Off-topic |', '|---|---|---|---|---|---|---|---|---|---|---|');
   for (const board of report.boards) {
