@@ -909,6 +909,21 @@ document.addEventListener('visibilitychange', () => {
    choice saved by the old toggle is cleared.
    --------------------------------------------------------------------------- */
 
+/* The TERRA wordmark goes to the landing page: the welcome page for a signed
+   out visitor (the site root), the Home page for a member. */
+function startBrand() {
+  const brand = document.querySelector('.appbar .brand');
+  if (!brand) return;
+  brand.addEventListener('click', (event) => {
+    const home = document.getElementById('tab-home');
+    if (home && !home.hidden) {
+      event.preventDefault();
+      location.hash = 'home';
+      scrollTo({ top: 0 });
+    }
+  });
+}
+
 function startTheme() {
   document.documentElement.dataset.theme = 'dark';
   try {
@@ -949,6 +964,7 @@ redirectRetired();
 window.addEventListener('hashchange', redirectRetired);
 
 startTheme();
+startBrand();
 startMarkets();
 startTracker({
   toast,

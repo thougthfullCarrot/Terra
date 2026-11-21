@@ -83,7 +83,7 @@ const shot = async (page, name) => shots && page.screenshot({ path: `${shots}/${
 
 const SECTIONS = [
   ['jobs', '', '#list .card'],
-  ['map', '#markets&tool=map', '#m-body .devx, #m-body .state'],
+  ['map', '#markets&tool=map', '#m-body .devx-overview, #m-body .devx, #m-body .state'],
   ['markets', '#markets', '#m-body > *'],
   ['news', '#news', '#n-list .news-item'],
   ['deal', before ? '#property&tool=deal&city=San%20Antonio' : '#news&view=deal&city=San%20Antonio', '.deal-card, .deal-none'],

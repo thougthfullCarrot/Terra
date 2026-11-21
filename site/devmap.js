@@ -144,6 +144,8 @@ export function developmentMap({ data, cities, city, bids, onCity, back = null }
     const menu = el('label', 'devx-city-menu');
     const select = el('select');
     select.setAttribute('aria-label', 'City');
+    // In the workspace, "All Texas" goes back to the overview (devoverview.js).
+    if (back) select.append(new Option('All Texas', ''));
     for (const name of cities) select.append(new Option(name, name));
     select.value = city;
     select.addEventListener('change', () => onCity(select.value));

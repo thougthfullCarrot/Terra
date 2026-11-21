@@ -13773,3 +13773,74 @@ button.primary, .button.primary, a.primary {
 button.primary:hover, .button.primary:hover, a.primary:hover { background: #c9c9d4; border-color: #c9c9d4; }
 a { text-underline-offset: 3px; }
 h1 { font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spacing: -0.005em; }
+
+/* ---- Development map overview (devoverview.js): all of Texas first, in
+   the Horizon look; a metro opens the street map. ---- */
+.devx-overview {
+  --hz: 240 240 250;
+  position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 14px;
+  height: calc(100svh - 64px); min-height: 560px; padding: 28px clamp(16px, 3vw, 36px) 22px;
+  background: radial-gradient(60% 55% at 60% 55%, rgb(var(--hz) / 0.045), transparent 70%), #050607;
+  color: rgb(var(--hz)); overflow: hidden;
+}
+.devo-head { position: relative; z-index: 2; pointer-events: none; }
+.devo-eyebrow {
+  margin: 0; font: 600 12px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%;
+  letter-spacing: 0.2em; text-transform: uppercase; color: rgb(var(--hz) / 0.6);
+}
+.devo-title {
+  margin: 6px 0 0; font: 800 clamp(48px, 7vw, 104px)/0.9 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%;
+  text-transform: uppercase; letter-spacing: -0.01em; color: rgb(var(--hz));
+}
+.devo-hint { margin: 10px 0 0; font-size: 14px; color: rgb(var(--hz) / 0.55); }
+.devo-stage { position: relative; min-height: 0; display: grid; place-items: center; }
+.devo-map { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.devo-land { fill: rgb(var(--hz) / 0.035); stroke: rgb(var(--hz) / 0.32); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.devo-pt { fill: rgb(var(--hz) / 0.85); stroke: rgb(5 6 7 / 0.9); stroke-width: 0.6; }
+.devo-pt.approx { fill: none; stroke: rgb(var(--hz) / 0.6); stroke-width: 0.9; }
+.devo-hub { cursor: pointer; outline: none; }
+.devo-ring { fill: rgb(var(--hz) / 0.05); stroke: rgb(var(--hz) / 0.55); stroke-width: 1; vector-effect: non-scaling-stroke; transition: fill 220ms, stroke 220ms; }
+.devo-hit { fill: transparent; stroke: none; }
+.devo-label {
+  fill: rgb(var(--hz)); font-family: 'Archivo', 'Arial Narrow', sans-serif; font-weight: 700; font-stretch: 112%; letter-spacing: 0.08em;
+  paint-order: stroke; stroke: #050607; stroke-linejoin: round; pointer-events: none;
+}
+.devo-hub:hover .devo-ring,
+.devo-hub:focus-visible .devo-ring { fill: rgb(var(--hz) / 0.16); stroke: rgb(var(--hz)); }
+.devo-hub:focus-visible .devo-label { text-decoration: underline; }
+.devo-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; font-size: 12px; color: rgb(var(--hz) / 0.55); }
+.devo-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.devo-legend i { display: inline-block; width: 8px; height: 8px; }
+.devo-legend .sq { background: rgb(var(--hz) / 0.85); }
+.devo-legend .dot { background: rgb(var(--hz) / 0.85); border-radius: 50%; }
+.devo-legend .ring { border: 1.2px solid rgb(var(--hz) / 0.6); border-radius: 50%; }
+.devo-metros { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.devo-metros::-webkit-scrollbar { display: none; }
+.devo-metro {
+  flex: none; height: 38px; padding: 0 16px; border: 1px solid rgb(var(--hz) / 0.22); border-radius: 4px; background: none; cursor: pointer;
+  font: 600 12px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: 0.14em; text-transform: uppercase; color: rgb(var(--hz) / 0.75);
+  transition: color 200ms, border-color 200ms, background 200ms;
+}
+.devo-metro .n { color: rgb(var(--hz) / 0.5); margin-left: 4px; }
+.devo-metro:hover { color: rgb(var(--hz)); border-color: rgb(var(--hz) / 0.6); }
+.devo-metro.on { background: rgb(var(--hz)); color: #050607; border-color: rgb(var(--hz)); }
+@media (prefers-reduced-motion: no-preference) {
+  .devo-head > * { animation: hz-in-up 800ms var(--ease-out) backwards; }
+  .devo-title { animation-delay: 80ms !important; }
+  .devo-land { stroke-dasharray: 3000; animation: devo-draw 1600ms 100ms var(--ease-out) backwards; }
+  .devo-pt { animation: devo-pop 600ms var(--ease-out) backwards; animation-delay: calc(500ms + var(--i, 0) * 18ms); }
+  .devo-hub { animation: hz-in-up 700ms 900ms var(--ease-out) backwards; }
+  .devo-metros { animation: hz-in-up 700ms 300ms var(--ease-out) backwards; }
+}
+@keyframes devo-draw { from { stroke-dashoffset: 3000; } to { stroke-dashoffset: 0; } }
+@keyframes devo-pop { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 640px) {
+  .devx-overview { height: calc(100svh - 64px - 60px); min-height: 520px; padding-top: 20px; }
+}
+
+@media (min-width: 900px) {
+  /* The title floats over the map's empty top-left, as on the landing page. */
+  .devx-overview { grid-template-rows: minmax(0, 1fr) auto auto; }
+  .devo-head { position: absolute; top: 28px; left: clamp(16px, 3vw, 36px); }
+  .devo-stage { margin-top: 24px; }
+}
