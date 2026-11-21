@@ -13434,3 +13434,74 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
   .devx-body .devx-panel { animation: hz-in-right 520ms var(--ease-out) backwards; }
 }
 @keyframes hz-in-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+/* ---- The top bar on the development map page, in the Horizon look so it
+   matches the map under it. Only while the map is open
+   (markets-view.js sets body[data-workspace='map']); every other page
+   keeps the current bar. The phone's bottom tabs live in .tabs too. ---- */
+body[data-workspace='map'] .appbar {
+  --hz-w: 240 240 250;
+  --bg: #050607;
+  --surface: #0c0e10;
+  --ink: rgb(var(--hz-w));
+  --ink2: rgb(var(--hz-w) / 0.7);
+  --muted: rgb(var(--hz-w) / 0.55);
+  --line: rgb(var(--hz-w) / 0.12);
+  --chip: rgb(var(--hz-w) / 0.05);
+  --accent: rgb(var(--hz-w));
+  --on-accent: #050607;
+  --appbar: #050607;
+  background: #050607;
+  border-bottom: 1px solid rgb(var(--hz-w) / 0.1);
+  color: rgb(var(--hz-w));
+}
+body[data-workspace='map'] .appbar .brand-mark { background: rgb(240 240 250); color: #050607; border-radius: 3px; }
+body[data-workspace='map'] .appbar .brand-name {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.3em; font-size: 15px;
+}
+body[data-workspace='map'] .appbar .tabs { background: #050607; }
+body[data-workspace='map'] .appbar .tab {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: rgb(240 240 250 / 0.55); background: none; box-shadow: none; border-radius: 0;
+  transition: color 200ms;
+}
+body[data-workspace='map'] .appbar .tab:hover { color: rgb(240 240 250); background: none; }
+body[data-workspace='map'] .appbar .tab[aria-current='page'] {
+  color: rgb(240 240 250); background: none; box-shadow: inset 0 -1px 0 rgb(240 240 250);
+}
+body[data-workspace='map'] .appbar .tab-count { color: rgb(240 240 250 / 0.45); background: none; }
+body[data-workspace='map'] .appbar .head-search {
+  background: rgb(240 240 250 / 0.04); border: 1px solid rgb(240 240 250 / 0.14); border-radius: 4px;
+}
+body[data-workspace='map'] .appbar .head-search input { color: rgb(240 240 250); font-family: 'Manrope', system-ui, sans-serif; }
+body[data-workspace='map'] .appbar .head-search input::placeholder { color: rgb(240 240 250 / 0.45); }
+body[data-workspace='map'] .appbar .search-hint { background: none; border: 1px solid rgb(240 240 250 / 0.2); color: rgb(240 240 250 / 0.5); border-radius: 3px; }
+body[data-workspace='map'] .appbar .theme-button,
+body[data-workspace='map'] .appbar .signin-jump {
+  background: none; color: rgb(240 240 250); border: 1px solid rgb(240 240 250 / 0.35); border-radius: 4px;
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+}
+body[data-workspace='map'] .appbar .theme-button:hover { background: rgb(240 240 250); color: #050607; }
+body[data-workspace='map'] .appbar .tab-slider { display: none; }
+body[data-workspace='map'] .appbar .tabs .tab[aria-current='page'] { color: rgb(240 240 250); background: none; }
+@media (max-width: 640px) {
+  body[data-workspace='map'] .appbar .tab { font-size: 10px; letter-spacing: 0.08em; font-stretch: 100%; padding-inline: 0; }
+  body[data-workspace='map'] .appbar .tabs .tab[aria-current='page'] { box-shadow: inset 0 1px 0 rgb(240 240 250); }
+}
+/* Match the Horizon landing page's bar: wordmark only, links on the right,
+   a short underline under the open page. Search and the theme switch are
+   left out here: the map is always dark, and that search is for roles. */
+body[data-workspace='map'] .appbar .brand-mark,
+body[data-workspace='map'] .appbar .brand-tag,
+body[data-workspace='map'] .appbar .head-search,
+body[data-workspace='map'] .appbar .theme-button { display: none; }
+body[data-workspace='map'] .appbar .brand-name { font-size: 17px; letter-spacing: 0.32em; }
+@media (min-width: 641px) {
+  body[data-workspace='map'] .appbar .tabs { margin-left: auto; gap: 28px; align-items: center; }
+  body[data-workspace='map'] .appbar .tab { font-size: 12.5px; padding: 6px 0; margin: 0; align-self: center; border-bottom: 0; }
+  body[data-workspace='map'] .appbar .tabs .tab[aria-current='page'] { box-shadow: inset 0 -1px 0 rgb(240 240 250); }
+  body[data-workspace='map'] .appbar .appbar-actions { margin-left: 28px; }
+}
