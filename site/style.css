@@ -13350,3 +13350,87 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
 .devx-body .leaflet-bar { border: 1px solid var(--line); border-radius: 4px; box-shadow: none; }
 .devx-body .leaflet-control-attribution { background: rgb(5 6 7 / 0.7); color: var(--muted); }
 .devx-body .leaflet-control-attribution a { color: rgb(var(--hz-white) / 0.75); }
+
+/* ---- Development map: Horizon motion. Everything here is decoration on
+   top of the existing markers and panels, and all of it is off when the
+   visitor asks for reduced motion. Leaflet positions the marker element
+   itself, so animations go on its children and pseudo-elements only. ---- */
+@media (prefers-reduced-motion: no-preference) {
+  /* Panels slide in once when the map opens. */
+  .devx-body .devx-side { animation: hz-in-left 700ms var(--ease-out) backwards; }
+  .devx-body .devx-filters { animation: hz-in-down 700ms 120ms var(--ease-out) backwards; }
+  .devx-body .devx-chart { animation: hz-in-up 700ms 200ms var(--ease-out) backwards; }
+
+  /* Price tags and icons rise into place whenever they are drawn. */
+  .devx-body .devx-pill,
+  .devx-body .devx-pin { animation: hz-rise 620ms var(--ease-out) backwards; }
+  .devx-body .devx-pill-icon:hover .devx-pill { transform: translateY(-3px); }
+  .devx-body .devx-pill { transition: transform 220ms var(--ease-out), background 220ms, color 220ms; }
+
+  /* A soft light glows on the ground where each price tag points, and
+     brightens on hover or selection. */
+  .devx-body .devx-pill-icon::before {
+    content: ""; position: absolute; left: 6px; bottom: -14px; width: 16px; height: 16px; border-radius: 50%;
+    background: radial-gradient(circle, rgb(240 240 250 / 0.55) 0%, rgb(240 240 250 / 0.12) 40%, transparent 70%);
+    pointer-events: none; animation: hz-glow 3.2s ease-in-out infinite;
+  }
+  .devx-body .devx-pill-icon:hover::before,
+  .devx-body .devx-pill-icon.lit::before,
+  .devx-body .devx-pill-icon.chosen::before { background: radial-gradient(circle, rgb(240 240 250 / 0.95) 0%, rgb(240 240 250 / 0.25) 40%, transparent 70%); animation: none; }
+
+  /* A ripple on the ground under the selected or hovered project. */
+  .devx-body .devx-pill-icon::after,
+  .devx-body .devx-pin-icon::after {
+    content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid rgb(240 240 250 / 0.8); opacity: 0; pointer-events: none;
+  }
+  .devx-body .devx-pill-icon::after { left: 7px; bottom: -13px; }
+  .devx-body .devx-pin-icon::after { left: 50%; top: 50%; margin: -7px 0 0 -7px; }
+  .devx-body .devx-pill-icon.chosen::after,
+  .devx-body .devx-pin-icon.chosen::after,
+  .devx-body .devx-pill-icon:hover::after,
+  .devx-body .devx-pin-icon:hover::after { animation: hz-ripple 1.8s var(--ease-out) infinite; }
+
+  /* One slow light sweep across the map when it opens. */
+  .devx-body .devx-mapwrap::after {
+    content: ""; position: absolute; inset: 0; z-index: 402; pointer-events: none;
+    background: linear-gradient(100deg, transparent 40%, rgb(240 240 250 / 0.06) 50%, transparent 60%);
+    background-size: 250% 100%; animation: hz-sweep 2.4s 300ms var(--ease-in-out) backwards;
+  }
+
+  /* Filings-by-month bars grow up from the axis. */
+  .devx-body .devx-bar-col i { transform-origin: bottom; animation: hz-grow 800ms var(--ease-out) backwards; }
+  .devx-body .devx-bar-col:nth-child(3n+1) i { animation-delay: 300ms; }
+  .devx-body .devx-bar-col:nth-child(3n+2) i { animation-delay: 380ms; }
+  .devx-body .devx-bar-col:nth-child(3n) i { animation-delay: 460ms; }
+
+  /* List rows: a soft highlight slides in on hover. */
+  .devx-body .dev-item { transition: background 200ms, box-shadow 200ms; }
+  .devx-body .dev-item:hover { background: rgb(240 240 250 / 0.04); box-shadow: inset 2px 0 0 rgb(240 240 250 / 0.7); }
+}
+.devx-body .devx-pill-icon { position: relative; overflow: visible; }
+
+@keyframes hz-in-left { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes hz-in-down { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes hz-in-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes hz-rise { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
+@keyframes hz-glow { 50% { opacity: 0.45; } }
+@keyframes hz-ripple { 0% { opacity: 0.9; transform: scale(0.4); } 100% { opacity: 0; transform: scale(2.6); } }
+@keyframes hz-sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+@keyframes hz-grow { from { transform: scaleY(0); } to { transform: none; } }
+
+/* Map hover labels in the Horizon look. */
+.devx-body .leaflet-tooltip {
+  color: rgb(240 240 250); background: rgb(12 14 16 / 0.92); border: 1px solid rgb(240 240 250 / 0.18);
+  border-radius: 4px; box-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.9); font: 500 12.5px var(--ui);
+}
+.devx-body .leaflet-tooltip-top::before { border-top-color: rgb(240 240 250 / 0.18); }
+.devx-body .leaflet-tooltip-bottom::before { border-bottom-color: rgb(240 240 250 / 0.18); }
+.devx-body .devx-panel a,
+.devx-body .devx-panel-foot > *,
+.devx-body .devx-tile { border-radius: 4px; }
+.devx-body .devx-panel-foot a:first-child { background: rgb(240 240 250); color: #050607; }
+@media (prefers-reduced-motion: no-preference) {
+  .devx-body .devx-panel { animation: hz-in-right 520ms var(--ease-out) backwards; }
+}
+@keyframes hz-in-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
