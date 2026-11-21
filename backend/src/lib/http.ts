@@ -48,6 +48,15 @@ interface HostGroup {
   pausedUntil: number;
   /** 429 answers seen, for the run report. */
   throttled: number;
+  /** Shared pause spent so far, against the budget below. */
+  pausedMs: number;
+  /**
+   * Most shared pause one process may spend. When an edge keeps throttling,
+   * pausing on every 429 would stall the build for good (a PR build hit the
+   * 30-minute step limit that way), so past the budget a 429 is retried with
+   * the plain backoff and then counted as a failed read, as before.
+   */
+  budgetMs: number;
 }
 
 const GROUPS: Record<string, HostGroup> = {};
@@ -69,13 +78,20 @@ function group(name: string): HostGroup {
     active: 0,
     queue: [],
     pausedUntil: 0,
-    throttled: 0
+    throttled: 0,
+    pausedMs: 0,
+    budgetMs: Number(process.env[`${name.toUpperCase()}_PAUSE_BUDGET_MS`] ?? 90_000)
   });
 }
 
 /** 429s per host group so far this process (Workday: how often the edge pushed back). */
 export function throttleCounts(): Record<string, number> {
   return Object.fromEntries(Object.entries(GROUPS).map(([name, g]) => [name, g.throttled]));
+}
+
+/** Shared pause spent per host group, in seconds. */
+export function pauseSeconds(): Record<string, number> {
+  return Object.fromEntries(Object.entries(GROUPS).map(([name, g]) => [name, Math.round(g.pausedMs / 1000)]));
 }
 
 /** For tests: forget every group's state. */
@@ -157,7 +173,7 @@ async function request<T>(
   const gate = groupName ? group(groupName) : null;
   // A shared edge that rate-limits gets more patience: the pause is shared, so
   // a few extra tries cost little and save the board from a partial read.
-  const tries = gate ? Math.max(retries, 4) : retries;
+  let tries = gate ? Math.max(retries, 4) : retries;
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= tries; attempt++) {
@@ -186,8 +202,16 @@ async function request<T>(
         );
         if (gate && response.status === 429) {
           gate.throttled++;
-          pause = retryAfterMs(response, Math.max(5000, backoffMs(attempt, baseDelayMs)));
-          gate.pausedUntil = Math.max(gate.pausedUntil, Date.now() + pause);
+          const want = retryAfterMs(response, Math.max(3000, backoffMs(attempt, baseDelayMs)));
+          // Only the part that extends the current pause is new waiting.
+          const extra = Math.max(0, Date.now() + want - Math.max(gate.pausedUntil, Date.now()));
+          if (gate.pausedMs + extra <= gate.budgetMs) {
+            gate.pausedMs += extra;
+            gate.pausedUntil = Math.max(gate.pausedUntil, Date.now() + want);
+            pause = want;
+          } else {
+            tries = Math.min(tries, retries);
+          }
         }
         if (!retryable(response.status) || attempt === tries) throw error;
         lastError = error;

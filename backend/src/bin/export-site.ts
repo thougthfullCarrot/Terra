@@ -39,7 +39,7 @@ import { publishAs, resolveIdentity } from '../site/identity.js';
 import { sheetsClientFromEnv } from '../sheets/env.js';
 import { firmStatuses, loadFirms } from '../sheets/firms.js';
 import { DETAIL_MAX_AGE_HOURS, useDetailCache, type DetailCache, type DetailCacheEntry } from '../collector/sources/workday.js';
-import { throttleCounts } from '../lib/http.js';
+import { pauseSeconds, throttleCounts } from '../lib/http.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = resolve(here, '../../../site/postings.json');
@@ -246,7 +246,7 @@ function metricsTable(report: RunReport, firmsListed: number): string {
       byAts.set(b.ats, row);
     }
     const throttled = throttleCounts();
-    lines.push(`Throttled (HTTP 429, shared pause): ${Object.entries(throttled).map(([g, n]) => `${g} ${n}`).join(', ') || 'none'} · Workday details reused: ${report.boards.reduce((n, b) => n + (b.reused ?? 0), 0)}`);
+    lines.push(`Throttled (HTTP 429): ${Object.entries(throttled).map(([g, n]) => `${g} ${n} answers, ${pauseSeconds()[g]}s shared pause`).join(', ') || 'none'} · Workday details reused: ${report.boards.reduce((n, b) => n + (b.reused ?? 0), 0)}`);
     lines.push(`Boards by platform: ${[...byAts].map(([ats, r]) => `${ats} ${r.boards} boards ${r.requests} req ${sec(r.ms)}`).join(' · ')}`);
   }
   for (const a of report.aggregators) {

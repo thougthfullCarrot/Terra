@@ -80,6 +80,17 @@ describe('Workday host group', () => {
     await Promise.all(Array.from({ length: 8 }, (_, i) => fetchJson(`https://t${i}.wd1.myworkdayjobs.com/x`, { fetchImpl, baseDelayMs: 1 })));
     expect(peak).toBeLessThanOrEqual(3);
     expect(throttleCounts().workday).toBe(1);
-    expect(Date.now() - started).toBeGreaterThanOrEqual(4900); // 5s minimum shared pause
+    expect(Date.now() - started).toBeGreaterThanOrEqual(2900); // 3s minimum shared pause
   }, 15_000);
+  it('stops pausing once the shared budget is spent, so a throttling edge cannot stall the build', async () => {
+    process.env.WORKDAY_PAUSE_BUDGET_MS = '0';
+    try {
+      const fetchImpl = (async () => new Response('', { status: 429 })) as unknown as typeof fetch;
+      const started = Date.now();
+      await expect(fetchJson('https://t.wd1.myworkdayjobs.com/x', { fetchImpl, baseDelayMs: 1, retries: 2 })).rejects.toThrow('429');
+      expect(Date.now() - started).toBeLessThan(1000);
+    } finally {
+      delete process.env.WORKDAY_PAUSE_BUDGET_MS;
+    }
+  });
 });
