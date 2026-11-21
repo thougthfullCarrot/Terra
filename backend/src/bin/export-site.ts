@@ -6,6 +6,7 @@
  *   npm run export:site -- --history <path>   # how long each job has been up (site/history.ts)
  *   npm run export:site -- --retain <path>    # keep jobs of a board that failed this build (site/retain.ts)
  *   npm run export:site -- --coverage <path>  # per-board status and counts, as JSON
+ *   npm run export:site -- --excluded <path>  # every board posting the filters left out, for audits
  *
  * Needs no database: the firm list is read from the seed migration, as
  * verify-firms does, and the pass runs against an in-memory store. What lands
@@ -121,7 +122,12 @@ async function main(): Promise<void> {
 
   // The held postings are listed in full in the review file, not in the log,
   // and the per-board ids in the coverage file.
-  const { review, boards: _boards, ...summary } = report;
+  const { review, boards: _boards, excluded, ...summary } = report;
+  const excludedPath = flag('--excluded');
+  if (excludedPath) {
+    await writeFile(resolve(excludedPath), `${JSON.stringify(excluded ?? [])}\n`);
+    console.log(`Excluded: ${excluded?.length ?? 0} board postings written to ${excludedPath}.`);
+  }
   console.log(JSON.stringify({ ...summary, out }, null, 2));
 
   const reviewFlag = process.argv.indexOf('--review');
@@ -209,11 +215,23 @@ function metricsTable(report: RunReport, firmsListed: number): string {
       `Board reads: ${report.boards.length} boards · ${report.boards.filter((b) => b.status === 'ok').length} read in full · ${report.boards.filter((b) => b.status === 'incomplete').length} in part · ${report.boards.filter((b) => b.status === 'failed').length} failed · ${report.boards.reduce((n, b) => n + (b.requests ?? 0), 0)} requests · ${report.boards.reduce((n, b) => n + (b.retries ?? 0), 0)} retries (${report.boards.filter((b) => b.retries).map((b) => `${b.firm} ${b.retries}`).join(', ') || 'none'})`,
       `Slowest boards: ${timed.slice(0, 5).map((b) => `${b.firm} ${sec(b.ms!)}`).join(', ')}`
     );
+    const byAts = new Map<string, { boards: number; ms: number; requests: number }>();
+    for (const b of report.boards) {
+      const row = byAts.get(b.ats) ?? { boards: 0, ms: 0, requests: 0 };
+      row.boards++;
+      row.ms += b.ms ?? 0;
+      row.requests += b.requests ?? 0;
+      byAts.set(b.ats, row);
+    }
+    lines.push(`Boards by platform: ${[...byAts].map(([ats, r]) => `${ats} ${r.boards} boards ${r.requests} req ${sec(r.ms)}`).join(' · ')}`);
   }
-  lines.push('', '| Board | ATS | Status | Listed / total | Fetched | Published | Review | Not TX | Not entry | Over exp. | Off-topic |', '|---|---|---|---|---|---|---|---|---|---|---|');
+  for (const a of report.aggregators) {
+    if (a.ms !== undefined) lines.push(`Aggregator ${a.name}: ${(a.ms / 1000).toFixed(1)}s · ${a.requests ?? 0} requests · ${a.retries ?? 0} retries · fetched ${a.fetched} · kept ${a.kept}`);
+  }
+  lines.push('', '| Board | ATS | Status | Listed / total | Fetched | Published | Review | Not TX | Not entry | Over exp. | Off-topic | Read time | Requests |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const board of report.boards) {
     const r = board.rejected;
-    lines.push(`| ${board.firm} | ${board.ats} | ${board.status} | ${board.listed ?? '?'} / ${board.total ?? '?'} | ${board.fetched} | ${board.kept} | ${board.review} | ${r['not-texas']} | ${r['not-entry-level']} | ${r['over-experience']} | ${r['off-topic']} |`);
+    lines.push(`| ${board.firm} | ${board.ats} | ${board.status} | ${board.listed ?? '?'} / ${board.total ?? '?'} | ${board.fetched} | ${board.kept} | ${board.review} | ${r['not-texas']} | ${r['not-entry-level']} | ${r['over-experience']} | ${r['off-topic']} | ${board.ms !== undefined ? `${(board.ms / 1000).toFixed(1)}s` : '?'} | ${board.requests ?? '?'} |`);
   }
   return lines.join('\n');
 }

@@ -131,7 +131,7 @@ jobs:
           SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
-          npm run --silent export:site -- --history ../job-history.json --retain ../job-retain.json --coverage ../job-coverage.json --review ../job-review.json --samples 2>&1 | tee /tmp/export.log
+          npm run --silent export:site -- --history ../job-history.json --retain ../job-retain.json --coverage ../job-coverage.json --review ../job-review.json --excluded ../job-excluded.json --samples 2>&1 | tee /tmp/export.log
 
       # Postings held back because they state no experience and nothing says
       # entry level. Kept as a run artifact for a person to look through;
@@ -643,6 +643,26 @@ jobs:
             cat ../site/stats.json
           fi
 
+      # Pull requests only: the measurements a reviewer needs, gathered while the
+      # development lists and excluded jobs are still on disk, printed at the end.
+      - name: Gather review measurements
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          {
+            echo '=== MEASURE: job feed ==='
+            sed -n '/^### Job feed/,/^| Board |/p' /tmp/export.log | grep -v '^| Board' || true
+            grep -E '^(Firm list|Retained|Identity|Excluded|Detail cache)' /tmp/export.log || true
+            echo '=== MEASURE: boards ==='
+            grep -E '^\| [^-B]' /tmp/export.log | grep -E '\| (ok|incomplete|failed) \|' || true
+            echo '=== MEASURE: by market ==='
+            [ -f ../site/postings.json ] && jq -c '{jobs: (.jobs | length), byCity: ([.jobs[].city] | group_by(.) | map({(.[0]): length}) | add)}' ../site/postings.json || true
+            echo '=== MEASURE: excluded audit ==='
+            [ -f ../job-excluded.json ] && npm run --silent audit:excluded -- ../job-excluded.json || true
+            echo '=== MEASURE: employer leads ==='
+            [ -d ../site/developments ] && npm run --silent employer:leads -- ../site/developments --top 30 || true
+          } > /tmp/measure.txt 2>&1
+
       # With accounts on, the feed is members-only: it must not also sit at a public URL.
       - name: Keep the feed out of the public site
         if: steps.accounts.outputs.enabled == 'true'
@@ -656,6 +676,10 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+      - name: Print review measurements
+        if: always() && github.event_name == 'pull_request'
+        run: cat /tmp/measure.txt 2>/dev/null || echo 'No measurements.'
 
   deploy:
     needs: build

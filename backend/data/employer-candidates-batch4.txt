@@ -1,0 +1,83 @@
+# Employer discovery, batch 4 (2026-11-21): larger Texas real estate employers.
+#
+# Not on the firm list, firm-candidates.txt or batches 1 to 3. Batch 2 showed
+# small Texas firms mostly post on ADP, UKG or Paylocity (no permitted reader),
+# so this batch leans to employers big enough to run Workday, Greenhouse,
+# iCIMS, Lever, SmartRecruiters or Workable boards. The first group comes from
+# TERRA's own development filings: owners that file the most Texas projects
+# (src/market/developers.ts, matched from TDLR owner names, which are often
+# project LLCs resolved to the operating company). Each line is a candidate,
+# not a fact; `discover:ats --check` decides.
+#
+# Name | website hint | sector | markets
+
+# --- From TERRA development filings (TDLR owners) ---
+Hines | hines.com | Development | Houston; Dallas; Austin
+Trammell Crow Company | trammellcrow.com | Development | Dallas; Houston; Austin
+Stream Realty Partners | streamrealty.com | Brokerage | Dallas; Houston; Austin; San Antonio
+Majestic Realty | majesticrealty.com | Development | Dallas; Houston
+Ryan Companies | ryancompanies.com | Development | Dallas; Austin; Houston
+Thompson Thrift | thompsonthrift.com | Development | Houston; San Antonio; Austin
+Brookfield Properties | brookfieldproperties.com | Investment | Houston; Dallas
+
+# --- General contractors ---
+Austin Industries | austin-ind.com | Construction | Dallas; Houston; Austin; San Antonio
+McCarthy Building Companies | mccarthy.com | Construction | Dallas; Houston; Austin
+Turner Construction | turnerconstruction.com | Construction | Dallas; Houston; Austin; San Antonio
+DPR Construction | dpr.com | Construction | Dallas; Houston; Austin; San Antonio
+Balfour Beatty US | balfourbeattyus.com | Construction | Dallas; Houston; Austin
+Manhattan Construction | manhattanconstructiongroup.com | Construction | Dallas; Houston; Austin
+SpawGlass | spawglass.com | Construction | Houston; San Antonio; Austin
+Joeris General Contractors | joeris.com | Construction | San Antonio; Austin; Dallas
+Linbeck | linbeck.com | Construction | Houston; Dallas; Austin
+Satterfield & Pontikes | satpon.com | Construction | Houston; Dallas; Austin
+Gilbane Building Company | gilbaneco.com | Construction | Houston; Dallas; Austin
+Whiting-Turner | whiting-turner.com | Construction | Dallas; Houston; Austin
+Hoar Construction | hoar.com | Construction | Dallas; Houston; Austin
+Brasfield & Gorrie | brasfieldgorrie.com | Construction | Dallas; Houston
+JE Dunn Construction | jedunn.com | Construction | Dallas; Houston; Austin
+Swinerton | swinerton.com | Construction | Dallas; Houston; Austin
+Clayco | claycorp.com | Construction | Dallas; Houston
+
+# --- Homebuilders ---
+Toll Brothers | tollbrothers.com | Homebuilder | Dallas; Houston; Austin; San Antonio
+KB Home | kbhome.com | Homebuilder | Houston; Austin; San Antonio
+Meritage Homes | meritagehomes.com | Homebuilder | Dallas; Houston; Austin; San Antonio
+M/I Homes | mihomes.com | Homebuilder | Dallas; Houston; Austin; San Antonio
+Tri Pointe Homes | tripointehomes.com | Homebuilder | Dallas; Houston; Austin
+Beazer Homes | beazer.com | Homebuilder | Dallas; Houston
+Perry Homes | perryhomes.com | Homebuilder | Houston; Dallas; Austin; San Antonio
+Brookfield Residential | brookfieldresidential.com | Homebuilder | Dallas; Houston; Austin
+
+# --- Brokerages ---
+Newmark | nmrk.com | Brokerage | Dallas; Houston; Austin; San Antonio
+Marcus & Millichap | marcusmillichap.com | Brokerage | Dallas; Houston; Austin; San Antonio
+Compass | compass.com | Brokerage | Dallas; Houston; Austin
+Anywhere Real Estate | anywhere.re | Brokerage | Dallas; Houston; Austin
+Redfin | redfin.com | Brokerage | Dallas; Houston; Austin; San Antonio
+Zillow | zillow.com | Brokerage | Dallas; Houston; Austin
+
+# --- Owners and operators ---
+AMLI Residential | amli.com | Investment | Dallas; Houston; Austin
+American Homes 4 Rent | ah4r.com | Investment | Dallas; Houston; San Antonio
+Tricon Residential | triconresidential.com | Investment | Dallas; Houston
+Progress Residential | progressresidential.com | Investment | Dallas; Houston; San Antonio
+Extra Space Storage | extraspace.com | Investment | Dallas; Houston; Austin
+Public Storage | publicstorage.com | Investment | Dallas; Houston; Austin
+Mission Rock Residential | missionrockresidential.com | Property Management | Dallas; Houston
+
+# --- Lenders and title ---
+Bank OZK | ozk.com | Lending | Dallas
+Amegy Bank | amegybank.com | Lending | Houston; Dallas; San Antonio
+Prosperity Bank | prosperitybankusa.com | Lending | Houston; Dallas; Austin
+KeyBank | key.com | Lending | Dallas
+PNC | pnc.com | Lending | Dallas; Houston
+Regions Bank | regions.com | Lending | Dallas; Houston
+Fidelity National Financial | fnf.com | Title | Dallas; Houston; Austin; San Antonio
+Ready Capital | readycapital.com | Lending | Dallas
+
+# --- Investment managers ---
+Clarion Partners | clarionpartners.com | Investment | Dallas
+Heitman | heitman.com | Investment | Dallas
+Ares Management | aresmgmt.com | Investment | Dallas; Houston
+CBRE Investment Management | cbreim.com | Investment | Dallas

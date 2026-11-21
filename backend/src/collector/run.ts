@@ -51,6 +51,10 @@ export interface AggregatorReport {
   /** Held for review instead of published. */
   review?: number;
   error?: string;
+  /** Wall time and HTTP requests the search took. */
+  ms?: number;
+  requests?: number;
+  retries?: number;
 }
 
 /** What one source contributed, so a thin feed can be traced to the collector behind it. */
@@ -89,6 +93,17 @@ export interface BoardStatus {
   /** HTTP requests the board took, and how many of them were retries. */
   requests?: number;
   retries?: number;
+}
+
+/** A board posting the filters left out. */
+export interface ExcludedJob {
+  reason: RejectReason;
+  role: string;
+  firm: string;
+  ats: string;
+  location: string;
+  url: string;
+  description: string;
 }
 
 /** A posting held back for a person to check, with the reason it was held. */
@@ -144,6 +159,8 @@ export interface RunReport {
   firmsWithOpenings: number;
   /** A few rejected postings per reason, so the filters can be spot-checked in the run log. */
   rejectedSamples: Partial<Record<RejectReason, { role: string; firm: string; location: string }[]>>;
+  /** Every board posting left out, with enough text to audit the filters (export-site --excluded). */
+  excluded?: ExcludedJob[];
   sectorGuessed: number;
   inserted: number;
   updated: number;
@@ -193,6 +210,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     kinds: { Internship: 0, 'Entry-level': 0 },
     firmsWithOpenings: 0,
     rejectedSamples: {},
+    excluded: [],
     sectorGuessed: 0,
     inserted: 0,
     updated: 0,
@@ -290,6 +308,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
         status.rejected[result.reason]++;
         const samples = (report.rejectedSamples[result.reason] ??= []);
         if (samples.length < SAMPLES_PER_REASON) samples.push({ role: job.title, firm: job.firm, location: job.location });
+        report.excluded!.push({ reason: result.reason, role: job.title, firm: job.firm, ats: firm.ats, location: job.location, url: job.applyUrl ?? '', description: (job.description ?? '').slice(0, 4000) });
         continue;
       }
       if (result.sectorGuessed) report.sectorGuessed++;
@@ -420,11 +439,17 @@ async function collectAggregator(
   };
 
   let raw: RawJob[];
+  const started = Date.now();
+  const tally = { retries: 0, requests: 0 };
   try {
-    raw = await aggregator.fetch();
+    raw = await requestTally.run(tally, () => aggregator.fetch());
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
     return result;
+  } finally {
+    result.ms = Date.now() - started;
+    result.requests = tally.requests;
+    result.retries = tally.retries;
   }
 
   result.fetched = raw.length;

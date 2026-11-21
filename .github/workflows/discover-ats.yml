@@ -89,3 +89,8 @@ jobs:
           echo "No firm resolved to an ATS. Either the domain guesses all missed,"
           echo "or careers pages are rendering their board links with JavaScript."
           exit 1
+
+      # Last, so the run's log tail carries the result (the full text is in the summary).
+      - name: Print the findings
+        if: always()
+        run: grep -vE '^\s*$' /tmp/discover.txt | tail -n 220 || true

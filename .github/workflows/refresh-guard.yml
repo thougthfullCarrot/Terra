@@ -1,0 +1,74 @@
+name: Refresh guard
+
+# GitHub fires scheduled workflows late or not at all when it is busy. Website
+# (site.yml) asks for a build every 2 hours ('20 */2 * * *'), but from
+# 2026-11-12 to 2026-11-21 GitHub started 30 of the ~114 scheduled runs: gaps
+# of 1.2 to 11.9 hours, median 8.3. Collect postings, a 6-second job on its own
+# 2-hour cron, slipped the same way, so the gap is GitHub's scheduler, not the
+# build (11-24 minutes) or a queue (no cancelled or waiting runs).
+#
+# This guard enforces a maximum interval instead of trusting the cron: every
+# 10 minutes it looks at the newest Website run on the default branch and,
+# when none is running and the last one started REFRESH_MAX_MINUTES ago or
+# more (default 120), dispatches one. A workflow_dispatch sent with the
+# workflow's own token is one of the events GitHub does run, so the chain needs
+# no personal token. Each guard run lasts about 5.5 hours, then dispatches the
+# next guard; the cron below only restarts the chain if it ever breaks.
+#
+# Cost: Actions minutes are free for public repositories (this repo must stay
+# public anyway, for free Pages). The guard mostly sleeps on one runner.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 */4 * * *'
+
+# One guard at a time; a second waits instead of running in parallel.
+concurrency:
+  group: refresh-guard
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  guard:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.repository.default_branch }}
+      MAX_MINUTES: ${{ vars.REFRESH_MAX_MINUTES || '120' }}
+    steps:
+      - name: Keep Website builds within the maximum interval
+        run: |
+          set -u
+          echo "## Refresh guard (max ${MAX_MINUTES} min between Website builds)" >> "$GITHUB_STEP_SUMMARY"
+          stop=$((SECONDS + 330 * 60))
+          while [ "$SECONDS" -lt "$stop" ]; do
+            runs=$(gh run list --workflow site.yml --branch "$BRANCH" --limit 10 --json createdAt,status,event 2>/dev/null || echo '[]')
+            active=$(echo "$runs" | jq '[.[] | select(.event != "pull_request" and (.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending"))] | length')
+            last=$(echo "$runs" | jq -r '[.[] | select(.event != "pull_request")][0].createdAt // empty')
+            now=$(date -u +%s)
+            if [ -n "$last" ]; then age=$(( (now - $(date -u -d "$last" +%s)) / 60 )); else age=99999; fi
+            stamp=$(date -u +%H:%MZ)
+            if [ "$active" -gt 0 ]; then
+              echo "$stamp build running (last started ${age} min ago)"
+            elif [ "$age" -ge "$MAX_MINUTES" ]; then
+              if gh workflow run site.yml --ref "$BRANCH"; then
+                echo "$stamp dispatched Website: last build started ${age} min ago" | tee -a "$GITHUB_STEP_SUMMARY"
+              else
+                echo "$stamp could not dispatch Website" | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              echo "$stamp ok: last build started ${age} min ago"
+            fi
+            sleep 600
+          done
+
+      - name: Hand over to the next guard
+        if: always()
+        run: gh workflow run refresh-guard.yml --ref "$BRANCH"
