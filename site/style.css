@@ -13948,3 +13948,68 @@ h1 { font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spa
 .devo-scroll:disabled { opacity: 0.3; cursor: default; }
 .devo-scroll svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
 @media (max-width: 640px) { .devo-num { display: none; } }
+
+/* ---- Top bar fit: the wide uppercase links and the search share the bar,
+   so both tighten as the window narrows instead of cutting off Events. ---- */
+.appbar .tab-count { margin: 0 0 0 6px; align-self: center; font-size: 10px; letter-spacing: 0.04em; }
+@media (min-width: 641px) {
+  .appbar .appbar-inner { gap: 20px; }
+  .appbar .tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .appbar .tabs::-webkit-scrollbar { display: none; }
+  .appbar .head-search { flex: 0 1 240px; min-width: 150px; }
+}
+@media (min-width: 641px) and (max-width: 1240px) {
+  .appbar .tabs { gap: 18px; }
+  .appbar .tab { font-size: 11px; letter-spacing: 0.12em; }
+  .appbar .head-search { flex-basis: 190px; }
+}
+@media (min-width: 641px) and (max-width: 1060px) {
+  .appbar .tabs { gap: 14px; }
+  .appbar .tab { font-size: 10.5px; letter-spacing: 0.08em; }
+  .appbar .head-search { flex-basis: 150px; }
+  .appbar .head-search .search-hint { display: none; }
+  .appbar .brand-name { letter-spacing: 0.22em; font-size: 15px; }
+}
+
+/* ---- Chips and section tabs in the Horizon look, site-wide: square
+   corners, a hairline outline, solid off-white when picked. The section
+   tabs (Markets tools, News sections) also take the wide uppercase face. ---- */
+.chip,
+.city-tab {
+  border-radius: 4px;
+  background: none;
+  border: 1px solid rgb(240 240 250 / 0.2);
+  color: rgb(240 240 250 / 0.72);
+  box-shadow: none;
+}
+.chip:hover,
+.city-tab:hover { background: rgb(240 240 250 / 0.06); border-color: rgb(240 240 250 / 0.55); color: rgb(240 240 250); }
+.chip[aria-pressed='true'],
+.chip[aria-current='page'],
+.chip[aria-current='true'],
+.chip[aria-selected='true'],
+.city-tab[aria-current='page'],
+.city-tab[aria-selected='true'],
+.market-tools .chip[aria-current='page'] {
+  background: rgb(240 240 250); color: #050607; border-color: rgb(240 240 250); box-shadow: none; outline: none;
+}
+.chip:focus-visible,
+.city-tab:focus-visible { outline: 2px solid rgb(240 240 250); outline-offset: 2px; }
+.market-tools .chip {
+  height: 36px; padding: 0 14px;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.chip .chip-count { opacity: 0.6; }
+/* Some older rules are ID-scoped (#news-view, #markets-view, #controls);
+   the Horizon chip shape and picked state win over them site-wide. */
+.chip,
+.city-tab,
+#controls .filters label,
+.toggle,
+.saved-toggle { border-radius: 4px !important; }
+:is(#markets-view, #news-view, #events-view, #jobs-view, #home-view, #tracker-view) .chip[aria-current],
+:is(#markets-view, #news-view, #events-view, #jobs-view, #home-view, #tracker-view) .chip[aria-pressed='true'] {
+  background: rgb(240 240 250) !important; color: #050607 !important; border-color: rgb(240 240 250) !important; box-shadow: none !important;
+}
+#controls .filters label { background: none; border: 1px solid rgb(240 240 250 / 0.2); }
