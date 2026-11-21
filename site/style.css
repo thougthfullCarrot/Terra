@@ -13228,3 +13228,125 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
 @media (prefers-reduced-motion: reduce) {
   .pfx-in, .pfx-letter, .city-panel { animation: none !important; }
 }
+
+/* ==========================================================================
+   Development map: Horizon look.
+   Black canvas, one off-white at stepped opacities, wide uppercase labels,
+   hairlines and 4px corners. Scoped to the map workspace; the rest of the
+   site keeps its own theme. Category colours stay (they carry meaning) but
+   are muted so the off-white reads first.
+   ========================================================================== */
+.devx-body {
+  --hz-black: #050607;
+  --hz-white: 240 240 250;
+  --bg: var(--hz-black);
+  --surface: #0c0e10;
+  --sunk: rgb(var(--hz-white) / 0.05);
+  --ink: rgb(var(--hz-white));
+  --ink2: rgb(var(--hz-white) / 0.7);
+  --secondary: rgb(var(--hz-white) / 0.7);
+  --muted: rgb(var(--hz-white) / 0.5);
+  --faint: rgb(var(--hz-white) / 0.35);
+  --line: rgb(var(--hz-white) / 0.12);
+  --line2: rgb(var(--hz-white) / 0.22);
+  --chip: rgb(var(--hz-white) / 0.05);
+  --chip-hover: rgb(var(--hz-white) / 0.1);
+  --accent: rgb(var(--hz-white));
+  --accent-hover: #c9c9d4;
+  --tint: rgb(var(--hz-white) / 0.1);
+  --accent-tint: var(--tint);
+  --on-tint: rgb(var(--hz-white));
+  --on-accent: var(--hz-black);
+  --shadow-lg: 0 30px 80px -30px rgb(0 0 0 / 0.9);
+  --shadow-float: 0 10px 30px -12px rgb(0 0 0 / 0.8);
+  --ui: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --hz-display: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --radius: 4px;
+  color: var(--ink);
+  background: var(--hz-black);
+  font-family: var(--ui);
+}
+.devx-body .devx-mapwrap,
+.devx-body .leaflet-container { background: var(--hz-black); font-family: var(--ui); }
+
+/* The street basemap, turned to a quiet monochrome night map. */
+.devx-body .leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.62) contrast(1.15); }
+.devx-body .leaflet-container::after {
+  content: ""; position: absolute; inset: 0; z-index: 401; pointer-events: none;
+  background: radial-gradient(120% 90% at 55% 45%, transparent 55%, rgb(5 6 7 / 0.7) 100%);
+}
+
+/* Floating panels: dark glass with hairlines, not soft cards. */
+.devx-body .devx-glass {
+  background: rgb(12 14 16 / 0.8);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+/* Labels: wide uppercase, as on the Horizon landing page. */
+.devx-body .devx-place,
+.devx-body .devx-chart-titles h3,
+.devx-body .devx-chart-titles strong,
+.devx-body .devx-pill-label {
+  font-family: var(--hz-display);
+  font-stretch: 112%;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.devx-body .devx-place b { color: var(--ink); }
+.devx-body .devx-big,
+.devx-body .devx-total b {
+  font-family: var(--hz-display);
+  font-stretch: 125%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+/* Controls: ghost buttons; the selected one fills off-white. */
+.devx-body button,
+.devx-body select,
+.devx-body input { border-radius: 4px; }
+.devx-body input[type='search'],
+.devx-body input[type='text'] { background: rgb(var(--hz-white) / 0.04); border: 1px solid var(--line); color: var(--ink); }
+.devx-body input::placeholder { color: var(--muted); }
+.devx-body .devx-seg { border: 1px solid var(--line); border-radius: 4px; background: none; }
+.devx-body .devx-seg-item[aria-pressed='true'],
+.devx-body .devx-seg-item[aria-checked='true'],
+.devx-body .devx-seg-item.on { background: rgb(var(--hz-white)); color: var(--hz-black); border-radius: 2px; }
+.devx-body .devx-seg-item { font-size: 12px; letter-spacing: 0.02em; }
+
+/* Category marks: muted, so colour is a hint, not the headline. */
+.devx-body .devx-legend-item,
+.devx-body .dev-item [style*='--cat'],
+.devx-body .devx-bar-col,
+.devx-body .devx-pin-icon,
+.devx-body .devx-pill .devx-pin { filter: saturate(0.35); }
+.devx-body .devx-legend-item { border-radius: 4px; background: none; border: 1px solid var(--line); }
+
+/* Price pins on the map: black tags with an off-white edge. */
+.devx-body .devx-pill {
+  color: rgb(var(--hz-white));
+  background: rgb(5 6 7 / 0.88);
+  border: 1px solid rgb(var(--hz-white) / 0.35);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px -6px rgb(0 0 0 / 0.9);
+  font-family: var(--hz-display);
+  font-stretch: 108%;
+  letter-spacing: 0.02em;
+}
+.devx-body .devx-pill::after { border-top-color: rgb(var(--hz-white) / 0.35); }
+.devx-body .devx-pill-icon.lit .devx-pill,
+.devx-body .devx-pill-icon.chosen .devx-pill { background: rgb(var(--hz-white)); color: var(--hz-black); border-color: rgb(var(--hz-white)); }
+.devx-body .devx-pin { filter: saturate(0.5); }
+
+/* Leaflet's own controls. */
+.devx-body .leaflet-bar a,
+.devx-body .leaflet-control-zoom a { background: rgb(12 14 16 / 0.85); color: rgb(var(--hz-white)); border-color: var(--line); }
+.devx-body .leaflet-bar { border: 1px solid var(--line); border-radius: 4px; box-shadow: none; }
+.devx-body .leaflet-control-attribution { background: rgb(5 6 7 / 0.7); color: var(--muted); }
+.devx-body .leaflet-control-attribution a { color: rgb(var(--hz-white) / 0.75); }
