@@ -1,0 +1,148 @@
+{
+  "key": "amd",
+  "url": "https://www.amd.com/en.html",
+  "when": "2026-11-21T19:55:12.155Z",
+  "notes": [
+    "status=502 title=\"\" finalUrl=https://www.amd.com/en.html",
+    "desktop: no consent banner detected",
+    "status=502 title=\"\" finalUrl=https://www.amd.com/en.html",
+    "phone: no consent banner detected",
+    "phone: no menu button found",
+    "phone-reload: no consent banner detected"
+  ],
+  "desktopStatus": 502,
+  "desktopConsent": [],
+  "desktop": {
+    "docHeight": 900,
+    "title": "",
+    "h1s": [],
+    "h2s": [],
+    "h3s": [],
+    "ps": [],
+    "header": null,
+    "navLinks": [],
+    "body": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "htmlBg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(0, 0, 0)",
+      "fontFamily": "\"Times New Roman\"",
+      "fontSize": "16px"
+    },
+    "bgCensus": [],
+    "fgCensus": [
+      [
+        "rgb(0, 0, 0)",
+        23
+      ]
+    ],
+    "fontCensus": [
+      [
+        "monospace",
+        23
+      ]
+    ],
+    "cssVars": {},
+    "loadedFonts": [],
+    "libs": {
+      "gsap": false,
+      "ScrollTrigger": false,
+      "lenis": false,
+      "locomotive": false,
+      "swiper": false,
+      "slick": false,
+      "splide": false,
+      "aos": false,
+      "framer": false,
+      "next": false,
+      "wordpress": false,
+      "aem": false,
+      "webflow": false
+    },
+    "videos": [],
+    "sticky": [],
+    "carousels": 0,
+    "canvases": 0,
+    "iframes": []
+  },
+  "desktopNav": [],
+  "desktopScroll": {
+    "shots": [
+      {
+        "f": "desktop-01.png",
+        "y": 0
+      }
+    ],
+    "hdrTop": null,
+    "hdrScrolled": null,
+    "opacityReveals": 0,
+    "transformChanges": 0
+  },
+  "cardHover": [],
+  "phoneStatus": 502,
+  "phoneConsent": [],
+  "phone": {
+    "docHeight": 2121,
+    "title": "",
+    "h1s": [],
+    "h2s": [],
+    "h3s": [],
+    "ps": [],
+    "header": null,
+    "navLinks": [],
+    "body": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "htmlBg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(0, 0, 0)",
+      "fontFamily": "\"Times New Roman\"",
+      "fontSize": "16px"
+    },
+    "bgCensus": [],
+    "fgCensus": [
+      [
+        "rgb(0, 0, 0)",
+        23
+      ]
+    ],
+    "fontCensus": [
+      [
+        "monospace",
+        23
+      ]
+    ],
+    "cssVars": {},
+    "loadedFonts": [],
+    "libs": {
+      "gsap": false,
+      "ScrollTrigger": false,
+      "lenis": false,
+      "locomotive": false,
+      "swiper": false,
+      "slick": false,
+      "splide": false,
+      "aos": false,
+      "framer": false,
+      "next": false,
+      "wordpress": false,
+      "aem": false,
+      "webflow": false
+    },
+    "videos": [],
+    "sticky": [],
+    "carousels": 0,
+    "canvases": 0,
+    "iframes": []
+  },
+  "phoneMenuButton": null,
+  "phoneScroll": {
+    "shots": [
+      {
+        "f": "phone-01.png",
+        "y": 0
+      }
+    ],
+    "hdrTop": null,
+    "hdrScrolled": null,
+    "opacityReveals": 0,
+    "transformChanges": 0
+  }
+}

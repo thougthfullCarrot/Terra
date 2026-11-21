@@ -1,0 +1,80 @@
+{
+  "codec": {
+    "h264": "probably",
+    "webm": "probably"
+  },
+  "heroVideoState": {
+    "readyState": 4,
+    "error": null,
+    "paused": false,
+    "src": "PAL_HEADER_LOOP_Desktop_V2.2.mp4"
+  },
+  "h1": {
+    "text": "Sovereign AI Systems for Every Decision",
+    "w": 1,
+    "h": 1,
+    "clip": "auto",
+    "clipPath": "inset(50%)",
+    "pos": "absolute",
+    "opacity": "1"
+  },
+  "desktopTopRight": [
+    {
+      "l": null,
+      "x": 1414,
+      "y": 26.421875
+    },
+    {
+      "l": null,
+      "x": 1391,
+      "y": 102.84375
+    }
+  ],
+  "desktopMenuAdded": [
+    "THE TIMES, JUNE 9, 2026 Palantir software halves sepsis deaths at US hospital The Sepsis Hub, developed with Tampa General Hospital in Florida, detects subtle changes in vital signs so antibiotics are given early ↳ Read Here",
+    "CNBC, JULY 1, 2026 Palantir CEO Alex Karp says 'something has gone completely wrong' with how AI is sold Palantir CEO Alex Karp joins CNBC's 'Squawk Box' to discuss the new Nvidia partnership, frontier AI models, and more. ↳ Watch Here",
+    "VIEW ALL IMPACT STUDIES ↗",
+    "About Palantir",
+    "Blog",
+    "Investor Relations",
+    "Letters from the CEO",
+    "Privacy & Civil Liberties",
+    "Information Security",
+    "Cloud Partners",
+    "Pause background video"
+  ],
+  "desktopMenuLinkStyle": {
+    "ff": "\"Alliance No.1\"",
+    "fs": "34px",
+    "color": "rgb(255, 255, 255)"
+  },
+  "phoneBottomLeft": [
+    {
+      "l": null,
+      "x": 79,
+      "y": 804
+    },
+    {
+      "l": null,
+      "x": 40,
+      "y": 804
+    },
+    {
+      "l": "Previous",
+      "x": 104.546875,
+      "y": 1127.28125
+    },
+    {
+      "l": null,
+      "x": 152,
+      "y": 4498.78125
+    }
+  ],
+  "phoneMenuAdded": [
+    "Foundry",
+    "Gotham",
+    "Apollo",
+    "Ontology",
+    "Artificial Intelligence (AI)"
+  ]
+}

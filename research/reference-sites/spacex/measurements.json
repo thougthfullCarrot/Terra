@@ -1,0 +1,615 @@
+{
+  "key": "spacex",
+  "url": "https://www.spacex.com/",
+  "when": "2026-11-21T19:52:59.030Z",
+  "notes": [
+    "status=200 title=\"SpaceX\" finalUrl=https://www.spacex.com/",
+    "desktop: no consent banner detected",
+    "status=200 title=\"SpaceX\" finalUrl=https://www.spacex.com/",
+    "phone: no consent banner detected",
+    "phone-reload: no consent banner detected"
+  ],
+  "desktopStatus": 200,
+  "desktopConsent": [],
+  "desktop": {
+    "docHeight": 974,
+    "title": "SpaceX",
+    "h1s": [],
+    "h2s": [],
+    "h3s": [],
+    "ps": [],
+    "header": {
+      "tag": "header",
+      "cls": "",
+      "position": "static",
+      "height": 0,
+      "top": 902,
+      "bg": "rgba(0, 0, 0, 0)",
+      "backdrop": "none",
+      "color": "rgb(240, 240, 250)",
+      "zIndex": "auto"
+    },
+    "navLinks": [
+      {
+        "text": "STARSHIP",
+        "href": "/vehicles/starship",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "DRAGON",
+        "href": "/vehicles/dragon",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "FALCON 9",
+        "href": "/vehicles/falcon-9",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "FALCON HEAVY",
+        "href": "/vehicles/falcon-heavy",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "STARFALL",
+        "href": "/starfall",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "OVERVIEW",
+        "href": "/humanspaceflight/overview",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "SPACE STATION",
+        "href": "/humanspaceflight/iss",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "EARTH ORBIT",
+        "href": "/humanspaceflight/earth",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "THE MOON",
+        "href": "/humanspaceflight/moon",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "MARS & BEYOND",
+        "href": "/humanspaceflight/mars",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "STARLINK",
+        "href": "https://starlink.com",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "STARSHIELD",
+        "href": "/starshield",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "STARMIND",
+        "href": "/spacexsi/starmind",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "GROK",
+        "href": "https://x.ai",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "GROKIPEDIA",
+        "href": "https://grokipedia.com",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "𝕏",
+        "href": "https://x.com",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "TERAFAB",
+        "href": "https://terafab.ai",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "MISSION",
+        "href": "/mission",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "CAREERS",
+        "href": "/careers",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "SITES",
+        "href": "/sites",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "UPDATES",
+        "href": "/updates",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "CONTENT",
+        "href": "/content",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "INVESTORS",
+        "href": "https://ir.spacex.com",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "SPACEX",
+        "href": "https://shop.spacex.com",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      },
+      {
+        "text": "SPACEXSI",
+        "href": "https://shop.x.com",
+        "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+        "fontSize": "13.008px",
+        "fontWeight": "700",
+        "textTransform": "uppercase",
+        "letterSpacing": "1.17072px",
+        "color": "rgba(240, 240, 250, 0.9)"
+      }
+    ],
+    "body": {
+      "bg": "rgb(0, 0, 0)",
+      "htmlBg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 240, 250)",
+      "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+      "fontSize": "16px"
+    },
+    "bgCensus": [
+      [
+        "GRADIENT linear-gradient(rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.55) 35%, rgba(0, 0, 0, 0.25) 70%, rgba(0, 0, 0, 0) 100%)",
+        518400
+      ],
+      [
+        "GRADIENT linear-gradient(rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%)",
+        432000
+      ],
+      [
+        "GRADIENT linear-gradient(rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 95%)",
+        106560
+      ],
+      [
+        "rgba(240, 240, 250, 0.1)",
+        2304
+      ]
+    ],
+    "fgCensus": [
+      [
+        "rgba(240, 240, 250, 0.9)",
+        244
+      ],
+      [
+        "rgb(240, 240, 250)",
+        59
+      ]
+    ],
+    "fontCensus": [
+      [
+        "D-DIN",
+        303
+      ]
+    ],
+    "cssVars": {
+      "--white-100": "rgba(240, 240, 250, 1)",
+      "--white-90": "rgba(240, 240, 250, .9)",
+      "--white-80": "rgba(240, 240, 250, .8)",
+      "--white-70": "rgba(240, 240, 250, .7)",
+      "--white-60": "rgba(240, 240, 250, .6)",
+      "--white-50": "rgba(240, 240, 250, .5)",
+      "--white-35": "rgba(240, 240, 250, .35)",
+      "--white-30": "rgba(240, 240, 250, .3)",
+      "--white-25": "rgba(255, 255, 255, .25)",
+      "--white-15": "rgba(240, 240, 250, .15)",
+      "--white-10": "rgba(240, 240, 250, .1)",
+      "--black-50": "rgba(0, 0, 0, .5)",
+      "--black-80": "rgba(0, 0, 0, .8)",
+      "--gray-80": "rgba(37, 38, 40, .8)",
+      "--gray-60": "rgba(37, 38, 40, .6)",
+      "--gray-40": "rgba(37, 38, 40, .4)"
+    },
+    "loadedFonts": [
+      "D-DIN 400 normal"
+    ],
+    "libs": {
+      "gsap": false,
+      "ScrollTrigger": false,
+      "lenis": false,
+      "locomotive": false,
+      "swiper": false,
+      "slick": false,
+      "splide": false,
+      "aos": false,
+      "framer": false,
+      "next": false,
+      "wordpress": false,
+      "aem": false,
+      "webflow": false
+    },
+    "videos": [],
+    "sticky": [
+      {
+        "tag": "div",
+        "pos": "fixed",
+        "cls": "header",
+        "h": 74
+      }
+    ],
+    "carousels": 0,
+    "canvases": 0,
+    "iframes": []
+  },
+  "desktopNav": [
+    {
+      "text": "STARSHIP",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "DRAGON",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "FALCON 9",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "OVERVIEW",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "SPACE STATION",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "EARTH ORBIT",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "STARLINK",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "STARSHIELD",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    },
+    {
+      "text": "STARMIND",
+      "linksBefore": 26,
+      "linksAfter": 26,
+      "ariaExpanded": null
+    }
+  ],
+  "desktopScroll": {
+    "shots": [
+      {
+        "f": "desktop-01.png",
+        "y": 0
+      },
+      {
+        "f": "desktop-02.png",
+        "y": 900
+      },
+      {
+        "f": "desktop-03.png",
+        "y": 1800
+      },
+      {
+        "f": "desktop-04.png",
+        "y": 2700
+      },
+      {
+        "f": "desktop-05.png",
+        "y": 3600
+      },
+      {
+        "f": "desktop-06.png",
+        "y": 4500
+      },
+      {
+        "f": "desktop-07.png",
+        "y": 5400
+      },
+      {
+        "f": "desktop-08.png",
+        "y": 6300
+      },
+      {
+        "f": "desktop-09.png",
+        "y": 7200
+      },
+      {
+        "f": "desktop-10.png",
+        "y": 8015
+      }
+    ],
+    "hdrTop": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": 0
+    },
+    "hdrScrolled": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": -900,
+      "transform": "none"
+    },
+    "opacityReveals": 0,
+    "transformChanges": 0
+  },
+  "cardHover": [],
+  "phoneStatus": 200,
+  "phoneConsent": [],
+  "phone": {
+    "docHeight": 978,
+    "title": "SpaceX",
+    "h1s": [],
+    "h2s": [],
+    "h3s": [],
+    "ps": [],
+    "header": {
+      "tag": "header",
+      "cls": "",
+      "position": "static",
+      "height": 0,
+      "top": 846,
+      "bg": "rgba(0, 0, 0, 0)",
+      "backdrop": "none",
+      "color": "rgb(240, 240, 250)",
+      "zIndex": "auto"
+    },
+    "navLinks": [],
+    "body": {
+      "bg": "rgb(0, 0, 0)",
+      "htmlBg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 240, 250)",
+      "fontFamily": "D-DIN, Arial, Verdana, sans-serif",
+      "fontSize": "10px"
+    },
+    "bgCensus": [
+      [
+        "GRADIENT linear-gradient(rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.55) 35%, rgba(0, 0, 0, 0.25) 70%, rgba(0, 0, 0, 0) 100%)",
+        140400
+      ],
+      [
+        "GRADIENT linear-gradient(rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%)",
+        117000
+      ],
+      [
+        "rgba(240, 240, 250, 0.1)",
+        2304
+      ]
+    ],
+    "fgCensus": [
+      [
+        "rgb(240, 240, 250)",
+        59
+      ]
+    ],
+    "fontCensus": [
+      [
+        "D-DIN",
+        59
+      ]
+    ],
+    "cssVars": {
+      "--white-100": "rgba(240, 240, 250, 1)",
+      "--white-90": "rgba(240, 240, 250, .9)",
+      "--white-80": "rgba(240, 240, 250, .8)",
+      "--white-70": "rgba(240, 240, 250, .7)",
+      "--white-60": "rgba(240, 240, 250, .6)",
+      "--white-50": "rgba(240, 240, 250, .5)",
+      "--white-35": "rgba(240, 240, 250, .35)",
+      "--white-30": "rgba(240, 240, 250, .3)",
+      "--white-25": "rgba(255, 255, 255, .25)",
+      "--white-15": "rgba(240, 240, 250, .15)",
+      "--white-10": "rgba(240, 240, 250, .1)",
+      "--black-50": "rgba(0, 0, 0, .5)",
+      "--black-80": "rgba(0, 0, 0, .8)",
+      "--gray-80": "rgba(37, 38, 40, .8)",
+      "--gray-60": "rgba(37, 38, 40, .6)",
+      "--gray-40": "rgba(37, 38, 40, .4)"
+    },
+    "loadedFonts": [
+      "D-DIN 400 normal"
+    ],
+    "libs": {
+      "gsap": false,
+      "ScrollTrigger": false,
+      "lenis": false,
+      "locomotive": false,
+      "swiper": false,
+      "slick": false,
+      "splide": false,
+      "aos": false,
+      "framer": false,
+      "next": false,
+      "wordpress": false,
+      "aem": false,
+      "webflow": false
+    },
+    "videos": [],
+    "sticky": [],
+    "carousels": 0,
+    "canvases": 0,
+    "iframes": []
+  },
+  "phoneMenuButton": {
+    "x": 195,
+    "y": 180,
+    "label": "menu-backdrop"
+  },
+  "phoneMenuItems": [],
+  "phoneScroll": {
+    "shots": [
+      {
+        "f": "phone-01.png",
+        "y": 0
+      },
+      {
+        "f": "phone-02.png",
+        "y": 134
+      }
+    ],
+    "hdrTop": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": 846
+    },
+    "hdrScrolled": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": 712,
+      "transform": "none"
+    },
+    "opacityReveals": 0,
+    "transformChanges": 0
+  }
+}

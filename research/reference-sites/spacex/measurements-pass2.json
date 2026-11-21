@@ -1,0 +1,440 @@
+{
+  "desktopHeader": {
+    "sel": ".header",
+    "position": "fixed",
+    "top": 0,
+    "height": 74,
+    "bg": "rgba(0, 0, 0, 0)",
+    "backdrop": "none",
+    "transform": "none",
+    "opacity": "1",
+    "color": "rgb(240, 240, 250)"
+  },
+  "heroText": [
+    {
+      "t": "VEHICLES",
+      "tag": "SPAN",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "STARSHIP",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "DRAGON",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "FALCON 9",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "FALCON HEAVY",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "STARFALL",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "HUMAN SPACEFLIGHT",
+      "tag": "SPAN",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "OVERVIEW",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "SPACE STATION",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "EARTH ORBIT",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "THE MOON",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "MARS & BEYOND",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "STARLINK",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "STARSHIELD",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "SPACEXSI",
+      "tag": "SPAN",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "none",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "STARMIND",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "GROK",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "GROKIPEDIA",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "𝕏",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "TERAFAB",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "COMPANY",
+      "tag": "SPAN",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "MISSION",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "CAREERS",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "SITES",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "UPDATES",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "CONTENT",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "INVESTORS",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "SHOP",
+      "tag": "SPAN",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "SPACEX",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    },
+    {
+      "t": "SPACEXSI",
+      "tag": "A",
+      "fs": "13.008px",
+      "fw": "700",
+      "ff": "D-DIN",
+      "tt": "uppercase",
+      "ls": "1.17072px"
+    }
+  ],
+  "sectionTitles": [],
+  "videos": [],
+  "docHeight": 974,
+  "topNav": [
+    "VEHICLES",
+    "STARSHIP",
+    "HUMAN SPACEFLIGHT",
+    "OVERVIEW",
+    "STARLINK",
+    "STARSHIELD",
+    "SPACEXSI",
+    "STARMIND",
+    "TERAFAB",
+    "COMPANY",
+    "MISSION",
+    "SHOP",
+    "SPACEX"
+  ],
+  "hovers": [
+    {
+      "item": "VEHICLES",
+      "added": []
+    },
+    {
+      "item": "STARSHIP",
+      "added": []
+    },
+    {
+      "item": "HUMAN SPACEFLIGHT",
+      "added": []
+    },
+    {
+      "item": "OVERVIEW",
+      "added": []
+    },
+    {
+      "item": "STARLINK",
+      "added": []
+    },
+    {
+      "item": "STARSHIELD",
+      "added": []
+    },
+    {
+      "item": "SPACEXSI",
+      "added": []
+    },
+    {
+      "item": "STARMIND",
+      "added": []
+    },
+    {
+      "item": "TERAFAB",
+      "added": []
+    },
+    {
+      "item": "COMPANY",
+      "added": []
+    },
+    {
+      "item": "MISSION",
+      "added": []
+    },
+    {
+      "item": "SHOP",
+      "added": []
+    },
+    {
+      "item": "SPACEX",
+      "added": []
+    }
+  ],
+  "headerAt400": {
+    "sel": ".header",
+    "position": "fixed",
+    "top": 0,
+    "height": 74,
+    "bg": "rgba(0, 0, 0, 0)",
+    "backdrop": "none",
+    "transform": "none",
+    "opacity": "0",
+    "color": "rgb(240, 240, 250)"
+  },
+  "headerAt1200": {
+    "sel": ".header",
+    "position": "fixed",
+    "top": 0,
+    "height": 74,
+    "bg": "rgba(0, 0, 0, 0)",
+    "backdrop": "none",
+    "transform": "none",
+    "opacity": "0",
+    "color": "rgb(240, 240, 250)"
+  },
+  "headerAfterScrollUp": {
+    "sel": ".header",
+    "position": "fixed",
+    "top": 0,
+    "height": 74,
+    "bg": "rgba(0, 0, 0, 0)",
+    "backdrop": "none",
+    "transform": "none",
+    "opacity": "1",
+    "color": "rgb(240, 240, 250)"
+  },
+  "carouselSectionChangedWithoutInput": false,
+  "phoneDocHeight": 978,
+  "phoneHeader": {
+    "sel": ".header",
+    "position": "fixed",
+    "top": 0,
+    "height": 0,
+    "bg": "rgba(0, 0, 0, 0)",
+    "backdrop": "none",
+    "transform": "none",
+    "opacity": "1",
+    "color": "rgb(240, 240, 250)"
+  },
+  "phoneVisibleText": "CAREERS\nUPDATES\nPRIVACY POLICY\nSUPPLIERS\nINVESTORS\n© 2026 SPACEX",
+  "phoneShotsY": [
+    134
+  ],
+  "phoneBurger": {
+    "x": 366,
+    "y": 37.5,
+    "cls": "header-button",
+    "tag": "DIV"
+  },
+  "phoneMenuItems": [
+    "STARSHIP",
+    "DRAGON",
+    "FALCON 9",
+    "FALCON HEAVY",
+    "STARFALL",
+    "OVERVIEW",
+    "SPACE STATION",
+    "EARTH ORBIT",
+    "THE MOON",
+    "MARS & BEYOND",
+    "STARLINK",
+    "STARSHIELD",
+    "STARMIND",
+    "GROK",
+    "GROKIPEDIA",
+    "𝕏",
+    "TERAFAB",
+    "MISSION",
+    "CAREERS",
+    "SITES",
+    "UPDATES",
+    "CONTENT",
+    "INVESTORS",
+    "SPACEX",
+    "SPACEXSI"
+  ]
+}

@@ -1,0 +1,1477 @@
+{
+  "key": "palantir",
+  "url": "https://www.palantir.com/",
+  "when": "2026-11-21T19:52:59.028Z",
+  "notes": [
+    "networkidle timeout (continuing)",
+    "status=200 title=\"Home | Palantir\" finalUrl=https://www.palantir.com/",
+    "desktop: no consent banner detected",
+    "networkidle timeout (continuing)",
+    "status=200 title=\"Home | Palantir\" finalUrl=https://www.palantir.com/",
+    "phone: no consent banner detected",
+    "phone: no menu button found",
+    "phone-reload: no consent banner detected"
+  ],
+  "desktopStatus": 200,
+  "desktopConsent": [],
+  "desktop": {
+    "docHeight": 6554,
+    "title": "Home | Palantir",
+    "h1s": [
+      {
+        "tag": "h1",
+        "text": "Sovereign AI Systems for Every Decision",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "25px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      }
+    ],
+    "h2s": [
+      {
+        "tag": "h2",
+        "text": "NAVIGATION",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "LATEST NEWS",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "OFFERINGS",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "LATEST IMPACT",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "QUICK LINKS",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "Featured News",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "25px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      }
+    ],
+    "h3s": [
+      {
+        "tag": "h3",
+        "text": "Rebuilding American Sea Power",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "lineHeight": "36px",
+        "letterSpacing": "-1.7px",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "tag": "h3",
+        "text": "The Manufacturing OS for American Re-Industrialization",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "lineHeight": "36px",
+        "letterSpacing": "-1.7px",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "tag": "h3",
+        "text": "Accelerate Enterprise Data Migration with Palantir AIP",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "lineHeight": "36px",
+        "letterSpacing": "-1.7px",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "tag": "h3",
+        "text": "Building the Agent Stack, the Ontology-Powered Infrastructure Behind Agents That Work at Scale",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "lineHeight": "36px",
+        "letterSpacing": "-1.7px",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "ps": [
+      {
+        "tag": "p",
+        "text": "Palantir software halves sepsis deaths at US hospital",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "22.8576px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "tag": "p",
+        "text": "The Sepsis Hub, developed with Tampa General Hospital in Florida, detects subtle changes in vital signs so antibiotics are given early",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "22.8576px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "tag": "p",
+        "text": "Palantir CEO Alex Karp says 'something has gone completely wrong' with how AI is sold",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "22.8576px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "header": {
+      "tag": "header",
+      "cls": "ptcom-design__banner__1g4b6dk ptcom-design__light__1g4b6dk",
+      "position": "sticky",
+      "height": 0,
+      "top": 53,
+      "bg": "rgba(0, 0, 0, 0)",
+      "backdrop": "none",
+      "color": "rgb(30, 31, 43)",
+      "zIndex": "600"
+    },
+    "navLinks": [
+      {
+        "text": "Sovereign AI",
+        "href": "/protect-your-sovereignty/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ AIP",
+        "href": "/platforms/aip/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Foundry",
+        "href": "/platforms/foundry/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Gotham",
+        "href": "/platforms/gotham/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Ontology",
+        "href": "/platforms/ontology/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Apollo",
+        "href": "/platforms/apollo/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Offerings",
+        "href": "/offerings/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Impact Studies",
+        "href": "/impact/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Documentation",
+        "href": "https://www.palantir.com/docs/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Careers",
+        "href": "/careers/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Newsroom",
+        "href": "/newsroom/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Palantir Explained",
+        "href": "/palantir-explained/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "34px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "NEWSROOM ↗",
+        "href": "/newsroom/",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "textTransform": "uppercase",
+        "letterSpacing": "0.5px",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "THE TIMES, JUNE 9, 2026 Palantir software halves sepsis deaths at US hospital The Sepsis Hub, developed with Tampa General Hospital in Florida, detects subtle changes in vital signs so antibiotics are given early ↳ Read Here",
+        "href": "https://www.thetimes.com/uk/healthcare/article/palantir-software-halves-sepsis-deaths-hospital-tampa-bmbk83pdq?eafs_enabled=false",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(0, 0, 238)"
+      },
+      {
+        "text": "CNBC, JULY 1, 2026 Palantir CEO Alex Karp says 'something has gone completely wrong' with how AI is sold Palantir CEO Alex Karp joins CNBC's 'Squawk Box' to discuss the new Nvidia partnership, frontier AI models, and more. ↳ Watch Here",
+        "href": "https://www.youtube.com/watch?v=0A3sGymV6kY",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(0, 0, 238)"
+      },
+      {
+        "text": "VIEW ALL OFFERINGS ↗",
+        "href": "/offerings/",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "textTransform": "uppercase",
+        "letterSpacing": "0.5px",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Our platforms are used throughout the public, private, and non-profit sectors to help organizations quickly implement solutions to the hardest problems they face. ↳ Learn more about AIP",
+        "href": "/platforms/aip/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(0, 0, 238)"
+      },
+      {
+        "text": "VIEW ALL IMPACT STUDIES ↗",
+        "href": "/impact/",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "textTransform": "uppercase",
+        "letterSpacing": "0.5px",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "IMPACT STUDY // TAMPA GENERAL HOSPITAL Infusing data throughout the care continuum",
+        "href": "/impact/tampa-general-hospital/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(0, 0, 238)"
+      },
+      {
+        "text": "About Palantir",
+        "href": "/about/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Blog",
+        "href": "/blog/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Investor Relations",
+        "href": "https://investors.palantir.com/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Letters from the CEO",
+        "href": "/newsroom/letters/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Privacy & Civil Liberties",
+        "href": "/pcl/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Information Security",
+        "href": "/information-security/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Cloud Partners",
+        "href": "/partnerships/cloud/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Palantir Learning",
+        "href": "https://learn.palantir.com/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Customer Success Services",
+        "href": "/customer-success-services/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Palantir Apparel Store",
+        "href": "/store/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Contact",
+        "href": "/contact/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "body": {
+      "bg": "rgb(255, 255, 255)",
+      "htmlBg": "rgb(255, 255, 255)",
+      "color": "rgb(30, 33, 36)",
+      "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+      "fontSize": "18px"
+    },
+    "bgCensus": [
+      [
+        "rgb(239, 239, 239)",
+        12132743
+      ],
+      [
+        "rgb(118, 118, 118)",
+        9965225
+      ],
+      [
+        "rgb(243, 243, 243)",
+        6480000
+      ],
+      [
+        "rgb(255, 255, 255)",
+        5751435
+      ],
+      [
+        "rgb(30, 33, 36)",
+        2583235
+      ],
+      [
+        "rgb(13, 14, 16)",
+        1296000
+      ],
+      [
+        "rgba(255, 255, 255, 0.2)",
+        252281
+      ],
+      [
+        "rgb(219, 219, 219)",
+        127276
+      ],
+      [
+        "rgb(32, 36, 38)",
+        127276
+      ],
+      [
+        "rgba(171, 171, 171, 0.1)",
+        99400
+      ]
+    ],
+    "fgCensus": [
+      [
+        "rgb(102, 102, 102)",
+        10201
+      ],
+      [
+        "rgb(255, 255, 255)",
+        3149
+      ],
+      [
+        "rgb(30, 31, 43)",
+        2489
+      ],
+      [
+        "rgb(185, 185, 185)",
+        54
+      ],
+      [
+        "rgb(0, 0, 0)",
+        34
+      ],
+      [
+        "rgb(30, 33, 36)",
+        11
+      ]
+    ],
+    "fontCensus": [
+      [
+        "Alliance No.1",
+        14975
+      ],
+      [
+        "Alliance No.2",
+        963
+      ]
+    ],
+    "cssVars": {
+      "--border-color": "currentColor",
+      "--input-border-color": "var(--text-color-medium)",
+      "--error-color": "#ff4136",
+      "--accent-color": "#2b5945",
+      "--accent10-color": "rgba(43,89,69,.1)",
+      "--accent05-color": "rgba(43,89,69,.05)",
+      "--accent05-opaque-color": "#f4f7f6",
+      "--body-color": "#fff",
+      "--body-color-medium": "#f3f3f3",
+      "--body-color-light": "#f9f9f9",
+      "--text-color": "#1e2124",
+      "--text-color-medium": "#636363",
+      "--text-color-light": "#767676",
+      "--hover-color": "rgba(30,33,36,var(--hover-opacity))"
+    },
+    "loadedFonts": [
+      "Alliance No.1 400 normal",
+      "Alliance No.2 400 normal"
+    ],
+    "libs": {
+      "gsap": false,
+      "ScrollTrigger": false,
+      "lenis": false,
+      "locomotive": false,
+      "swiper": false,
+      "slick": false,
+      "splide": false,
+      "aos": false,
+      "framer": false,
+      "next": true,
+      "wordpress": false,
+      "aem": false,
+      "webflow": false
+    },
+    "videos": [
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": false,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/01seEIx1DjspOdLUkT3yF3/4109e5d0f243aebba826eabca0861587/PAL_HEADER_LOOP_Des",
+        "w": 1483,
+        "h": 927
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/1ZAGlJWcYtVmMckdqFKUNW/7ff05eda0bd3471eba68c522caa32872/homepage_-_AIP.mov?",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/6pvakzOU4AhfZjrgbrRXr9/ed5bb90509c20aa199058c74b3d7efd0/homepage_-_Gotham.m",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/2yuGstJPCnqZBe7DOcOVNx/85275c8cb70fef128d8eda7af4900690/homepage_-_Foundry.",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/727o8CbUwqHs2hTt02hIiO/cf08155d0843b07849af7d85c8e1aac0/Ontology.mov",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/4hKQ7uw6vsjxrlntoFav6k/d9ea76812927c7b04539acc5463d3300/homepage_-_Apollo.m",
+        "w": 0,
+        "h": 0
+      }
+    ],
+    "sticky": [
+      {
+        "tag": "div",
+        "pos": "fixed",
+        "cls": "ptcom-design__pageContainer__ec3r6t",
+        "h": 900
+      },
+      {
+        "tag": "a",
+        "pos": "fixed",
+        "cls": "ptcom-design__skipnav__1g4b6dk",
+        "h": 40
+      },
+      {
+        "tag": "div",
+        "pos": "fixed",
+        "cls": "ptcom-design__heroVideoFrame__fji15b",
+        "h": 900
+      }
+    ],
+    "carousels": 1,
+    "canvases": 0,
+    "iframes": []
+  },
+  "desktopNav": [],
+  "desktopScroll": {
+    "shots": [
+      {
+        "f": "desktop-01.png",
+        "y": 0
+      },
+      {
+        "f": "desktop-02.png",
+        "y": 900
+      },
+      {
+        "f": "desktop-03.png",
+        "y": 1800
+      },
+      {
+        "f": "desktop-04.png",
+        "y": 2697
+      },
+      {
+        "f": "desktop-05.png",
+        "y": 3600
+      },
+      {
+        "f": "desktop-06.png",
+        "y": 4500
+      },
+      {
+        "f": "desktop-07.png",
+        "y": 5400
+      },
+      {
+        "f": "desktop-08.png",
+        "y": 5599
+      }
+    ],
+    "hdrTop": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": 53
+    },
+    "hdrScrolled": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": 0,
+      "transform": "none"
+    },
+    "opacityReveals": 8,
+    "transformChanges": 3
+  },
+  "cardHover": [
+    {
+      "text": "IMPACT STUDY // TAMPA GENERAL HOSPITAL\n\nInfusing data throug",
+      "changedElements": 0
+    }
+  ],
+  "phoneStatus": 200,
+  "phoneConsent": [],
+  "phone": {
+    "docHeight": 6500,
+    "title": "Home | Palantir",
+    "h1s": [
+      {
+        "tag": "h1",
+        "text": "Sovereign AI Systems for Every Decision",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "25px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      }
+    ],
+    "h2s": [
+      {
+        "tag": "h2",
+        "text": "NAVIGATION",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "LATEST NEWS",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "OFFERINGS",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "LATEST IMPACT",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "QUICK LINKS",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "color": "rgb(185, 185, 185)"
+      },
+      {
+        "tag": "h2",
+        "text": "Featured News",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "25px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      }
+    ],
+    "h3s": [
+      {
+        "tag": "h3",
+        "text": "Rebuilding American Sea Power",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "22px",
+        "letterSpacing": "-0.9px",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      },
+      {
+        "tag": "h3",
+        "text": "The Manufacturing OS for American Re-Industrialization",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "22px",
+        "letterSpacing": "-0.9px",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      },
+      {
+        "tag": "h3",
+        "text": "Accelerate Enterprise Data Migration with Palantir AIP",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "22px",
+        "letterSpacing": "-0.9px",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      },
+      {
+        "tag": "h3",
+        "text": "Building the Agent Stack, the Ontology-Powered Infrastructure Behind Agents That Work at Scale",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "22px",
+        "letterSpacing": "-0.9px",
+        "textTransform": "none",
+        "color": "rgb(30, 31, 43)"
+      }
+    ],
+    "ps": [
+      {
+        "tag": "p",
+        "text": "Palantir software halves sepsis deaths at US hospital",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "22.8576px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "tag": "p",
+        "text": "The Sepsis Hub, developed with Tampa General Hospital in Florida, detects subtle changes in vital signs so antibiotics are given early",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "22.8576px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "tag": "p",
+        "text": "Our platforms are used throughout the public, private, and non-profit sectors to help organizations quickly implement solutions to the harde",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "25.0002px",
+        "letterSpacing": "normal",
+        "textTransform": "none",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "header": {
+      "tag": "header",
+      "cls": "ptcom-design__banner__1g4b6dk ptcom-design__light__1g4b6dk",
+      "position": "sticky",
+      "height": 0,
+      "top": 76,
+      "bg": "rgba(0, 0, 0, 0)",
+      "backdrop": "none",
+      "color": "rgb(30, 31, 43)",
+      "zIndex": "600"
+    },
+    "navLinks": [
+      {
+        "text": "Sovereign AI",
+        "href": "/protect-your-sovereignty/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ AIP",
+        "href": "/platforms/aip/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Foundry",
+        "href": "/platforms/foundry/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Gotham",
+        "href": "/platforms/gotham/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Ontology",
+        "href": "/platforms/ontology/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "↳ Apollo",
+        "href": "/platforms/apollo/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Offerings",
+        "href": "/offerings/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Impact Studies",
+        "href": "/impact/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Documentation",
+        "href": "https://www.palantir.com/docs/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Careers",
+        "href": "/careers/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Newsroom",
+        "href": "/newsroom/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Palantir Explained",
+        "href": "/palantir-explained/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "NEWSROOM ↗",
+        "href": "/newsroom/",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "textTransform": "uppercase",
+        "letterSpacing": "0.5px",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "THE TIMES, JUNE 9, 2026 Palantir software halves sepsis deaths at US hospital The Sepsis Hub, developed with Tampa General Hospital in Florida, detects subtle changes in vital signs so antibiotics are given early ↳ Read Here",
+        "href": "https://www.thetimes.com/uk/healthcare/article/palantir-software-halves-sepsis-deaths-hospital-tampa-bmbk83pdq?eafs_enabled=false",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(0, 0, 238)"
+      },
+      {
+        "text": "VIEW ALL OFFERINGS ↗",
+        "href": "/offerings/",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "textTransform": "uppercase",
+        "letterSpacing": "0.5px",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Our platforms are used throughout the public, private, and non-profit sectors to help organizations quickly implement solutions to the hardest problems they face. ↳ Learn more about AIP",
+        "href": "/platforms/aip/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(0, 0, 238)"
+      },
+      {
+        "text": "VIEW ALL IMPACT STUDIES ↗",
+        "href": "/impact/",
+        "fontFamily": "\"Alliance No.2\", \"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "10px",
+        "fontWeight": "400",
+        "textTransform": "uppercase",
+        "letterSpacing": "0.5px",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "IMPACT STUDY // TAMPA GENERAL HOSPITAL Infusing data throughout the care continuum",
+        "href": "/impact/tampa-general-hospital/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(0, 0, 238)"
+      },
+      {
+        "text": "About Palantir",
+        "href": "/about/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Blog",
+        "href": "/blog/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Investor Relations",
+        "href": "https://investors.palantir.com/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Letters from the CEO",
+        "href": "/newsroom/letters/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Privacy & Civil Liberties",
+        "href": "/pcl/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Information Security",
+        "href": "/information-security/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Cloud Partners",
+        "href": "/partnerships/cloud/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Palantir Learning",
+        "href": "https://learn.palantir.com/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Customer Success Services",
+        "href": "/customer-success-services/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Palantir Apparel Store",
+        "href": "/store/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "text": "Contact",
+        "href": "/contact/",
+        "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "textTransform": "none",
+        "letterSpacing": "normal",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "body": {
+      "bg": "rgb(255, 255, 255)",
+      "htmlBg": "rgb(255, 255, 255)",
+      "color": "rgb(30, 33, 36)",
+      "fontFamily": "\"Alliance No.1\", system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif",
+      "fontSize": "18px"
+    },
+    "bgCensus": [
+      [
+        "rgb(243, 243, 243)",
+        6480000
+      ],
+      [
+        "rgb(239, 239, 239)",
+        3029325
+      ],
+      [
+        "rgb(118, 118, 118)",
+        2749940
+      ],
+      [
+        "rgb(255, 255, 255)",
+        1799786
+      ],
+      [
+        "rgb(13, 14, 16)",
+        329160
+      ],
+      [
+        "rgba(255, 255, 255, 0.2)",
+        126645
+      ],
+      [
+        "rgb(30, 31, 43)",
+        34430
+      ],
+      [
+        "rgba(171, 171, 171, 0.1)",
+        25350
+      ],
+      [
+        "rgb(219, 219, 219)",
+        25200
+      ],
+      [
+        "rgb(32, 36, 38)",
+        25200
+      ]
+    ],
+    "fgCensus": [
+      [
+        "rgb(102, 102, 102)",
+        12337
+      ],
+      [
+        "rgb(30, 31, 43)",
+        5438
+      ],
+      [
+        "rgb(255, 255, 255)",
+        971
+      ],
+      [
+        "rgb(185, 185, 185)",
+        54
+      ],
+      [
+        "rgb(0, 0, 0)",
+        17
+      ],
+      [
+        "rgb(30, 33, 36)",
+        11
+      ]
+    ],
+    "fontCensus": [
+      [
+        "Alliance No.1",
+        17925
+      ],
+      [
+        "Alliance No.2",
+        903
+      ]
+    ],
+    "cssVars": {
+      "--border-color": "currentColor",
+      "--input-border-color": "var(--text-color-medium)",
+      "--error-color": "#ff4136",
+      "--accent-color": "#2b5945",
+      "--accent10-color": "rgba(43,89,69,.1)",
+      "--accent05-color": "rgba(43,89,69,.05)",
+      "--accent05-opaque-color": "#f4f7f6",
+      "--body-color": "#fff",
+      "--body-color-medium": "#f3f3f3",
+      "--body-color-light": "#f9f9f9",
+      "--text-color": "#1e2124",
+      "--text-color-medium": "#636363",
+      "--text-color-light": "#767676",
+      "--hover-color": "rgba(30,33,36,var(--hover-opacity))"
+    },
+    "loadedFonts": [
+      "Alliance No.1 400 normal",
+      "Alliance No.2 400 normal"
+    ],
+    "libs": {
+      "gsap": false,
+      "ScrollTrigger": false,
+      "lenis": false,
+      "locomotive": false,
+      "swiper": false,
+      "slick": false,
+      "splide": false,
+      "aos": false,
+      "framer": false,
+      "next": true,
+      "wordpress": false,
+      "aem": false,
+      "webflow": false
+    },
+    "videos": [
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": false,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/2cJJzYBUBhBUB4vMs0QKxB/f20dbdd79d3ea0f40a6fe2fe51b04f21/PAL_HEADER_LOOP_Mob",
+        "w": 406,
+        "h": 156
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/1ZAGlJWcYtVmMckdqFKUNW/7ff05eda0bd3471eba68c522caa32872/homepage_-_AIP.mov?",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/6pvakzOU4AhfZjrgbrRXr9/ed5bb90509c20aa199058c74b3d7efd0/homepage_-_Gotham.m",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/2yuGstJPCnqZBe7DOcOVNx/85275c8cb70fef128d8eda7af4900690/homepage_-_Foundry.",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/727o8CbUwqHs2hTt02hIiO/cf08155d0843b07849af7d85c8e1aac0/Ontology.mov",
+        "w": 0,
+        "h": 0
+      },
+      {
+        "autoplay": false,
+        "muted": true,
+        "loop": true,
+        "paused": true,
+        "src": "https://www.palantir.com/assets/xrfr7uokpv1b/4hKQ7uw6vsjxrlntoFav6k/d9ea76812927c7b04539acc5463d3300/homepage_-_Apollo.m",
+        "w": 0,
+        "h": 0
+      }
+    ],
+    "sticky": [
+      {
+        "tag": "div",
+        "pos": "fixed",
+        "cls": "ptcom-design__pageContainer__ec3r6t",
+        "h": 844
+      },
+      {
+        "tag": "a",
+        "pos": "fixed",
+        "cls": "ptcom-design__skipnav__1g4b6dk",
+        "h": 40
+      },
+      {
+        "tag": "div",
+        "pos": "fixed",
+        "cls": "ptcom-design__buttonWrapper__1g4b6dk ptcom-design__light__1g4b6dk",
+        "h": 40
+      },
+      {
+        "tag": "div",
+        "pos": "fixed",
+        "cls": "ptcom-design__heroVideoFrame__fji15b",
+        "h": 844
+      }
+    ],
+    "carousels": 1,
+    "canvases": 0,
+    "iframes": []
+  },
+  "phoneMenuButton": null,
+  "phoneScroll": {
+    "shots": [
+      {
+        "f": "phone-01.png",
+        "y": 0
+      },
+      {
+        "f": "phone-02.png",
+        "y": 900
+      },
+      {
+        "f": "phone-03.png",
+        "y": 1800
+      },
+      {
+        "f": "phone-04.png",
+        "y": 2700
+      },
+      {
+        "f": "phone-05.png",
+        "y": 3600
+      },
+      {
+        "f": "phone-06.png",
+        "y": 4500
+      },
+      {
+        "f": "phone-07.png",
+        "y": 5400
+      },
+      {
+        "f": "phone-08.png",
+        "y": 5632
+      }
+    ],
+    "hdrTop": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": 76
+    },
+    "hdrScrolled": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "h": 0,
+      "top": 0,
+      "transform": "none"
+    },
+    "opacityReveals": 8,
+    "transformChanges": 1
+  }
+}
