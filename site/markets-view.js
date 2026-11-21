@@ -40,6 +40,8 @@ import { readNewsHash } from './news.js';
 import { readEventsHash } from './events.js';
 import { stateBox } from './labels.js';
 import { countText, placeOf, project, texasMap } from './live.js';
+import { devOverview } from './devoverview.js';
+import { marketStage } from './markets-stage.js';
 import { field } from './contour.js';
 
 const $ = (id) => document.getElementById(id);
@@ -237,7 +239,8 @@ function render() {
     $('m-rates').replaceChildren();
     $('m-chart').replaceChildren();
     $('m-sources').replaceChildren();
-    $('m-body').replaceChildren(devMap(state.city || null, true) || mapMissing());
+    // No metro picked yet: the all-Texas overview first; a metro opens its map.
+    $('m-body').replaceChildren((state.city ? devMap(state.city, true) : devStart()) || mapMissing());
     return;
   }
   if (tool) {
@@ -256,7 +259,12 @@ function render() {
   $('m-rates').replaceChildren(rates());
   // All markets: the comparison table beside the picked city's panel, the map's entry and the chart under it.
   $('m-chart').replaceChildren();
-  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [overview(group), ...(group.key === 'development' ? [devTeaser()] : [])]));
+  // All markets: one metro on stage at a time and all of them on one figure (markets-stage.js), the full table folded under it.
+  const allMarkets = () => [
+    marketStage({ snapshot, group, metricFor, cityHref: (city) => writeMarketHash({ ...state, city, tool: '' }) }),
+    reliefTable(group)
+  ];
+  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [...allMarkets(), ...(group.key === 'development' ? [devTeaser()] : [])]));
   if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
 }
@@ -1097,6 +1105,15 @@ function rates() {
  * a city's own page and on the all-markets development view. Nothing until a build has
  * read the state's project register.
  */
+/** The Development map's first screen (devoverview.js); a metro moves the hash to its map. */
+function devStart() {
+  const data = snapshot.developments;
+  if (!data?.projects?.length) return '';
+  const cities = snapshot.markets.map((m) => m.city).filter((c) => data.projects.some((p) => p.city === c));
+  // A new history entry, so Back returns to the overview.
+  return devOverview({ data, cities, onCity: (next) => (location.hash = writeMarketHash({ ...state, tool: 'map', city: next })) });
+}
+
 function devMap(city, workspace = false) {
   const data = snapshot.developments;
   if (!data?.projects?.length) return '';

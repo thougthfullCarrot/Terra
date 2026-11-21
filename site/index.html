@@ -8,8 +8,8 @@
       name="description"
       content="Find Texas commercial real estate jobs, see what's being built, follow industry news and discover local events, all in one place. Free to use with an account."
     />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#161412" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#050607" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" href="favicon.png" />
     <link rel="canonical" href="https://thougthfullcarrot.github.io/Terra/" />
     <!-- The preview card when a Terra link is shared in a text, Slack, LinkedIn or Discord. -->
@@ -27,17 +27,13 @@
     <meta property="og:image:alt" content="Terra: explore Texas real estate. Jobs, development map, news and events." />
     <meta name="twitter:card" content="summary_large_image" />
     <script>
-      // Before first paint, so a dark-mode visitor never sees a white flash.
-      try {
-        const theme = localStorage.getItem('terra-theme');
-        // Night console: dark unless the visitor picked light.
-        document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
-      } catch {}
+      // Terra has one theme: the dark Horizon look. Set before first paint.
+      document.documentElement.dataset.theme = 'dark';
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Archivo:wdth,wght@100..125,600..800&family=Manrope:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
@@ -79,7 +75,6 @@
             <input id="q" name="q" type="search" placeholder="Search roles, firms, skills" autocomplete="off" form="controls" />
             <kbd class="search-hint" aria-hidden="true">/</kbd>
           </label>
-          <button type="button" id="theme-toggle" class="theme-button" aria-label="Switch to dark mode">Dark</button>
           <button type="button" class="primary small signin-jump" id="signin-jump" hidden>Sign in</button>
           <button type="button" id="account-button" class="account-button" hidden aria-label="Your profile">
             <span class="avatar small" id="account-avatar" aria-hidden="true"></span>

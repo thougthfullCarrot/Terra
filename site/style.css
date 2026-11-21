@@ -13228,3 +13228,788 @@ body[data-workspace='map'] .devx.mapfirst .devx-body {
 @media (prefers-reduced-motion: reduce) {
   .pfx-in, .pfx-letter, .city-panel { animation: none !important; }
 }
+
+/* ==========================================================================
+   Development map: Horizon look.
+   Black canvas, one off-white at stepped opacities, wide uppercase labels,
+   hairlines and 4px corners. Scoped to the map workspace; the rest of the
+   site keeps its own theme. Category colours stay (they carry meaning) but
+   are muted so the off-white reads first.
+   ========================================================================== */
+.devx-body {
+  --hz-black: #050607;
+  --hz-white: 240 240 250;
+  --bg: var(--hz-black);
+  --surface: #0c0e10;
+  --sunk: rgb(var(--hz-white) / 0.05);
+  --ink: rgb(var(--hz-white));
+  --ink2: rgb(var(--hz-white) / 0.7);
+  --secondary: rgb(var(--hz-white) / 0.7);
+  --muted: rgb(var(--hz-white) / 0.5);
+  --faint: rgb(var(--hz-white) / 0.35);
+  --line: rgb(var(--hz-white) / 0.12);
+  --line2: rgb(var(--hz-white) / 0.22);
+  --chip: rgb(var(--hz-white) / 0.05);
+  --chip-hover: rgb(var(--hz-white) / 0.1);
+  --accent: rgb(var(--hz-white));
+  --accent-hover: #c9c9d4;
+  --tint: rgb(var(--hz-white) / 0.1);
+  --accent-tint: var(--tint);
+  --on-tint: rgb(var(--hz-white));
+  --on-accent: var(--hz-black);
+  --shadow-lg: 0 30px 80px -30px rgb(0 0 0 / 0.9);
+  --shadow-float: 0 10px 30px -12px rgb(0 0 0 / 0.8);
+  --ui: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --hz-display: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --radius: 4px;
+  color: var(--ink);
+  background: var(--hz-black);
+  font-family: var(--ui);
+}
+.devx-body .devx-mapwrap,
+.devx-body .leaflet-container { background: var(--hz-black); font-family: var(--ui); }
+
+/* The street basemap, turned to a quiet monochrome night map. */
+.devx-body .leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.62) contrast(1.15); }
+.devx-body .leaflet-container::after {
+  content: ""; position: absolute; inset: 0; z-index: 401; pointer-events: none;
+  background: radial-gradient(120% 90% at 55% 45%, transparent 55%, rgb(5 6 7 / 0.7) 100%);
+}
+
+/* Floating panels: dark glass with hairlines, not soft cards. */
+.devx-body .devx-glass {
+  background: rgb(12 14 16 / 0.8);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+/* Labels: wide uppercase, as on the Horizon landing page. */
+.devx-body .devx-place,
+.devx-body .devx-chart-titles h3,
+.devx-body .devx-chart-titles strong,
+.devx-body .devx-pill-label {
+  font-family: var(--hz-display);
+  font-stretch: 112%;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.devx-body .devx-place b { color: var(--ink); }
+.devx-body .devx-big,
+.devx-body .devx-total b {
+  font-family: var(--hz-display);
+  font-stretch: 125%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+/* Controls: ghost buttons; the selected one fills off-white. */
+.devx-body button,
+.devx-body select,
+.devx-body input { border-radius: 4px; }
+.devx-body input[type='search'],
+.devx-body input[type='text'] { background: rgb(var(--hz-white) / 0.04); border: 1px solid var(--line); color: var(--ink); }
+.devx-body input::placeholder { color: var(--muted); }
+.devx-body .devx-seg { border: 1px solid var(--line); border-radius: 4px; background: none; }
+.devx-body .devx-seg-item[aria-pressed='true'],
+.devx-body .devx-seg-item[aria-checked='true'],
+.devx-body .devx-seg-item.on { background: rgb(var(--hz-white)); color: var(--hz-black); border-radius: 2px; }
+.devx-body .devx-seg-item { font-size: 12px; letter-spacing: 0.02em; }
+
+/* Category marks: muted, so colour is a hint, not the headline. */
+.devx-body .devx-legend-item,
+.devx-body .dev-item [style*='--cat'],
+.devx-body .devx-bar-col,
+.devx-body .devx-pin-icon,
+.devx-body .devx-pill .devx-pin { filter: saturate(0.35); }
+.devx-body .devx-legend-item { border-radius: 4px; background: none; border: 1px solid var(--line); }
+
+/* Price pins on the map: black tags with an off-white edge. */
+.devx-body .devx-pill {
+  color: rgb(var(--hz-white));
+  background: rgb(5 6 7 / 0.88);
+  border: 1px solid rgb(var(--hz-white) / 0.35);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px -6px rgb(0 0 0 / 0.9);
+  font-family: var(--hz-display);
+  font-stretch: 108%;
+  letter-spacing: 0.02em;
+}
+.devx-body .devx-pill::after { border-top-color: rgb(var(--hz-white) / 0.35); }
+.devx-body .devx-pill-icon.lit .devx-pill,
+.devx-body .devx-pill-icon.chosen .devx-pill { background: rgb(var(--hz-white)); color: var(--hz-black); border-color: rgb(var(--hz-white)); }
+.devx-body .devx-pin { filter: saturate(0.5); }
+
+/* Leaflet's own controls. */
+.devx-body .leaflet-bar a,
+.devx-body .leaflet-control-zoom a { background: rgb(12 14 16 / 0.85); color: rgb(var(--hz-white)); border-color: var(--line); }
+.devx-body .leaflet-bar { border: 1px solid var(--line); border-radius: 4px; box-shadow: none; }
+.devx-body .leaflet-control-attribution { background: rgb(5 6 7 / 0.7); color: var(--muted); }
+.devx-body .leaflet-control-attribution a { color: rgb(var(--hz-white) / 0.75); }
+
+/* ---- Development map: Horizon motion. Everything here is decoration on
+   top of the existing markers and panels, and all of it is off when the
+   visitor asks for reduced motion. Leaflet positions the marker element
+   itself, so animations go on its children and pseudo-elements only. ---- */
+@media (prefers-reduced-motion: no-preference) {
+  /* Panels slide in once when the map opens. */
+  .devx-body .devx-side { animation: hz-in-left 700ms var(--ease-out) backwards; }
+  .devx-body .devx-filters { animation: hz-in-down 700ms 120ms var(--ease-out) backwards; }
+  .devx-body .devx-chart { animation: hz-in-up 700ms 200ms var(--ease-out) backwards; }
+
+  /* Price tags and icons rise into place whenever they are drawn. */
+  .devx-body .devx-pill,
+  .devx-body .devx-pin { animation: hz-rise 620ms var(--ease-out) backwards; }
+  .devx-body .devx-pill-icon:hover .devx-pill { transform: translateY(-3px); }
+  .devx-body .devx-pill { transition: transform 220ms var(--ease-out), background 220ms, color 220ms; }
+
+  /* A soft light glows on the ground where each price tag points, and
+     brightens on hover or selection. */
+  .devx-body .devx-pill-icon::before {
+    content: ""; position: absolute; left: 6px; bottom: -14px; width: 16px; height: 16px; border-radius: 50%;
+    background: radial-gradient(circle, rgb(240 240 250 / 0.55) 0%, rgb(240 240 250 / 0.12) 40%, transparent 70%);
+    pointer-events: none; animation: hz-glow 3.2s ease-in-out infinite;
+  }
+  .devx-body .devx-pill-icon:hover::before,
+  .devx-body .devx-pill-icon.lit::before,
+  .devx-body .devx-pill-icon.chosen::before { background: radial-gradient(circle, rgb(240 240 250 / 0.95) 0%, rgb(240 240 250 / 0.25) 40%, transparent 70%); animation: none; }
+
+  /* A ripple on the ground under the selected or hovered project. */
+  .devx-body .devx-pill-icon::after,
+  .devx-body .devx-pin-icon::after {
+    content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid rgb(240 240 250 / 0.8); opacity: 0; pointer-events: none;
+  }
+  .devx-body .devx-pill-icon::after { left: 7px; bottom: -13px; }
+  .devx-body .devx-pin-icon::after { left: 50%; top: 50%; margin: -7px 0 0 -7px; }
+  .devx-body .devx-pill-icon.chosen::after,
+  .devx-body .devx-pin-icon.chosen::after,
+  .devx-body .devx-pill-icon:hover::after,
+  .devx-body .devx-pin-icon:hover::after { animation: hz-ripple 1.8s var(--ease-out) infinite; }
+
+  /* One slow light sweep across the map when it opens. */
+  .devx-body .devx-mapwrap::after {
+    content: ""; position: absolute; inset: 0; z-index: 402; pointer-events: none;
+    background: linear-gradient(100deg, transparent 40%, rgb(240 240 250 / 0.06) 50%, transparent 60%);
+    background-size: 250% 100%; animation: hz-sweep 2.4s 300ms var(--ease-in-out) backwards;
+  }
+
+  /* Filings-by-month bars grow up from the axis. */
+  .devx-body .devx-bar-col i { transform-origin: bottom; animation: hz-grow 800ms var(--ease-out) backwards; }
+  .devx-body .devx-bar-col:nth-child(3n+1) i { animation-delay: 300ms; }
+  .devx-body .devx-bar-col:nth-child(3n+2) i { animation-delay: 380ms; }
+  .devx-body .devx-bar-col:nth-child(3n) i { animation-delay: 460ms; }
+
+  /* List rows: a soft highlight slides in on hover. */
+  .devx-body .dev-item { transition: background 200ms, box-shadow 200ms; }
+  .devx-body .dev-item:hover { background: rgb(240 240 250 / 0.04); box-shadow: inset 2px 0 0 rgb(240 240 250 / 0.7); }
+}
+.devx-body .devx-pill-icon { position: relative; overflow: visible; }
+
+@keyframes hz-in-left { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes hz-in-down { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes hz-in-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes hz-rise { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
+@keyframes hz-glow { 50% { opacity: 0.45; } }
+@keyframes hz-ripple { 0% { opacity: 0.9; transform: scale(0.4); } 100% { opacity: 0; transform: scale(2.6); } }
+@keyframes hz-sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+@keyframes hz-grow { from { transform: scaleY(0); } to { transform: none; } }
+
+/* Map hover labels in the Horizon look. */
+.devx-body .leaflet-tooltip {
+  color: rgb(240 240 250); background: rgb(12 14 16 / 0.92); border: 1px solid rgb(240 240 250 / 0.18);
+  border-radius: 4px; box-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.9); font: 500 12.5px var(--ui);
+}
+.devx-body .leaflet-tooltip-top::before { border-top-color: rgb(240 240 250 / 0.18); }
+.devx-body .leaflet-tooltip-bottom::before { border-bottom-color: rgb(240 240 250 / 0.18); }
+.devx-body .devx-panel a,
+.devx-body .devx-panel-foot > *,
+.devx-body .devx-tile { border-radius: 4px; }
+.devx-body .devx-panel-foot a:first-child { background: rgb(240 240 250); color: #050607; }
+@media (prefers-reduced-motion: no-preference) {
+  .devx-body .devx-panel { animation: hz-in-right 520ms var(--ease-out) backwards; }
+}
+@keyframes hz-in-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+/* ---- The top bar in the Horizon look on every page (it began on the
+   development map page; the roles search is hidden only there). Only while the map is open
+   (markets-view.js sets body[data-workspace='map']); every other page
+   keeps the current bar. The phone's bottom tabs live in .tabs too. ---- */
+.appbar {
+  --hz-w: 240 240 250;
+  --bg: #050607;
+  --surface: #0c0e10;
+  --ink: rgb(var(--hz-w));
+  --ink2: rgb(var(--hz-w) / 0.7);
+  --muted: rgb(var(--hz-w) / 0.55);
+  --line: rgb(var(--hz-w) / 0.12);
+  --chip: rgb(var(--hz-w) / 0.05);
+  --accent: rgb(var(--hz-w));
+  --on-accent: #050607;
+  --appbar: #050607;
+  background: #050607;
+  border-bottom: 1px solid rgb(var(--hz-w) / 0.1);
+  color: rgb(var(--hz-w));
+}
+.appbar .brand-mark { background: rgb(240 240 250); color: #050607; border-radius: 3px; }
+.appbar .brand-name {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.3em; font-size: 15px;
+}
+.appbar .tabs { background: #050607; }
+.appbar .tab {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: rgb(240 240 250 / 0.55); background: none; box-shadow: none; border-radius: 0;
+  transition: color 200ms;
+}
+.appbar .tab:hover { color: rgb(240 240 250); background: none; }
+.appbar .tab[aria-current='page'] {
+  color: rgb(240 240 250); background: none; box-shadow: inset 0 -1px 0 rgb(240 240 250);
+}
+.appbar .tab-count { color: rgb(240 240 250 / 0.45); background: none; }
+.appbar .head-search {
+  background: rgb(240 240 250 / 0.04); border: 1px solid rgb(240 240 250 / 0.14); border-radius: 4px;
+}
+.appbar .head-search input { color: rgb(240 240 250); font-family: 'Manrope', system-ui, sans-serif; }
+.appbar .head-search input::placeholder { color: rgb(240 240 250 / 0.45); }
+.appbar .search-hint { background: none; border: 1px solid rgb(240 240 250 / 0.2); color: rgb(240 240 250 / 0.5); border-radius: 3px; }
+.appbar .theme-button,
+.appbar .signin-jump {
+  background: none; color: rgb(240 240 250); border: 1px solid rgb(240 240 250 / 0.35); border-radius: 4px;
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.appbar .theme-button:hover { background: rgb(240 240 250); color: #050607; }
+.appbar .tab-slider { display: none; }
+.appbar .tabs .tab[aria-current='page'] { color: rgb(240 240 250); background: none; }
+@media (max-width: 640px) {
+  .appbar .tab { font-size: 10px; letter-spacing: 0.08em; font-stretch: 100%; padding-inline: 0; }
+  .appbar .tabs .tab[aria-current='page'] { box-shadow: inset 0 1px 0 rgb(240 240 250); }
+}
+/* Match the Horizon landing page's bar: wordmark only, links on the right,
+   a short underline under the open page. Search and the theme switch are
+   left out here: the map is always dark, and that search is for roles. */
+.appbar .brand-mark,
+.appbar .brand-tag,
+.appbar .theme-button { display: none; }
+body[data-workspace='map'] .appbar .head-search { display: none; }
+.appbar .brand-name { font-size: 17px; letter-spacing: 0.32em; }
+@media (min-width: 641px) {
+  .appbar .tabs { margin-left: auto; gap: 28px; align-items: center; }
+  .appbar .tab { font-size: 12.5px; padding: 6px 0; margin: 0; align-self: center; border-bottom: 0; }
+  .appbar .tabs .tab[aria-current='page'] { box-shadow: inset 0 -1px 0 rgb(240 240 250); }
+  .appbar .appbar-actions { margin-left: 28px; }
+}
+
+/* ==========================================================================
+   The landing tour (pitch.js) in the Horizon look: full screen and black,
+   wide uppercase headlines, one off-white at stepped opacities, a hairline
+   progress line, hairline-ruled lists and white rectangular buttons.
+   Styling only; the slides, keys, swipes and focus handling are unchanged.
+   ========================================================================== */
+.pitch {
+  --hz: 240 240 250;
+  --ink: rgb(var(--hz)); --ink2: rgb(var(--hz) / 0.7); --muted: rgb(var(--hz) / 0.5);
+  --line: rgb(var(--hz) / 0.14); --accent: rgb(var(--hz)); --on-accent: #050607;
+  --accent-tint: transparent;
+  padding: 0;
+  background: #050607;
+  color: rgb(var(--hz));
+  font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.pitch .pitch-frame {
+  width: 100%; height: 100%; max-width: none; max-height: none;
+  border: 0; border-radius: 0; box-shadow: none;
+  background:
+    radial-gradient(70% 60% at 78% 55%, rgb(var(--hz) / 0.05), transparent 70%),
+    #050607;
+}
+.pitch .pitch-top { padding: 26px clamp(20px, 5vw, 68px) 18px; }
+.pitch .brand-mark { display: none; }
+.pitch .brand-name {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%; font-weight: 800;
+  font-size: 17px; letter-spacing: 0.32em; text-transform: uppercase; color: rgb(var(--hz));
+}
+.pitch .pitch-count,
+.pitch .pitch-skip {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11.5px; letter-spacing: 0.2em; text-transform: uppercase;
+}
+.pitch .pitch-count { color: rgb(var(--hz) / 0.5); }
+.pitch .pitch-skip { color: rgb(var(--hz) / 0.7); text-decoration: none; }
+.pitch .pitch-skip:hover { color: rgb(var(--hz)); }
+.pitch .pitch-bar { height: 1px; margin-inline: clamp(20px, 5vw, 68px); background: rgb(var(--hz) / 0.14); border-radius: 0; }
+.pitch .pitch-bar span { background: rgb(var(--hz)); border-radius: 0; }
+
+.pitch .pitch-slide { padding: 28px clamp(20px, 5vw, 68px); }
+.pitch .eyebrow {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: rgb(var(--hz) / 0.6);
+}
+.pitch .pitch-slide h2 {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%; font-weight: 800;
+  font-size: clamp(34px, 5.2vw, 84px); line-height: 0.94; letter-spacing: -0.01em;
+  text-transform: uppercase; text-wrap: balance; color: rgb(var(--hz)); max-width: 13ch;
+}
+.pitch .pitch-slide.final h2 { max-width: none; }
+.pitch .pitch-lede { color: rgb(var(--hz) / 0.72); font-size: 16px; line-height: 1.6; max-width: 46ch; }
+
+/* Lists as a spec table: hairline rules, no checkbox bullets. */
+.pitch .pitch-points { gap: 0; border-top: 1px solid rgb(var(--hz) / 0.14); max-width: 52ch; }
+.pitch .pitch-points li { padding: 14px 0 14px 34px; border-bottom: 1px solid rgb(var(--hz) / 0.14); color: rgb(var(--hz) / 0.78); line-height: 1.5; counter-increment: hz-pt; }
+.pitch .pitch-points { counter-reset: hz-pt; }
+.pitch .pitch-points li::before {
+  content: counter(hz-pt, decimal-leading-zero); width: auto; height: auto; border: 0; border-radius: 0; background: none;
+  top: 15px; left: 0; font: 600 11px 'Archivo', sans-serif; font-stretch: 112%; letter-spacing: 0.12em; color: rgb(var(--hz) / 0.45);
+}
+.pitch .pitch-points strong { color: rgb(var(--hz)); }
+
+/* Art: a thin off-white line icon standing in a field of light columns,
+   echoing the landing page's light field. */
+#pitch .pitch-icon {
+  position: relative; width: min(340px, 60vw); border-radius: 0; background: none; overflow: visible; isolation: isolate;
+}
+#pitch .pitch-icon::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 13px, rgb(var(--hz) / 0.10) 13px 14px),
+    linear-gradient(to top, rgb(var(--hz) / 0.0), transparent);
+  -webkit-mask: linear-gradient(to top, #000 0%, rgb(0 0 0 / 0.6) 45%, transparent 100%), radial-gradient(closest-side, #000 40%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask: linear-gradient(to top, #000 0%, rgb(0 0 0 / 0.6) 45%, transparent 100%) intersect, radial-gradient(closest-side, #000 40%, transparent 100%);
+}
+#pitch .pitch-icon::after {
+  content: ""; position: absolute; left: 10%; right: 10%; bottom: 8%; height: 1px; z-index: -1;
+  background: linear-gradient(90deg, transparent, rgb(var(--hz) / 0.5), transparent);
+}
+#pitch .pitch-icon svg { width: 42%; height: 42%; stroke: rgb(var(--hz)); stroke-width: 1; filter: drop-shadow(0 0 18px rgb(var(--hz) / 0.35)); }
+
+/* Navigation: a ghost back button, hairline dashes for slides, a white Next. */
+.pitch .pitch-nav { padding: 18px clamp(20px, 5vw, 68px) 26px; border-top: 1px solid rgb(var(--hz) / 0.1); }
+.pitch .icon-button { border: 1px solid rgb(var(--hz) / 0.3); border-radius: 4px; background: none; color: rgb(var(--hz)); }
+.pitch .icon-button:hover { background: rgb(var(--hz) / 0.08); }
+.pitch .pitch-dots button::before { width: 18px; height: 2px; border-radius: 0; background: rgb(var(--hz) / 0.25); }
+.pitch .pitch-dots button[aria-selected='true']::before { width: 36px; background: rgb(var(--hz)); }
+.pitch .primary,
+.pitch .pitch-next,
+.pitch .pitch-ctas .primary {
+  background: rgb(var(--hz)); color: #050607; border: 1px solid rgb(var(--hz)); border-radius: 4px; box-shadow: none; outline-color: rgb(var(--hz));
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 115%; font-weight: 700;
+  font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; padding-inline: 22px;
+}
+.pitch .primary:hover,
+.pitch .pitch-next:hover { background: #c9c9d4; border-color: #c9c9d4; }
+.pitch button:not(.primary):not(.icon-button):not(.pitch-skip):not([role='tab']) { border-radius: 4px; }
+.pitch .pitch-plans p { border-radius: 4px; border-color: rgb(var(--hz) / 0.14); background: rgb(var(--hz) / 0.03); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .pitch .pitch-slide.current .eyebrow { animation: hz-in-up 700ms var(--ease-out) backwards; }
+  .pitch .pitch-slide.current h2 { animation: hz-in-up 800ms 80ms var(--ease-out) backwards; }
+  .pitch .pitch-slide.current .pitch-lede,
+  .pitch .pitch-slide.current .pitch-points,
+  .pitch .pitch-slide.current .pitch-ctas { animation: hz-in-up 800ms 180ms var(--ease-out) backwards; }
+  .pitch .pitch-slide.current .pitch-icon::before { animation: hz-grow 1100ms 120ms var(--ease-out) backwards; transform-origin: bottom; }
+}
+#pitch .pitch-icon::before { inset: 0; }
+.pitch .pitch-slide.final .pitch-lede { margin-inline: auto; }
+@media (max-width: 640px) {
+  #pitch .pitch-icon { width: min(180px, 46vw); }
+  .pitch .pitch-slide h2 { font-size: clamp(28px, 8.4vw, 40px); hyphens: none; }
+}
+
+/* ==========================================================================
+   Profile page layout refresh, in Terra's own look (Instrument Sans, the
+   indigo accent, cards, the contour motif; light and dark). A sticky
+   identity card on the left; each part of the form is its own card on the
+   right; Save stays in reach at the bottom. Styling only.
+   ========================================================================== */
+@media (min-width: 900px) {
+  #profile.profile {
+    display: grid; grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+    gap: 32px; align-items: start; max-width: 1180px; margin-inline: auto;
+  }
+  #profile .profile-side { position: sticky; top: 88px; max-width: none; align-self: start; }
+  #profile .profile-main { max-width: none; }
+}
+#profile .profile-side {
+  position: relative; overflow: hidden; display: grid; gap: 18px;
+  padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: calc(var(--radius) + 6px);
+}
+/* The contour motif behind the avatar. */
+#profile .profile-side::before {
+  content: ""; position: absolute; left: 50%; top: -140px; width: 520px; height: 360px; translate: -50% 0; pointer-events: none;
+  background: repeating-radial-gradient(ellipse at 50% 55%, transparent 0 17px, color-mix(in oklch, var(--accent) 22%, transparent) 17px 18px);
+  -webkit-mask: radial-gradient(closest-side, #000 30%, transparent 100%); mask: radial-gradient(closest-side, #000 30%, transparent 100%);
+}
+#profile .profile-head { position: relative; display: grid; justify-items: center; text-align: center; gap: 12px; padding-top: 44px; }
+#profile .profile-head .close {
+  position: absolute; left: 0; top: 0; padding: 4px 10px; font-size: 13px; text-decoration: none;
+  color: var(--ink2); background: var(--chip); border: 1px solid var(--line); border-radius: 999px;
+}
+#profile .profile-head .close::before { content: "← "; }
+#profile .profile-head .close:hover { color: var(--ink); background: var(--chip-hover); }
+#profile .avatar.large {
+  width: 104px; height: 104px;
+  box-shadow: 0 0 0 4px var(--surface), 0 0 0 5px color-mix(in oklch, var(--accent) 45%, transparent), var(--shadow-float);
+}
+#profile .profile-who { display: grid; justify-items: center; gap: 6px; }
+#profile #profile-title { margin: 6px 0 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+#profile #profile-email { margin: 0; }
+#profile .avatar-upload { display: grid; justify-items: center; gap: 6px; margin-top: 6px; }
+#profile .avatar-upload .hint { font-size: 12px; }
+
+#profile .prof-progress { margin: 0; padding: 16px; background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: none; }
+#profile .meter-bar { height: 6px; border-radius: 6px; background: var(--chip); overflow: hidden; }
+#profile .meter-bar i { border-radius: 6px; }
+#profile .profile-side-actions {
+  display: flex; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px;
+}
+
+/* Right column: one card per part of the profile. */
+#profile .profile-main { display: grid; gap: 20px; min-width: 0; }
+#profile .profile-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; margin-top: 0; padding-top: 0; border-top: 0; }
+#profile .profile-form > * { grid-column: 1 / -1; }
+#profile .profile-cards > .card,
+#profile .skill-gaps,
+#profile .profile-form > .about,
+#profile .profile-form > fieldset.sectors {
+  margin: 0; padding: 24px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--line); border-radius: calc(var(--radius) + 6px); box-shadow: none;
+}
+#profile .profile-form > fieldset.sectors > legend {
+  display: block; width: 100%; margin: 0 0 14px; padding: 0 0 12px; border-bottom: 1px solid var(--line);
+  font-size: 19px; font-weight: 600; letter-spacing: -0.01em; text-transform: none; color: var(--ink);
+}
+#profile .section-title { margin: 0 0 16px; padding: 0 0 12px; border-bottom: 1px solid var(--line); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+#profile .profile-form > .about fieldset.sectors { margin-top: 18px; padding: 0; border: 0; }
+#profile .upload.card { display: grid; gap: 10px; justify-items: start; }
+#profile .upload.card .eyebrow { font-size: 19px; font-weight: 600; color: var(--ink); text-transform: none; letter-spacing: -0.01em; }
+#profile .fields { gap: 16px 18px; }
+#profile .fields input,
+#profile .fields select { border-radius: var(--radius); }
+#profile .check { padding: 10px 0; }
+
+/* Save stays in reach while scrolling the form. */
+#profile .profile-form > .actions {
+  position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px; border: 1px solid var(--line); border-radius: calc(var(--radius) + 6px);
+  background: color-mix(in srgb, var(--surface) 86%, transparent); box-shadow: var(--shadow-float);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+#profile .profile-form > .actions .notice { margin: 0; }
+@media (max-width: 899px) {
+  #profile .profile-side { margin-bottom: 20px; }
+  #profile .profile-form > .actions { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (min-width: 900px) {
+  #profile .profile-side { grid-column: 1; grid-row: 1; margin: 0; }
+  #profile .profile-main { grid-column: 2; grid-row: 1; margin: 0; }
+}
+@media (min-width: 900px) {
+  #profile .profile-side { position: sticky; top: 88px; }
+}
+/* Keep the alerts and watch titles inside their cards, not on the border. */
+#profile .profile-form > fieldset.sectors { display: block; }
+#profile .profile-form > fieldset.sectors > legend { float: left; }
+#profile .profile-form > fieldset.sectors > legend + * { clear: both; }
+
+
+/* ==========================================================================
+   One theme: dark Horizon, site-wide. Terra no longer has a light mode.
+   These tokens sit on top of the old dark theme, so every component that
+   reads them (cards, chips, inputs, charts) follows: black canvas, one
+   off-white at stepped opacities, white as the accent, Manrope text,
+   4px corners. Data colours (up/down, categories) are unchanged.
+   ========================================================================== */
+:root[data-theme],
+:root {
+  color-scheme: dark;
+  --bg: #050607;
+  --surface: #0c0e10;
+  --sunk: #121417;
+  --ink: rgb(240 240 250);
+  --ink2: rgb(240 240 250 / 0.72);
+  --secondary: rgb(240 240 250 / 0.72);
+  --muted: rgb(240 240 250 / 0.52);
+  --faint: rgb(240 240 250 / 0.4);
+  --line: rgb(240 240 250 / 0.12);
+  --line2: rgb(240 240 250 / 0.2);
+  --hairline: rgb(240 240 250 / 0.12);
+  --divider: rgb(240 240 250 / 0.2);
+  --chip: rgb(240 240 250 / 0.06);
+  --chip-hover: rgb(240 240 250 / 0.11);
+  --accent: rgb(240 240 250);
+  --accent-hover: #c9c9d4;
+  --tint: rgb(240 240 250 / 0.1);
+  --accent-tint: rgb(240 240 250 / 0.1);
+  --on-tint: rgb(240 240 250);
+  --on-accent: #050607;
+  --appbar: #050607;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-float: 0 10px 30px -12px rgb(0 0 0 / 0.85);
+  --shadow-lg: 0 30px 80px -30px rgb(0 0 0 / 0.9);
+  --skeleton: linear-gradient(90deg, #0c0e10 0%, #16181b 50%, #0c0e10 100%);
+  --ui: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius: 6px;
+}
+body { background: var(--bg); color: var(--ink); }
+/* Page and section headings take Horizon's wide display face. */
+h1, h2, .section-title, .group-title {
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif; font-stretch: 112%; letter-spacing: -0.01em;
+}
+.eyebrow {
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif; font-stretch: 112%; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+}
+/* Primary buttons: white rectangles with black text. */
+button.primary, .button.primary, a.primary {
+  background: rgb(240 240 250); color: #050607; border-color: rgb(240 240 250); border-radius: 4px; box-shadow: none;
+}
+button.primary:hover, .button.primary:hover, a.primary:hover { background: #c9c9d4; border-color: #c9c9d4; }
+a { text-underline-offset: 3px; }
+h1 { font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spacing: -0.005em; }
+
+/* ---- Development map overview (devoverview.js): all of Texas first, in
+   the Horizon look; a metro opens the street map. ---- */
+.devx-overview {
+  --hz: 240 240 250;
+  position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 14px;
+  height: calc(100svh - 64px); min-height: 560px; padding: 28px clamp(16px, 3vw, 36px) 22px;
+  background: radial-gradient(60% 55% at 60% 55%, rgb(var(--hz) / 0.045), transparent 70%), #050607;
+  color: rgb(var(--hz)); overflow: hidden;
+}
+.devo-head { position: relative; z-index: 2; pointer-events: none; }
+.devo-eyebrow {
+  margin: 0; font: 600 12px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%;
+  letter-spacing: 0.2em; text-transform: uppercase; color: rgb(var(--hz) / 0.6);
+}
+.devo-title {
+  margin: 6px 0 0; font: 800 clamp(48px, 7vw, 104px)/0.9 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%;
+  text-transform: uppercase; letter-spacing: -0.01em; color: rgb(var(--hz));
+}
+.devo-hint { margin: 10px 0 0; font-size: 14px; color: rgb(var(--hz) / 0.55); }
+.devo-stage { position: relative; min-height: 0; display: grid; place-items: center; }
+.devo-map { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.devo-land { fill: rgb(var(--hz) / 0.035); stroke: rgb(var(--hz) / 0.32); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.devo-pt { fill: rgb(var(--hz) / 0.42); stroke: none; }
+.devo-pt.approx { fill: none; stroke: rgb(var(--hz) / 0.35); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
+.devo-hub { cursor: pointer; outline: none; }
+.devo-ring { fill: rgb(var(--hz) / 0.06); stroke: rgb(var(--hz) / 0.8); stroke-width: 1; vector-effect: non-scaling-stroke; transition: fill 220ms, stroke 220ms; }
+.devo-hit { fill: transparent; stroke: none; }
+.devo-label {
+  fill: rgb(var(--hz)); font-family: 'Archivo', 'Arial Narrow', sans-serif; font-weight: 700; font-stretch: 112%; letter-spacing: 0.08em;
+  paint-order: stroke; stroke: #050607; stroke-linejoin: round; pointer-events: none;
+}
+.devo-hub:hover .devo-ring,
+.devo-hub:focus-visible .devo-ring { fill: rgb(var(--hz) / 0.16); stroke: rgb(var(--hz)); }
+.devo-hub:focus-visible .devo-label { text-decoration: underline; }
+.devo-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; font-size: 12px; color: rgb(var(--hz) / 0.55); }
+.devo-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.devo-legend i { display: inline-block; width: 8px; height: 8px; }
+.devo-legend .sq { background: rgb(var(--hz) / 0.85); }
+.devo-legend .dot { background: rgb(var(--hz) / 0.85); border-radius: 50%; }
+.devo-legend .ring { border: 1.2px solid rgb(var(--hz) / 0.6); border-radius: 50%; }
+.devo-metros { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.devo-metros::-webkit-scrollbar { display: none; }
+.devo-metro {
+  flex: none; height: 38px; padding: 0 16px; border: 1px solid rgb(var(--hz) / 0.22); border-radius: 4px; background: none; cursor: pointer;
+  font: 600 12px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: 0.14em; text-transform: uppercase; color: rgb(var(--hz) / 0.75);
+  transition: color 200ms, border-color 200ms, background 200ms;
+}
+.devo-metro .n { color: rgb(var(--hz) / 0.5); margin-left: 4px; }
+.devo-metro:hover { color: rgb(var(--hz)); border-color: rgb(var(--hz) / 0.6); }
+.devo-metro.on { background: rgb(var(--hz)); color: #050607; border-color: rgb(var(--hz)); }
+@media (prefers-reduced-motion: no-preference) {
+  .devo-head > * { animation: hz-in-up 800ms var(--ease-out) backwards; }
+  .devo-title { animation-delay: 80ms !important; }
+  .devo-land { stroke-dasharray: 3000; animation: devo-draw 1600ms 100ms var(--ease-out) backwards; }
+  .devo-pt { animation: devo-pop 600ms var(--ease-out) backwards; animation-delay: calc(500ms + var(--i, 0) * 18ms); }
+  .devo-hub { animation: hz-in-up 700ms 900ms var(--ease-out) backwards; }
+  .devo-metros { animation: hz-in-up 700ms 300ms var(--ease-out) backwards; }
+}
+@keyframes devo-draw { from { stroke-dashoffset: 3000; } to { stroke-dashoffset: 0; } }
+@keyframes devo-pop { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 640px) {
+  .devx-overview { height: calc(100svh - 64px - 60px); min-height: 520px; padding-top: 20px; }
+}
+
+@media (min-width: 900px) {
+  /* The title floats over the map's empty top-left, as on the landing page. */
+  .devx-overview { grid-template-rows: minmax(0, 1fr) auto auto; }
+  .devo-head { position: absolute; top: 28px; left: clamp(16px, 3vw, 36px); }
+  .devo-stage { margin-top: 24px; }
+}
+
+/* ---- Markets, all markets (markets-stage.js): one metro on stage, then
+   every metro on one figure. Ported from the Horizon concept. ---- */
+.mstage-wrap { --hz: 240 240 250; display: grid; gap: 0; color: rgb(var(--hz)); }
+.mstage { display: grid; gap: 22px; padding-block: 28px 32px; min-width: 0; }
+.mstage-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mstage-count {
+  margin: 0; font: 600 12px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: 0.2em;
+  text-transform: uppercase; color: rgb(var(--hz) / 0.6);
+}
+.mstage-arrows { display: flex; gap: 8px; }
+.mstage-arrow {
+  width: 48px; height: 48px; display: grid; place-items: center; cursor: pointer; color: rgb(var(--hz));
+  background: none; border: 1px solid rgb(var(--hz) / 0.22); border-radius: 4px; transition: border-color 200ms, background 200ms;
+}
+.mstage-arrow:hover { border-color: rgb(var(--hz)); background: rgb(var(--hz) / 0.06); }
+.mstage-arrow svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.mstage-city {
+  margin: 0; font: 800 clamp(52px, 11vw, 190px)/0.86 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%;
+  text-transform: uppercase; letter-spacing: -0.02em; overflow-wrap: anywhere; color: rgb(var(--hz));
+}
+.mstage-city .ch { display: inline-block; }
+@media (prefers-reduced-motion: no-preference) {
+  .mstage-city.swap .ch { animation: mstage-ch 700ms var(--ease-out) backwards; animation-delay: calc(var(--k) * 22ms); }
+}
+@keyframes mstage-ch { from { transform: translateY(0.4em); opacity: 0.15; } to { transform: none; opacity: 1; } }
+.mstage-metro { margin: -8px 0 0; color: rgb(var(--hz) / 0.65); }
+.mstage-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(16px, 3vw, 40px); }
+.mstage-fig { display: grid; gap: 6px; padding-top: 16px; border-top: 1px solid rgb(var(--hz) / 0.22); min-width: 0; }
+.mstage-fig b {
+  font: 800 clamp(28px, 3.6vw, 60px)/0.95 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 108%; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.mstage-fig .label { color: rgb(var(--hz) / 0.7); font-size: 14px; }
+.mstage-fig .rank { color: rgb(var(--hz) / 0.48); font-size: 12.5px; }
+.mstage-open {
+  justify-self: start; display: inline-flex; align-items: center; height: 44px; padding: 0 20px; text-decoration: none;
+  border: 1px solid rgb(var(--hz) / 0.35); border-radius: 4px; color: rgb(var(--hz));
+  font: 700 12.5px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 115%; letter-spacing: 0.16em; text-transform: uppercase;
+  transition: background 200ms, color 200ms;
+}
+.mstage-open:hover { background: rgb(var(--hz)); color: #050607; }
+.mstage-rail { display: flex; gap: 14px; overflow-x: auto; padding-block: 6px 12px; scrollbar-width: none; }
+.mstage-rail::-webkit-scrollbar { display: none; }
+.mstage-rail button {
+  flex: none; padding: 8px 2px; background: none; border: 0; border-bottom: 2px solid rgb(var(--hz) / 0.12); cursor: pointer;
+  color: rgb(var(--hz) / 0.45); font: 600 12px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%;
+  letter-spacing: 0.12em; text-transform: uppercase; transition: color 200ms, border-color 200ms;
+}
+.mstage-rail button:hover { color: rgb(var(--hz) / 0.75); }
+.mstage-rail button[aria-current='true'] { color: rgb(var(--hz)); border-color: rgb(var(--hz)); }
+
+.mcompare { display: grid; gap: 20px; padding-block: 40px 48px; border-top: 1px solid rgb(var(--hz) / 0.12); }
+.mcompare-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.mcompare-title {
+  margin: 0; font: 800 clamp(24px, 3vw, 40px)/1 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%;
+  text-transform: uppercase; letter-spacing: -0.01em;
+}
+.mcompare-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.mcompare-chip {
+  height: 36px; padding: 0 14px; cursor: pointer; background: none; color: rgb(var(--hz) / 0.7);
+  border: 1px solid rgb(var(--hz) / 0.22); border-radius: 4px; font: 600 12px var(--ui);
+  transition: color 200ms, border-color 200ms, background 200ms;
+}
+.mcompare-chip:hover { color: rgb(var(--hz)); border-color: rgb(var(--hz) / 0.6); }
+.mcompare-chip[aria-pressed='true'] { background: rgb(var(--hz)); color: #050607; border-color: rgb(var(--hz)); }
+.mcompare-bars { display: grid; gap: 10px; }
+.mcompare-bar {
+  display: grid; grid-template-columns: 150px minmax(0, 1fr) 96px; gap: 16px; align-items: center;
+  padding: 0; background: none; border: 0; text-align: left; cursor: pointer; color: rgb(var(--hz) / 0.7);
+}
+.mcompare-bar .city { font-size: 14px; }
+.mcompare-bar .track { position: relative; height: 26px; background: #0c0e10; overflow: hidden; }
+.mcompare-bar .track i { position: absolute; top: 0; bottom: 0; background: rgb(var(--hz) / 0.35); transition: left 600ms var(--ease-out), width 600ms var(--ease-out); }
+.mcompare-bar .val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mcompare-bar:hover { color: rgb(var(--hz)); }
+.mcompare-bar.on { color: rgb(var(--hz)); }
+.mcompare-bar.on .track i { background: rgb(var(--hz)); }
+.mcompare-note { margin: 0; font-size: 13px; color: rgb(var(--hz) / 0.5); }
+@media (max-width: 760px) {
+  .mstage-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mcompare-bar { grid-template-columns: 96px minmax(0, 1fr) 72px; gap: 10px; }
+  .mcompare-bar .city { font-size: 12.5px; }
+}
+
+.devo-glow { fill: url(#devo-glow); fill: rgb(var(--hz) / 0.05); stroke: none; pointer-events: none; filter: blur(6px); }
+.devo-leader { stroke: rgb(var(--hz) / 0.35); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.devo-num { font-weight: 500; font-size: 0.82em; fill: rgb(var(--hz) / 0.55); letter-spacing: 0.04em; }
+.devo-hub:hover .devo-leader, .devo-hub:focus-visible .devo-leader { stroke: rgb(var(--hz) / 0.8); }
+.devo-hub:hover .devo-glow { fill: rgb(var(--hz) / 0.12); }
+
+.devo-metros-wrap { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.devo-metros-wrap .devo-metros { scroll-behavior: smooth; -webkit-mask: linear-gradient(90deg, transparent 0, #000 0, #000 100%, transparent 100%); }
+.devo-metros-wrap.more-left .devo-metros { -webkit-mask: linear-gradient(90deg, transparent 0, #000 36px); mask: linear-gradient(90deg, transparent 0, #000 36px); }
+.devo-metros-wrap.more-right .devo-metros { -webkit-mask: linear-gradient(90deg, #000 calc(100% - 36px), transparent 100%); mask: linear-gradient(90deg, #000 calc(100% - 36px), transparent 100%); }
+.devo-metros-wrap.more-left.more-right .devo-metros { -webkit-mask: linear-gradient(90deg, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%); mask: linear-gradient(90deg, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%); }
+.devo-scroll {
+  width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer; color: rgb(240 240 250);
+  background: #050607; border: 1px solid rgb(240 240 250 / 0.3); border-radius: 4px; transition: border-color 200ms, background 200ms, opacity 200ms;
+}
+.devo-scroll:hover:not(:disabled) { border-color: rgb(240 240 250); background: rgb(240 240 250 / 0.08); }
+.devo-scroll:disabled { opacity: 0.3; cursor: default; }
+.devo-scroll svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+@media (max-width: 640px) { .devo-num { display: none; } }
+
+/* ---- Top bar fit: the wide uppercase links and the search share the bar,
+   so both tighten as the window narrows instead of cutting off Events. ---- */
+.appbar .tab-count { margin: 0 0 0 6px; align-self: center; font-size: 10px; letter-spacing: 0.04em; }
+@media (min-width: 641px) {
+  .appbar .appbar-inner { gap: 20px; }
+  .appbar .tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .appbar .tabs::-webkit-scrollbar { display: none; }
+  .appbar .head-search { flex: 0 1 240px; min-width: 150px; }
+}
+@media (min-width: 641px) and (max-width: 1240px) {
+  .appbar .tabs { gap: 18px; }
+  .appbar .tab { font-size: 11px; letter-spacing: 0.12em; }
+  .appbar .head-search { flex-basis: 190px; }
+}
+@media (min-width: 641px) and (max-width: 1060px) {
+  .appbar .tabs { gap: 14px; }
+  .appbar .tab { font-size: 10.5px; letter-spacing: 0.08em; }
+  .appbar .head-search { flex-basis: 150px; }
+  .appbar .head-search .search-hint { display: none; }
+  .appbar .brand-name { letter-spacing: 0.22em; font-size: 15px; }
+}
+
+/* ---- Chips and section tabs in the Horizon look, site-wide: square
+   corners, a hairline outline, solid off-white when picked. The section
+   tabs (Markets tools, News sections) also take the wide uppercase face. ---- */
+.chip,
+.city-tab {
+  border-radius: 4px;
+  background: none;
+  border: 1px solid rgb(240 240 250 / 0.2);
+  color: rgb(240 240 250 / 0.72);
+  box-shadow: none;
+}
+.chip:hover,
+.city-tab:hover { background: rgb(240 240 250 / 0.06); border-color: rgb(240 240 250 / 0.55); color: rgb(240 240 250); }
+.chip[aria-pressed='true'],
+.chip[aria-current='page'],
+.chip[aria-current='true'],
+.chip[aria-selected='true'],
+.city-tab[aria-current='page'],
+.city-tab[aria-selected='true'],
+.market-tools .chip[aria-current='page'] {
+  background: rgb(240 240 250); color: #050607; border-color: rgb(240 240 250); box-shadow: none; outline: none;
+}
+.chip:focus-visible,
+.city-tab:focus-visible { outline: 2px solid rgb(240 240 250); outline-offset: 2px; }
+.market-tools .chip {
+  height: 36px; padding: 0 14px;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.chip .chip-count { opacity: 0.6; }
+/* Some older rules are ID-scoped (#news-view, #markets-view, #controls);
+   the Horizon chip shape and picked state win over them site-wide. */
+.chip,
+.city-tab,
+#controls .filters label,
+.toggle,
+.saved-toggle { border-radius: 4px !important; }
+:is(#markets-view, #news-view, #events-view, #jobs-view, #home-view, #tracker-view) .chip[aria-current],
+:is(#markets-view, #news-view, #events-view, #jobs-view, #home-view, #tracker-view) .chip[aria-pressed='true'] {
+  background: rgb(240 240 250) !important; color: #050607 !important; border-color: rgb(240 240 250) !important; box-shadow: none !important;
+}
+#controls .filters label { background: none; border: 1px solid rgb(240 240 250 / 0.2); }
