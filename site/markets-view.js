@@ -41,6 +41,7 @@ import { readEventsHash } from './events.js';
 import { stateBox } from './labels.js';
 import { countText, placeOf, project, texasMap } from './live.js';
 import { devOverview } from './devoverview.js';
+import { marketStage } from './markets-stage.js';
 import { field } from './contour.js';
 
 const $ = (id) => document.getElementById(id);
@@ -258,7 +259,12 @@ function render() {
   $('m-rates').replaceChildren(rates());
   // All markets: the comparison table beside the picked city's panel, the map's entry and the chart under it.
   $('m-chart').replaceChildren();
-  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [overview(group), ...(group.key === 'development' ? [devTeaser()] : [])]));
+  // All markets: one metro on stage at a time and all of them on one figure (markets-stage.js), the full table folded under it.
+  const allMarkets = () => [
+    marketStage({ snapshot, group, metricFor, cityHref: (city) => writeMarketHash({ ...state, city, tool: '' }) }),
+    reliefTable(group)
+  ];
+  $('m-body').replaceChildren(...(state.city ? [cityView(state.city, group)] : [...allMarkets(), ...(group.key === 'development' ? [devTeaser()] : [])]));
   if (!state.city && group.key === 'migration') $('m-body').append(counties());
   $('m-sources').replaceChildren(sources());
 }
