@@ -34,6 +34,80 @@ export interface FetchJsonOptions {
   headers?: Record<string, string>;
 }
 
+/**
+ * Hosts that share one rate limit across tenants. Every Workday career site
+ * sits behind the same edge, and on 2026-11-21 a PR build reading 27 Workday
+ * boards four at a time (three details each) got HTTP 429 on 20 of them. Each
+ * group gets its own cap on requests in flight, and one 429 pauses the whole
+ * group (Retry-After, or a backoff) instead of every board retrying into it.
+ */
+interface HostGroup {
+  limit: number;
+  active: number;
+  queue: (() => void)[];
+  pausedUntil: number;
+  /** 429 answers seen, for the run report. */
+  throttled: number;
+}
+
+const GROUPS: Record<string, HostGroup> = {};
+
+export function hostGroup(url: string): string | null {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return null;
+  }
+  if (host.endsWith('.myworkdayjobs.com') || host.endsWith('.myworkdaysite.com')) return 'workday';
+  return null;
+}
+
+function group(name: string): HostGroup {
+  return (GROUPS[name] ??= {
+    limit: Math.max(1, Number(process.env[`${name.toUpperCase()}_CONCURRENCY`] ?? 3)),
+    active: 0,
+    queue: [],
+    pausedUntil: 0,
+    throttled: 0
+  });
+}
+
+/** 429s per host group so far this process (Workday: how often the edge pushed back). */
+export function throttleCounts(): Record<string, number> {
+  return Object.fromEntries(Object.entries(GROUPS).map(([name, g]) => [name, g.throttled]));
+}
+
+/** For tests: forget every group's state. */
+export function resetHostGroups(): void {
+  for (const key of Object.keys(GROUPS)) delete GROUPS[key];
+}
+
+async function acquire(g: HostGroup): Promise<void> {
+  if (g.active < g.limit) {
+    g.active++;
+  } else {
+    await new Promise<void>((resolve) => g.queue.push(resolve));
+  }
+  const wait = g.pausedUntil - Date.now();
+  if (wait > 0) await delay(wait);
+}
+
+function release(g: HostGroup): void {
+  const next = g.queue.shift();
+  if (next) next();
+  else g.active--;
+}
+
+/** Seconds or an HTTP date, capped at a minute so one header cannot stall a build. */
+function retryAfterMs(response: Response, fallback: number): number {
+  const value = response.headers?.get?.('retry-after');
+  if (!value) return fallback;
+  const seconds = Number(value);
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : new Date(value).getTime() - Date.now();
+  return Math.min(60_000, Math.max(fallback, Number.isFinite(ms) ? ms : fallback));
+}
+
 const USER_AGENT = 'terra-collector/0.1 (+https://github.com/thougthfullCarrot/Terra)';
 
 /**
@@ -79,15 +153,23 @@ async function request<T>(
     body = JSON.stringify(options.body);
   }
 
+  const groupName = hostGroup(url);
+  const gate = groupName ? group(groupName) : null;
+  // A shared edge that rate-limits gets more patience: the pause is shared, so
+  // a few extra tries cost little and save the board from a partial read.
+  const tries = gate ? Math.max(retries, 4) : retries;
+
   let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; attempt <= tries; attempt++) {
     const tally = requestTally.getStore();
     if (tally) {
       tally.requests++;
       if (attempt > 0) tally.retries++;
     }
+    if (gate) await acquire(gate);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let pause = 0;
     try {
       const response = await fetchImpl(url, {
         method,
@@ -102,20 +184,27 @@ async function request<T>(
           response.status,
           url
         );
-        if (!retryable(response.status) || attempt === retries) throw error;
+        if (gate && response.status === 429) {
+          gate.throttled++;
+          pause = retryAfterMs(response, Math.max(5000, backoffMs(attempt, baseDelayMs)));
+          gate.pausedUntil = Math.max(gate.pausedUntil, Date.now() + pause);
+        }
+        if (!retryable(response.status) || attempt === tries) throw error;
         lastError = error;
       } else {
         return await read(response);
       }
     } catch (error) {
       if (error instanceof HttpError && !retryable(error.status)) throw error;
-      if (attempt === retries) throw error;
+      if (attempt === tries) throw error;
       lastError = error;
     } finally {
       clearTimeout(timer);
+      if (gate) release(gate);
     }
 
-    await delay(backoffMs(attempt, baseDelayMs));
+    // A 429 already paused the group; the next acquire waits that out.
+    if (!pause) await delay(backoffMs(attempt, baseDelayMs));
   }
 
   throw lastError instanceof Error ? lastError : new Error(`${method} ${url} failed`);

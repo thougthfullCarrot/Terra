@@ -33,6 +33,33 @@ import { IncompleteBoardError } from './incomplete.js';
  */
 
 const PAGE_SIZE = 20;
+
+/**
+ * Posting details read on an earlier build, keyed by tenant + posting path.
+ * Workday gives no ETag or modified time on the CXS API, and its list carries
+ * only a relative "Posted N days ago", so the validator is the posting path
+ * (which ends in the requisition id) plus an age cap: a detail is reused for
+ * DETAIL_MAX_AGE_HOURS, then read again. A posting no longer on the list is
+ * never read, cached or not, so closures work exactly as before.
+ */
+export interface DetailCacheEntry {
+  job: Omit<RawJob, 'postedAt'> & { postedAt?: string };
+  /** ISO time the detail was read from Workday. */
+  at: string;
+}
+export type DetailCache = Map<string, DetailCacheEntry>;
+
+export const DETAIL_MAX_AGE_HOURS = Number(process.env.WORKDAY_DETAIL_MAX_AGE_HOURS ?? 72);
+
+let sharedCache: DetailCache | null = null;
+/** Set once per process by export-site --detail-cache; null turns reuse off. */
+export function useDetailCache(cache: DetailCache | null): void {
+  sharedCache = cache;
+}
+
+export function detailKey(tenant: WorkdayTenant, externalPath: string): string {
+  return `${tenant.host}/${tenant.tenant}/${tenant.site}${externalPath}`;
+}
 /**
  * Stop after this many pages per firm. The largest boards seen (JLL, Cushman &
  * Wakefield) both report exactly 2,000, which looks like Workday's ceiling, so
@@ -58,6 +85,8 @@ export interface WorkdayStats {
   listed: number;
   considered: number;
   fetched: number;
+  /** Details taken from the cache instead of read again. */
+  reused?: number;
   /**
    * A few titles the board listed, kept for diagnosis. 0 of 63 postings
    * surviving the filters is either correct or a silently over-aggressive
@@ -141,8 +170,11 @@ export async function fetchWorkday(
   firm: string,
   host: string | null | undefined,
   slug: string,
-  options: FetchJsonOptions & { maxPages?: number; stats?: WorkdayStats } = {}
+  options: FetchJsonOptions & { maxPages?: number; stats?: WorkdayStats; cache?: DetailCache | null; now?: Date } = {}
 ): Promise<RawJob[]> {
+  const cache = options.cache === undefined ? sharedCache : options.cache;
+  const now = options.now ?? new Date();
+  let reused = 0;
   const tenant = parseTenant(host, slug);
   const maxPages = options.maxPages ?? MAX_PAGES;
 
@@ -185,18 +217,37 @@ export async function fetchWorkday(
 
   const jobs: RawJob[] = [];
   let detailFailures = 0;
+  const toRead: WorkdayListing[] = [];
+  for (const listing of candidates) {
+    const key = detailKey(tenant, listing.externalPath as string);
+    const hit = cache?.get(key);
+    if (hit && now.getTime() - new Date(hit.at).getTime() < DETAIL_MAX_AGE_HOURS * 3_600_000) {
+      reused++;
+      jobs.push({ ...hit.job, firm, postedAt: hit.job.postedAt ? new Date(hit.job.postedAt) : undefined } as RawJob);
+    } else {
+      toRead.push(listing);
+    }
+  }
   // Three at a time: this is one tenant's server and we are a guest on it.
-  for (let i = 0; i < candidates.length; i += 3) {
-    const details = await Promise.all(
-      candidates.slice(i, i + 3).map((listing) => fetchDetail(firm, tenant, listing, options))
-    );
+  for (let i = 0; i < toRead.length; i += 3) {
+    const batch = toRead.slice(i, i + 3);
+    const details = await Promise.all(batch.map((listing) => fetchDetail(firm, tenant, listing, options)));
+    details.forEach((detail, n) => {
+      const key = detailKey(tenant, batch[n]!.externalPath as string);
+      if (detail && detail !== 'failed') cache?.set(key, { job: { ...detail, postedAt: detail.postedAt?.toISOString() }, at: now.toISOString() });
+      // Closed between list and detail: never reuse it.
+      if (detail === null) cache?.delete(key);
+    });
     for (const detail of details) {
       if (detail === 'failed') detailFailures++;
       else if (detail) jobs.push(detail);
     }
   }
 
-  if (options.stats) options.stats.fetched = jobs.length;
+  if (options.stats) {
+    options.stats.fetched = jobs.length;
+    options.stats.reused = reused;
+  }
 
   if (detailFailures) gap = [gap, `${detailFailures} of ${candidates.length} posting details failed`].filter(Boolean).join('; ');
   if (gap) throw new IncompleteBoardError(`Workday ${tenant.tenant}/${tenant.site}: ${gap}`, jobs);

@@ -116,6 +116,15 @@ jobs:
           key: job-retain-none
           restore-keys: job-retain-
 
+      # Workday posting details read on recent builds, reused for up to 72 hours
+      # instead of read again (backend/src/collector/sources/workday.ts).
+      - name: Restore the Workday details
+        uses: actions/cache/restore@v4
+        with:
+          path: workday-details.json
+          key: workday-details-none
+          restore-keys: workday-details-
+
       - name: Export postings from the live boards
         # Optional. With these set, Adzuna search results join the board
         # postings; without them the site is built from the boards alone.
@@ -131,7 +140,7 @@ jobs:
           SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
-          npm run --silent export:site -- --history ../job-history.json --retain ../job-retain.json --coverage ../job-coverage.json --review ../job-review.json --excluded ../job-excluded.json --samples 2>&1 | tee /tmp/export.log
+          npm run --silent export:site -- --history ../job-history.json --retain ../job-retain.json --coverage ../job-coverage.json --review ../job-review.json --excluded ../job-excluded.json --detail-cache ../workday-details.json --samples 2>&1 | tee /tmp/export.log
 
       # Postings held back because they state no experience and nothing says
       # entry level. Kept as a run artifact for a person to look through;
@@ -160,6 +169,13 @@ jobs:
         with:
           path: job-retain.json
           key: job-retain-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Cache the Workday details
+        if: hashFiles('workday-details.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: workday-details.json
+          key: workday-details-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Cache the job history
         if: hashFiles('job-history.json') != ''

@@ -6,6 +6,7 @@
  *   npm run export:site -- --history <path>   # how long each job has been up (site/history.ts)
  *   npm run export:site -- --retain <path>    # keep jobs of a board that failed this build (site/retain.ts)
  *   npm run export:site -- --coverage <path>  # per-board status and counts, as JSON
+ *   npm run export:site -- --detail-cache <path>  # reuse Workday posting details read on recent builds
  *   npm run export:site -- --excluded <path>  # every board posting the filters left out, for audits
  *
  * Needs no database: the firm list is read from the seed migration, as
@@ -37,6 +38,8 @@ import { retainUnverified, type RetainFile, type RetainResult } from '../site/re
 import { publishAs, resolveIdentity } from '../site/identity.js';
 import { sheetsClientFromEnv } from '../sheets/env.js';
 import { firmStatuses, loadFirms } from '../sheets/firms.js';
+import { DETAIL_MAX_AGE_HOURS, useDetailCache, type DetailCache, type DetailCacheEntry } from '../collector/sources/workday.js';
+import { throttleCounts } from '../lib/http.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = resolve(here, '../../../site/postings.json');
@@ -54,7 +57,26 @@ async function main(): Promise<void> {
   const aggregators = [...adzunaAggregators(), ...usajobsAggregators()];
   if (!aggregators.some((a) => a.name === 'adzuna')) console.warn('ADZUNA_APP_ID / ADZUNA_APP_KEY not set; no Adzuna results.');
   if (!aggregators.some((a) => a.name === 'usajobs')) console.warn('USAJOBS_API_KEY / USAJOBS_EMAIL not set; no USAJOBS results.');
+  // Workday posting details from earlier builds (sources/workday.ts): reused
+  // for a few days instead of read again, the largest share of board requests.
+  const detailCachePath = flag('--detail-cache');
+  let detailCache: DetailCache | null = null;
+  if (detailCachePath) {
+    const saved = await readFile(detailCachePath, 'utf8').then((text) => JSON.parse(text) as Record<string, DetailCacheEntry>, () => ({}));
+    detailCache = new Map(Object.entries(saved));
+    useDetailCache(detailCache);
+    console.log(`Detail cache: ${detailCache.size} Workday details loaded (reused up to ${DETAIL_MAX_AGE_HOURS}h).`);
+  }
+
   const report = await runCollector({ store, aggregators });
+
+  if (detailCachePath && detailCache && report.firmsFailed < report.firms) {
+    const cutoff = Date.now() - DETAIL_MAX_AGE_HOURS * 3_600_000;
+    for (const [key, entry] of detailCache) if (new Date(entry.at).getTime() < cutoff) detailCache.delete(key);
+    await writeFile(detailCachePath, `${JSON.stringify(Object.fromEntries(detailCache))}\n`);
+    const reused = report.boards.reduce((n, b) => n + (b.reused ?? 0), 0);
+    console.log(`Detail cache: ${reused} details reused this build; ${detailCache.size} kept.`);
+  }
 
   if (sheets && write && firms.sheet) {
     const jobsByFirm = new Map<string, number>();
@@ -223,6 +245,8 @@ function metricsTable(report: RunReport, firmsListed: number): string {
       row.requests += b.requests ?? 0;
       byAts.set(b.ats, row);
     }
+    const throttled = throttleCounts();
+    lines.push(`Throttled (HTTP 429, shared pause): ${Object.entries(throttled).map(([g, n]) => `${g} ${n}`).join(', ') || 'none'} · Workday details reused: ${report.boards.reduce((n, b) => n + (b.reused ?? 0), 0)}`);
     lines.push(`Boards by platform: ${[...byAts].map(([ats, r]) => `${ats} ${r.boards} boards ${r.requests} req ${sec(r.ms)}`).join(' · ')}`);
   }
   for (const a of report.aggregators) {

@@ -25,6 +25,8 @@ export const STALE_DAYS = 14;
 export interface BoardCount {
   listed?: number;
   total?: number;
+  /** Posting details reused from an earlier build instead of read again (Workday). */
+  reused?: number;
 }
 
 export type Fetcher = (firm: FirmRow, count?: BoardCount) => Promise<RawJob[]>;
@@ -93,6 +95,8 @@ export interface BoardStatus {
   /** HTTP requests the board took, and how many of them were retries. */
   requests?: number;
   retries?: number;
+  /** Posting details reused from an earlier build (Workday detail cache). */
+  reused?: number;
 }
 
 /** A board posting the filters left out. */
@@ -254,6 +258,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
         status.retries = tally.retries;
         if (count.listed !== undefined) status.listed = count.listed;
         if (count.total !== undefined) status.total = count.total;
+        if (count.reused) status.reused = count.reused;
       }
       await store.markFirmPolled(firm.id, { ok: true });
     } catch (error) {
@@ -520,6 +525,7 @@ async function fetchWorkdayCounted(firm: FirmRow, count?: BoardCount): Promise<R
     if (count) {
       count.listed = stats.listed;
       if (stats.total !== undefined) count.total = stats.total;
+      if (stats.reused) count.reused = stats.reused;
     }
   }
 }

@@ -11,10 +11,13 @@
 #
 # Name | website hint | sector | markets
 
+# Dropped after run 44934839335 because they are already on the firm list:
+# Hines, Stream Realty Partners, Toll Brothers, KB Home, Meritage Homes,
+# M/I Homes, Tri Pointe Homes, Beazer Homes, Perry Homes, Marcus & Millichap,
+# Tricon Residential, Fidelity National Financial.
+
 # --- From TERRA development filings (TDLR owners) ---
-Hines | hines.com | Development | Houston; Dallas; Austin
 Trammell Crow Company | trammellcrow.com | Development | Dallas; Houston; Austin
-Stream Realty Partners | streamrealty.com | Brokerage | Dallas; Houston; Austin; San Antonio
 Majestic Realty | majesticrealty.com | Development | Dallas; Houston
 Ryan Companies | ryancompanies.com | Development | Dallas; Austin; Houston
 Thompson Thrift | thompsonthrift.com | Development | Houston; San Antonio; Austin
@@ -40,18 +43,10 @@ Swinerton | swinerton.com | Construction | Dallas; Houston; Austin
 Clayco | claycorp.com | Construction | Dallas; Houston
 
 # --- Homebuilders ---
-Toll Brothers | tollbrothers.com | Homebuilder | Dallas; Houston; Austin; San Antonio
-KB Home | kbhome.com | Homebuilder | Houston; Austin; San Antonio
-Meritage Homes | meritagehomes.com | Homebuilder | Dallas; Houston; Austin; San Antonio
-M/I Homes | mihomes.com | Homebuilder | Dallas; Houston; Austin; San Antonio
-Tri Pointe Homes | tripointehomes.com | Homebuilder | Dallas; Houston; Austin
-Beazer Homes | beazer.com | Homebuilder | Dallas; Houston
-Perry Homes | perryhomes.com | Homebuilder | Houston; Dallas; Austin; San Antonio
 Brookfield Residential | brookfieldresidential.com | Homebuilder | Dallas; Houston; Austin
 
 # --- Brokerages ---
 Newmark | nmrk.com | Brokerage | Dallas; Houston; Austin; San Antonio
-Marcus & Millichap | marcusmillichap.com | Brokerage | Dallas; Houston; Austin; San Antonio
 Compass | compass.com | Brokerage | Dallas; Houston; Austin
 Anywhere Real Estate | anywhere.re | Brokerage | Dallas; Houston; Austin
 Redfin | redfin.com | Brokerage | Dallas; Houston; Austin; San Antonio
@@ -60,7 +55,6 @@ Zillow | zillow.com | Brokerage | Dallas; Houston; Austin
 # --- Owners and operators ---
 AMLI Residential | amli.com | Investment | Dallas; Houston; Austin
 American Homes 4 Rent | ah4r.com | Investment | Dallas; Houston; San Antonio
-Tricon Residential | triconresidential.com | Investment | Dallas; Houston
 Progress Residential | progressresidential.com | Investment | Dallas; Houston; San Antonio
 Extra Space Storage | extraspace.com | Investment | Dallas; Houston; Austin
 Public Storage | publicstorage.com | Investment | Dallas; Houston; Austin
@@ -73,7 +67,6 @@ Prosperity Bank | prosperitybankusa.com | Lending | Houston; Dallas; Austin
 KeyBank | key.com | Lending | Dallas
 PNC | pnc.com | Lending | Dallas; Houston
 Regions Bank | regions.com | Lending | Dallas; Houston
-Fidelity National Financial | fnf.com | Title | Dallas; Houston; Austin; San Antonio
 Ready Capital | readycapital.com | Lending | Dallas
 
 # --- Investment managers ---
@@ -81,3 +74,76 @@ Clarion Partners | clarionpartners.com | Investment | Dallas
 Heitman | heitman.com | Investment | Dallas
 Ares Management | aresmgmt.com | Investment | Dallas; Houston
 CBRE Investment Management | cbreim.com | Investment | Dallas
+
+# --- From TERRA development filings, round 2 (employer:leads, PR #116 build) ---
+# Owner and contractor names resolved to the operating company only where the
+# filing itself shows it: "GRBK Edgewood, LLC" (Rivina, Georgetown) is Green
+# Brick Partners (NYSE: GRBK); "NRP Contractors II" is The NRP Group (listed);
+# "Camden Development" is Camden (batch 2). Contractors named on Austin permits.
+Green Brick Partners | greenbrickpartners.com | Homebuilder | Dallas; Austin; Houston
+Harvey-Cleary Builders | harvey-cleary.com | Construction | Austin; Houston
+JLB Partners | jlbpartners.com | Development | Dallas; Austin; Houston
+Andres Construction | andresconstruction.com | Construction | Dallas; Austin
+The Christman Company | christmanco.com | Construction | Austin
+Carleton Companies | carletoncompanies.com | Development | Austin; Dallas
+Halle Properties | halleproperties.com | Investment | Austin; Houston
+
+# --- General contractors, round 2 ---
+Pogue Construction | pogueconstruction.com | Construction | Dallas
+Alston Construction | alstonco.com | Construction | Dallas; Houston
+Hill & Wilkinson | hill-wilkinson.com | Construction | Dallas
+Sundt Construction | sundt.com | Construction | Dallas; San Antonio; Austin
+Mortenson | mortenson.com | Construction | Dallas; Austin
+Zachry Construction | zachry.com | Construction | San Antonio
+Flintco | flintco.com | Construction | Austin; Dallas
+Adolfson & Peterson | a-p.com | Construction | Dallas
+Tellepsen | tellepsen.com | Construction | Houston
+Structure Tone | structuretone.com | Construction | Dallas; Houston; Austin
+Holder Construction | holderconstruction.com | Construction | Dallas; Austin
+Layton Construction | laytonconstruction.com | Construction | Dallas
+Haskell | haskell.com | Construction | Dallas; Houston
+
+# --- Homebuilders, round 2 ---
+Trendmaker Homes | trendmakerhomes.com | Homebuilder | Houston
+Empire Communities | empirecommunities.com | Homebuilder | Austin; San Antonio
+Sandlin Homes | sandlinhomes.com | Homebuilder | Fort Worth
+Homebound | homebound.com | Homebuilder | Austin; Dallas; Houston
+Woodside Homes | woodsidehomes.com | Homebuilder | Austin; Houston
+
+# --- Brokerage and advisory, round 2 ---
+Mohr Partners | mohrpartners.com | Brokerage | Dallas
+Franklin Street | franklinst.com | Brokerage | Dallas; Houston
+Hughes Marino | hughesmarino.com | Brokerage | Dallas; Austin
+
+# --- Owners, operators and student housing ---
+Landmark Properties | landmarkproperties.com | Development | Austin; College Station; San Antonio
+Cardinal Group Companies | cardinalgroup.com | Property Management | Austin; College Station; San Antonio
+CA Ventures | ca-ventures.com | Development | Austin; Dallas
+Olympus Property | olympusproperty.com | Investment | Fort Worth; Dallas
+Avanti Residential | avantiresidential.com | Property Management | Dallas; Austin; Houston
+Waterton | waterton.com | Investment | Dallas; Houston
+Morgan Properties | morganproperties.com | Investment | Dallas; Houston
+Weidner Apartment Homes | weidner.com | Property Management | Dallas; Austin; Houston
+Lincoln Avenue Capital | lincolnavecap.com | Investment | Dallas; Houston
+Exeter Property Group | exeterpg.com | Investment | Dallas; Houston
+Stockbridge | stockbridge.com | Investment | Dallas
+Starwood Capital Group | starwoodcapital.com | Investment | Dallas
+TPG Real Estate | tpg.com | Investment | Dallas; Austin
+
+# --- Lenders and title, round 2 ---
+Broadway Bank | broadway.bank | Lending | San Antonio; Austin
+Happy State Bank | happybank.com | Lending | Dallas; Fort Worth; Austin
+Third Coast Bank | thirdcoast.bank | Lending | Houston; Dallas; Austin; San Antonio
+Stellar Bank | stellar.bank | Lending | Houston
+Simmons Bank | simmonsbank.com | Lending | Dallas; Houston
+Synovus | synovus.com | Lending | Houston
+Republic Title of Texas | republictitle.com | Title | Dallas; Houston; Austin
+Allegiance Title | allegiancetitle.com | Title | Dallas; Houston; Austin
+Independence Title | independencetitle.com | Title | Austin; San Antonio; Dallas
+Westcor Land Title | wltic.com | Title | Dallas; Houston
+Doma | doma.com | Title | Dallas
+
+# --- Real estate technology with Texas seats (CRE seats only publish) ---
+RealPage | realpage.com | Property Management | Dallas
+Offerpad | offerpad.com | Investment | Dallas; Houston; Austin; San Antonio
+SmartRent | smartrent.com | Property Management | Dallas; Austin
