@@ -13505,3 +13505,119 @@ body[data-workspace='map'] .appbar .brand-name { font-size: 17px; letter-spacing
   body[data-workspace='map'] .appbar .tabs .tab[aria-current='page'] { box-shadow: inset 0 -1px 0 rgb(240 240 250); }
   body[data-workspace='map'] .appbar .appbar-actions { margin-left: 28px; }
 }
+
+/* ==========================================================================
+   The landing tour (pitch.js) in the Horizon look: full screen and black,
+   wide uppercase headlines, one off-white at stepped opacities, a hairline
+   progress line, hairline-ruled lists and white rectangular buttons.
+   Styling only; the slides, keys, swipes and focus handling are unchanged.
+   ========================================================================== */
+.pitch {
+  --hz: 240 240 250;
+  --ink: rgb(var(--hz)); --ink2: rgb(var(--hz) / 0.7); --muted: rgb(var(--hz) / 0.5);
+  --line: rgb(var(--hz) / 0.14); --accent: rgb(var(--hz)); --on-accent: #050607;
+  --accent-tint: transparent;
+  padding: 0;
+  background: #050607;
+  color: rgb(var(--hz));
+  font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.pitch .pitch-frame {
+  width: 100%; height: 100%; max-width: none; max-height: none;
+  border: 0; border-radius: 0; box-shadow: none;
+  background:
+    radial-gradient(70% 60% at 78% 55%, rgb(var(--hz) / 0.05), transparent 70%),
+    #050607;
+}
+.pitch .pitch-top { padding: 26px clamp(20px, 5vw, 68px) 18px; }
+.pitch .brand-mark { display: none; }
+.pitch .brand-name {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%; font-weight: 800;
+  font-size: 17px; letter-spacing: 0.32em; text-transform: uppercase; color: rgb(var(--hz));
+}
+.pitch .pitch-count,
+.pitch .pitch-skip {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 11.5px; letter-spacing: 0.2em; text-transform: uppercase;
+}
+.pitch .pitch-count { color: rgb(var(--hz) / 0.5); }
+.pitch .pitch-skip { color: rgb(var(--hz) / 0.7); text-decoration: none; }
+.pitch .pitch-skip:hover { color: rgb(var(--hz)); }
+.pitch .pitch-bar { height: 1px; margin-inline: clamp(20px, 5vw, 68px); background: rgb(var(--hz) / 0.14); border-radius: 0; }
+.pitch .pitch-bar span { background: rgb(var(--hz)); border-radius: 0; }
+
+.pitch .pitch-slide { padding: 28px clamp(20px, 5vw, 68px); }
+.pitch .eyebrow {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; font-weight: 600;
+  font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: rgb(var(--hz) / 0.6);
+}
+.pitch .pitch-slide h2 {
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%; font-weight: 800;
+  font-size: clamp(34px, 5.2vw, 84px); line-height: 0.94; letter-spacing: -0.01em;
+  text-transform: uppercase; text-wrap: balance; color: rgb(var(--hz)); max-width: 13ch;
+}
+.pitch .pitch-slide.final h2 { max-width: none; }
+.pitch .pitch-lede { color: rgb(var(--hz) / 0.72); font-size: 16px; line-height: 1.6; max-width: 46ch; }
+
+/* Lists as a spec table: hairline rules, no checkbox bullets. */
+.pitch .pitch-points { gap: 0; border-top: 1px solid rgb(var(--hz) / 0.14); max-width: 52ch; }
+.pitch .pitch-points li { padding: 14px 0 14px 34px; border-bottom: 1px solid rgb(var(--hz) / 0.14); color: rgb(var(--hz) / 0.78); line-height: 1.5; counter-increment: hz-pt; }
+.pitch .pitch-points { counter-reset: hz-pt; }
+.pitch .pitch-points li::before {
+  content: counter(hz-pt, decimal-leading-zero); width: auto; height: auto; border: 0; border-radius: 0; background: none;
+  top: 15px; left: 0; font: 600 11px 'Archivo', sans-serif; font-stretch: 112%; letter-spacing: 0.12em; color: rgb(var(--hz) / 0.45);
+}
+.pitch .pitch-points strong { color: rgb(var(--hz)); }
+
+/* Art: a thin off-white line icon standing in a field of light columns,
+   echoing the landing page's light field. */
+#pitch .pitch-icon {
+  position: relative; width: min(340px, 60vw); border-radius: 0; background: none; overflow: visible; isolation: isolate;
+}
+#pitch .pitch-icon::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 13px, rgb(var(--hz) / 0.10) 13px 14px),
+    linear-gradient(to top, rgb(var(--hz) / 0.0), transparent);
+  -webkit-mask: linear-gradient(to top, #000 0%, rgb(0 0 0 / 0.6) 45%, transparent 100%), radial-gradient(closest-side, #000 40%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask: linear-gradient(to top, #000 0%, rgb(0 0 0 / 0.6) 45%, transparent 100%) intersect, radial-gradient(closest-side, #000 40%, transparent 100%);
+}
+#pitch .pitch-icon::after {
+  content: ""; position: absolute; left: 10%; right: 10%; bottom: 8%; height: 1px; z-index: -1;
+  background: linear-gradient(90deg, transparent, rgb(var(--hz) / 0.5), transparent);
+}
+#pitch .pitch-icon svg { width: 42%; height: 42%; stroke: rgb(var(--hz)); stroke-width: 1; filter: drop-shadow(0 0 18px rgb(var(--hz) / 0.35)); }
+
+/* Navigation: a ghost back button, hairline dashes for slides, a white Next. */
+.pitch .pitch-nav { padding: 18px clamp(20px, 5vw, 68px) 26px; border-top: 1px solid rgb(var(--hz) / 0.1); }
+.pitch .icon-button { border: 1px solid rgb(var(--hz) / 0.3); border-radius: 4px; background: none; color: rgb(var(--hz)); }
+.pitch .icon-button:hover { background: rgb(var(--hz) / 0.08); }
+.pitch .pitch-dots button::before { width: 18px; height: 2px; border-radius: 0; background: rgb(var(--hz) / 0.25); }
+.pitch .pitch-dots button[aria-selected='true']::before { width: 36px; background: rgb(var(--hz)); }
+.pitch .primary,
+.pitch .pitch-next,
+.pitch .pitch-ctas .primary {
+  background: rgb(var(--hz)); color: #050607; border: 1px solid rgb(var(--hz)); border-radius: 4px; box-shadow: none; outline-color: rgb(var(--hz));
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 115%; font-weight: 700;
+  font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; padding-inline: 22px;
+}
+.pitch .primary:hover,
+.pitch .pitch-next:hover { background: #c9c9d4; border-color: #c9c9d4; }
+.pitch button:not(.primary):not(.icon-button):not(.pitch-skip):not([role='tab']) { border-radius: 4px; }
+.pitch .pitch-plans p { border-radius: 4px; border-color: rgb(var(--hz) / 0.14); background: rgb(var(--hz) / 0.03); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .pitch .pitch-slide.current .eyebrow { animation: hz-in-up 700ms var(--ease-out) backwards; }
+  .pitch .pitch-slide.current h2 { animation: hz-in-up 800ms 80ms var(--ease-out) backwards; }
+  .pitch .pitch-slide.current .pitch-lede,
+  .pitch .pitch-slide.current .pitch-points,
+  .pitch .pitch-slide.current .pitch-ctas { animation: hz-in-up 800ms 180ms var(--ease-out) backwards; }
+  .pitch .pitch-slide.current .pitch-icon::before { animation: hz-grow 1100ms 120ms var(--ease-out) backwards; transform-origin: bottom; }
+}
+#pitch .pitch-icon::before { inset: 0; }
+.pitch .pitch-slide.final .pitch-lede { margin-inline: auto; }
+@media (max-width: 640px) {
+  #pitch .pitch-icon { width: min(180px, 46vw); }
+  .pitch .pitch-slide h2 { font-size: clamp(28px, 8.4vw, 40px); hyphens: none; }
+}
