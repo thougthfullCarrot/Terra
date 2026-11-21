@@ -1,0 +1,76 @@
+# Temporary, on an isolated branch: print compact samples of the Website build's
+# cached data (market figures, development lists, jobs, news, events) so the
+# redesign concepts can use real figures. Reads caches only; deploys nothing.
+name: Design data dump
+on:
+  push:
+    branches: [claude/terra-design-data]
+permissions:
+  contents: read
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with: { path: site/market.json, key: market-none, restore-keys: market- }
+      - uses: actions/cache/restore@v4
+        with: { path: site/developments, key: devlists-none, restore-keys: devlists- }
+      - uses: actions/cache/restore@v4
+        with: { path: job-retain.json, key: job-retain-none, restore-keys: job-retain- }
+      - uses: actions/cache/restore@v4
+        with: { path: site/news.json, key: news-none, restore-keys: news- }
+      - uses: actions/cache/restore@v4
+        with: { path: site/events.json, key: events-none, restore-keys: events- }
+      - name: Dump compact samples
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const read = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return { __missing: p, err: String(e).slice(0, 120) }; } };
+          // Scalars only, strings trimmed: enough to design with, nothing bulky.
+          const flat = (o, depth = 0) => {
+            if (o == null || typeof o !== 'object') return typeof o === 'string' ? o.slice(0, 200) : o;
+            if (Array.isArray(o)) return depth > 1 ? `[${o.length}]` : o.slice(0, 6).map((x) => flat(x, depth + 1));
+            const out = {};
+            for (const [k, v] of Object.entries(o)) {
+              if (v == null || typeof v !== 'object') out[k] = typeof v === 'string' ? v.slice(0, 200) : v;
+              else if (depth < 1) out[k] = flat(v, depth + 1);
+            }
+            return out;
+          };
+          const shape = (o) => o && typeof o === 'object' ? (Array.isArray(o) ? `array(${o.length})` : Object.keys(o).join(',')) : typeof o;
+          const emit = (name, data) => console.log(`@@${name}@@` + JSON.stringify(data));
+
+          const m = read('site/market.json');
+          emit('market-shape', shape(m));
+          emit('market-meta', { generatedAt: m.generatedAt, schemaVersion: m.schemaVersion, refresh: m.refresh });
+          emit('market-groups', (m.groups || []).map((g) => ({ key: g.key, label: g.label, blurb: g.blurb, metrics: g.metrics })));
+          emit('market-metrics', (m.metrics || []).map((x) => ({ key: x.key, label: x.label, unit: x.unit, source: x.source, better: x.better, note: (x.note || '').slice(0, 160) })));
+          emit('market-markets', (m.markets || []).map((x) => ({ city: x.city, metro: x.metro, values: x.values, shared: x.shared, status: x.status, periods: x.periods })));
+          emit('market-rates', flat(m.rates));
+          emit('market-dev-shape', shape(m.developments));
+          const proj = m.developments?.projects || [];
+          emit('market-dev-projects', { count: proj.length, sample: proj.slice(0, 60).map((p) => flat(p)) });
+          emit('market-zoning', flat(m.zoning));
+
+          const dir = 'site/developments';
+          const files = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+          emit('devlists-files', files);
+          for (const f of files.slice(0, 12)) {
+            const d = read(`${dir}/${f}`);
+            const list = Array.isArray(d) ? d : d.projects || d.items || [];
+            emit(`devlist:${f}`, { shape: shape(d), count: list.length, sample: list.slice(0, 25).map((p) => flat(p)) });
+          }
+
+          const j = read('job-retain.json');
+          emit('jobs-shape', shape(j));
+          const jl = Array.isArray(j) ? j : j.postings || j.jobs || Object.values(j)[0] || [];
+          emit('jobs', { count: Array.isArray(jl) ? jl.length : 0, sample: (Array.isArray(jl) ? jl : []).slice(0, 40).map((p) => flat(p)) });
+
+          for (const n of ['news', 'events']) {
+            const d = read(`site/${n}.json`);
+            emit(`${n}-shape`, shape(d));
+            const l = Array.isArray(d) ? d : d.items || d[n] || d.headlines || [];
+            emit(n, { count: l.length, sample: l.slice(0, 15).map((x) => flat(x)) });
+          }
+          JS
