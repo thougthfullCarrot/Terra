@@ -13796,10 +13796,10 @@ h1 { font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spa
 .devo-stage { position: relative; min-height: 0; display: grid; place-items: center; }
 .devo-map { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .devo-land { fill: rgb(var(--hz) / 0.035); stroke: rgb(var(--hz) / 0.32); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.devo-pt { fill: rgb(var(--hz) / 0.85); stroke: rgb(5 6 7 / 0.9); stroke-width: 0.6; }
-.devo-pt.approx { fill: none; stroke: rgb(var(--hz) / 0.6); stroke-width: 0.9; }
+.devo-pt { fill: rgb(var(--hz) / 0.42); stroke: none; }
+.devo-pt.approx { fill: none; stroke: rgb(var(--hz) / 0.35); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
 .devo-hub { cursor: pointer; outline: none; }
-.devo-ring { fill: rgb(var(--hz) / 0.05); stroke: rgb(var(--hz) / 0.55); stroke-width: 1; vector-effect: non-scaling-stroke; transition: fill 220ms, stroke 220ms; }
+.devo-ring { fill: rgb(var(--hz) / 0.06); stroke: rgb(var(--hz) / 0.8); stroke-width: 1; vector-effect: non-scaling-stroke; transition: fill 220ms, stroke 220ms; }
 .devo-hit { fill: transparent; stroke: none; }
 .devo-label {
   fill: rgb(var(--hz)); font-family: 'Archivo', 'Arial Narrow', sans-serif; font-weight: 700; font-stretch: 112%; letter-spacing: 0.08em;
@@ -13928,3 +13928,23 @@ h1 { font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spa
   .mcompare-bar { grid-template-columns: 96px minmax(0, 1fr) 72px; gap: 10px; }
   .mcompare-bar .city { font-size: 12.5px; }
 }
+
+.devo-glow { fill: url(#devo-glow); fill: rgb(var(--hz) / 0.05); stroke: none; pointer-events: none; filter: blur(6px); }
+.devo-leader { stroke: rgb(var(--hz) / 0.35); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.devo-num { font-weight: 500; font-size: 0.82em; fill: rgb(var(--hz) / 0.55); letter-spacing: 0.04em; }
+.devo-hub:hover .devo-leader, .devo-hub:focus-visible .devo-leader { stroke: rgb(var(--hz) / 0.8); }
+.devo-hub:hover .devo-glow { fill: rgb(var(--hz) / 0.12); }
+
+.devo-metros-wrap { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.devo-metros-wrap .devo-metros { scroll-behavior: smooth; -webkit-mask: linear-gradient(90deg, transparent 0, #000 0, #000 100%, transparent 100%); }
+.devo-metros-wrap.more-left .devo-metros { -webkit-mask: linear-gradient(90deg, transparent 0, #000 36px); mask: linear-gradient(90deg, transparent 0, #000 36px); }
+.devo-metros-wrap.more-right .devo-metros { -webkit-mask: linear-gradient(90deg, #000 calc(100% - 36px), transparent 100%); mask: linear-gradient(90deg, #000 calc(100% - 36px), transparent 100%); }
+.devo-metros-wrap.more-left.more-right .devo-metros { -webkit-mask: linear-gradient(90deg, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%); mask: linear-gradient(90deg, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%); }
+.devo-scroll {
+  width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer; color: rgb(240 240 250);
+  background: #050607; border: 1px solid rgb(240 240 250 / 0.3); border-radius: 4px; transition: border-color 200ms, background 200ms, opacity 200ms;
+}
+.devo-scroll:hover:not(:disabled) { border-color: rgb(240 240 250); background: rgb(240 240 250 / 0.08); }
+.devo-scroll:disabled { opacity: 0.3; cursor: default; }
+.devo-scroll svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+@media (max-width: 640px) { .devo-num { display: none; } }

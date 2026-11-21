@@ -13,8 +13,27 @@ import { OUTLINE, TEXAS_PLACES, project } from './live.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-/** Where each metro's label sits, away from its neighbours (DFW, Houston and Galveston, the I-35 cluster). */
-const LABEL_SIDE = { 'Fort Worth': 'l', Dallas: 'r', Austin: 't', 'San Antonio': 'l', 'New Braunfels': 'r', Houston: 't', Galveston: 'r', 'College Station': 't' };
+/**
+ * Where each metro's label sits, in screen pixels from its ring, with a
+ * leader line when it is pulled out: DFW, the I-35 run (Austin, New
+ * Braunfels, San Antonio) and the coast (Houston, Galveston) otherwise
+ * overprint each other. [dx, dy, anchor]
+ */
+const LABEL_AT = {
+  Dallas: [34, -22, 'start'],
+  'Fort Worth': [-36, 22, 'end'],
+  Austin: [-46, -34, 'end'],
+  'College Station': [34, -34, 'start'],
+  'New Braunfels': [52, 22, 'start'],
+  'San Antonio': [-48, 26, 'end'],
+  Houston: [44, -30, 'start'],
+  Galveston: [40, 34, 'start'],
+  Lubbock: [0, -26, 'middle'],
+  Midland: [0, 30, 'middle'],
+  'El Paso': [0, 30, 'middle']
+};
+/** On a phone the pull-outs shrink with the map. */
+const PHONE_SCALE = 0.62;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -95,10 +114,16 @@ export function devOverview({ data, cities, onCity }) {
     const hub = svg('g', { class: 'devo-hub', tabindex: 0, role: 'button', 'aria-label': `${m.city}: ${m.filings.toLocaleString('en-US')} filings. Open its map.` });
     const ring = svg('circle', { class: 'devo-ring', cx: x.toFixed(1), cy: y.toFixed(1) });
     const hit = svg('circle', { class: 'devo-hit', cx: x.toFixed(1), cy: y.toFixed(1) });
+    const glow = svg('circle', { class: 'devo-glow', cx: x.toFixed(1), cy: y.toFixed(1) });
+    const leader = svg('line', { class: 'devo-leader' });
     const label = svg('text', { class: 'devo-label' });
-    label.textContent = m.city.toUpperCase();
-    hub.append(ring, hit, label);
-    rings.push({ ring, hit, label, x, y, side: LABEL_SIDE[m.city] ?? 'b', size: 8 + Math.min(8, Math.sqrt(m.filings) / 7) });
+    const name = svg('tspan', { class: 'devo-name' });
+    name.textContent = m.city.toUpperCase();
+    const num = svg('tspan', { class: 'devo-num' });
+    num.textContent = m.filings.toLocaleString('en-US');
+    label.append(name, num);
+    hub.append(glow, ring, hit, leader, label);
+    rings.push({ ring, glow, hit, leader, label, name, num, x, y, at: LABEL_AT[m.city] ?? [0, 30, 'middle'], share: m.filings / Math.max(1, metros[0].filings) });
     const go = () => onCity(m.city);
     hub.addEventListener('click', go);
     hub.addEventListener('keydown', (e) => {
@@ -120,25 +145,41 @@ export function devOverview({ data, cities, onCity }) {
     const f = (n) => (n * u).toFixed(2);
     for (const { node, x, y } of marks) {
       if (node.tagName === 'rect') {
-        const half = box.width < 520 ? 1.7 : 2.4;
+        const half = box.width < 520 ? 1.1 : 1.6;
         node.setAttribute('x', (x - half * u).toFixed(2));
         node.setAttribute('y', (y - half * u).toFixed(2));
         node.setAttribute('width', f(half * 2));
         node.setAttribute('height', f(half * 2));
-      } else node.setAttribute('r', f(box.width < 520 ? 1.8 : 2.6));
+      } else node.setAttribute('r', f(box.width < 520 ? 1.2 : 1.7));
     }
     const small = box.width < 520;
-    for (const { ring, hit, label, x, y, side, size } of rings) {
-      const r = size * (small ? 0.55 : 1) * u;
+    const k = small ? PHONE_SCALE : 1;
+    for (const { ring, glow, hit, leader, label, name, num, x, y, at, share } of rings) {
+      // Ring area follows the metro's filings: Houston biggest, the smallest still visible.
+      const r = (4 + 10 * Math.sqrt(share)) * k * u;
       ring.setAttribute('r', r.toFixed(2));
+      glow.setAttribute('r', (r * 2.2).toFixed(2));
       hit.setAttribute('r', (r + 10 * u).toFixed(2));
-      const gap = r + (small ? 4 : 6) * u;
-      const pos = side === 'l' ? [x - gap, y + 4 * u, 'end'] : side === 'r' ? [x + gap, y + 4 * u, 'start'] : side === 't' ? [x, y - gap, 'middle'] : [x, y + gap + 9 * u, 'middle'];
-      label.setAttribute('x', pos[0].toFixed(2));
-      label.setAttribute('y', pos[1].toFixed(2));
-      label.setAttribute('text-anchor', pos[2]);
+      const [dx, dy, anchor] = at;
+      const lx = x + dx * k * u;
+      const ly = y + dy * k * u;
+      // A leader from the ring's edge toward the label when it is pulled out.
+      const far = Math.hypot(dx, dy) * k > 30;
+      leader.setAttribute('visibility', far ? 'visible' : 'hidden');
+      if (far) {
+        const t = r / Math.hypot(lx - x, ly - y);
+        leader.setAttribute('x1', (x + (lx - x) * t).toFixed(2));
+        leader.setAttribute('y1', (y + (ly - y) * t).toFixed(2));
+        leader.setAttribute('x2', (lx - (anchor === 'start' ? 4 : anchor === 'end' ? -4 : 0) * u).toFixed(2));
+        leader.setAttribute('y2', (ly - 4 * u).toFixed(2));
+      }
+      label.setAttribute('text-anchor', anchor);
       label.setAttribute('font-size', f(small ? 9 : 11.5));
       label.setAttribute('stroke-width', f(3));
+      name.setAttribute('x', lx.toFixed(2));
+      name.setAttribute('y', ly.toFixed(2));
+      num.setAttribute('x', lx.toFixed(2));
+      num.setAttribute('dy', '1.25em');
     }
   };
   new ResizeObserver(fit).observe(map);
@@ -166,6 +207,29 @@ export function devOverview({ data, cities, onCity }) {
     row.append(b);
   }
 
-  box.append(head, stage, legend, row);
+  // Arrows either side scroll the row; each dims at its end. Wheel, swipe and Tab still work too.
+  const rowWrap = el('div', 'devo-metros-wrap');
+  const arrow = (dir, label) => {
+    const b = el('button', `devo-scroll ${dir < 0 ? 'prev' : 'next'}`);
+    b.type = 'button';
+    b.setAttribute('aria-label', label);
+    b.innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true"><path d="${dir < 0 ? 'M11 3L5 9l6 6' : 'M7 3l6 6-6 6'}"/></svg>`;
+    b.addEventListener('click', () => row.scrollBy({ left: dir * row.clientWidth * 0.8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
+    return b;
+  };
+  const back = arrow(-1, 'Scroll metros left');
+  const fwd = arrow(1, 'Scroll metros right');
+  const ends = () => {
+    const max = row.scrollWidth - row.clientWidth - 1;
+    back.disabled = row.scrollLeft <= 0;
+    fwd.disabled = row.scrollLeft >= max;
+    rowWrap.classList.toggle('more-left', row.scrollLeft > 0);
+    rowWrap.classList.toggle('more-right', row.scrollLeft < max);
+  };
+  row.addEventListener('scroll', ends, { passive: true });
+  new ResizeObserver(ends).observe(row);
+  rowWrap.append(back, row, fwd);
+
+  box.append(head, stage, legend, rowWrap);
   return box;
 }
