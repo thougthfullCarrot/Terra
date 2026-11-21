@@ -905,32 +905,17 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* ---------------------------------------------------------------------------
-   Light and dark. The page follows the device until the visitor picks one.
+   One theme: the dark Horizon look. There is no light mode to switch to; a
+   choice saved by the old toggle is cleared.
    --------------------------------------------------------------------------- */
 
 function startTheme() {
-  const root = document.documentElement;
-  const media = matchMedia('(prefers-color-scheme: dark)');
-  const current = () => root.dataset.theme ?? (media.matches ? 'dark' : 'light');
-  const paint = () => {
-    const dark = current() === 'dark';
-    $('theme-toggle').setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} mode`);
-    $('theme-toggle').dataset.mode = dark ? 'dark' : 'light';
-    $('theme-toggle').textContent = dark ? 'Light' : 'Dark';
-  };
-  $('theme-toggle').addEventListener('click', () => {
-    const next = current() === 'dark' ? 'light' : 'dark';
-    root.dataset.theme = next;
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch {
-      // Not remembered, but still switched for this visit.
-    }
-    paint();
-    window.dispatchEvent(new Event('themechange'));
-  });
-  media.addEventListener('change', paint);
-  paint();
+  document.documentElement.dataset.theme = 'dark';
+  try {
+    localStorage.removeItem(THEME_KEY);
+  } catch {
+    // Nothing stored, or storage blocked: either way the page is dark.
+  }
 }
 
 function el(tag, cls = '', text) {
