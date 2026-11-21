@@ -62,15 +62,26 @@ jobs:
             emit(`devlist:${f}`, { shape: shape(d), count: list.length, sample: list.slice(0, 25).map((p) => flat(p)) });
           }
 
+          // Jobs, news and events are keyed objects, not arrays: walk them for the
+          // first array of records, and say how each is shaped.
+          const firstArray = (o, depth = 0) => {
+            if (Array.isArray(o)) return o;
+            if (!o || typeof o !== 'object' || depth > 3) return null;
+            for (const v of Object.values(o)) { const a = firstArray(v, depth + 1); if (a && a.length && typeof a[0] === 'object') return a; }
+            return null;
+          };
+          const keysOf = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.entries(o).slice(0, 12).map(([k, v]) => [k, Array.isArray(v) ? `array(${v.length})` : typeof v === 'object' && v ? `object(${Object.keys(v).length}): ${Object.keys(v).slice(0, 6).join(',')}` : typeof v])) : typeof o);
           const j = read('job-retain.json');
-          emit('jobs-shape', shape(j));
-          const jl = Array.isArray(j) ? j : j.postings || j.jobs || Object.values(j)[0] || [];
-          emit('jobs', { count: Array.isArray(jl) ? jl.length : 0, sample: (Array.isArray(jl) ? jl : []).slice(0, 40).map((p) => flat(p)) });
-
+          emit('jobs-keys', keysOf(j));
+          emit('jobs-postings-keys', keysOf(j.postings));
+          const jobs = Array.isArray(j.postings) ? j.postings : Object.values(j.postings || {}).flatMap((v) => (Array.isArray(v) ? v : typeof v === 'object' ? [v] : []));
+          emit('jobs', { count: jobs.length, sample: jobs.slice(0, 60).map((p) => flat(p.posting || p)) });
           for (const n of ['news', 'events']) {
             const d = read(`site/${n}.json`);
-            emit(`${n}-shape`, shape(d));
-            const l = Array.isArray(d) ? d : d.items || d[n] || d.headlines || [];
-            emit(n, { count: l.length, sample: l.slice(0, 15).map((x) => flat(x)) });
+            emit(`${n}-keys`, keysOf(d));
+            const cityLists = d.cities && typeof d.cities === 'object' ? Object.entries(d.cities) : [];
+            emit(`${n}-cities`, cityLists.slice(0, 11).map(([c, v]) => ({ city: c, shape: keysOf(v), sample: (firstArray(v) || []).slice(0, 4).map((x) => flat(x)) })));
+            const topics = d.topics ? firstArray(d.topics) : null;
+            if (topics) emit(`${n}-topics`, topics.slice(0, 12).map((x) => flat(x)));
           }
           JS
