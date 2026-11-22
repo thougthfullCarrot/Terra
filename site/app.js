@@ -38,6 +38,7 @@ import { setHomeJobs, startHome } from './home-view.js';
 import { stateBox } from './labels.js';
 import { startGateMap, startLanding, startTabSlider } from './live.js';
 import { startLandingField } from './landing-field.js';
+import { startLandingWelcome } from './landing-welcome.js';
 
 const $ = (id) => document.getElementById(id);
 const FILTER_LABELS = { firm: 'All firms', sector: 'All sectors' };
@@ -1011,4 +1012,5 @@ setInterval(() => {
 startTabSlider();
 startGateMap();
 startLandingField();
+startLandingWelcome();
 startLanding();

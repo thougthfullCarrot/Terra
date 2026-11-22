@@ -23,6 +23,7 @@ export function startLandingField() {
   let running = false;
   let seen = true;
   let cols = [];
+  let labels = [];
   let maxH = 1;
 
   const lons = OUTLINE.map((p) => p[0]);
@@ -46,10 +47,13 @@ export function startLandingField() {
     ctx.clearRect(0, 0, w, h);
     if (!w || !h) return;
     const phone = w < 760;
-    // Texas spans about 11.6 squeezed degrees: on a phone it fills the width
-    // above the headline; on a desktop it stands to the right.
-    const scale = Math.min(phone ? w * 0.9 : w * 0.44, h * 1.1) / 11.6;
-    const cx = phone ? w * 0.5 : w * 0.73;
+    // Texas spans about 11.6 squeezed degrees. It sits inside the page's
+    // 1240px column, to the right of the copy, so a wide window doesn't
+    // blow it up across the headline; on a phone it fills the top.
+    const col = Math.min(w, 1240);
+    const left = (w - col) / 2;
+    const scale = Math.min(phone ? w * 0.9 : col * 0.36, h * 0.9) / 11.6;
+    const cx = phone ? w * 0.5 : left + col * 0.8;
     const cy = phone ? h * 0.24 : h * 0.56;
     const tall = h * (phone ? 0.15 : 0.3);
     const tilt = 0.46;
@@ -98,11 +102,29 @@ export function startLandingField() {
       }
     }
     ctx.globalCompositeOperation = 'source-over';
+
+    // City names under the biggest bundles, as on the Horizon concept.
+    if (!phone) {
+      ctx.font = '600 10px Archivo, "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(240,240,250,0.6)';
+      const placed = [];
+      for (const { name, at } of labels) {
+        const [x, y] = P(at);
+        if (placed.some(([a, b]) => Math.hypot(a - x, b - y) < 70)) continue;
+        placed.push([x, y]);
+        ctx.fillText(name.toUpperCase().split('').join('\u200A'), x, y + 18);
+      }
+    }
   };
 
-  const loop = () => {
+  // Turn by time, not by frame, so a 120 or 144 Hz screen doesn't spin it
+  // faster: about one full turn every five minutes.
+  let last = 0;
+  const loop = (now) => {
     if (!running) return;
-    theta += 0.0016;
+    if (last) theta += Math.min(now - last, 100) * 0.000021;
+    last = now;
     draw();
     requestAnimationFrame(loop);
   };
@@ -110,6 +132,7 @@ export function startLandingField() {
     const want = seen && !document.hidden && !gate.hidden && !reduced();
     if (want && !running) {
       running = true;
+      last = 0;
       requestAnimationFrame(loop);
     } else if (!want) running = false;
   };
@@ -134,6 +157,7 @@ export function startLandingField() {
       }
     }
     maxH = Math.max(...cols.map((c) => c.h), 1);
+    labels = ranked.slice(0, 5).filter(([name]) => TEXAS_PLACES[name]).map(([name]) => ({ name, at: toPlane(TEXAS_PLACES[name]) }));
     const roles = ranked.reduce((s, [, n]) => s + n, 0);
     if (caption) {
       caption.textContent = `Each column of light is an open role, standing in its city: ${roles.toLocaleString('en-US')} roles in ${ranked.length} ${ranked.length === 1 ? 'city' : 'cities'}. ${ranked[0][0]} leads with ${ranked[0][1]}.`;
