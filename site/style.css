@@ -14118,3 +14118,86 @@ h1 { font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spa
   #gate.hz-hero .hero-copy { gap: 16px; }
 }
 @media (max-width: 760px) { #gate.hz-hero h1 em { white-space: normal; } }
+
+/* ---- Landing, below the hero (#welcome), in the Horizon look: wide
+   uppercase headings, hairline rules instead of rounded cards, square
+   tabs with a solid off-white pick. Copy and behaviour are unchanged. ---- */
+#gate.hz-hero h1 { font-size: clamp(44px, 5vw, 88px); }
+#welcome { --hz: 240 240 250; }
+#welcome .welcome-block { border-top: 1px solid rgb(var(--hz) / 0.12); padding-top: clamp(40px, 6vw, 72px); }
+#welcome .eyebrow { color: rgb(var(--hz) / 0.55); letter-spacing: 0.22em; font-size: 12px; }
+#welcome h2 {
+  font: 800 clamp(30px, 4vw, 60px)/0.95 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%;
+  text-transform: uppercase; letter-spacing: -0.01em; color: rgb(var(--hz)); text-wrap: balance;
+}
+/* How it works: a numbered spec row. */
+#welcome .steps { gap: clamp(16px, 3vw, 40px); }
+#welcome .steps li {
+  background: none; border: 0; border-top: 1px solid rgb(var(--hz) / 0.22); border-radius: 0; box-shadow: none;
+  padding: 18px 0 0; transform: none !important;
+}
+#welcome .step-num {
+  width: auto; height: auto; padding: 0; background: none; border: 0; border-radius: 0;
+  font: 600 12px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: 0.16em; color: rgb(var(--hz) / 0.5);
+}
+#welcome .steps h3 { font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; text-transform: uppercase; letter-spacing: 0.04em; font-size: 16px; }
+#welcome .steps p { color: rgb(var(--hz) / 0.65); }
+/* Feature tabs: square, white when picked; the old contour rings go. */
+#welcome .ftabs { background: none; border: 1px solid rgb(var(--hz) / 0.14); border-radius: 4px; padding: 4px; }
+#welcome .ftab-pill { background: rgb(var(--hz)); border-radius: 2px; box-shadow: none; }
+#welcome .ftab {
+  border-radius: 2px; color: rgb(var(--hz) / 0.7);
+  font-family: 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px;
+}
+#welcome .ftab[aria-selected='true'] { color: #050607; }
+#welcome .ftab[aria-selected='true'] svg { stroke: #050607; }
+#welcome .feature { background: #0c0e10; border: 1px solid rgb(var(--hz) / 0.12); border-radius: 4px; box-shadow: none; }
+#welcome .feature canvas.topo,
+#welcome .core-features canvas.topo { display: none; }
+#welcome .feature h3 {
+  font: 800 clamp(26px, 3vw, 44px)/1 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%; text-transform: uppercase;
+}
+#welcome .feature p { color: rgb(var(--hz) / 0.68); }
+/* Free access and questions. */
+#welcome .free-card { background: none; border: 0; border-top: 1px solid rgb(var(--hz) / 0.22); border-radius: 0; box-shadow: none; padding: 18px 0 0; }
+#welcome .faq details { border: 0; border-bottom: 1px solid rgb(var(--hz) / 0.14); border-radius: 0; background: none; }
+#welcome .faq summary { font-weight: 600; }
+#welcome .welcome-cta { background: #0c0e10; border: 1px solid rgb(var(--hz) / 0.12); border-radius: 4px; box-shadow: none; }
+#welcome .welcome-cta h2 { font-size: clamp(28px, 3.4vw, 52px); }
+#welcome .welcome-cta .primary { border-radius: 4px; background: rgb(var(--hz)); color: #050607; text-transform: uppercase; letter-spacing: 0.14em; font: 700 12.5px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 115%; }
+
+/* ---- Landing: Horizon sections (landing-welcome.js) ---- */
+#welcome .hz-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 4vw, 56px); margin-top: 40px; }
+#welcome .hz-stat { display: grid; gap: 10px; align-content: start; padding-top: 18px; border-top: 1px solid rgb(var(--hz) / 0.22); }
+#welcome .hz-stat .v {
+  font: 800 clamp(48px, 6.4vw, 100px)/0.9 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: -0.02em;
+  color: rgb(var(--hz)); font-variant-numeric: tabular-nums;
+}
+#welcome .hz-stat p { margin: 0; max-width: 34ch; color: rgb(var(--hz) / 0.65); }
+#welcome .hz-panel { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+#welcome .hz-copy { display: grid; gap: 16px; justify-items: start; }
+#welcome .hz-copy h2 { margin: 0; }
+#welcome .hz-lede { margin: 0; max-width: 42ch; color: rgb(var(--hz) / 0.7); font-size: 16.5px; line-height: 1.6; }
+#welcome .hz-link {
+  display: inline-flex; align-items: center; gap: 12px; padding: 6px 0; background: none; border: 0; cursor: pointer; color: rgb(var(--hz));
+  font: 700 12.5px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 115%; letter-spacing: 0.16em; text-transform: uppercase;
+}
+#welcome .hz-link span { transition: transform 220ms var(--ease-out); }
+#welcome .hz-link:hover span { transform: translateX(5px); }
+#welcome .hz-visual { min-width: 0; padding: 22px; background: #0c0e10; border: 1px solid rgb(var(--hz) / 0.12); display: grid; gap: 12px; }
+#welcome .hz-visual-k { margin: 0; font: 600 11px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: 0.18em; text-transform: uppercase; color: rgb(var(--hz) / 0.5); }
+#welcome .hz-visual-s { margin: 0; font-size: 13px; color: rgb(var(--hz) / 0.5); }
+#welcome .hz-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+#welcome .hz-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px; background: #050607; border: 1px solid rgb(var(--hz) / 0.12); }
+#welcome .hz-card b { font-weight: 600; color: rgb(var(--hz)); }
+#welcome .hz-card span { font-size: 12.5px; color: rgb(var(--hz) / 0.5); white-space: nowrap; }
+#welcome .hz-cards:empty::before { content: 'Firms appear here once the feed is read.'; color: rgb(var(--hz) / 0.5); font-size: 13px; }
+#welcome .hz-visual-map { padding: 18px; }
+#welcome .hz-visual-map svg { width: 100%; height: auto; display: block; overflow: visible; }
+#welcome .hzm-land { fill: rgb(var(--hz) / 0.03); stroke: rgb(var(--hz) / 0.35); stroke-width: 1; vector-effect: non-scaling-stroke; }
+#welcome .hzm-dot { fill: rgb(var(--hz)); }
+#welcome .hzm-label { fill: rgb(var(--hz) / 0.75); font: 700 8px 'Archivo', 'Arial Narrow', sans-serif; letter-spacing: 0.08em; paint-order: stroke; stroke: #0c0e10; stroke-width: 3px; }
+@media (max-width: 760px) {
+  #welcome .hz-stats { grid-template-columns: minmax(0, 1fr); }
+  #welcome .hz-panel { grid-template-columns: minmax(0, 1fr); }
+}

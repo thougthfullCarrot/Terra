@@ -135,6 +135,38 @@
 
       <!-- Signed out: what Terra is, shown under the sign-in form. -->
       <div id="welcome" class="welcome" hidden>
+        <!-- Horizon sections (landing-welcome.js fills them from stats.json, public counts only). -->
+        <section class="welcome-block hz-statements" aria-labelledby="hzs-title">
+          <p class="eyebrow">The state of it</p>
+          <h2 id="hzs-title">Read the market the way the firms hiring you do</h2>
+          <div class="hz-stats" id="hz-stats">
+            <div class="hz-stat"><span class="v" data-k="cities">—</span><p id="hz-cities-text">Texas cities with entry-level and internship roles open right now.</p></div>
+            <div class="hz-stat"><span class="v" data-k="top">—</span><p id="hz-top-text">roles in the city hiring the most, each linking straight to the firm.</p></div>
+            <div class="hz-stat"><span class="v">11</span><p>Texas metros with market figures, development filings, news and events.</p></div>
+          </div>
+        </section>
+        <section class="welcome-block hz-panel" aria-labelledby="hzr-title">
+          <div class="hz-copy">
+            <p class="eyebrow">Roles</p>
+            <h2 id="hzr-title">Start where the work is</h2>
+            <p class="hz-lede">Internships and entry-level roles pulled from each firm's own applicant board, with the link straight to the firm.</p>
+            <button type="button" class="hz-link" data-signup>Create a free account <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="hz-visual">
+            <p class="hz-visual-k">Hiring most right now</p>
+            <ol class="hz-cards" id="hz-firms"></ol>
+            <p class="hz-visual-s" id="hz-cities"></p>
+          </div>
+        </section>
+        <section class="welcome-block hz-panel" aria-labelledby="hzd-title">
+          <div class="hz-copy">
+            <p class="eyebrow">Development</p>
+            <h2 id="hzd-title">Filed, reviewed, located</h2>
+            <p class="hz-lede">Accessibility filings with TDLR are the earliest public record of a building. Each one keeps its filed cost, dates and a link to the filing.</p>
+            <button type="button" class="hz-link" data-signup>See the map <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="hz-visual hz-visual-map" id="hz-metros" aria-label="The eleven Texas metros Terra covers"></div>
+        </section>
         <section class="welcome-block" aria-labelledby="how-title">
           <p class="eyebrow">How it works</p>
           <h2 id="how-title">Three moves. No password.</h2>
