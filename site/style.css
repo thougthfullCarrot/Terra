@@ -14013,3 +14013,108 @@ h1 { font-stretch: 125%; font-weight: 800; text-transform: uppercase; letter-spa
   background: rgb(240 240 250) !important; color: #050607 !important; border-color: rgb(240 240 250) !important; box-shadow: none !important;
 }
 #controls .filters label { background: none; border: 1px solid rgb(240 240 250 / 0.2); }
+
+/* ==========================================================================
+   Landing hero in the Horizon look (#gate.hz-hero). The light field
+   (landing-field.js) stands behind the copy on the right; the headline,
+   sign-up form and live counts sit on the left; the counts run along the
+   bottom as a spec row. Sign-in markup and ids are unchanged (account.js).
+   ========================================================================== */
+#gate.hz-hero {
+  --hz: 240 240 250;
+  position: relative; isolation: isolate; overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: end; gap: 0;
+  min-height: max(640px, calc(100svh - 64px)); max-width: none;
+  margin-inline: calc(50% - 50vw); padding: 96px max(24px, calc(50vw - 620px)) 0;
+  background: #050607;
+}
+#gate.hz-hero::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgb(5 6 7 / 0.92) 0%, rgb(5 6 7 / 0.6) 36%, rgb(5 6 7 / 0) 60%),
+    radial-gradient(60% 50% at 72% 60%, rgb(var(--hz) / 0.06), transparent 70%);
+}
+#gate.hz-hero .gate-field { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
+#gate.hz-hero .hero-copy { position: relative; max-width: 620px; display: grid; gap: 18px; padding: 0; background: none; border: 0; }
+#gate.hz-hero .hz-eyebrow { margin: 0; color: rgb(var(--hz) / 0.6); font-size: 12px; letter-spacing: 0.22em; }
+#gate.hz-hero .live-pill {
+  justify-self: start; border-radius: 4px; background: none; border: 1px solid rgb(var(--hz) / 0.18); color: rgb(var(--hz) / 0.72);
+}
+#gate.hz-hero h1 {
+  margin: 4px 0 0; max-width: 12ch;
+  font: 800 clamp(44px, 5.6vw, 100px)/0.92 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 125%;
+  text-transform: uppercase; letter-spacing: -0.01em; color: rgb(var(--hz));
+}
+#gate.hz-hero h1 em { display: block; font-style: normal; color: rgb(var(--hz) / 0.42); }
+#gate.hz-hero .lede { margin: 0; max-width: 46ch; font-size: 17px; line-height: 1.6; color: rgb(var(--hz) / 0.72); }
+
+/* Create free account / Sign in: square tabs, then one square email form. */
+#gate.hz-hero .auth-modes { justify-self: start; gap: 6px; padding: 0; background: none; border: 0; border-radius: 0; }
+#gate.hz-hero .auth-mode {
+  height: 38px; padding: 0 16px; border-radius: 4px; border: 1px solid rgb(var(--hz) / 0.22); background: none; color: rgb(var(--hz) / 0.7);
+  font: 600 11.5px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: 0.14em; text-transform: uppercase;
+}
+#gate.hz-hero .auth-mode[aria-pressed='true'] { background: rgb(var(--hz)); color: #050607; border-color: rgb(var(--hz)); }
+#gate.hz-hero .pill-form {
+  max-width: 520px; gap: 8px; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none;
+}
+#gate.hz-hero .pill-form input {
+  height: 50px; padding: 0 16px; border-radius: 4px; border: 1px solid rgb(var(--hz) / 0.22); background: rgb(var(--hz) / 0.04); color: rgb(var(--hz));
+}
+#gate.hz-hero .pill-form input:focus { border-color: rgb(var(--hz) / 0.7); outline: none; }
+#gate.hz-hero .pill-form .primary {
+  height: 50px; padding: 0 22px; border-radius: 4px; background: rgb(var(--hz)); color: #050607; border: 1px solid rgb(var(--hz));
+  font: 700 12.5px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 115%; letter-spacing: 0.16em; text-transform: uppercase;
+}
+#gate.hz-hero .pill-form .primary:hover { background: #c9c9d4; border-color: #c9c9d4; }
+#gate.hz-hero .hero-note { margin: 0; color: rgb(var(--hz) / 0.55); font-size: 13.5px; }
+#gate.hz-hero .tour-link { color: rgb(var(--hz)); }
+
+/* The panel's map and lists give way to the light field; its counts become the spec row. */
+#gate.hz-hero .hero-panel {
+  position: static; margin: clamp(28px, 6vh, 56px) 0 0; padding: 0; max-width: none; transform: none !important;
+  background: none; border: 0; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+#gate.hz-hero .hero-panel-head,
+#gate.hz-hero #bento-map-box,
+#gate.hz-hero #bento-top-box,
+#gate.hz-hero .hero-panel-foot { display: none !important; }
+#gate.hz-hero .hero-stats {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid rgb(var(--hz) / 0.22);
+}
+#gate.hz-hero .hero-stats .bento-box {
+  padding: 18px 20px 28px 0; background: none; border: 0; border-radius: 0; box-shadow: none; display: grid; gap: 6px;
+}
+#gate.hz-hero .hero-stats .bento-box + .bento-box { padding-left: 20px; border-left: 1px solid rgb(var(--hz) / 0.12); }
+#gate.hz-hero .bento-k {
+  margin: 0; font: 600 11px 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 112%; letter-spacing: 0.18em; text-transform: uppercase; color: rgb(var(--hz) / 0.5);
+}
+#gate.hz-hero .bento-v { margin: 0; font: 700 clamp(26px, 2.6vw, 38px)/1 'Archivo', 'Arial Narrow', sans-serif; font-stretch: 108%; color: rgb(var(--hz)); }
+#gate.hz-hero .bento-s { margin: 0; font-size: 12.5px; color: rgb(var(--hz) / 0.5); }
+#gate.hz-hero .gate-field-cap {
+  position: absolute; right: max(24px, calc(50vw - 620px)); bottom: 150px; max-width: 40ch; margin: 0;
+  text-align: right; font-size: 12.5px; color: rgb(var(--hz) / 0.5);
+}
+@media (max-width: 760px) {
+  #gate.hz-hero { padding: min(46vh, 380px) 16px 0; }
+  #gate.hz-hero::before { background: linear-gradient(180deg, rgb(5 6 7 / 0) 24%, rgb(5 6 7 / 0.88) 50%); }
+  #gate.hz-hero h1 { font-size: clamp(38px, 11vw, 56px); }
+  #gate.hz-hero .pill-form { grid-template-columns: minmax(0, 1fr); }
+  #gate.hz-hero .hero-stats .bento-box { padding-right: 10px; }
+  #gate.hz-hero .hero-stats .bento-box + .bento-box { padding-left: 12px; }
+  #gate.hz-hero .gate-field-cap { position: static; text-align: left; padding: 0 0 22px; }
+}
+
+/* The light field replaces the contour rings on the Horizon hero. */
+#gate.hz-hero > canvas.topo { display: none; }
+#gate.hz-hero .hero-copy { min-width: 0; max-width: min(620px, 100%); }
+#gate.hz-hero .lede { overflow-wrap: anywhere; }
+#gate.hz-hero .pill-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; }
+#gate.hz-hero h1 em { -webkit-text-fill-color: currentColor; background: none; }
+#gate.hz-hero h1 { max-width: none; }
+#gate.hz-hero h1 em { white-space: nowrap; }
+@media (min-width: 761px) {
+  #gate.hz-hero { padding-top: 56px; }
+  #gate.hz-hero .hero-copy { gap: 16px; }
+}
+@media (max-width: 760px) { #gate.hz-hero h1 em { white-space: normal; } }

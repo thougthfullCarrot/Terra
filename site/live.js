@@ -355,7 +355,7 @@ export function startGateMap() {
   if (gate) new MutationObserver(() => !gate.hidden && check()).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
 }
 
-async function cityTotals() {
+export async function cityTotals() {
   let stats;
   try {
     const response = await fetch('stats.json', { cache: 'no-cache' });

@@ -85,12 +85,15 @@
 
     <main class="page" id="main" tabindex="-1">
       <!-- Shown when accounts are configured and nobody is signed in: the landing hero with the sign-in form. -->
-      <section id="gate" class="hero" hidden aria-labelledby="gate-title">
+      <section id="gate" class="hero hz-hero" hidden aria-labelledby="gate-title">
+        <!-- Horizon light field (landing-field.js): a column per open role, in its city. Public counts only. -->
+        <canvas id="gate-field" class="gate-field" aria-hidden="true"></canvas>
         <div class="hero-copy">
+          <p class="eyebrow hz-eyebrow">Commercial real estate · Texas</p>
           <!-- Live counts from stats.json (live.js startLanding); stays hidden until they arrive. -->
           <p class="live-pill" id="live-pill" hidden><span class="pulse" aria-hidden="true"></span><span><b id="live-roles">0</b> open roles at <b id="live-firms">0</b> firms<span id="live-updated"></span></span></p>
-          <h1 id="gate-title">Explore Texas <em>real estate.</em></h1>
-          <p class="lede">Find jobs, see what’s being built, follow industry news and discover local events—all in one place.</p>
+          <h1 id="gate-title">Where Texas <em>builds next.</em></h1>
+          <p class="lede">Entry-level roles, market figures for eleven metros, and the development filings behind them, for the people starting a career in Texas real estate. Free to use.</p>
           <!-- Create free account and Sign in share one email-code form; the mode only changes the wording and whether a new account may be made (account.js). -->
           <div class="auth-modes" role="group" aria-label="Create an account or sign in">
             <button type="button" class="auth-mode" id="mode-create" aria-pressed="true">Create free account</button>
@@ -127,6 +130,7 @@
           <div class="bento-box" id="bento-top-box" hidden><p class="bento-k">Hiring most right now</p><ol class="bento-list" id="bento-top"></ol></div>
           <p class="hero-panel-foot">Every apply button goes to the firm's own career page. Terra never stands in between.</p>
         </aside>
+        <p class="gate-field-cap" id="gate-field-cap" hidden></p>
       </section>
 
       <!-- Signed out: what Terra is, shown under the sign-in form. -->
