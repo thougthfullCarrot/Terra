@@ -126,7 +126,8 @@ function start() {
     setTimeout(() => mo.disconnect(), 4000);
   }
   const em = gate.querySelector('h1 em');
-  if (em) setTimeout(() => cycleWord(gate.querySelector('h1 em'), [em.textContent.trim(), 'jobs.', 'development.', 'news.', 'events.']), 1800);
+  // The Horizon hero's headline is static ("Where Texas builds next.").
+  if (em && !gate.classList.contains('hz-hero')) setTimeout(() => cycleWord(gate.querySelector('h1 em'), [em.textContent.trim(), 'jobs.', 'development.', 'news.', 'events.']), 1800);
   if (!fine()) return;
   spotlight(gate);
   document.querySelectorAll('#welcome .feature, #welcome .steps li').forEach(spotlight);
