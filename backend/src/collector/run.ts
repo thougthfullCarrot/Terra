@@ -13,6 +13,7 @@ import { openingId } from './id.js';
 import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
+import { requestTally } from '../lib/http.js';
 
 /** Rejected postings kept per reason for the run log. */
 const SAMPLES_PER_REASON = 25;
@@ -83,6 +84,11 @@ export interface BoardStatus {
   listed?: number;
   total?: number;
   error?: string;
+  /** How long the board took to read, in milliseconds (list, details and retries). */
+  ms?: number;
+  /** HTTP requests the board took, and how many of them were retries. */
+  requests?: number;
+  retries?: number;
 }
 
 /** A posting held back for a person to check, with the reason it was held. */
@@ -124,6 +130,8 @@ export interface RunReport {
   bySource: Record<string, SourceCounts>;
   /** Per firm board, in firm-list order. */
   boards: BoardStatus[];
+  /** Wall-clock time of the board pass, in milliseconds. */
+  boardPassMs?: number;
   /** Boards read only in part this pass (counted in neither firmsFailed nor as clean). */
   firmsIncomplete: number;
   /** Openings that share a title and city with another on the same board, kept apart by their job ids. */
@@ -211,14 +219,21 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
   const statuses = new Map<FirmRow['id'], BoardStatus>();
   const reads = new Map<FirmRow['id'], RawJob[]>();
 
-  await inBatches(firms, concurrency, async (firm) => {
+  const passStarted = Date.now();
+  await inPool(firms, concurrency, async (firm) => {
     const status: BoardStatus = { firm: firm.name, ats: firm.ats, status: 'ok', fetched: 0, kept: 0, review: 0, rejected: emptyRejected(), ids: [] };
     statuses.set(firm.id, status);
+    const started = Date.now();
+    const tally = { retries: 0, requests: 0 };
+    await requestTally.run(tally, async () => {
     try {
       const count: BoardCount = {};
       try {
         reads.set(firm.id, forFirm(firm, await fetcher(firm, count)));
       } finally {
+        status.ms = Date.now() - started;
+        status.requests = tally.requests;
+        status.retries = tally.retries;
         if (count.listed !== undefined) status.listed = count.listed;
         if (count.total !== undefined) status.total = count.total;
       }
@@ -235,7 +250,10 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
       reads.set(firm.id, forFirm(firm, error.jobs));
       await store.markFirmPolled(firm.id, { ok: true, error: message });
     }
+    });
   });
+
+  report.boardPassMs = Date.now() - passStarted;
 
   /** legacy id -> the board that first kept a seat under it. */
   const legacyOwner = new Map<string, FirmRow['id']>();
@@ -512,14 +530,22 @@ export async function fetchBoard(firm: FirmRow, count?: BoardCount): Promise<Raw
   }
 }
 
-async function inBatches<T>(
+/**
+ * Run `work` over `items` with at most `size` in flight. Each worker takes the
+ * next item as soon as its last one finishes, so one slow board (a Workday
+ * tenant retrying 5xx answers) no longer holds three idle slots until it is
+ * done, as fixed batches did. Same cap, same requests, less waiting.
+ */
+export async function inPool<T>(
   items: T[],
   size: number,
   work: (item: T) => Promise<void>
 ): Promise<void> {
-  for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(work));
-  }
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await work(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(size, items.length)) }, worker));
 }
 
 export { STRONG_MATCH };

@@ -1,3 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+/** Counts retried requests for whoever runs inside it (one job board, for the run report). */
+export const requestTally = new AsyncLocalStorage<{ retries: number; requests: number }>();
+
 export class HttpError extends Error {
   constructor(
     override readonly message: string,
@@ -76,6 +81,11 @@ async function request<T>(
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const tally = requestTally.getStore();
+    if (tally) {
+      tally.requests++;
+      if (attempt > 0) tally.retries++;
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
