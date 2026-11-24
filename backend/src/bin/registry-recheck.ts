@@ -52,7 +52,9 @@ const DAY = 86_400_000;
 const READERS = new Set(['greenhouse', 'lever', 'workday', 'icims', 'workable', 'ashby', 'smartrecruiters']);
 
 /** Which quiet employers to read this run, most overdue first. */
-export function dueEmployers(registry: Registry, state: Record<string, CheckState>, now: Date, limit: number): RegistryEmployer[] {
+export function dueEmployers(registry: Registry, state: Record<string, CheckState>, now: Date, limit: number, force = false): RegistryEmployer[] {
+  // --all: every readable quiet employer, whatever its schedule says.
+  if (force) return registry.employers.filter((e) => e.status === 'quiet' && READERS.has(e.ats) && e.slug);
   const age = (e: RegistryEmployer) => {
     // Measured from the last recheck, or from verification for one never rechecked.
     const last = state[e.name]?.lastChecked ?? e.verifiedAt;
@@ -77,9 +79,10 @@ async function main(): Promise<void> {
   if (statePath) state = JSON.parse(await readFile(statePath, 'utf8').catch(() => '{}')) as Record<string, CheckState>;
   const now = new Date();
   const limit = process.argv.includes('--all') ? Infinity : Number(arg('--limit') ?? 12);
-  const due = process.argv.includes('--all') ? dueEmployers(registry, {}, now, Infinity) : dueEmployers(registry, state, now, limit);
+  const force = process.argv.includes('--all');
+  const due = dueEmployers(registry, state, now, limit, force);
   const quiet = registry.employers.filter((e) => e.status === 'quiet').length;
-  console.log(`Registry: ${registry.employers.length} employers (${quiet} quiet, ${registry.employers.filter((e) => e.status === 'unsupported').length} unsupported); ${due.length} due (every ${registry.recheckDays} days, at most ${registry.maxDays}).`);
+  console.log(`Registry: ${registry.employers.length} employers (${quiet} quiet, ${registry.employers.filter((e) => e.status === 'unsupported').length} unsupported); ${due.length} ${force ? 'forced (--all)' : 'due'} (every ${registry.recheckDays} days, at most ${registry.maxDays}).`);
 
   for (const e of due) {
     const firm: FirmRow = { id: 0, name: e.name, ats: e.ats as FirmRow['ats'], atsSlug: e.slug!, atsHost: e.host ?? null, active: true, slugVerified: true, ...(e.creOnly ? { creOnly: true } : {}) };

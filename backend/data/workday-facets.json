@@ -1,0 +1,5 @@
+{
+  "note": "Workday boards listed through Texas + US-remote location facets instead of the full nationwide list. A board is added only after pilot:workday-facets returns VERDICT validated: the facet lists found every Texas-located posting on a complete nationwide list, and detail checks of every multi-location and US-remote candidate outside them found none in Texas. Others stay nationwide.",
+  "validated": [],
+  "inconclusive": {}
+}

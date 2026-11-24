@@ -14,6 +14,17 @@ import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
 import { requestTally } from '../lib/http.js';
+import { readFileSync } from 'node:fs';
+
+/** Workday boards validated for Texas facet listing (data/workday-facets.json). */
+const FACET_BOARDS: Set<string> = (() => {
+  try {
+    const file = JSON.parse(readFileSync(new URL('../../data/workday-facets.json', import.meta.url), 'utf8')) as { validated?: string[] };
+    return new Set(process.env.WORKDAY_FACETS === 'off' ? [] : (file.validated ?? []));
+  } catch {
+    return new Set<string>();
+  }
+})();
 
 /** Rejected postings kept per reason for the run log. */
 const SAMPLES_PER_REASON = 25;
@@ -27,6 +38,11 @@ export interface BoardCount {
   total?: number;
   /** Posting details reused from an earlier build instead of read again (Workday). */
   reused?: number;
+  /** Workday: how the list read ended, and whether only Texas facets were listed. */
+  listEnd?: string;
+  listMode?: 'nationwide' | 'facet';
+  listRequests?: number;
+  duplicates?: number;
 }
 
 export type Fetcher = (firm: FirmRow, count?: BoardCount) => Promise<RawJob[]>;
@@ -97,6 +113,10 @@ export interface BoardStatus {
   retries?: number;
   /** Posting details reused from an earlier build (Workday detail cache). */
   reused?: number;
+  listEnd?: string;
+  listMode?: 'nationwide' | 'facet';
+  listRequests?: number;
+  duplicates?: number;
 }
 
 /** A board posting the filters left out. */
@@ -259,6 +279,10 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
         if (count.listed !== undefined) status.listed = count.listed;
         if (count.total !== undefined) status.total = count.total;
         if (count.reused) status.reused = count.reused;
+        if (count.listEnd) status.listEnd = count.listEnd;
+        if (count.listMode) status.listMode = count.listMode;
+        if (count.listRequests) status.listRequests = count.listRequests;
+        if (count.duplicates) status.duplicates = count.duplicates;
       }
       await store.markFirmPolled(firm.id, { ok: true });
     } catch (error) {
@@ -520,12 +544,16 @@ function sourceCounts(report: RunReport, source: string): SourceCounts {
 async function fetchWorkdayCounted(firm: FirmRow, count?: BoardCount): Promise<RawJob[]> {
   const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
   try {
-    return await fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, { stats });
+    return await fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, { stats, facets: FACET_BOARDS.has(firm.atsSlug) });
   } finally {
     if (count) {
       count.listed = stats.listed;
       if (stats.total !== undefined) count.total = stats.total;
       if (stats.reused) count.reused = stats.reused;
+      count.listEnd = stats.listEnd;
+      count.listMode = stats.listMode;
+      count.listRequests = stats.listRequests;
+      count.duplicates = stats.duplicates;
     }
   }
 }

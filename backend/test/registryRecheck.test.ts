@@ -29,4 +29,27 @@ describe('employer registry recheck schedule', () => {
     const state = Object.fromEntries(registry.employers.map((e) => [e.name, { lastChecked: daysAgo(15), fetched: 0, published: 0 }]));
     expect(dueEmployers(registry, state, now, 2)).toHaveLength(17);
   });
+
+  it('--all forces a recheck of every readable quiet employer, even ones just checked', () => {
+    const state = Object.fromEntries(registry.employers.map((e) => [e.name, { lastChecked: daysAgo(0), fetched: 0, published: 0 }]));
+    expect(dueEmployers(registry, state, now, 12, true)).toHaveLength(17);
+  });
+
+  it('processes every employer within maxDays when each run reads only 2', () => {
+    const state: Record<string, { lastChecked: string; fetched: number; published: number }> = {};
+    const start = new Date('2026-11-21T00:00:00Z').getTime();
+    const gaps: number[] = [];
+    // One run a day for 60 days, reading at most 2 due employers per run.
+    for (let day = 0; day <= 60; day++) {
+      const at = new Date(start + day * 86_400_000);
+      for (const e of dueEmployers(registry, state, at, 2)) {
+        const last = Date.parse(state[e.name]?.lastChecked ?? e.verifiedAt);
+        gaps.push((at.getTime() - last) / 86_400_000);
+        state[e.name] = { lastChecked: at.toISOString(), fetched: 0, published: 0 };
+      }
+    }
+    const quiet = registry.employers.filter((e) => e.status === 'quiet');
+    for (const e of quiet) expect(state[e.name]).toBeTruthy();
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(registry.maxDays + 1);
+  });
 });

@@ -247,6 +247,10 @@ function metricsTable(report: RunReport, firmsListed: number): string {
     }
     const throttled = throttleCounts();
     lines.push(`Throttled (HTTP 429): ${Object.entries(throttled).map(([g, n]) => `${g} ${n} answers, ${pauseSeconds()[g]}s shared pause`).join(', ') || 'none'} · Workday details reused: ${report.boards.reduce((n, b) => n + (b.reused ?? 0), 0)}`);
+    const wd = report.boards.filter((b) => b.ats === 'workday');
+    const ends = new Map<string, number>();
+    for (const b of wd) ends.set(b.listEnd ?? 'first page failed', (ends.get(b.listEnd ?? 'first page failed') ?? 0) + 1);
+    lines.push(`Workday lists: ${wd.filter((b) => b.listMode === 'facet').length} by Texas facet, ${wd.filter((b) => b.listMode !== 'facet').length} nationwide · ${wd.reduce((n, b) => n + (b.listRequests ?? 0), 0)} list requests · list ends: ${[...ends].map(([k, n]) => `${k} ${n}`).join(', ')} · repeated postings dropped ${wd.reduce((n, b) => n + (b.duplicates ?? 0), 0)}`);
     lines.push(`Boards by platform: ${[...byAts].map(([ats, r]) => `${ats} ${r.boards} boards ${r.requests} req ${sec(r.ms)}`).join(' · ')}`);
   }
   for (const a of report.aggregators) {

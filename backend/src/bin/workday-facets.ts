@@ -9,7 +9,7 @@
  *   2. Cap check: a list request past offset 2,000 and the sum of the
  *      country-level facet counts, so "2,000 postings" can be told apart from a
  *      real total of 2,000 (Workday's own ceiling, or ours).
- *   3. The full nationwide list (every page, up to what Workday serves).
+ *   3. The full nationwide list, read with the collector's own listAll.
  *   4. The Texas-only list: the board's Texas facet values applied.
  *   5. Comparison: Texas-located postings on the nationwide list that the
  *      facet list misses, multi-location ("N Locations") postings, remote
@@ -21,9 +21,8 @@
  * Workday gate (lib/http.ts), so it is gentler than a build.
  */
 import { fetchJson, requestTally, throttleCounts } from '../lib/http.js';
-import { resolveCity } from '../collector/texas.js';
 import { classifyKind } from '../collector/seniority.js';
-import { detailUrl, listUrl, parseTenant, type WorkdayListing, type WorkdayTenant } from '../collector/sources/workday.js';
+import { detailUrl, isTexasPlace, listAll, parseTenant, texasFacetFilters, type WorkdayListing, type WorkdayTenant } from '../collector/sources/workday.js';
 
 const DEFAULT_BOARDS = [
   'JLL=jll/jllcareers@jll.wd1.myworkdayjobs.com',
@@ -32,73 +31,10 @@ const DEFAULT_BOARDS = [
   'Huntington Bank=huntington/HNBcareers@huntington.wd12.myworkdayjobs.com',
   'Greystar=greystar/External@greystar.wd1.myworkdayjobs.com'
 ];
-const PAGE = 20;
-const MAX_PAGES = Number(process.env.FACET_MAX_PAGES ?? 110);
-const DETAIL_LIMIT = Number(process.env.FACET_DETAIL_LIMIT ?? 40);
-
-interface FacetValue {
-  parameter: string;
-  descriptor: string;
-  id: string;
-  count: number;
-}
-interface ListResponse {
-  total?: number;
-  jobPostings?: WorkdayListing[];
-  facets?: unknown[];
-}
-
-const TEXAS = /\btexas\b|,\s*tx\b|\btx\b|\busa?\s*-\s*tx\b/i;
-const OTHER_STATE = /,\s*(?!tx\b)[A-Z]{2}\b/;
+const MAX_PAGES = 250;
 const MULTI = /^\d+\s+locations$/i;
 const REMOTE = /\b(remote|virtual|work from home|telecommut)/i;
-
-function isTexas(text: string): boolean {
-  if (TEXAS.test(text)) return true;
-  return !OTHER_STATE.test(text) && Boolean(resolveCity(text));
-}
-
-/** Facet values come flat ({descriptor,id,count}) or nested under groups; collect them all. */
-function facetValues(facets: unknown[] | undefined, parent = ''): FacetValue[] {
-  const out: FacetValue[] = [];
-  for (const raw of facets ?? []) {
-    if (!raw || typeof raw !== 'object') continue;
-    const f = raw as { facetParameter?: string; descriptor?: string; id?: string; count?: number; values?: unknown[] };
-    const parameter = f.facetParameter ?? parent;
-    if (Array.isArray(f.values)) out.push(...facetValues(f.values, parameter));
-    else if (f.id && f.descriptor) out.push({ parameter, descriptor: f.descriptor, id: f.id, count: f.count ?? 0 });
-  }
-  return out;
-}
-
-async function list(tenant: WorkdayTenant, offset: number, appliedFacets: Record<string, string[]>): Promise<ListResponse> {
-  return fetchJson<ListResponse>(listUrl(tenant), {
-    method: 'POST',
-    retries: 4,
-    headers: { 'accept-language': 'en-US', origin: `https://${tenant.host}`, referer: `https://${tenant.host}/${tenant.site}` },
-    body: { appliedFacets, limit: PAGE, offset, searchText: '' }
-  });
-}
-
-async function listAll(tenant: WorkdayTenant, facets: Record<string, string[]>): Promise<{ postings: WorkdayListing[]; total?: number; requests: number; error?: string }> {
-  const postings: WorkdayListing[] = [];
-  let total: number | undefined;
-  let requests = 0;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    let batch: ListResponse;
-    try {
-      requests++;
-      batch = await list(tenant, page * PAGE, facets);
-    } catch (error) {
-      return { postings, total, requests, error: `page ${page + 1}: ${error instanceof Error ? error.message : String(error)}` };
-    }
-    if (page === 0) total = batch.total;
-    const got = batch.jobPostings ?? [];
-    postings.push(...got);
-    if (got.length < PAGE) break;
-  }
-  return { postings, total, requests };
-}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function parseBoards(): { name: string; tenant: WorkdayTenant }[] {
   const at = process.argv.indexOf('--boards');
@@ -110,88 +46,93 @@ function parseBoards(): { name: string; tenant: WorkdayTenant }[] {
   });
 }
 
+type Detail = { location?: string; additionalLocations?: string[]; jobDescription?: string };
+
+/** Detail reads one at a time, spaced, with a second pass after a pause for the ones a 429 stopped. */
+async function readDetails(tenant: WorkdayTenant, paths: string[]): Promise<{ got: Map<string, Detail>; failed: string[] }> {
+  const got = new Map<string, Detail>();
+  let todo = paths;
+  for (let pass = 0; pass < 3 && todo.length; pass++) {
+    if (pass) await sleep(90_000);
+    const failed: string[] = [];
+    for (const path of todo) {
+      try {
+        const d = await fetchJson<{ jobPostingInfo?: Detail }>(detailUrl(tenant, path), { retries: 2 });
+        got.set(path, d.jobPostingInfo ?? {});
+      } catch {
+        failed.push(path);
+      }
+      await sleep(1500);
+    }
+    todo = failed;
+  }
+  return { got, failed: todo };
+}
+
+function reachesTexas(d: Detail): boolean {
+  const locs = [d.location, ...(d.additionalLocations ?? [])].filter(Boolean) as string[];
+  if (locs.some(isTexasPlace)) return true;
+  // A US-remote posting that names Texas as eligible in its text.
+  return locs.some((l) => REMOTE.test(l)) && /\b(texas|tx)\b/i.test((d.jobDescription ?? '').replace(/<[^>]+>/g, ' ').slice(0, 6000));
+}
+
 async function pilot(name: string, tenant: WorkdayTenant): Promise<void> {
   const say = (line: string) => console.log(`FACET ${name} | ${line}`);
+  const reasons: string[] = [];
   const started = Date.now();
 
-  // 1. Facets and the reported total.
-  const first = await list(tenant, 0, {});
-  const values = facetValues(first.facets);
-  const params = [...new Set(values.map((v) => v.parameter))];
-  say(`reported total ${first.total ?? '?'}; facet parameters: ${params.map((p) => `${p} (${values.filter((v) => v.parameter === p).length})`).join(', ') || 'none'}`);
+  // The same code the collector runs: page 0's facets, then listAll per filter.
+  const nation = await listAll(tenant, { retries: 4 }, MAX_PAGES, {});
+  say(`nationwide: listed ${nation.listings.length} (total field ${nation.total ?? '?'}); end ${nation.end}${nation.gap ? ` (${nation.gap})` : ''}; ${nation.requests} list requests; ${nation.duplicates} repeated postings dropped`);
+  if (nation.end !== 'end' && nation.end !== 'total') reasons.push(`nationwide list ${nation.end}`);
 
-  // 2. Cap check: past offset 2,000, and the country/region sums.
-  for (const offset of [2000, 2020]) {
-    try {
-      const past = await list(tenant, offset, {});
-      say(`offset ${offset}: ${past.jobPostings?.length ?? 0} postings returned (total field ${past.total ?? '?'})`);
-    } catch (error) {
-      say(`offset ${offset}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  for (const p of params.filter((p) => /country|region|state|main/i.test(p))) {
-    const sum = values.filter((v) => v.parameter === p).reduce((n, v) => n + v.count, 0);
-    say(`sum of ${p} facet counts: ${sum}`);
-  }
-
-  // Texas facet values: prefer a state-level value, else every Texas city/site value.
-  const locationValues = values.filter((v) => /location|state|region|country|city|site/i.test(v.parameter));
-  const state = locationValues.filter((v) => /state|region/i.test(v.parameter) && /\btexas\b|\btx\b/i.test(v.descriptor));
-  const texasValues = state.length ? state : locationValues.filter((v) => !/country/i.test(v.parameter) && isTexas(v.descriptor));
-  const remoteValues = locationValues.filter((v) => REMOTE.test(v.descriptor));
-  say(`Texas facet values used: ${texasValues.length} (${texasValues.slice(0, 12).map((v) => `${v.descriptor}=${v.count}`).join(', ')}${texasValues.length > 12 ? ', ...' : ''}); sum ${texasValues.reduce((n, v) => n + v.count, 0)}`);
-  if (remoteValues.length) say(`remote facet values (not applied): ${remoteValues.slice(0, 8).map((v) => `${v.descriptor}=${v.count}`).join(', ')}`);
-  if (!texasValues.length) {
-    say('no Texas facet value; a facet read is not possible on this board');
+  const firstPage = await fetchJson<{ facets?: unknown[] }>(`https://${tenant.host}/wday/cxs/${tenant.tenant}/${tenant.site}/jobs`, {
+    method: 'POST', retries: 4,
+    headers: { 'accept-language': 'en-US', origin: `https://${tenant.host}`, referer: `https://${tenant.host}/${tenant.site}` },
+    body: { appliedFacets: {}, limit: 20, offset: 0, searchText: '' }
+  });
+  const filters = texasFacetFilters(firstPage.facets);
+  say(`filters: ${filters.map((f) => `${f.label} ${JSON.stringify(f.applied).slice(0, 160)} (${f.count})`).join('; ') || 'none'}`);
+  if (!filters.length) {
+    say('VERDICT not-applicable (no Texas facet value; stays nationwide)');
     return;
   }
 
-  // 3. Full nationwide list.
-  const all = await listAll(tenant, {});
-  say(`nationwide: listed ${all.postings.length} of ${all.total ?? '?'} in ${all.requests} requests${all.error ? `; stopped: ${all.error}` : ''}`);
-
-  // 4. Texas facet list. Group by parameter, as Workday ANDs parameters and ORs values.
-  const applied: Record<string, string[]> = {};
-  for (const v of texasValues) (applied[v.parameter] ??= []).push(v.id);
-  const tx = await listAll(tenant, applied);
-  say(`texas facet: listed ${tx.postings.length} of ${tx.total ?? '?'} in ${tx.requests} requests${tx.error ? `; stopped: ${tx.error}` : ''}`);
-
-  // 5. Compare on the same data.
-  const facetPaths = new Set(tx.postings.map((p) => p.externalPath));
-  const nationTexas = all.postings.filter((p) => p.locationsText && !MULTI.test(p.locationsText) && isTexas(p.locationsText));
-  const missed = nationTexas.filter((p) => !facetPaths.has(p.externalPath));
-  const multi = all.postings.filter((p) => p.locationsText && MULTI.test(p.locationsText));
-  const remote = all.postings.filter((p) => REMOTE.test(`${p.locationsText ?? ''} ${p.title ?? ''}`));
-  const extra = tx.postings.filter((p) => !(p.locationsText && isTexas(p.locationsText)));
-  say(`nationwide Texas-located ${nationTexas.length}; facet list has ${nationTexas.length - missed.length}; missed ${missed.length}`);
-  for (const p of missed.slice(0, 8)) say(`  missed: ${p.title} — ${p.locationsText} — ${p.externalPath}`);
-  say(`facet list postings without Texas in their list text (multi-location etc.): ${extra.length} (${extra.filter((p) => MULTI.test(p.locationsText ?? '')).length} multi-location)`);
-  say(`nationwide multi-location ${multi.length} (${multi.filter((p) => facetPaths.has(p.externalPath)).length} in the facet list); remote ${remote.length} (${remote.filter((p) => facetPaths.has(p.externalPath)).length} in the facet list)`);
-
-  // Multi-location and remote postings outside the facet list that a build would open: do any reach Texas?
-  const open = [...multi, ...remote]
-    .filter((p, i, arr) => arr.findIndex((q) => q.externalPath === p.externalPath) === i)
-    .filter((p) => !facetPaths.has(p.externalPath) && p.title && classifyKind(p.title))
-    .slice(0, DETAIL_LIMIT);
-  let texasOutside = 0;
-  for (const p of open) {
-    try {
-      const d = await fetchJson<{ jobPostingInfo?: { location?: string; additionalLocations?: string[]; jobDescription?: string } }>(detailUrl(tenant, p.externalPath!), { retries: 3 });
-      const info = d.jobPostingInfo ?? {};
-      const locs = [info.location, ...(info.additionalLocations ?? [])].filter(Boolean).join('; ');
-      const remoteTx = REMOTE.test(locs) && /\b(texas|tx)\b/i.test(`${locs} ${(info.jobDescription ?? '').slice(0, 4000)}`);
-      if (isTexas(locs) || remoteTx) {
-        texasOutside++;
-        say(`  outside facet but Texas: ${p.title} — ${locs.slice(0, 120)}${remoteTx ? ' (remote, Texas named)' : ''}`);
-      }
-    } catch (error) {
-      say(`  detail failed: ${p.externalPath} (${error instanceof Error ? error.message : String(error)})`);
-    }
+  const union = new Map<string, WorkdayListing>();
+  let facetRequests = 1;
+  for (const f of filters) {
+    const r = await listAll(tenant, { retries: 4 }, MAX_PAGES, f.applied);
+    facetRequests += r.requests;
+    for (const l of r.listings) union.set(l.externalPath!, l);
+    say(`facet ${f.label}: listed ${r.listings.length} (total ${r.total ?? '?'}); end ${r.end}${r.gap ? ` (${r.gap})` : ''}; ${r.requests} requests`);
+    if (r.end !== 'end' && r.end !== 'total') reasons.push(`facet ${f.label} list ${r.end}`);
   }
-  say(`multi-location/remote postings outside the facet list that a build would open: ${open.length} checked, ${texasOutside} reach Texas`);
 
+  // Candidates a nationwide build would open but the facet lists do not have.
+  const outside = nation.listings.filter((l) => l.externalPath && !union.has(l.externalPath) && l.title && classifyKind(l.title));
+  const texasText = outside.filter((l) => l.locationsText && !MULTI.test(l.locationsText) && isTexasPlace(l.locationsText));
+  const multi = outside.filter((l) => l.locationsText && MULTI.test(l.locationsText));
+  const remote = outside.filter((l) => REMOTE.test(`${l.locationsText ?? ''} ${l.title ?? ''}`) && !multi.includes(l));
+  const inFacetMulti = [...union.values()].filter((l) => MULTI.test(l.locationsText ?? '')).length;
+  const inFacetRemote = [...union.values()].filter((l) => REMOTE.test(l.locationsText ?? '')).length;
+  say(`facet lists hold ${union.size} postings (${inFacetMulti} multi-location, ${inFacetRemote} remote)`);
+  say(`outside the facet lists, title-eligible: ${texasText.length} with Texas in the list text, ${multi.length} multi-location, ${remote.length} remote`);
+
+  const check = [...texasText, ...multi, ...remote];
+  const { got, failed } = await readDetails(tenant, check.map((l) => l.externalPath!));
+  const misses = check.filter((l) => got.has(l.externalPath!) && reachesTexas(got.get(l.externalPath!)!));
+  for (const l of misses.slice(0, 10)) {
+    const d = got.get(l.externalPath!)!;
+    say(`  MISS ${l.title} | ${l.locationsText} | ${[d.location, ...(d.additionalLocations ?? [])].join('; ').slice(0, 140)}`);
+  }
+  say(`detail checks: ${check.length} needed, ${got.size} read, ${failed.length} failed (rate limits); ${misses.length} reach Texas`);
+  if (failed.length) reasons.push(`${failed.length} of ${check.length} detail checks failed`);
+  if (misses.length) reasons.push(`${misses.length} Texas postings missed by the facets`);
+
+  const saved = nation.requests ? Math.round((1 - facetRequests / nation.requests) * 100) : 0;
   const used = requestTally.getStore();
-  say(`requests: nationwide ${all.requests} vs facet ${tx.requests} list requests (${all.requests ? Math.round((1 - tx.requests / all.requests) * 100) : 0}% fewer); detail checks ${open.length}; all requests incl. retries ${used?.requests ?? '?'} (${used?.retries ?? '?'} retries); ${((Date.now() - started) / 1000).toFixed(0)}s`);
+  say(`list requests: nationwide ${nation.requests} vs facet ${facetRequests} (${saved}% fewer); all requests ${used?.requests ?? '?'} (${used?.retries ?? '?'} retries); ${((Date.now() - started) / 1000).toFixed(0)}s`);
+  say(misses.length ? `VERDICT rejected (${reasons.join('; ')})` : reasons.length ? `VERDICT inconclusive (${reasons.join('; ')})` : 'VERDICT validated');
 }
 
 async function main(): Promise<void> {
@@ -199,7 +140,7 @@ async function main(): Promise<void> {
     try {
       await requestTally.run({ requests: 0, retries: 0 }, () => pilot(name, tenant));
     } catch (error) {
-      console.log(`FACET ${name} | failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(`FACET ${name} | VERDICT inconclusive (failed: ${error instanceof Error ? error.message : String(error)})`);
     }
   }
   console.log(`FACET throttled (HTTP 429): ${JSON.stringify(throttleCounts())}`);

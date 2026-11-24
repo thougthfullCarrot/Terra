@@ -517,6 +517,11 @@ function card(job, now, index) {
     posted.textContent += ` · last verified ${SHORT_DATE.format(new Date(job.verifiedAt))}`;
     posted.title = 'The firm\'s job board did not answer in full on the latest check, so this listing is shown as of its last confirmed check.';
   }
+  // Listing confirmed this build, description text from an earlier read: say when.
+  if (!job.retained && job.detailReadAt) {
+    posted.textContent += ` · description read ${SHORT_DATE.format(new Date(job.detailReadAt))}`;
+    posted.title = 'The listing was confirmed open on the latest check; its description is from this earlier read (re-read at least every 3 days, and whenever the title or location changes).';
+  }
   if (job.via !== 'Adzuna') node.querySelector('.via').remove();
   const deadline = deadlineLabel(job.deadline, now);
   const deadlineNode = node.querySelector('.deadline');
