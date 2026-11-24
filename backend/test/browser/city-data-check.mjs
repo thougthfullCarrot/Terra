@@ -126,7 +126,14 @@ if (missingCase) {
 if (zeroCase) {
   await page.goto(`${base}#markets&city=${encodeURIComponent(zeroCase.city)}&focus=${zeroCase.group}`);
   await page.waitForSelector('.city-head');
-  const value = await page.$$eval('.city-table tbody tr', (trs, label) => trs.find((tr) => tr.querySelector('.city-metric-name').textContent.startsWith(label))?.querySelector('td.num').textContent, zeroCase.label);
+  const value = await page.$$eval('.city-table tbody tr', (trs, label) => {
+    // The figure without its stale mark (a '•' beside a figure kept from an earlier update).
+    const cell = trs.find((tr) => tr.querySelector('.city-metric-name').textContent.startsWith(label))?.querySelector('td.num');
+    if (!cell) return undefined;
+    const copy = cell.cloneNode(true);
+    copy.querySelectorAll('.stale-mark').forEach((m) => m.remove());
+    return copy.textContent;
+  }, zeroCase.label);
   log('zero shown as 0', /^\$?0(\.0+)?%?$/.test(value?.trim() ?? ''), `${zeroCase.city} ${zeroCase.label}: ${value}`);
 } else console.log('SKIP  zero case (no zero in this data)');
 // Rate changes in sentences are percentage points, never a bare "%" (0.99 points is not 0.99%).
