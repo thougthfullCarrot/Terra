@@ -81,7 +81,8 @@ export function normalize(raw: RawJob, now = new Date()): NormalizeResult {
     reqs: extractReqs(description),
     applyUrl: raw.applyUrl,
     source: provenance(raw.ats),
-    ...(raw.sourceId ? { sourceId: raw.sourceId } : {})
+    ...(raw.sourceId ? { sourceId: raw.sourceId } : {}),
+    ...(raw.detailReadAt ? { detailReadAt: raw.detailReadAt } : {})
   };
   const sectorGuessed = guess.sector === null;
 

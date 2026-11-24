@@ -54,6 +54,81 @@ describe('Workday detail reuse', () => {
   });
 });
 
+describe('Workday detail reuse: an existing posting updated at the same path', () => {
+  const t0 = new Date('2026-11-21T12:00:00Z');
+  const hours = (h: number) => new Date(t0.getTime() + h * 3_600_000);
+  function edited(list: Record<string, unknown>, info: Record<string, unknown>) {
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string | URL) => {
+      const href = String(url);
+      calls.push(href);
+      if (href.endsWith('/jobs')) return new Response(JSON.stringify({ total: 1, jobPostings: [list] }), { status: 200 });
+      return new Response(JSON.stringify({ jobPostingInfo: { ...detail.jobPostingInfo, ...info } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+  async function primed(): Promise<DetailCache> {
+    const cache: DetailCache = new Map();
+    await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: tenant([listing]).fetchImpl, cache, now: t0 });
+    return cache;
+  }
+
+  it('description or requirements edited, list unchanged: the old text is served until the cap, with its real read time', async () => {
+    const cache = await primed();
+    const change = { jobDescription: '<p>3-5 years required</p>' };
+    const within = edited(listing, change);
+    const [stale] = await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: within.fetchImpl, cache, now: hours(24) });
+    expect(within.calls).toHaveLength(1);
+    expect(stale!.description).toBe('0-2 years');
+    expect(stale!.detailReadAt).toBe(t0.toISOString());
+
+    const after = edited(listing, change);
+    const [fresh] = await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: after.fetchImpl, cache, now: hours(73) });
+    expect(after.calls).toHaveLength(2);
+    expect(fresh!.description).toBe('3-5 years required');
+    expect(fresh!.detailReadAt).toBeUndefined();
+  });
+
+  it('location changed on the list: read again at once', async () => {
+    const cache = await primed();
+    const moved = edited({ ...listing, locationsText: 'Houston, TX' }, { location: 'Houston, TX' });
+    const [job] = await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: moved.fetchImpl, cache, now: hours(1) });
+    expect(moved.calls).toHaveLength(2);
+    expect(job!.location).toBe('Houston, TX');
+  });
+
+  it('multi-site posting gains a location ("2 Locations" to "3 Locations"): read again', async () => {
+    const cache: DetailCache = new Map();
+    const two = { ...listing, locationsText: '2 Locations' };
+    await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: edited(two, { additionalLocations: ['Austin, TX'] }).fetchImpl, cache, now: t0 });
+    const three = edited({ ...listing, locationsText: '3 Locations' }, { additionalLocations: ['Austin, TX', 'Houston, TX'] });
+    const [job] = await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: three.fetchImpl, cache, now: hours(1) });
+    expect(three.calls).toHaveLength(2);
+    expect(job!.location).toContain('Houston, TX');
+  });
+
+  it('retitled: read again; an entry cached before list fingerprints never matches', async () => {
+    const cache = await primed();
+    const retitled = edited({ ...listing, title: 'Leasing Associate' }, { title: 'Leasing Associate' });
+    const [job] = await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: retitled.fetchImpl, cache, now: hours(1) });
+    expect(retitled.calls).toHaveLength(2);
+    expect(job!.title).toBe('Leasing Associate');
+
+    for (const entry of cache.values()) delete entry.list;
+    const old = edited({ ...listing, title: 'Leasing Associate' }, { title: 'Leasing Associate' });
+    await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: old.fetchImpl, cache, now: hours(2) });
+    expect(old.calls).toHaveLength(2);
+  });
+
+  it('closed: gone from the list means gone, even with a fresh cached detail', async () => {
+    const cache = await primed();
+    const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
+    const jobs = await fetchWorkday('CBRE', HOST, 'cbre/CBRE_Careers', { fetchImpl: tenant([]).fetchImpl, cache, now: hours(1), stats });
+    expect(jobs).toEqual([]);
+    expect(stats.reused).toBe(0);
+  });
+});
+
 describe('Workday host group', () => {
   it('groups every Workday tenant together and nothing else', () => {
     expect(hostGroup('https://jll.wd1.myworkdayjobs.com/x')).toBe('workday');

@@ -34,6 +34,11 @@ import { IncompleteBoardError } from './incomplete.js';
 
 const PAGE_SIZE = 20;
 
+/** The list fields that identify a posting's content; postedOn is left out (it ages daily). */
+export function listFingerprint(listing: Pick<WorkdayListing, 'title' | 'locationsText' | 'bulletFields'>): string {
+  return [listing.title?.trim() ?? '', listing.locationsText?.trim() ?? '', ...(listing.bulletFields ?? []).map((f) => f.trim())].join('\u0001');
+}
+
 /**
  * Posting details read on an earlier build, keyed by tenant + posting path.
  * Workday gives no ETag or modified time on the CXS API, and its list carries
@@ -46,6 +51,13 @@ export interface DetailCacheEntry {
   job: Omit<RawJob, 'postedAt'> & { postedAt?: string };
   /** ISO time the detail was read from Workday. */
   at: string;
+  /**
+   * What the list said about the posting when the detail was read (title,
+   * location text, bullet fields). The list is read in full every build, so a
+   * retitled or relocated posting at the same path no longer matches and its
+   * detail is read again. Entries from before this field never match.
+   */
+  list?: string;
 }
 export type DetailCache = Map<string, DetailCacheEntry>;
 
@@ -101,7 +113,7 @@ export interface WorkdayTenant {
   site: string;
 }
 
-interface WorkdayListing {
+export interface WorkdayListing {
   title?: string;
   externalPath?: string;
   locationsText?: string;
@@ -221,9 +233,11 @@ export async function fetchWorkday(
   for (const listing of candidates) {
     const key = detailKey(tenant, listing.externalPath as string);
     const hit = cache?.get(key);
-    if (hit && now.getTime() - new Date(hit.at).getTime() < DETAIL_MAX_AGE_HOURS * 3_600_000) {
+    const fresh = hit && now.getTime() - new Date(hit.at).getTime() < DETAIL_MAX_AGE_HOURS * 3_600_000;
+    if (hit && fresh && hit.list === listFingerprint(listing)) {
       reused++;
-      jobs.push({ ...hit.job, firm, postedAt: hit.job.postedAt ? new Date(hit.job.postedAt) : undefined } as RawJob);
+      // Keep the real read time: the listing is verified this build, the text is not.
+      jobs.push({ ...hit.job, firm, postedAt: hit.job.postedAt ? new Date(hit.job.postedAt) : undefined, detailReadAt: hit.at } as RawJob);
     } else {
       toRead.push(listing);
     }
@@ -234,7 +248,7 @@ export async function fetchWorkday(
     const details = await Promise.all(batch.map((listing) => fetchDetail(firm, tenant, listing, options)));
     details.forEach((detail, n) => {
       const key = detailKey(tenant, batch[n]!.externalPath as string);
-      if (detail && detail !== 'failed') cache?.set(key, { job: { ...detail, postedAt: detail.postedAt?.toISOString() }, at: now.toISOString() });
+      if (detail && detail !== 'failed') cache?.set(key, { job: { ...detail, postedAt: detail.postedAt?.toISOString() }, at: now.toISOString(), list: listFingerprint(batch[n]!) });
       // Closed between list and detail: never reuse it.
       if (detail === null) cache?.delete(key);
     });

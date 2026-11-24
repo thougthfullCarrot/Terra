@@ -1,0 +1,33 @@
+{
+  "about": "Verified employers that are not polled every build. 'quiet': official board on a platform TERRA reads, no Texas entry-level opening when verified; rechecked by registry:recheck every recheckDays (at most maxDays apart) and flagged for the firm list when one appears. 'unsupported': official board on a platform TERRA has no permitted reader for; kept so a future reader or employer feed can start from it. Batch 4 discovery, PR #116.",
+  "recheckDays": 7,
+  "maxDays": 14,
+  "employers": [
+    { "name": "Thompson Thrift", "ats": "greenhouse", "slug": "thompsonthrift", "host": null, "sector": "Development", "careersUrl": "https://job-boards.greenhouse.io/thompsonthrift", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Brookfield Properties", "ats": "workday", "slug": "brookfield/brookfield", "host": "brookfield.wd5.myworkdayjobs.com", "sector": "Investment", "careersUrl": "https://brookfield.wd5.myworkdayjobs.com/brookfield", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Brookfield Residential", "ats": "workday", "slug": "brookfield/brookfieldproperties", "host": "brookfield.wd5.myworkdayjobs.com", "sector": "Homebuilder", "careersUrl": "https://brookfield.wd5.myworkdayjobs.com/brookfieldproperties", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Joeris General Contractors", "ats": "icims", "slug": "careers-joeris", "host": "careers-joeris.icims.com", "sector": "Construction", "careersUrl": "https://careers-joeris.icims.com/", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Gilbane Building Company", "ats": "icims", "slug": "careers-gilbaneco", "host": "careers-gilbaneco.icims.com", "sector": "Construction", "careersUrl": "https://careers-gilbaneco.icims.com/", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Swinerton", "ats": "workday", "slug": "swinerton/Swinerton_External_Career", "host": "swinerton.wd1.myworkdayjobs.com", "sector": "Construction", "careersUrl": "https://swinerton.wd1.myworkdayjobs.com/en-US/Swinerton_External_Career", "verifiedAt": "2026-11-21", "status": "quiet", "note": "Only hit was a trade apprentice seat (Apprentice Drywall Framer)." },
+    { "name": "Zillow", "ats": "workday", "slug": "zillow/Zillow_Group_External", "host": "zillow.wd5.myworkdayjobs.com", "sector": "Brokerage", "careersUrl": "https://zillow.wd5.myworkdayjobs.com/Zillow_Group_External", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "AMLI Residential", "ats": "workday", "slug": "amli/AMLI_Careers", "host": "amli.wd5.myworkdayjobs.com", "sector": "Investment", "careersUrl": "https://amli.wd5.myworkdayjobs.com/AMLI_Careers", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Bank OZK", "ats": "icims", "slug": "careers-ozk", "host": "careers-ozk.icims.com", "sector": "Lending", "careersUrl": "https://careers-ozk.icims.com/", "verifiedAt": "2026-11-21", "status": "quiet", "creOnly": true },
+    { "name": "Ready Capital", "ats": "workday", "slug": "readycapital/ReadyCapital", "host": "readycapital.wd501.myworkdayjobs.com", "sector": "Lending", "careersUrl": "https://readycapital.wd501.myworkdayjobs.com/ReadyCapital", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Holder Construction", "ats": "greenhouse", "slug": "holderconstruction", "host": null, "sector": "Construction", "careersUrl": "https://job-boards.greenhouse.io/holderconstruction", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Haskell", "ats": "icims", "slug": "haskell", "host": "haskell.icims.com", "sector": "Construction", "careersUrl": "https://haskell.icims.com/", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Landmark Properties", "ats": "workday", "slug": "landmarkproperties/Landmark_Careers", "host": "landmarkproperties.wd12.myworkdayjobs.com", "sector": "Development", "careersUrl": "https://landmarkproperties.wd12.myworkdayjobs.com/Landmark_Careers", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "TPG Real Estate", "ats": "greenhouse", "slug": "tpgcareers", "host": null, "sector": "Investment", "careersUrl": "https://job-boards.greenhouse.io/tpgcareers", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Simmons Bank", "ats": "workday", "slug": "simmonsbank/SimmonsCareers", "host": "simmonsbank.wd5.myworkdayjobs.com", "sector": "Lending", "careersUrl": "https://simmonsbank.wd5.myworkdayjobs.com/SimmonsCareers", "verifiedAt": "2026-11-21", "status": "quiet", "creOnly": true },
+    { "name": "Doma", "ats": "greenhouse", "slug": "doma", "host": null, "sector": "Title", "careersUrl": "https://job-boards.greenhouse.io/doma", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "RealPage", "ats": "icims", "slug": "careers-realpagepms", "host": "careers-realpagepms.icims.com", "sector": "Property Management", "careersUrl": "https://careers-realpagepms.icims.com/", "verifiedAt": "2026-11-21", "status": "quiet" },
+    { "name": "Austin Industries", "ats": "ukg", "careersUrl": null, "sector": "Construction", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "UKG robots.txt disallows automated reads." },
+    { "name": "Westcor Land Title", "ats": "ukg", "careersUrl": null, "sector": "Title", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "UKG robots.txt disallows automated reads." },
+    { "name": "Linbeck", "ats": "adp", "careersUrl": null, "sector": "Construction", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "ADP terms forbid aggregators." },
+    { "name": "Prosperity Bank", "ats": "adp", "careersUrl": null, "sector": "Lending", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "ADP terms forbid aggregators." },
+    { "name": "Offerpad", "ats": "adp", "careersUrl": null, "sector": "Investment", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "ADP terms forbid aggregators." },
+    { "name": "McCarthy Building Companies", "ats": "jobvite", "careersUrl": null, "sector": "Construction", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "No Jobvite reader yet." },
+    { "name": "Heitman", "ats": "jobvite", "careersUrl": null, "sector": "Investment", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "No Jobvite reader yet." },
+    { "name": "Mission Rock Residential", "ats": "paylocity", "careersUrl": null, "sector": "Property Management", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "Paylocity feed needs an employer-shared key." },
+    { "name": "Satterfield & Pontikes", "ats": "bamboohr", "careersUrl": null, "sector": "Construction", "verifiedAt": "2026-11-21", "status": "unsupported", "note": "No BambooHR reader yet." }
+  ]
+}

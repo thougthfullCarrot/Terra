@@ -177,6 +177,30 @@ jobs:
           path: workday-details.json
           key: workday-details-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Verified quiet employers (data/employer-registry.json) are read at most
+      # every 7 days and at least every 14 while builds run, up to 12 per build,
+      # after the export so they never compete with it for Workday. Read only:
+      # one with a Texas entry-level opening is printed as PROMOTE.
+      - name: Restore the employer registry checks
+        uses: actions/cache/restore@v4
+        with:
+          path: registry-state.json
+          key: registry-state-none
+          restore-keys: registry-state-
+
+      - name: Recheck quiet employers when due
+        continue-on-error: true
+        timeout-minutes: 8
+        working-directory: backend
+        run: npm run --silent registry:recheck -- --state ../registry-state.json --limit 12 2>&1 | tee /tmp/registry.log
+
+      - name: Cache the employer registry checks
+        if: always() && hashFiles('registry-state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: registry-state.json
+          key: registry-state-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Cache the job history
         if: hashFiles('job-history.json') != ''
         uses: actions/cache/save@v4
@@ -672,11 +696,13 @@ jobs:
             echo '=== MEASURE: boards ==='
             grep -E '^\| [^-B]' /tmp/export.log | grep -E '\| (ok|incomplete|failed) \|' || true
             echo '=== MEASURE: by market ==='
-            [ -f ../site/postings.json ] && jq -c '{jobs: (.jobs | length), byCity: ([.jobs[].city] | group_by(.) | map({(.[0]): length}) | add)}' ../site/postings.json || true
+            [ -f ../site/postings.json ] && jq -c '{jobs: (.jobs | length), fresh: ([.jobs[] | select(.retained | not)] | length), retained: ([.jobs[] | select(.retained)] | length), cachedDetail: ([.jobs[] | select(.detailReadAt)] | length), byCity: ([.jobs[].city] | group_by(.) | map({(.[0]): length}) | add)}' ../site/postings.json || true
+            echo '=== MEASURE: batch 4 employers in the snapshot ==='
+            [ -f ../site/postings.json ] && jq -r '.jobs[] | select(.firm | test("^(Ryan Companies|SpawGlass|Green Brick Partners|Homebound|Olympus Property)$")) | "BATCH4 \(.firm) | \(.role) | \(.city)\(if .retained then " | retained" else "" end)"' ../site/postings.json || true
+            echo '=== MEASURE: registry recheck ==='
+            cat /tmp/registry.log 2>/dev/null || true
             echo '=== MEASURE: excluded audit ==='
-            [ -f ../job-excluded.json ] && npm run --silent audit:excluded -- ../job-excluded.json || true
-            echo '=== MEASURE: employer leads ==='
-            [ -d ../site/developments ] && npm run --silent employer:leads -- ../site/developments --top 30 || true
+            [ -f ../job-excluded.json ] && npm run --silent audit:excluded -- ../job-excluded.json | head -40 || true
           } > /tmp/measure.txt 2>&1
 
       # With accounts on, the feed is members-only: it must not also sit at a public URL.

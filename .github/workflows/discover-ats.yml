@@ -24,6 +24,10 @@ on:
         description: 'Read each board found once and count Texas entry-level jobs'
         type: boolean
         default: true
+      mode:
+        description: 'discover (default), facets (Workday Texas facet pilot) or registry (recheck every quiet employer in data/employer-registry.json)'
+        required: false
+        default: 'discover'
 
 jobs:
   discover:
@@ -44,7 +48,17 @@ jobs:
 
       - run: npm ci
 
+      - name: Workday Texas facet pilot (read only)
+        if: inputs.mode == 'facets'
+        timeout-minutes: 40
+        run: npm run --silent pilot:workday-facets 2>&1 | tee /tmp/discover.txt
+
+      - name: Recheck every quiet registry employer (read only)
+        if: inputs.mode == 'registry'
+        run: npm run --silent registry:recheck -- --all 2>&1 | tee /tmp/discover.txt
+
       - name: Read every firm's careers page
+        if: inputs.mode == '' || inputs.mode == 'discover'
         id: discover
         env:
           DOMAINS: ${{ inputs.domains || '5' }}
