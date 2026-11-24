@@ -1,0 +1,12 @@
+{
+  "note": "Workday boards listed through Texas + US-remote location facets instead of the full nationwide list. A board is added only after pilot:workday-facets returns VERDICT validated: the facet lists found every Texas-located posting on a complete nationwide list, and detail checks of every multi-location and US-remote candidate outside them found none in Texas. Others stay nationwide.",
+  "validated": [],
+  "inconclusive": {
+    "jll/jllcareers": "2026-11-24: nationwide list stopped by 429 at page 6; facet Texas 205 complete",
+    "cw/External": "2026-11-24: nationwide list repeats past offset 2,000 (cannot be read in full nationwide); 15/16 detail checks, 0 Texas",
+    "fifththird/53careers": "2026-11-24: lists complete, 0 Texas misses; 12 of 23 detail checks 429",
+    "huntington/HNBcareers": "2026-11-24: lists complete, 0 Texas misses; 2 of 9 detail checks 429",
+    "greystar/External": "2026-11-24: nationwide list stopped by 429 at page 21; 4/4 detail checks, 0 Texas",
+    "colliers/Colliers-External-Career-Site": "2026-11-24: lists complete, 0 Texas misses; 6 of 11 detail checks 429"
+  }
+}

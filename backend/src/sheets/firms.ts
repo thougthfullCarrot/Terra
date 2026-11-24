@@ -404,7 +404,9 @@ export const DISCOVERED_BATCH = '0017_discovered_firms.sql';
 export const FIRM_BATCHES: { file: string; id: string }[] = [
   { file: DISCOVERED_FIRMS, id: DISCOVERED_BATCH },
   // Official career sites, batch 3 (2026-10-20): RCLCO.
-  { file: '0020_career_site_firms.sql', id: '0020_career_site_firms.sql' }
+  { file: '0020_career_site_firms.sql', id: '0020_career_site_firms.sql' },
+  // Batch 4 (2026-11-21, PR #116): five boards with a Texas entry-level opening.
+  { file: '0022_batch4_firms.sql', id: '0022_batch4_firms.sql' }
 ];
 
 /** A small tab recording which firm batches were added, so a firm the owner deletes is never added back. */

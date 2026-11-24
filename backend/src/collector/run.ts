@@ -13,6 +13,18 @@ import { openingId } from './id.js';
 import { significant } from './nameMatch.js';
 import { scoreMatch } from '../matching/score.js';
 import { STRONG_MATCH } from '../types.js';
+import { requestTally } from '../lib/http.js';
+import { readFileSync } from 'node:fs';
+
+/** Workday boards validated for Texas facet listing (data/workday-facets.json). */
+const FACET_BOARDS: Set<string> = (() => {
+  try {
+    const file = JSON.parse(readFileSync(new URL('../../data/workday-facets.json', import.meta.url), 'utf8')) as { validated?: string[] };
+    return new Set(process.env.WORKDAY_FACETS === 'off' ? [] : (file.validated ?? []));
+  } catch {
+    return new Set<string>();
+  }
+})();
 
 /** Rejected postings kept per reason for the run log. */
 const SAMPLES_PER_REASON = 25;
@@ -24,6 +36,13 @@ export const STALE_DAYS = 14;
 export interface BoardCount {
   listed?: number;
   total?: number;
+  /** Posting details reused from an earlier build instead of read again (Workday). */
+  reused?: number;
+  /** Workday: how the list read ended, and whether only Texas facets were listed. */
+  listEnd?: string;
+  listMode?: 'nationwide' | 'facet';
+  listRequests?: number;
+  duplicates?: number;
 }
 
 export type Fetcher = (firm: FirmRow, count?: BoardCount) => Promise<RawJob[]>;
@@ -50,6 +69,10 @@ export interface AggregatorReport {
   /** Held for review instead of published. */
   review?: number;
   error?: string;
+  /** Wall time and HTTP requests the search took. */
+  ms?: number;
+  requests?: number;
+  retries?: number;
 }
 
 /** What one source contributed, so a thin feed can be traced to the collector behind it. */
@@ -83,6 +106,28 @@ export interface BoardStatus {
   listed?: number;
   total?: number;
   error?: string;
+  /** How long the board took to read, in milliseconds (list, details and retries). */
+  ms?: number;
+  /** HTTP requests the board took, and how many of them were retries. */
+  requests?: number;
+  retries?: number;
+  /** Posting details reused from an earlier build (Workday detail cache). */
+  reused?: number;
+  listEnd?: string;
+  listMode?: 'nationwide' | 'facet';
+  listRequests?: number;
+  duplicates?: number;
+}
+
+/** A board posting the filters left out. */
+export interface ExcludedJob {
+  reason: RejectReason;
+  role: string;
+  firm: string;
+  ats: string;
+  location: string;
+  url: string;
+  description: string;
 }
 
 /** A posting held back for a person to check, with the reason it was held. */
@@ -124,6 +169,8 @@ export interface RunReport {
   bySource: Record<string, SourceCounts>;
   /** Per firm board, in firm-list order. */
   boards: BoardStatus[];
+  /** Wall-clock time of the board pass, in milliseconds. */
+  boardPassMs?: number;
   /** Boards read only in part this pass (counted in neither firmsFailed nor as clean). */
   firmsIncomplete: number;
   /** Openings that share a title and city with another on the same board, kept apart by their job ids. */
@@ -136,6 +183,8 @@ export interface RunReport {
   firmsWithOpenings: number;
   /** A few rejected postings per reason, so the filters can be spot-checked in the run log. */
   rejectedSamples: Partial<Record<RejectReason, { role: string; firm: string; location: string }[]>>;
+  /** Every board posting left out, with enough text to audit the filters (export-site --excluded). */
+  excluded?: ExcludedJob[];
   sectorGuessed: number;
   inserted: number;
   updated: number;
@@ -185,6 +234,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
     kinds: { Internship: 0, 'Entry-level': 0 },
     firmsWithOpenings: 0,
     rejectedSamples: {},
+    excluded: [],
     sectorGuessed: 0,
     inserted: 0,
     updated: 0,
@@ -211,16 +261,28 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
   const statuses = new Map<FirmRow['id'], BoardStatus>();
   const reads = new Map<FirmRow['id'], RawJob[]>();
 
-  await inBatches(firms, concurrency, async (firm) => {
+  const passStarted = Date.now();
+  await inPool(firms, concurrency, async (firm) => {
     const status: BoardStatus = { firm: firm.name, ats: firm.ats, status: 'ok', fetched: 0, kept: 0, review: 0, rejected: emptyRejected(), ids: [] };
     statuses.set(firm.id, status);
+    const started = Date.now();
+    const tally = { retries: 0, requests: 0 };
+    await requestTally.run(tally, async () => {
     try {
       const count: BoardCount = {};
       try {
         reads.set(firm.id, forFirm(firm, await fetcher(firm, count)));
       } finally {
+        status.ms = Date.now() - started;
+        status.requests = tally.requests;
+        status.retries = tally.retries;
         if (count.listed !== undefined) status.listed = count.listed;
         if (count.total !== undefined) status.total = count.total;
+        if (count.reused) status.reused = count.reused;
+        if (count.listEnd) status.listEnd = count.listEnd;
+        if (count.listMode) status.listMode = count.listMode;
+        if (count.listRequests) status.listRequests = count.listRequests;
+        if (count.duplicates) status.duplicates = count.duplicates;
       }
       await store.markFirmPolled(firm.id, { ok: true });
     } catch (error) {
@@ -235,7 +297,10 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
       reads.set(firm.id, forFirm(firm, error.jobs));
       await store.markFirmPolled(firm.id, { ok: true, error: message });
     }
+    });
   });
+
+  report.boardPassMs = Date.now() - passStarted;
 
   /** legacy id -> the board that first kept a seat under it. */
   const legacyOwner = new Map<string, FirmRow['id']>();
@@ -272,6 +337,7 @@ export async function runCollector(options: RunOptions): Promise<RunReport> {
         status.rejected[result.reason]++;
         const samples = (report.rejectedSamples[result.reason] ??= []);
         if (samples.length < SAMPLES_PER_REASON) samples.push({ role: job.title, firm: job.firm, location: job.location });
+        report.excluded!.push({ reason: result.reason, role: job.title, firm: job.firm, ats: firm.ats, location: job.location, url: job.applyUrl ?? '', description: (job.description ?? '').slice(0, 4000) });
         continue;
       }
       if (result.sectorGuessed) report.sectorGuessed++;
@@ -402,11 +468,17 @@ async function collectAggregator(
   };
 
   let raw: RawJob[];
+  const started = Date.now();
+  const tally = { retries: 0, requests: 0 };
   try {
-    raw = await aggregator.fetch();
+    raw = await requestTally.run(tally, () => aggregator.fetch());
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
     return result;
+  } finally {
+    result.ms = Date.now() - started;
+    result.requests = tally.requests;
+    result.retries = tally.retries;
   }
 
   result.fetched = raw.length;
@@ -472,11 +544,16 @@ function sourceCounts(report: RunReport, source: string): SourceCounts {
 async function fetchWorkdayCounted(firm: FirmRow, count?: BoardCount): Promise<RawJob[]> {
   const stats: WorkdayStats = { listed: 0, considered: 0, fetched: 0 };
   try {
-    return await fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, { stats });
+    return await fetchWorkday(firm.name, firm.atsHost, firm.atsSlug, { stats, facets: FACET_BOARDS.has(firm.atsSlug) });
   } finally {
     if (count) {
       count.listed = stats.listed;
       if (stats.total !== undefined) count.total = stats.total;
+      if (stats.reused) count.reused = stats.reused;
+      count.listEnd = stats.listEnd;
+      count.listMode = stats.listMode;
+      count.listRequests = stats.listRequests;
+      count.duplicates = stats.duplicates;
     }
   }
 }
@@ -512,14 +589,22 @@ export async function fetchBoard(firm: FirmRow, count?: BoardCount): Promise<Raw
   }
 }
 
-async function inBatches<T>(
+/**
+ * Run `work` over `items` with at most `size` in flight. Each worker takes the
+ * next item as soon as its last one finishes, so one slow board (a Workday
+ * tenant retrying 5xx answers) no longer holds three idle slots until it is
+ * done, as fixed batches did. Same cap, same requests, less waiting.
+ */
+export async function inPool<T>(
   items: T[],
   size: number,
   work: (item: T) => Promise<void>
 ): Promise<void> {
-  for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(work));
-  }
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await work(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(size, items.length)) }, worker));
 }
 
 export { STRONG_MATCH };

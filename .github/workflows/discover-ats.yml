@@ -24,9 +24,47 @@ on:
         description: 'Read each board found once and count Texas entry-level jobs'
         type: boolean
         default: true
+      mode:
+        description: 'discover (default), facets (Workday Texas facet pilot) or registry (recheck every quiet employer in data/employer-registry.json)'
+        required: false
+        default: 'discover'
 
 jobs:
+  # One job per board: each lands on its own runner, so one board's rate
+  # limiting does not spill into the next board's checks.
+  facets:
+    if: inputs.mode == 'facets'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        board:
+          - 'JLL=jll/jllcareers@jll.wd1.myworkdayjobs.com'
+          - 'Cushman & Wakefield=cw/External@cw.wd1.myworkdayjobs.com'
+          - 'Fifth Third Bank=fifththird/53careers@fifththird.wd5.myworkdayjobs.com'
+          - 'Huntington Bank=huntington/HNBcareers@huntington.wd12.myworkdayjobs.com'
+          - 'Greystar=greystar/External@greystar.wd1.myworkdayjobs.com'
+          - 'Colliers=colliers/Colliers-External-Career-Site@colliers.wd3.myworkdayjobs.com'
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Workday Texas facet pilot (read only)
+        env:
+          FACET_BOARDS: ${{ matrix.board }}
+        run: npm run --silent pilot:workday-facets 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
   discover:
+    if: inputs.mode != 'facets'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -44,7 +82,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Recheck every quiet registry employer (read only)
+        if: inputs.mode == 'registry'
+        run: npm run --silent registry:recheck -- --all 2>&1 | tee /tmp/discover.txt
+
       - name: Read every firm's careers page
+        if: inputs.mode == '' || inputs.mode == 'discover'
         id: discover
         env:
           DOMAINS: ${{ inputs.domains || '5' }}
@@ -89,3 +132,8 @@ jobs:
           echo "No firm resolved to an ATS. Either the domain guesses all missed,"
           echo "or careers pages are rendering their board links with JavaScript."
           exit 1
+
+      # Last, so the run's log tail carries the result (the full text is in the summary).
+      - name: Print the findings
+        if: always()
+        run: grep -vE '^\s*$' /tmp/discover.txt | tail -n 220 || true

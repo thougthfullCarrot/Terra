@@ -12,7 +12,8 @@ export const SEED_PATHS = [
   resolve(MIGRATIONS, '0006_homebuilders.sql'),
   resolve(MIGRATIONS, '0014_more_firms.sql'),
   resolve(MIGRATIONS, '0018_discovered_firms.sql'),
-  resolve(MIGRATIONS, '0020_career_site_firms.sql')
+  resolve(MIGRATIONS, '0020_career_site_firms.sql'),
+  resolve(MIGRATIONS, '0022_batch4_firms.sql')
 ];
 
 /**

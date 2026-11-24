@@ -33,13 +33,62 @@ import { IncompleteBoardError } from './incomplete.js';
  */
 
 const PAGE_SIZE = 20;
+
+/** The list fields that identify a posting's content; postedOn is left out (it ages daily). */
+export function listFingerprint(listing: Pick<WorkdayListing, 'title' | 'locationsText' | 'bulletFields'>): string {
+  return [listing.title?.trim() ?? '', listing.locationsText?.trim() ?? '', ...(listing.bulletFields ?? []).map((f) => f.trim())].join('\u0001');
+}
+
 /**
- * Stop after this many pages per firm. The largest boards seen (JLL, Cushman &
- * Wakefield) both report exactly 2,000, which looks like Workday's ceiling, so
- * 100 x 20 reads everything a board will give. Stopping at 500 found 5 of JLL's 16
- * Texas entry-level roles; the list endpoint is cheap, the details are not.
+ * Posting details read on an earlier build, keyed by tenant + posting path.
+ * Workday gives no ETag or modified time on the CXS API, and its list carries
+ * only a relative "Posted N days ago", so the validator is the posting path
+ * (which ends in the requisition id) plus an age cap: a detail is reused for
+ * DETAIL_MAX_AGE_HOURS, then read again. A posting no longer on the list is
+ * never read, cached or not, so closures work exactly as before.
  */
-const MAX_PAGES = 100;
+export interface DetailCacheEntry {
+  job: Omit<RawJob, 'postedAt'> & { postedAt?: string };
+  /** ISO time the detail was read from Workday. */
+  at: string;
+  /**
+   * What the list said about the posting when the detail was read (title,
+   * location text, bullet fields). The list is read in full every build, so a
+   * retitled or relocated posting at the same path no longer matches and its
+   * detail is read again. Entries from before this field never match.
+   */
+  list?: string;
+}
+export type DetailCache = Map<string, DetailCacheEntry>;
+
+export const DETAIL_MAX_AGE_HOURS = Number(process.env.WORKDAY_DETAIL_MAX_AGE_HOURS ?? 72);
+
+let sharedCache: DetailCache | null = null;
+/** Set once per process by export-site --detail-cache; null turns reuse off. */
+export function useDetailCache(cache: DetailCache | null): void {
+  sharedCache = cache;
+}
+
+export function detailKey(tenant: WorkdayTenant, externalPath: string): string {
+  return `${tenant.host}/${tenant.tenant}/${tenant.site}${externalPath}`;
+}
+/**
+ * Workday's `total` field stops at 2,000: Cushman & Wakefield reports exactly
+ * 2,000 yet keeps serving postings past offset 2,000, and its country facet
+ * counts add up to 2,169 (facet pilot, 2026-11-24). A total under this value is
+ * the board's real size; a total at it only says "at least 2,000".
+ */
+export const WORKDAY_TOTAL_CAP = 2000;
+
+/**
+ * Runaway guard, not a completeness rule: a list ends on a short page. 250
+ * pages is 5,000 postings, well past the largest board seen (about 2,200).
+ * Reaching it marks the board as read in part.
+ */
+const MAX_PAGES = 250;
+
+/** How a board's list read ended; only 'end' and 'total' mean read in full. */
+export type ListEnd = 'end' | 'total' | 'failed' | 'repeated' | 'page-cap' | 'short';
 
 /**
  * How many postings the board listed, and how many survived the cheap filters.
@@ -58,6 +107,16 @@ export interface WorkdayStats {
   listed: number;
   considered: number;
   fetched: number;
+  /** Details taken from the cache instead of read again. */
+  reused?: number;
+  /** Postings a later page repeated from an earlier one (dropped). */
+  duplicates?: number;
+  /** How the list read ended. */
+  listEnd?: ListEnd;
+  /** 'facet' when only the Texas + US-remote location facets were listed. */
+  listMode?: 'nationwide' | 'facet';
+  /** List requests made (pages, all facet lists included). */
+  listRequests?: number;
   /**
    * A few titles the board listed, kept for diagnosis. 0 of 63 postings
    * surviving the filters is either correct or a silently over-aggressive
@@ -72,7 +131,7 @@ export interface WorkdayTenant {
   site: string;
 }
 
-interface WorkdayListing {
+export interface WorkdayListing {
   title?: string;
   externalPath?: string;
   locationsText?: string;
@@ -83,6 +142,7 @@ interface WorkdayListing {
 interface WorkdayListResponse {
   total?: number;
   jobPostings?: WorkdayListing[];
+  facets?: unknown[];
 }
 
 interface WorkdayDetailResponse {
@@ -141,36 +201,55 @@ export async function fetchWorkday(
   firm: string,
   host: string | null | undefined,
   slug: string,
-  options: FetchJsonOptions & { maxPages?: number; stats?: WorkdayStats } = {}
+  options: FetchJsonOptions & { maxPages?: number; stats?: WorkdayStats; cache?: DetailCache | null; now?: Date; facets?: boolean } = {}
 ): Promise<RawJob[]> {
+  const cache = options.cache === undefined ? sharedCache : options.cache;
+  const now = options.now ?? new Date();
+  let reused = 0;
   const tenant = parseTenant(host, slug);
   const maxPages = options.maxPages ?? MAX_PAGES;
 
-  const listings: WorkdayListing[] = [];
+  let listings: WorkdayListing[];
   let total: number | undefined;
   /** Why the list was not read to its end, if it was not. */
   let gap: string | undefined;
-  for (let page = 0; page < maxPages; page++) {
-    let batch;
-    try {
-      batch = await fetchPage(tenant, page * PAGE_SIZE, options);
-    } catch (error) {
-      // Some tenants answer the first pages and then fail deep in the list
-      // (Huntington's 500s past a few hundred postings); keep what was read,
-      // and say the board was not read in full.
-      if (page === 0) throw error;
-      gap = `page ${page + 1} failed (${error instanceof Error ? error.message : String(error)})`;
-      break;
+  let listEnd: ListEnd;
+  let duplicates = 0;
+  let listRequests = 0;
+  let listMode: 'nationwide' | 'facet' = 'nationwide';
+
+  const first = await fetchPage(tenant, 0, options, {});
+  listRequests++;
+  const filters = options.facets ? texasFacetFilters(first.facets) : [];
+  if (filters.length) {
+    // Validated board: list only the Texas and US-remote facet values. Each
+    // filter is its own list (Workday ANDs facet parameters), merged by path.
+    listMode = 'facet';
+    const seen = new Set<string>();
+    listings = [];
+    const ends: string[] = [];
+    for (const filter of filters) {
+      const read = await listAll(tenant, options, maxPages, filter.applied);
+      listRequests += read.requests;
+      duplicates += read.duplicates;
+      for (const l of read.listings) {
+        if (seen.has(l.externalPath!)) continue;
+        seen.add(l.externalPath!);
+        listings.push(l);
+      }
+      if (read.gap) ends.push(`${filter.label}: ${read.gap}`);
+      if (read.end !== 'end' && read.end !== 'total') listEnd = read.end;
     }
-    // Workday reports the total on the first page only; later pages carry 0.
-    if (page === 0) total = batch.total;
-    listings.push(...batch.jobPostings);
-    if (batch.jobPostings.length < PAGE_SIZE) break;
-    if (total && listings.length >= total) break;
-    if (page === maxPages - 1) gap = `stopped at the ${maxPages}-page cap`;
+    listEnd ??= 'end';
+    if (ends.length) gap = ends.join('; ');
+    total = first.total;
+  } else {
+    const read = await listAll(tenant, options, maxPages, {}, first);
+    listRequests += read.requests;
+    ({ listings, total, duplicates } = read);
+    listEnd = read.end;
+    gap = read.gap;
   }
-  // Workday's own ceiling: a board reporting more than it pages through.
-  if (!gap && total && listings.length < total && listings.length >= maxPages * PAGE_SIZE) gap = `board reports ${total}, listed ${listings.length}`;
 
   const candidates = listings.filter(worthFetching);
 
@@ -178,6 +257,10 @@ export async function fetchWorkday(
     options.stats.total = total;
     options.stats.listed = listings.length;
     options.stats.considered = candidates.length;
+    options.stats.duplicates = duplicates;
+    options.stats.listEnd = listEnd;
+    options.stats.listMode = listMode;
+    options.stats.listRequests = listRequests;
     options.stats.sample = listings
       .slice(0, 6)
       .map((listing) => `${listing.title ?? '?'} — ${listing.locationsText ?? '?'}`);
@@ -185,18 +268,39 @@ export async function fetchWorkday(
 
   const jobs: RawJob[] = [];
   let detailFailures = 0;
+  const toRead: WorkdayListing[] = [];
+  for (const listing of candidates) {
+    const key = detailKey(tenant, listing.externalPath as string);
+    const hit = cache?.get(key);
+    const fresh = hit && now.getTime() - new Date(hit.at).getTime() < DETAIL_MAX_AGE_HOURS * 3_600_000;
+    if (hit && fresh && hit.list === listFingerprint(listing)) {
+      reused++;
+      // Keep the real read time: the listing is verified this build, the text is not.
+      jobs.push({ ...hit.job, firm, postedAt: hit.job.postedAt ? new Date(hit.job.postedAt) : undefined, detailReadAt: hit.at } as RawJob);
+    } else {
+      toRead.push(listing);
+    }
+  }
   // Three at a time: this is one tenant's server and we are a guest on it.
-  for (let i = 0; i < candidates.length; i += 3) {
-    const details = await Promise.all(
-      candidates.slice(i, i + 3).map((listing) => fetchDetail(firm, tenant, listing, options))
-    );
+  for (let i = 0; i < toRead.length; i += 3) {
+    const batch = toRead.slice(i, i + 3);
+    const details = await Promise.all(batch.map((listing) => fetchDetail(firm, tenant, listing, options)));
+    details.forEach((detail, n) => {
+      const key = detailKey(tenant, batch[n]!.externalPath as string);
+      if (detail && detail !== 'failed') cache?.set(key, { job: { ...detail, postedAt: detail.postedAt?.toISOString() }, at: now.toISOString(), list: listFingerprint(batch[n]!) });
+      // Closed between list and detail: never reuse it.
+      if (detail === null) cache?.delete(key);
+    });
     for (const detail of details) {
       if (detail === 'failed') detailFailures++;
       else if (detail) jobs.push(detail);
     }
   }
 
-  if (options.stats) options.stats.fetched = jobs.length;
+  if (options.stats) {
+    options.stats.fetched = jobs.length;
+    options.stats.reused = reused;
+  }
 
   if (detailFailures) gap = [gap, `${detailFailures} of ${candidates.length} posting details failed`].filter(Boolean).join('; ');
   if (gap) throw new IncompleteBoardError(`Workday ${tenant.tenant}/${tenant.site}: ${gap}`, jobs);
@@ -229,8 +333,9 @@ export function worthFetching(listing: WorkdayListing): boolean {
 async function fetchPage(
   tenant: WorkdayTenant,
   offset: number,
-  options: FetchJsonOptions
-): Promise<{ jobPostings: WorkdayListing[]; total: number | undefined }> {
+  options: FetchJsonOptions,
+  appliedFacets: Record<string, string[]> = {}
+): Promise<ListPage> {
   const response = await fetchJson<WorkdayListResponse>(listUrl(tenant), {
     ...options,
     method: 'POST',
@@ -242,7 +347,7 @@ async function fetchPage(
       referer: `https://${tenant.host}/${tenant.site}`,
       ...options.headers
     },
-    body: { appliedFacets: {}, limit: PAGE_SIZE, offset, searchText: '' }
+    body: { appliedFacets, limit: PAGE_SIZE, offset, searchText: '' }
   });
 
   // A list page without a jobPostings array is a failed read, not an empty
@@ -252,8 +357,148 @@ async function fetchPage(
   }
   return {
     jobPostings: response.jobPostings,
-    total: typeof response?.total === 'number' ? response.total : undefined
+    total: typeof response?.total === 'number' ? response.total : undefined,
+    facets: Array.isArray(response.facets) ? response.facets : undefined
   };
+}
+
+interface ListPage {
+  jobPostings: WorkdayListing[];
+  total: number | undefined;
+  facets?: unknown[];
+}
+
+export interface ListRead {
+  listings: WorkdayListing[];
+  total?: number;
+  requests: number;
+  duplicates: number;
+  end: ListEnd;
+  gap?: string;
+}
+
+/**
+ * Read one list (nationwide, or one facet filter) to its end.
+ *
+ * Complete when a page comes back short (fewer than 20), or when a total under
+ * Workday's 2,000 ceiling has been reached. A total at the ceiling is never
+ * trusted as the end. Safeguards, each of which marks the read as partial:
+ * a failed page after the first, a page that only repeats postings already
+ * listed (Workday wrapping or ignoring the offset), the page cap, and a
+ * finished read that lists noticeably fewer postings than a real total.
+ */
+export async function listAll(
+  tenant: WorkdayTenant,
+  options: FetchJsonOptions,
+  maxPages: number,
+  appliedFacets: Record<string, string[]>,
+  first?: ListPage
+): Promise<ListRead> {
+  const listings: WorkdayListing[] = [];
+  const seen = new Set<string>();
+  let total: number | undefined;
+  let requests = 0;
+  let duplicates = 0;
+  for (let page = 0; page < maxPages; page++) {
+    let batch: ListPage;
+    if (page === 0 && first) batch = first;
+    else {
+      try {
+        requests++;
+        batch = await fetchPage(tenant, page * PAGE_SIZE, options, appliedFacets);
+      } catch (error) {
+        // Some tenants answer the first pages and then fail deep in the list
+        // (Huntington's 500s past a few hundred postings); keep what was read,
+        // and say the board was not read in full.
+        if (page === 0) throw error;
+        return { listings, total, requests, duplicates, end: 'failed', gap: `page ${page + 1} failed (${error instanceof Error ? error.message : String(error)})` };
+      }
+    }
+    // Workday reports the total on the first page only; later pages carry 0.
+    if (page === 0) total = batch.total;
+    const fresh = batch.jobPostings.filter((l) => !l.externalPath || !seen.has(l.externalPath));
+    duplicates += batch.jobPostings.length - fresh.length;
+    if (batch.jobPostings.length > 0 && fresh.length === 0) {
+      return { listings, total, requests, duplicates, end: 'repeated', gap: `page ${page + 1} only repeated postings already listed` };
+    }
+    for (const l of fresh) {
+      if (l.externalPath) seen.add(l.externalPath);
+      listings.push(l);
+    }
+    if (batch.jobPostings.length < PAGE_SIZE) return finish('end');
+    if (total && total < WORKDAY_TOTAL_CAP && listings.length >= total) return finish('total');
+  }
+  return { listings, total, requests, duplicates, end: 'page-cap', gap: `stopped at the ${maxPages}-page cap with ${listings.length} listed` };
+
+  function finish(end: 'end' | 'total'): ListRead {
+    // A real total the read fell well short of: postings went missing mid-read.
+    if (total && total < WORKDAY_TOTAL_CAP && listings.length < Math.floor(total * 0.98) - 1) {
+      return { listings, total, requests, duplicates, end: 'short', gap: `board reports ${total}, listed ${listings.length}` };
+    }
+    return { listings, total, requests, duplicates, end };
+  }
+}
+
+export interface FacetFilter {
+  label: string;
+  applied: Record<string, string[]>;
+  count: number;
+}
+
+interface FacetValue {
+  parameter: string;
+  descriptor: string;
+  id: string;
+  count: number;
+}
+
+/** Facet values come flat ({descriptor,id,count}) or nested under groups; collect them all. */
+export function facetValues(facets: unknown[] | undefined, parent = ''): FacetValue[] {
+  const out: FacetValue[] = [];
+  for (const raw of facets ?? []) {
+    if (!raw || typeof raw !== 'object') continue;
+    const f = raw as { facetParameter?: string; descriptor?: string; id?: string; count?: number; values?: unknown[] };
+    const parameter = f.facetParameter ?? parent;
+    if (Array.isArray(f.values)) out.push(...facetValues(f.values, parameter));
+    else if (f.id && f.descriptor) out.push({ parameter, descriptor: f.descriptor, id: f.id, count: f.count ?? 0 });
+  }
+  return out;
+}
+
+const US_REMOTE = /^(remote|virtual|work from home)\b.*\b(us|usa|u\.s\.|united states|nationwide)\b|^(remote|virtual)$|\b(us|usa|united states)\b.*\b(remote|virtual)\b/i;
+
+/**
+ * The filters a Texas-only list needs, from page 0's facets.
+ *
+ * Texas: the state/region value for Texas when the board has one, else every
+ * location value that resolves to a Texas city (Greystar has no state facet).
+ * US remote: location values like "Remote, United States" or "Virtual" are a
+ * separate list, since a remote posting carries no Texas value. Multi-location
+ * postings carry a value for each of their locations, so the Texas value finds
+ * them (C&W: 22 multi-location postings in its Texas list).
+ */
+export function texasFacetFilters(facets: unknown[] | undefined): FacetFilter[] {
+  const values = facetValues(facets).filter((v) => /location|state|region|city|site/i.test(v.parameter) && !/country/i.test(v.parameter));
+  const state = values.filter((v) => /state|region/i.test(v.parameter) && /^(texas|tx)$|\btexas\b|^us\s*-\s*tx$/i.test(v.descriptor.trim()));
+  const cities = values.filter((v) => !/state|region/i.test(v.parameter) && !/remote|virtual/i.test(v.descriptor) && isTexasPlace(v.descriptor));
+  const texas = state.length ? state : cities;
+  if (!texas.length) return [];
+  const group = (vs: FacetValue[]) => {
+    const applied: Record<string, string[]> = {};
+    for (const v of vs) (applied[v.parameter] ??= []).push(v.id);
+    return applied;
+  };
+  const out: FacetFilter[] = [{ label: 'Texas', applied: group(texas), count: texas.reduce((n, v) => n + v.count, 0) }];
+  const remote = values.filter((v) => US_REMOTE.test(v.descriptor.trim()));
+  if (remote.length) out.push({ label: 'US remote', applied: group(remote), count: remote.reduce((n, v) => n + v.count, 0) });
+  return out;
+}
+
+/** A facet value naming a Texas place: "Dallas, TX", "Texas - Houston", or a known Texas city alone. */
+export function isTexasPlace(text: string): boolean {
+  if (/\btexas\b|,\s*tx\b|\btx\s*-|\bus\s*-\s*tx\b/i.test(text)) return true;
+  if (/,\s*(?!tx\b)[A-Z]{2}\b|\b(thailand|india|china|mexico|canada|uk|united kingdom|philippines|bangkok)\b/i.test(text)) return false;
+  return Boolean(resolveCity(text));
 }
 
 async function fetchDetail(

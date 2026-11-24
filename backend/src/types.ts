@@ -68,6 +68,12 @@ export interface RawJob {
    * it; the same id listed twice is one opening.
    */
   sourceId?: string;
+  /**
+   * ISO time the posting's detail (description, requirements, locations) was
+   * last read from the board, when that was before this build: a reused cached
+   * detail keeps its real read time instead of looking freshly checked.
+   */
+  detailReadAt?: string;
 }
 
 /** A row of `postings`. */
@@ -97,6 +103,8 @@ export interface Posting {
   lastSeen?: Date;
   /** The board's own id for the opening, when it has one (RawJob.sourceId). */
   sourceId?: string;
+  /** RawJob.detailReadAt: when the detail text was read, if earlier than this build. */
+  detailReadAt?: string;
   /**
    * Set when `id` is an opening id (ats + board + sourceId): the id this seat
    * had under the older firm + title + city scheme. Saved jobs and history

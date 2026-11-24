@@ -148,7 +148,7 @@ describe('runCollector with an aggregator', () => {
     });
 
     expect(report.kept).toBe(2);
-    expect(report.aggregators).toEqual([
+    expect(report.aggregators).toMatchObject([
       { name: 'adzuna', fetched: 3, kept: 1, duplicates: 1, rejected: 1, rejectedBy: { unclassified: 1 }, review: 0 }
     ]);
     const links = [...store.postings.values()].map((p) => p.applyUrl).sort();

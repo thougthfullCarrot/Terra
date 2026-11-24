@@ -116,6 +116,15 @@ jobs:
           key: job-retain-none
           restore-keys: job-retain-
 
+      # Workday posting details read on recent builds, reused for up to 72 hours
+      # instead of read again (backend/src/collector/sources/workday.ts).
+      - name: Restore the Workday details
+        uses: actions/cache/restore@v4
+        with:
+          path: workday-details.json
+          key: workday-details-v2-none
+          restore-keys: workday-details-v2-
+
       - name: Export postings from the live boards
         # Optional. With these set, Adzuna search results join the board
         # postings; without them the site is built from the boards alone.
@@ -131,7 +140,7 @@ jobs:
           SHEETS_WRITE: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
         run: |
           set -o pipefail
-          npm run --silent export:site -- --history ../job-history.json --retain ../job-retain.json --coverage ../job-coverage.json --review ../job-review.json --samples 2>&1 | tee /tmp/export.log
+          npm run --silent export:site -- --history ../job-history.json --retain ../job-retain.json --coverage ../job-coverage.json --review ../job-review.json --excluded ../job-excluded.json --detail-cache ../workday-details.json --samples 2>&1 | tee /tmp/export.log
 
       # Postings held back because they state no experience and nothing says
       # entry level. Kept as a run artifact for a person to look through;
@@ -160,6 +169,37 @@ jobs:
         with:
           path: job-retain.json
           key: job-retain-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Cache the Workday details
+        if: hashFiles('workday-details.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: workday-details.json
+          key: workday-details-v2-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # Verified quiet employers (data/employer-registry.json) are read at most
+      # every 7 days and at least every 14 while builds run, up to 12 per build,
+      # after the export so they never compete with it for Workday. Read only:
+      # one with a Texas entry-level opening is printed as PROMOTE.
+      - name: Restore the employer registry checks
+        uses: actions/cache/restore@v4
+        with:
+          path: registry-state.json
+          key: registry-state-none
+          restore-keys: registry-state-
+
+      - name: Recheck quiet employers when due
+        continue-on-error: true
+        timeout-minutes: 8
+        working-directory: backend
+        run: npm run --silent registry:recheck -- --state ../registry-state.json --limit 12 2>&1 | tee /tmp/registry.log
+
+      - name: Cache the employer registry checks
+        if: always() && hashFiles('registry-state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: registry-state.json
+          key: registry-state-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Cache the job history
         if: hashFiles('job-history.json') != ''
@@ -643,6 +683,29 @@ jobs:
             cat ../site/stats.json
           fi
 
+      # Pull requests only: the measurements a reviewer needs, gathered while the
+      # development lists and excluded jobs are still on disk, printed at the end.
+      - name: Gather review measurements
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          {
+            echo '=== MEASURE: job feed ==='
+            sed -n '/^### Job feed/,/^| Board |/p' /tmp/export.log | grep -v '^| Board' || true
+            grep -E '^(Firm list|Retained|Identity|Excluded|Detail cache)' /tmp/export.log || true
+            echo '=== MEASURE: boards ==='
+            grep -E '^Workday lists:' /tmp/export.log || true
+            grep -E '^\| [^-B]' /tmp/export.log | grep -E '\| (ok|incomplete|failed) \|' || true
+            echo '=== MEASURE: by market ==='
+            [ -f ../site/postings.json ] && jq -c '{jobs: (.jobs | length), fresh: ([.jobs[] | select(.retained | not)] | length), retained: ([.jobs[] | select(.retained)] | length), descriptionReadNow: ([.jobs[] | select((.retained | not) and (.detailReadAt | not))] | length), listConfirmedCachedDescription: ([.jobs[] | select((.retained | not) and .detailReadAt)] | length), byCity: ([.jobs[].city] | group_by(.) | map({(.[0]): length}) | add)}' ../site/postings.json || true
+            echo '=== MEASURE: batch 4 employers in the snapshot ==='
+            [ -f ../site/postings.json ] && jq -r '.jobs[] | select(.firm | test("^(Ryan Companies|SpawGlass|Green Brick Partners|Homebound|Olympus Property)$")) | "BATCH4 \(.firm) | \(.role) | \(.city)\(if .retained then " | retained" else "" end)"' ../site/postings.json || true
+            echo '=== MEASURE: registry recheck ==='
+            cat /tmp/registry.log 2>/dev/null || true
+            echo '=== MEASURE: excluded audit ==='
+            [ -f ../job-excluded.json ] && npm run --silent audit:excluded -- ../job-excluded.json | head -40 || true
+          } > /tmp/measure.txt 2>&1
+
       # With accounts on, the feed is members-only: it must not also sit at a public URL.
       - name: Keep the feed out of the public site
         if: steps.accounts.outputs.enabled == 'true'
@@ -656,6 +719,10 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+      - name: Print review measurements
+        if: always() && github.event_name == 'pull_request'
+        run: cat /tmp/measure.txt 2>/dev/null || echo 'No measurements.'
 
   deploy:
     needs: build

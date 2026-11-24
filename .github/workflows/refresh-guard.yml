@@ -1,0 +1,111 @@
+name: Refresh guard
+
+# GitHub fires scheduled workflows late or not at all when it is busy. Website
+# (site.yml) asks for a build every 2 hours ('20 */2 * * *'), but from
+# 2026-11-12 to 2026-11-21 GitHub started 30 of the ~114 scheduled runs: gaps
+# of 1.2 to 11.9 hours, median 8.3. Collect postings, a 6-second job on its own
+# 2-hour cron, slipped the same way, so the gap is GitHub's scheduler, not the
+# build (11-24 minutes) or a queue (no cancelled or waiting runs).
+#
+# What this does: every 10 minutes it reads the Website runs on the default
+# branch and starts one (workflow_dispatch) when
+#   - no Website run is queued, waiting, pending, requested or in progress, and
+#   - no dispatch of its own is still unaccounted for (one dispatch, then it
+#     waits for the run to appear, up to 30 minutes), and
+#   - the last build STARTED REFRESH_MAX_MINUTES ago or more (default 120), or
+#     the last SUCCESSFUL build (the one that published the snapshot) is older
+#     than REFRESH_MAX_MINUTES + 60 and the last start is 30+ minutes old (a
+#     failing build is retried at most every 30 minutes, never in a loop).
+# Every check is logged with the last start and last successful publication.
+#
+# What it cannot do: guarantee a maximum interval. The guard is itself a GitHub
+# workflow. Its chain (each run lasts ~5.5 h, then dispatches the next) depends
+# on GitHub running workflow_dispatch events and finding a runner promptly,
+# which it normally does but does not promise; if the chain breaks, the backup
+# cron below restarts it and is subject to the same scheduler delays it is
+# working around; a GitHub Actions outage stops both. So 120 minutes is a
+# target the guard enforces whenever it is running, not an SLA. A guarantee
+# needs a scheduler outside GitHub (e.g. a free external cron calling the
+# dispatch API with a token), which is a production configuration choice left
+# to the owner.
+#
+# Cost: Actions minutes are free for public repositories (this repo must stay
+# public anyway, for free Pages). The guard mostly sleeps, but it keeps one
+# runner busy nearly all the time.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 */4 * * *'
+
+# One guard at a time; a second waits instead of running in parallel.
+concurrency:
+  group: refresh-guard
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  guard:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.repository.default_branch }}
+      MAX_MINUTES: ${{ vars.REFRESH_MAX_MINUTES || '120' }}
+    steps:
+      - name: Keep Website builds near the target interval
+        run: |
+          set -u
+          {
+            echo "## Refresh guard (target ${MAX_MINUTES} min between Website builds; not a guarantee, see the workflow header)"
+            echo
+            echo '| Check (UTC) | Active | Last start | Last success | Action |'
+            echo '|---|---|---|---|---|'
+          } >> "$GITHUB_STEP_SUMMARY"
+          stop=$((SECONDS + 330 * 60))
+          pending_since=0   # epoch of our own dispatch not yet seen as a run
+          mins() { if [ -n "$1" ]; then echo $(( ( $(date -u +%s) - $(date -u -d "$1" +%s) ) / 60 )); else echo 99999; fi; }
+          while [ "$SECONDS" -lt "$stop" ]; do
+            now=$(date -u +%s)
+            runs=$(gh run list --workflow site.yml --branch "$BRANCH" --limit 30 --json createdAt,status,conclusion,event 2>/dev/null) || runs=''
+            if [ -z "$runs" ]; then
+              echo "$(date -u +%H:%MZ) could not read runs; skipping this check"
+              sleep 600; continue
+            fi
+            own=$(echo "$runs" | jq '[.[] | select(.event != "pull_request")]')
+            active=$(echo "$own" | jq '[.[] | select(.status != "completed")] | length')
+            last=$(echo "$own" | jq -r '.[0].createdAt // empty')
+            good=$(echo "$own" | jq -r '[.[] | select(.conclusion == "success")][0].createdAt // empty')
+            age=$(mins "$last"); good_age=$(mins "$good")
+            # A dispatch counts as accounted for once a run created after it shows up.
+            if [ "$pending_since" -gt 0 ] && [ -n "$last" ] && [ "$(date -u -d "$last" +%s)" -ge $((pending_since - 60)) ]; then pending_since=0; fi
+            if [ "$pending_since" -gt 0 ] && [ $((now - pending_since)) -ge 1800 ]; then
+              echo "$(date -u +%H:%MZ) dispatch from $(( (now - pending_since) / 60 )) min ago never appeared; allowing another"
+              pending_since=0
+            fi
+            action='ok'
+            if [ "$active" -gt 0 ]; then
+              action='build running or queued'
+            elif [ "$pending_since" -gt 0 ]; then
+              action='waiting for own dispatch to appear'
+            elif [ "$age" -ge "$MAX_MINUTES" ] || { [ "$good_age" -ge $((MAX_MINUTES + 60)) ] && [ "$age" -ge 30 ]; }; then
+              if gh workflow run site.yml --ref "$BRANCH"; then
+                pending_since=$now; action='dispatched Website'
+              else
+                action='dispatch failed'
+              fi
+            fi
+            line="| $(date -u +%H:%M) | $active | ${age} min | ${good_age} min | $action |"
+            echo "$line"
+            case "$action" in ok|'build running or queued') ;; *) echo "$line" >> "$GITHUB_STEP_SUMMARY";; esac
+            sleep 600
+          done
+
+      - name: Hand over to the next guard
+        if: always()
+        run: gh workflow run refresh-guard.yml --ref "$BRANCH"

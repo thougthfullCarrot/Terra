@@ -43,6 +43,12 @@ export interface SitePosting {
   reposts?: number;
   /** The board's own id for the opening (Greenhouse job id, Workday requisition). */
   sourceId?: string;
+  /**
+   * ISO time the description and requirements were read, when a cached detail
+   * was reused (Workday): earlier than verifiedAt, which says the posting was
+   * still listed. Absent when the detail was read this build.
+   */
+  detailReadAt?: string;
   /** ISO time the posting was last seen on its source. */
   verifiedAt?: string;
   /**
@@ -117,7 +123,8 @@ export function toSitePosting(posting: Posting): SitePosting {
     applyUrl: posting.applyUrl,
     match: matchInputs(posting),
     via: viaAggregator(posting.applyUrl),
-    ...(posting.sourceId ? { sourceId: posting.sourceId } : {})
+    ...(posting.sourceId ? { sourceId: posting.sourceId } : {}),
+    ...(posting.detailReadAt ? { detailReadAt: posting.detailReadAt } : {})
   };
 }
 
